@@ -99,7 +99,11 @@ SAVE_LOAD_MAX_DICT EQU 512     ; provisional ceiling, same caveat as
 ; payload described in this file's header, and calls STORAGE_SAVE.
 ; ============================================================================
 H_SAVE:
-    DW   H_SEMICOLON
+    DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL) to
+                            ; whatever word chain this file should
+                            ; extend, immediately before INCLUDEing
+                            ; this file — see core/control.asm's own
+                            ; header for the full reasoning
     DB   4, "S", "A", "V", "E"
 W_SAVE:
     call W_WORD

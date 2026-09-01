@@ -168,6 +168,7 @@ TEST_SRC_C_LEN  EQU $ - TEST_SRC_C
 ; header ----
     INCLUDE "core/dict.asm"
     INCLUDE "core/interp.asm"
+DICT_CHAIN_POINT DEFL H_SEMICOLON   ; see core/control.asm's own header
     INCLUDE "core/control.asm"
 
     DS   $4000 - $, $FF

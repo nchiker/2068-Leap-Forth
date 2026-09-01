@@ -12,3 +12,7 @@ __pycache__/
 *.pyc
 /.claude/
 /CLAUDE.md
+
+# Fuse memory-dump snapshots (debug.bin) used for live-keyboard
+# debugging sessions -- see docs/PROJECT_PLAN.md's Phase 9 section
+/debug/

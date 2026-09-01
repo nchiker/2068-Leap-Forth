@@ -175,6 +175,29 @@ DELETE_CHAR_BEFORE_CURSOR:
 ; inverted cell only. Good enough to see where you are; not as visible
 ; as a blinking cursor would be.
 ; ============================================================================
+; REAL BUG, found only by a human actually typing at a live keyboard —
+; neither Phase 6's canned-key-array test nor Phase 9's non-interactive
+; smoke test could have caught this, since both only ever check final
+; state, never what the SCREEN shows while typing is in progress.
+; GFX_PUTCHAR's own documented contract only plots bitmap pixels; it
+; never touches the attribute byte at a cell (confirmed by reading its
+; header, not assumed). GFX_INVERT_ATTR_STATIC (used below to mark the
+; cursor) SWAPS a cell's attribute permanently — there is nothing that
+; ever sets it back. The original version of this routine printed
+; ordinary characters via GFX_PUTCHAR alone, never re-normalizing the
+; attribute underneath them, so every cell the cursor had ever
+; occupied stayed inverted forever: typing looked like every character
+; appearing in reverse video, and printing a blank (space) onto an
+; already-inverted cell rendered as a solid black block (a space has
+; no foreground pixels, so an inverted blank cell shows entirely in
+; what was the "ink" color). Fixed by explicitly setting every printed
+; and blanked cell's attribute to ATTR_DEFAULT (kernel/graphics's own
+; normal paper-white/ink-black constant) BEFORE the single cursor cell
+; gets inverted at the end — the same "clear old state before drawing
+; new state" fix already applied once above (INSERT_CHAR's own
+; correctness depends on operating on EDIT_BUF's authoritative content,
+; not on the screen matching it) applied to the screen's own attribute
+; plane this time.
 EDITOR_REDRAW:
     ld   hl, EDIT_BUF
     ld   a, (EDIT_LEN)
@@ -192,6 +215,13 @@ EDITOR_REDRAW:
     call GFX_PUTCHAR
     pop  de
     pop  bc
+    push bc
+    push de
+    ld   a, ATTR_DEFAULT
+    ld   b, EDIT_ROW
+    call GFX_SET_ATTR
+    pop  de
+    pop  bc
     pop  hl
     inc  hl
     inc  c
@@ -205,6 +235,11 @@ EDITOR_REDRAW:
     ld   a, " "
     ld   b, EDIT_ROW
     call GFX_PUTCHAR
+    pop  bc
+    push bc
+    ld   a, ATTR_DEFAULT
+    ld   b, EDIT_ROW
+    call GFX_SET_ATTR
     pop  bc
     inc  c
     jr   .blank

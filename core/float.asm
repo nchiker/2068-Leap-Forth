@@ -154,7 +154,11 @@ F_ALIGN:
 ; F+ ( f1 f2 -- f1+f2 )
 ; ============================================================================
 H_FPLUS:
-    DW   H_SEMICOLON
+    DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL) to
+                            ; whatever word chain this file should
+                            ; extend, immediately before INCLUDEing
+                            ; this file — see core/control.asm's own
+                            ; header for the full reasoning
     DB   2, "F", "+"
 W_FPLUS:
     call FPOP

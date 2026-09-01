@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b check clean
+.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-boot check clean
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-boot
 
 # Milestone 0: boot stub only.
 boot:
@@ -89,6 +89,27 @@ forth-smoke-p8b:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p8b.sym --lst=build/forth_smoke_p8b.lst rom/forth_smoke_p8b.asm
 	mv forth_smoke_p8b_rom0.bin build/forth_smoke_p8b_rom0.bin
+
+# Phase 9: full dictionary (every phase's words spliced into one
+# LATEST chain via DICT_CHAIN_POINT -- see core/control.asm's own
+# header) + real IM 1 interrupt wiring (RST $0038 -> KBD_ISR_TICK).
+# Proves the chain and real interrupt firing; does not exercise a live
+# keyboard (see forth-boot for that).
+forth-smoke-p9:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p9.sym --lst=build/forth_smoke_p9.lst rom/forth_smoke_p9.asm
+	mv forth_smoke_p9_rom0.bin build/forth_smoke_p9_rom0.bin
+
+# The first real, live, bootable 2068-Forth product ROM -- not a smoke
+# test. Boots, prints a banner, plays the startup sound (the product
+# requirement tracked since Phase 4), and hands off to a real,
+# interactive, keyboard-driven prompt (core/editor.asm's
+# EDITOR_LOOP_LIVE). See docs/PROJECT_PLAN.md's Phase 9 section for two
+# real bugs found only by a human actually typing at it.
+forth-boot:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_boot.sym --lst=build/forth_boot.lst rom/forth_boot.asm
+	mv forth_boot_rom0.bin build/forth_boot_rom0.bin
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm

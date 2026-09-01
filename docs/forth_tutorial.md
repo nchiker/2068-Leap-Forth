@@ -15,6 +15,12 @@ prompt, would see and do. Sections are added as each part of the
 language becomes real and usable — see the status note at the end of
 each section for exactly what's true right now versus still to come.
 
+**A live prompt genuinely exists.** Turning the machine on shows a
+banner, plays a short startup sound, and drops you at a real,
+keyboard-driven prompt — every example in this document that doesn't
+depend on `.` (there's no way to print a plain number's value yet — see
+section 11) can actually be typed in and run, not just read about.
+
 ---
 
 ## 1. What Forth actually is
@@ -408,17 +414,10 @@ model as typing into practically any text field — but it's worth
 stating plainly since BASIC on this same family of machines historically
 handled line editing somewhat differently.
 
-**Status:** the editing behavior itself — insert, delete, and cursor
-movement all correctly composing together, including the "move back
-and insert in the middle" and "delete a specific earlier character"
-cases above — is built and verified. What's NOT wired up yet is a live
-prompt to actually try it at: none of this document's examples,
-including this section's own `13`→`123` example, can be typed at a real
-2068-Forth prompt today. That gap is specifically about connecting a
-real keyboard to this already-working editing logic (see
-[`PROJECT_PLAN.md`](PROJECT_PLAN.md) Phase 6 for exactly what's
-missing) — not about the editing behavior described above being
-unfinished or unreliable.
+**Status:** all of it — insert, delete, cursor movement, and a real,
+live, keyboard-driven prompt to try them at — works today. This
+section's own `13`→`123` example is something you can actually type
+and watch happen now, not just a description of intended behavior.
 
 ---
 
@@ -515,13 +514,13 @@ here once it's real:
   loop that can check its condition *before* each pass, not just after).
 - **More comparisons** — only `0=` (section 5) exists so far. Ordinary
   `=`, `<`, and `>` between two arbitrary numbers don't exist yet.
-- **Printing, and an actual live prompt** — there's no `.` (print the
-  top of the stack) yet, and section 8's editing keys, while working,
-  aren't yet connected to a real keyboard-driven prompt. Until both
-  exist, none of this document's examples — including section 7's
-  drawing words and section 9's `SAVE`/`LOAD` — can be tried by typing
-  them in and watching them happen; only a fixed, pre-written program
-  can call them so far.
+- **Printing** — there's no `.` (print the top of the stack) yet. A
+  live, keyboard-driven prompt exists (section 8) and every word in
+  this document can genuinely be typed and run — but a word like `+`
+  that leaves its answer sitting on the stack has no way to *show* you
+  that answer. Only words with some other visible effect — `BORDER`,
+  `PLOT`, `BEEP`, and the rest of section 7's drawing words — let you
+  see a result today without `.` to fall back on.
 - **Named variables** (`VARIABLE`) and constants (`CONSTANT`), built on
   top of the `@`/`!` in section 4.
 - **More graphics and sound** — `FILL`, `AT-XY`, hi-res mode, and

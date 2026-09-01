@@ -136,6 +136,26 @@ W_WORD:
     ld   a, (hl)
     cp   " "
     jr   z, .donecopy_consume
+    ; Uppercase a-z to A-Z before storing. REAL BUG, found only by a
+    ; human typing at a live keyboard (rom/forth_boot.asm, confirmed
+    ; via a real memory-dump snapshot showing WORD_BUF holding lowercase
+    ; "border" after typing "5 BORDER"): every dictionary header this
+    ; project has ever written is uppercase, and FIND (this file, below)
+    ; is case-sensitive by design — a decision explicitly flagged back
+    ; in Phase 3 as needing a real answer once live keyboard input
+    ; existed ("a live REPL will need to decide a case-folding policy"),
+    ; not caught until it did. Folding to uppercase here, once, is
+    ; simpler than making FIND case-insensitive (would need to repeat
+    ; the fold on every comparison, every call) or than uppercasing at
+    ; the keyboard-scan layer (kernel/io is inherited, hardware-facing,
+    ; and shared with 2068-Leap's own conventions -- not this project's
+    ; to change for a language-level policy choice).
+    cp   "a"
+    jr   c, .not_lower
+    cp   "z" + 1
+    jr   nc, .not_lower
+    sub  "a" - "A"
+.not_lower:
     ld   (de), a
     inc  de
     inc  hl

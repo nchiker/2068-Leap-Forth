@@ -242,6 +242,7 @@ TEST_SRC_BEEP_LEN EQU $ - TEST_SRC_BEEP
     INCLUDE "kernel/sound/sound.asm"
     INCLUDE "core/dict.asm"
     INCLUDE "core/interp.asm"
+DICT_CHAIN_POINT DEFL H_SEMICOLON   ; see core/control.asm's own header
     INCLUDE "core/control.asm"
     INCLUDE "core/ts2068.asm"
 

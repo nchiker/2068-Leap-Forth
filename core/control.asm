@@ -2,9 +2,21 @@
 ; core/control.asm — Phase 4: control flow (IF/ELSE/THEN, BEGIN/UNTIL)
 ;
 ; Builds on core/dict.asm AND core/interp.asm (both must be INCLUDEd
-; first — this file chains its own dictionary entries onto
-; core/interp.asm's H_SEMICOLON, and uses DPUSH_HL/DPOP_HL,
-; COMPILE_CALL, and COMPILE_WORD from those files).
+; first — this file's own first header chains onto whatever the
+; including ROM sets DICT_CHAIN_POINT to (a DEFL, redefinable, unlike
+; EQU — every existing smoke ROM sets it to H_SEMICOLON right before
+; this INCLUDE, matching this file's own original hardcoded design; a
+; ROM combining several phases together, like Phase 9's, can instead
+; set it to whatever LATER phase's tail should come first, so this
+; file's words stay reachable from a single LATEST chain no matter
+; what else is assembled alongside it — see docs/PROJECT_PLAN.md's
+; Phase 9 section for why this indirection exists: core/control.asm,
+; core/storage.asm, and core/float.asm were each independently written
+; to extend core/interp.asm's own tail directly, by design, so each
+; phase's own smoke ROM could stay minimal — which silently made them
+; siblings of a tree, not links in one chain, the moment a ROM tried to
+; include more than one of them together), and uses DPUSH_HL/DPOP_HL,
+; COMPILE_CALL, and COMPILE_WORD from core/dict.asm/core/interp.asm.
 ;
 ; WHAT THIS ADDS:
 ;   0=          ( n -- flag )  a proper boolean flag, needed because
@@ -56,7 +68,11 @@
 ; is backwards from what a "loop until this becomes true" idiom needs.
 ; ============================================================================
 H_ZEROEQUALS:
-    DW   H_SEMICOLON
+    DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL,
+                            ; not EQU -- see this file's own header
+                            ; note below) to whatever word chain this
+                            ; file should extend, immediately before
+                            ; INCLUDEing this file
     DB   2, "0", "="
 W_ZEROEQUALS:
     ld   l, (ix+0)

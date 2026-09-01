@@ -192,6 +192,7 @@ SRC_FMINUS_LEN  EQU $ - SRC_FMINUS
 ; self-test code above, not before ORG $0000 ----
     INCLUDE "core/dict.asm"
     INCLUDE "core/interp.asm"
+DICT_CHAIN_POINT DEFL H_SEMICOLON   ; see core/control.asm's own header
     INCLUDE "core/float.asm"
 
     DS   $4000 - $, $FF

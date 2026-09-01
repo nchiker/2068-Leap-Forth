@@ -355,23 +355,18 @@ this whole project has followed since Phase 2's own first bug).
 
 ## Product requirement — startup screen plays a startup sound
 
-Captured 2026-09-01, not yet implemented: when 2068-Forth boots to its
-first user-visible screen (the live interactive front end — not any of
-the current smoke ROMs, which a real user will never see), that
-startup screen must play a startup sound. `BEEP` itself is done (Phase
-5, `core/ts2068.asm`, wrapping `kernel/sound`'s proven `SOUND_BEEP`),
-though it still takes raw hardware-timing numbers, not musical
-pitch/duration, so a deliberate startup tone still needs its own small
-design pass. The bigger remaining dependency, precisely identified as
-of Phase 6: this ROM must set up `RST $0038` to vector to
-`kernel/interrupt`'s `KBD_ISR_TICK`, enable IM 1, and execute `EI`
-before calling `core/editor.asm`'s `EDITOR_LOOP_LIVE` — every smoke ROM
-so far (correctly, for what each one proves) boots with interrupts
-permanently disabled, and `kernel/io`'s `IO_READ_KEY` only consumes a
-key already latched by that interrupt, it doesn't scan the keyboard
-itself. See Phase 6's own section for the full story. No sound design
-decided yet beyond "use `BEEP`" — just the requirement that a startup
-screen without a sound is incomplete.
+**Status: done, as of Phase 9.** Captured 2026-09-01; resolved the same
+day. `rom/forth_boot.asm` is the first real, live, bootable ROM: it
+boots, plays a startup tone via `BEEP` (`SOUND_BEEP`, still raw
+hardware-timing numbers, not a deliberately composed musical tone — a
+real, smaller, still-open follow-up, not the blocking dependency this
+requirement was tracking), and hands off to a genuinely interactive
+prompt. The bigger dependency this requirement was actually tracking —
+wiring `RST $0038` to `kernel/interrupt`'s `KBD_ISR_TICK`, IM 1, and
+`EI` before calling `core/editor.asm`'s `EDITOR_LOOP_LIVE` — is done
+and confirmed working by a human typing at the running system. See
+Phase 9's own section for the full story, including two real bugs
+found only once that live prompt actually existed to type into.
 
 ## Phase 6 — line editing
 
@@ -419,6 +414,13 @@ silent landmine. Whatever ROM first boots to a live interactive prompt
 a startup sound," above) needs to do that setup — a real, sizable piece
 of follow-up work this phase deliberately didn't try to absorb, to keep
 "line editing" itself provable on its own.
+
+**Update, Phase 9:** that follow-up work is done — `rom/forth_boot.asm`
+does exactly this setup and `EDITOR_LOOP_LIVE` is confirmed working
+against a real human at a real keyboard. Getting there also surfaced
+two real bugs in this phase's own `EDITOR_REDRAW` and in
+`core/interp.asm`'s `W_WORD` that this phase's own canned-key-array
+test structurally could not have caught — see Phase 9's own section.
 
 ## Phase 7 — storage
 
@@ -589,6 +591,139 @@ checked. Follow-up work, not resolved by this phase.
   `kernel/bank` trampoline, if the Home-resident dictionary gets tight.
 - Block/screen-style source loading from tape, as an alternative or
   complement to the Ace-style whole-image `SAVE`/`LOAD` from Phase 7.
+
+## Phase 9 — a real, live, bootable system
+
+**Status: done.** `rom/forth_boot.asm` boots, prints a banner, plays
+the startup sound tracked as an open product requirement since Phase 4
+("Product requirement — startup screen plays a startup sound," above —
+now resolved), and hands off to `core/editor.asm`'s `EDITOR_LOOP_LIVE`
+for real, live, keyboard-driven use. Confirmed working by a human
+actually typing `5 BORDER` and pressing Enter at the running system and
+watching the border turn cyan — the first genuine end-to-end proof in
+this entire project that doesn't depend on a fixed test string or a
+canned key array. Getting there required one real structural fix and
+surfaced two real bugs that no automated test in this project, across
+eight earlier smoke ROMs, had ever been positioned to catch.
+
+### The structural fix: one dictionary chain, not a tree
+
+`core/control.asm`, `core/storage.asm`, and `core/float.asm` were each
+independently written to chain their own first dictionary entry
+directly onto `core/interp.asm`'s `H_SEMICOLON` — correct and
+deliberate, since it let each phase's own smoke ROM stay minimal and
+self-contained. The unintended consequence: the three of them are
+siblings of a tree rooted at `H_SEMICOLON`, not links in one chain, so
+a single `LATEST` pointer can only ever reach ONE of those three
+branches (plus whatever hangs off it — `core/ts2068.asm` off
+`core/control.asm`, `core/mode64.asm` off `core/float.asm`). A ROM
+assembling more than one of them together — exactly what a real,
+complete product needs — would silently make the others' words
+unreachable by `FIND`, with no assembly error to reveal it.
+
+Fixed by making each of those three files' first header link through
+`DICT_CHAIN_POINT` — a `DEFL` (redefinable, unlike `EQU` — confirmed
+`sjasmplus` supports this before relying on it) that the including ROM
+sets immediately before each `INCLUDE`, splicing the tree into one
+line in whatever order that ROM actually wants:
+`dict → interp → control → ts2068 → storage → float → mode64`.
+Every existing smoke ROM (Phases 4/5/7/8/8b) was updated to set
+`DICT_CHAIN_POINT = H_SEMICOLON` right before its own single relevant
+`INCLUDE`, preserving their exact prior behavior exactly — rebuilt and
+re-confirmed passing under real Fuse after the change, not assumed
+unaffected. `rom/forth_smoke_p9.asm` proves the fully-spliced chain
+directly: `FIND` locates `SAVE`, `LOAD`, `F+`, `F-`, `64COL`, `32COL`,
+`PALETTE64`, and `PLOT64` — one word from each branch — from a single
+`LATEST`.
+
+### Real interrupts, confirmed against 2068-Leap's own working code
+
+`kernel/io`'s `IO_READ_KEY` (and therefore `core/editor.asm`'s
+`EDITOR_LOOP_LIVE`, since Phase 6) only ever consumes a key already
+latched by `kernel/interrupt`'s `KBD_ISR_TICK`, which needs a real IM 1
+interrupt actually running — a precondition documented as a real,
+unmet gap since Phase 6, since every smoke ROM up to and including
+Phase 8 deliberately keeps interrupts off throughout. `rom/forth_boot.asm`
+and `rom/forth_smoke_p9.asm` both wire it for real: `RST $0038: call
+KBD_ISR_TICK / ei / reti`, `KBD_ISR_INIT` called before `EI`, then
+`IM 1` / `EI` — the exact sequence confirmed by reading 2068-Leap's own
+working ROM files (`rom/test_arr3.asm`'s own `RST_38` and
+`COLD_START`), not guessed. `rom/forth_smoke_p9.asm`'s own checkpoint 3
+confirms `FRAMES` actually increments after this setup — proof a real
+maskable interrupt fired, not just that the vector table has
+plausible-looking bytes in it.
+
+### Two real bugs, found only by a human typing at a live keyboard
+
+Both were invisible to every automated test in this project up to this
+point, for the same underlying reason: every earlier smoke ROM checks
+*final* state after a fixed, hand-written source string runs with
+interrupts off. Neither bug is about final correctness of a fixed
+input — one is about what the *screen* shows while typing is in
+progress, the other is about what a *real keyboard* actually produces
+for a letter key, and no test before Phase 9 exercised either.
+
+**Bug 1 — accumulating inverted text.** A user reported (2026-09-01,
+via this project's own Fuse session, not simulated): typing at the live
+prompt showed every character in reverse video, and pressing Enter left
+the whole line as solid black blocks instead of clearing. Root cause,
+confirmed by reading `GFX_PUTCHAR`'s own documented contract rather
+than assumed: it only plots bitmap pixels, it never touches a cell's
+attribute (color) byte. `core/editor.asm`'s `EDITOR_REDRAW` used
+`GFX_INVERT_ATTR_STATIC` to mark the cursor cell (a real, permanent
+attribute *swap*, not a temporary highlight) but never explicitly reset
+a cell's attribute back to normal when printing an ordinary character
+over it — so every cell the cursor had ever visited stayed inverted
+forever, and printing a blank (space) onto an already-inverted cell
+renders as a solid block (a space has no foreground pixels, so an
+inverted blank cell shows entirely in what was the "ink" color). Fixed
+by calling `GFX_SET_ATTR` (sets outright, confirmed via its own header)
+to explicitly normalize every printed and blanked cell before the
+single current cursor cell gets inverted at the very end of
+`EDITOR_REDRAW`. Re-verified against Phase 6's own smoke ROM afterward
+— unaffected, as expected, since that test only ever checks final
+buffer content, never what the screen showed along the way.
+
+**Bug 2 — case folding.** After bug 1 was fixed, `5 BORDER` typed
+correctly (confirmed by literally reading it back off the screen) but
+still didn't change the border — instead landing on
+`INTERPRET_UNKNOWN_WORD`. A **Fuse memory-dump snapshot** (a raw 64KB
+`debug.bin`, saved by the user directly from the running emulator —
+the same "get a debug.bin, don't guess" technique 2068-Leap's own real
+ROM comments describe using for exactly this class of problem) settled
+it immediately: `WORD_BUF` held `06 62 6f 72 64 65 72` — count 6, then
+**lowercase** `border`. Every dictionary header this project has ever
+written is uppercase (`DB 6, "B", "O", "R", "D", "E", "R"`), and `FIND`
+is case-sensitive by design — a decision `core/interp.asm`'s own header
+flagged explicitly back in Phase 3 as needing a real answer "once a
+live REPL will need to decide a case-folding policy," never revisited
+until a live REPL actually existed to expose it. `kernel/io`'s real
+keyboard-to-ASCII translation produces lowercase letters for unshifted
+keys; every previous test's source was a hand-written ROM `DB` string,
+already uppercase, so this was structurally invisible until a human
+typed a letter for the first time. Fixed in `core/interp.asm`'s
+`W_WORD`: fold `a`-`z` to `A`-`Z` while copying into `WORD_BUF`, once,
+at the one place all parsed tokens already pass through — simpler than
+making `FIND` case-insensitive (would repeat the fold on every
+comparison) or changing `kernel/io` (inherited, hardware-facing, not
+this project's layer to encode a language-level policy into).
+
+**Both fixes were rebuilt and re-verified against all eight existing
+smoke ROMs under real Fuse before being trusted** — same standing
+discipline as every earlier phase's shared-file change, not skipped
+because the fix "looked obviously right."
+
+### What this makes possible, and what's still not resolved
+
+A real, typed Forth session now works end to end: keyboard → interrupt
+→ debounce → line buffer → `WORD`/`FIND`/`NUMBER` → dictionary
+dispatch → a visible hardware effect. `INTERPRET_UNKNOWN_WORD` still
+has zero visible error feedback (a genuine typo silently discards the
+line with no indication anything happened) — real, open follow-up
+work, not hidden. `EMIT`/`KEY` as real Forth words, `.` for printing,
+and named variables (`VARIABLE`/`CONSTANT`) remain exactly as absent as
+`docs/forth_tutorial.md` has said throughout — this phase made the
+existing words interactive, it didn't add new ones.
 
 ## Testing discipline
 

@@ -81,13 +81,25 @@ inherited, what was deliberately left behind, and the phased build order.
     (the whole visible area, border included, renders as one uniform
     color while this mode is active) is recorded, not resolved — see
     `docs/PROJECT_PLAN.md` Phase 8 for the full story.
-- **Not yet implemented, tracked for later:** the eventual live
-  startup screen must play a startup sound. `BEEP` is done (Phase 5);
-  the real remaining blocker, precisely identified in Phase 6, is
-  wiring `RST $0038` to `kernel/interrupt`'s `KBD_ISR_TICK` (+ IM 1 +
-  `EI`) so `EDITOR_LOOP_LIVE` can safely run — see
-  `docs/PROJECT_PLAN.md`, "Product requirement — startup screen plays a
-  startup sound."
+- Phase 9 (`rom/forth_boot.asm` + `rom/forth_smoke_p9.asm`): **a real,
+  live, bootable system.** Every phase's dictionary words spliced into
+  one `FIND`-able chain (a real structural fix — `core/control.asm`,
+  `core/storage.asm`, and `core/float.asm` were siblings of a tree, not
+  links in one chain, until this phase); real `IM 1` interrupt wiring,
+  confirmed against 2068-Leap's own working ROM files; a boot banner
+  and startup sound (the tracked product requirement — done). Confirmed
+  working by a human typing `5 BORDER` at the running system and
+  watching the border turn cyan — the first genuine end-to-end proof in
+  this project not based on a fixed test string. Getting there
+  surfaced two real bugs no automated test could have caught (an
+  accumulating-inverted-text redraw bug, and a case-folding bug — real
+  keyboards produce lowercase letters, the whole dictionary is
+  uppercase), both found live with the user typing at the keyboard and
+  one diagnosed from a real Fuse memory-dump snapshot. See
+  `docs/PROJECT_PLAN.md` Phase 9 for the full story.
+- **`docs/forth_tutorial.md`** teaches the Forth
+  *language* to a reader who doesn't already know it — from the
+  standpoint of someone using the finished product, not this project's
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -126,6 +138,8 @@ rom/        ROM image assembly:
               forth_smoke_p7.asm  Phase 7 smoke ROM
               forth_smoke_p8.asm  Phase 8 stretch smoke ROM (floating point)
               forth_smoke_p8b.asm Phase 8 stretch smoke ROM (64-column)
+              forth_smoke_p9.asm  Phase 9 smoke ROM (dictionary + interrupts)
+              forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
 docs/       PROJECT_PLAN.md (read this first, project/build-facing),
@@ -151,8 +165,24 @@ make forth-smoke-p6   # Phase 6 line-editing smoke ROM
 make forth-smoke-p7   # Phase 7 storage (SAVE/LOAD) smoke ROM
 make forth-smoke-p8   # Phase 8 stretch: floating point smoke ROM
 make forth-smoke-p8b  # Phase 8 stretch: 64-column display smoke ROM
+make forth-smoke-p9   # Phase 9 smoke ROM: full dictionary + real interrupts
+make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
+
+## Try it
+
+`make forth-boot` builds the real, live product — not a smoke test.
+Run it in Fuse with a real EXROM image (see `rom/forth_smoke.asm`'s own
+header on why a real image, not a blank placeholder, matters here):
+
+```sh
+fuse --machine ts2068 --rom-ts2068-0 build/forth_boot_rom0.bin \
+     --rom-ts2068-1 <a real EXROM image>
+```
+
+It boots to a banner, plays a short startup sound, and drops you at a
+real keyboard-driven prompt. Try `5 BORDER` and press Enter.
 
 ## License
 

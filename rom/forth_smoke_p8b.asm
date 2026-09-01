@@ -164,6 +164,7 @@ SRC_3_LEN EQU $ - SRC_3
     INCLUDE "kernel/mode64/mode64.asm"
     INCLUDE "core/dict.asm"
     INCLUDE "core/interp.asm"
+DICT_CHAIN_POINT DEFL H_SEMICOLON   ; see core/control.asm's own header
     INCLUDE "core/float.asm"
     INCLUDE "core/mode64.asm"
 

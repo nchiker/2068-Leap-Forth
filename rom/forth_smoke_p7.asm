@@ -301,6 +301,7 @@ STORAGE_TEST_RECEIVE_BLOCK:      ; A = expected type, carry-in = load(set)
     INCLUDE "kernel/storage/storage.asm"
     INCLUDE "core/dict.asm"
     INCLUDE "core/interp.asm"
+DICT_CHAIN_POINT DEFL H_SEMICOLON   ; see core/control.asm's own header
     INCLUDE "core/storage.asm"
 
     DS   $4000 - $, $FF
