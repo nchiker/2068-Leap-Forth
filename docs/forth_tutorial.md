@@ -256,7 +256,7 @@ written as part of the `IF` itself.
 ```
 
 *(That example uses `."`, which prints text — not built yet, see
-section 8 — so treat it as a preview of the shape rather than something
+section 9 — so treat it as a preview of the shape rather than something
 to try today. Here's the same idea using only what actually works right
 now:)*
 
@@ -326,7 +326,7 @@ down, you build that yourself out of ordinary stack values, the way
 `COUNTDOWN`'s own value does double duty as both the thing being
 counted down *and* the loop's exit test. A loop with a proper built-in
 counter (BASIC's `FOR`/`NEXT`, Forth's own `DO`/`LOOP`) is planned but
-not built yet — see section 8.
+not built yet — see section 9.
 
 **Status:** `BEGIN` and `UNTIL` work today, exactly as shown above.
 
@@ -382,7 +382,47 @@ words do not exist yet.
 
 ---
 
-## 8. What's not here yet
+## 8. Typing and editing a line
+
+Everything so far in this document has described *what happens* when a
+line of Forth runs — this section is about *typing the line itself*.
+When you're entering something at the keyboard, before you press
+Enter, a few keys behave specially rather than just adding a letter:
+
+| Key | What it does |
+|---|---|
+| any ordinary character | Inserted at the cursor position |
+| Enter | Finishes the line and runs it |
+| Delete / backspace | Removes the character just before the cursor |
+| Cursor left / right | Moves the cursor without changing anything |
+
+The important habit to notice: **the cursor doesn't have to be at the
+end of the line.** You can type `13`, move the cursor left one position
+(now sitting between the `1` and the `3`), type `2`, and the line
+becomes `123` — the `2` was inserted exactly where the cursor was, and
+everything after it shifted over to make room. The same works in
+reverse for fixing a typo: move the cursor past a wrong character, hit
+Delete to remove the one *before* the cursor, then keep typing or press
+Enter. Nothing about this is specific to Forth — it's the same editing
+model as typing into practically any text field — but it's worth
+stating plainly since BASIC on this same family of machines historically
+handled line editing somewhat differently.
+
+**Status:** the editing behavior itself — insert, delete, and cursor
+movement all correctly composing together, including the "move back
+and insert in the middle" and "delete a specific earlier character"
+cases above — is built and verified. What's NOT wired up yet is a live
+prompt to actually try it at: none of this document's examples,
+including this section's own `13`→`123` example, can be typed at a real
+2068-Forth prompt today. That gap is specifically about connecting a
+real keyboard to this already-working editing logic (see
+[`PROJECT_PLAN.md`](PROJECT_PLAN.md) Phase 6 for exactly what's
+missing) — not about the editing behavior described above being
+unfinished or unreliable.
+
+---
+
+## 9. What's not here yet
 
 A few things a Forth veteran would expect, and a BASIC programmer would
 ask about, aren't part of 2068-Forth yet. Each will get its own section
@@ -394,13 +434,12 @@ here once it's real:
   loop that can check its condition *before* each pass, not just after).
 - **More comparisons** — only `0=` (section 5) exists so far. Ordinary
   `=`, `<`, and `>` between two arbitrary numbers don't exist yet.
-- **Printing and input** — there's no `.` (print the top of the stack)
-  or way to read a line you type yet, so none of this document's
-  examples can be tried interactively at a prompt today; they describe
-  what typing them *will* do once that exists. This also means none of
-  section 7's drawing examples can be tried at a live prompt yet either
-  — the words work, but only a fixed, pre-written program can call them
-  so far, not something you type in and watch happen.
+- **Printing, and an actual live prompt** — there's no `.` (print the
+  top of the stack) yet, and section 8's editing keys, while working,
+  aren't yet connected to a real keyboard-driven prompt. Until both
+  exist, none of this document's examples — including section 7's
+  drawing words — can be tried by typing them in and watching them
+  happen; only a fixed, pre-written program can call them so far.
 - **Named variables** (`VARIABLE`) and constants (`CONSTANT`), built on
   top of the `@`/`!` in section 4.
 - **More graphics and sound** — `FILL`, `AT-XY`, hi-res mode, and

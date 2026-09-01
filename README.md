@@ -39,9 +39,22 @@ inherited, what was deliberately left behind, and the phased build order.
   `docs/PROJECT_PLAN.md` Phase 5 for the full story and the probe
   method used to catch it. `FILL`, `AT-XY`, and hi-res `MODE` are
   follow-up work.
+- Phase 6 (`core/editor.asm` + `rom/forth_smoke_p6.asm`): line editing
+  — a single-line input buffer with insert, backspace-delete, and
+  left/right cursor movement. Confirmed passing under Fuse: three
+  canned key sequences (plain typing; cursor-left then a mid-buffer
+  insert; cursor-left, delete, cursor-right) each committed via
+  `INTERPRET_RUN` and checked against the correct final result. The
+  real interactive entry point (`EDITOR_LOOP_LIVE`) is written but
+  **not yet safely callable** — see `docs/PROJECT_PLAN.md` Phase 6 for
+  a real precondition found while writing it (`kernel/io`'s
+  `IO_READ_KEY` needs a live interrupt wired up first, which no ROM in
+  this project sets up yet).
 - **Not yet implemented, tracked for later:** the eventual live
-  startup screen must play a startup sound (needs Phase 5's `BEEP`,
-  done, and live-keyboard input, not yet built) — see
+  startup screen must play a startup sound. `BEEP` is done (Phase 5);
+  the real remaining blocker, precisely identified in Phase 6, is
+  wiring `RST $0038` to `kernel/interrupt`'s `KBD_ISR_TICK` (+ IM 1 +
+  `EI`) so `EDITOR_LOOP_LIVE` can safely run — see
   `docs/PROJECT_PLAN.md`, "Product requirement — startup screen plays a
   startup sound."
 - **`docs/forth_tutorial.md`** teaches the Forth
@@ -62,6 +75,7 @@ core/       language-layer code, not hardware-facing:
               interp.asm  (Phase 3 — outer interpreter, colon compiler)
               control.asm (Phase 4 — IF/ELSE/THEN, BEGIN/UNTIL)
               ts2068.asm  (Phase 5 — PLOT/LINE/CIRCLE/BEEP/BORDER)
+              editor.asm  (Phase 6 — line editing)
 kernel/     hardware-facing modules inherited from 2068-Leap: memory,
             io, graphics, interrupt, math, sound, storage, bank
 include/    hardware/keyboard constants and the inherited kernel API
@@ -72,6 +86,7 @@ rom/        ROM image assembly:
               forth_smoke_p3.asm  Phase 3 smoke ROM
               forth_smoke_p4.asm  Phase 4 smoke ROM
               forth_smoke_p5.asm  Phase 5 smoke ROM
+              forth_smoke_p6.asm  Phase 6 smoke ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
 docs/       PROJECT_PLAN.md (read this first, project/build-facing),
@@ -93,6 +108,7 @@ make forth-smoke      # Phase 2 dictionary/primitives smoke ROM
 make forth-smoke-p3   # Phase 3 outer interpreter/colon compiler smoke ROM
 make forth-smoke-p4   # Phase 4 control-flow smoke ROM
 make forth-smoke-p5   # Phase 5 TS2068 vocabulary smoke ROM
+make forth-smoke-p6   # Phase 6 line-editing smoke ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
 

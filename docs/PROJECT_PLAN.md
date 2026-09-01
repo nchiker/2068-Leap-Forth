@@ -358,24 +358,67 @@ this whole project has followed since Phase 2's own first bug).
 Captured 2026-09-01, not yet implemented: when 2068-Forth boots to its
 first user-visible screen (the live interactive front end — not any of
 the current smoke ROMs, which a real user will never see), that
-startup screen must play a startup sound. Depends on Phase 5's `BEEP`/
-`SOUND` (built on `kernel/sound`, already inherited and proven by
-2068-Leap) and on wiring `INTERPRET_RUN` to live keyboard input (the
-"not a live REPL yet" limitation Phase 3 and Phase 4 both still carry).
-No sound design decided yet (tone, duration, whether it's the same
-kernel/sound `SOUND_BEEP` primitive 2068-Leap's own `BEEP` statement
-uses) — just the requirement that a startup screen without one is
-incomplete.
+startup screen must play a startup sound. `BEEP` itself is done (Phase
+5, `core/ts2068.asm`, wrapping `kernel/sound`'s proven `SOUND_BEEP`),
+though it still takes raw hardware-timing numbers, not musical
+pitch/duration, so a deliberate startup tone still needs its own small
+design pass. The bigger remaining dependency, precisely identified as
+of Phase 6: this ROM must set up `RST $0038` to vector to
+`kernel/interrupt`'s `KBD_ISR_TICK`, enable IM 1, and execute `EI`
+before calling `core/editor.asm`'s `EDITOR_LOOP_LIVE` — every smoke ROM
+so far (correctly, for what each one proves) boots with interrupts
+permanently disabled, and `kernel/io`'s `IO_READ_KEY` only consumes a
+key already latched by that interrupt, it doesn't scan the keyboard
+itself. See Phase 6's own section for the full story. No sound design
+decided yet beyond "use `BEEP`" — just the requirement that a startup
+screen without a sound is incomplete.
 
 ## Phase 6 — line editing
 
-New work, deliberately small: single-line (then multi-line, if needed)
-input buffer with insert/delete/cursor, sized for editing one Forth
-definition or command line at a time — not a full-program editor with
-label/reference tracking. Read `rom/exrom_editor.asm` in 2068-Leap for
-its cursor-position and insert/delete arithmetic as a reference only;
-do not adopt its EXROM/Home split or its redraw-hook architecture, both
-of which exist to serve BASIC's multi-line program-with-labels model.
+**Status: `EDITOR_PROCESS_KEY` proven; `EDITOR_LOOP_LIVE` written but
+not yet usable.** `core/editor.asm` + `rom/forth_smoke_p6.asm` add a
+single-line input buffer (`EDIT_BUF`, 32 bytes, one screen row) with
+insert, backspace-delete, and left/right cursor movement, redrawn in
+full on every keystroke (simple and correct, not fast — no need for
+2068-Leap's own incremental/fast-scroll redraw work at this scale).
+Confirmed passing under real Fuse on the first attempt: three canned
+key sequences (plain typing; typing then cursor-left then a mid-buffer
+insert; typing then cursor-left, delete, cursor-right) each committed
+via `INTERPRET_RUN` and checked against the correct final numeric
+result — proof that insert/delete/cursor composition ends at exactly
+the right buffer content, not just that each operation works in
+isolation. As planned, this reads `rom/exrom_editor.asm`'s cursor
+arithmetic as reference only — no EXROM/Home split, no redraw hooks, no
+label table adopted from it.
+
+Deliberately no dictionary words added. A line editor is the shell that
+reads a line and hands it to `INTERPRET_RUN` — the same relationship
+`INTERPRET_RUN` itself has to `WORD`/`FIND`/`NUMBER`, sitting outside
+the language rather than inside it. `EMIT`/`KEY` as real, callable
+Forth words remain deliberately out of scope for this phase even though
+the underlying calls (`GFX_PUTCHAR`, `IO_READ_KEY`) are used
+internally — Phase 6 was scoped as "line editing," not "line editing
+plus new dictionary words," and bundling them in silently would blur
+what this phase actually proved.
+
+**A real, previously-undocumented precondition surfaced while writing
+this phase, not discovered by testing (the automated test doesn't hit
+it) but by reading `kernel/io/io.asm` closely enough to write
+`EDITOR_LOOP_LIVE`:** `IO_READ_KEY` no longer scans the keyboard matrix
+itself — it only reads a key already latched by `kernel/interrupt`'s
+`KBD_ISR_TICK`, which runs solely on a real IM 1 interrupt. Every smoke
+ROM in this project so far (including this one) boots with interrupts
+permanently disabled, matching `rom/main.asm`'s own original Milestone
+0 design. That means `EDITOR_LOOP_LIVE` — the actual live, interactive
+entry point — would hang forever at its very first keypress if called
+as-is right now: nothing ever sets up `RST $0038` to vector to
+`KBD_ISR_TICK`, enables IM 1, or executes `EI`. This is now documented
+directly in `EDITOR_LOOP_LIVE`'s own header rather than left as a
+silent landmine. Whatever ROM first boots to a live interactive prompt
+(implied by the still-open "Product requirement — startup screen plays
+a startup sound," above) needs to do that setup — a real, sizable piece
+of follow-up work this phase deliberately didn't try to absorb, to keep
+"line editing" itself provable on its own.
 
 ## Phase 7 — storage
 

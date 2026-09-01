@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 check clean
+.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 check clean
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6
 
 # Milestone 0: boot stub only.
 boot:
@@ -46,6 +46,18 @@ forth-smoke-p5:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p5.sym --lst=build/forth_smoke_p5.lst rom/forth_smoke_p5.asm
 	mv forth_smoke_p5_rom0.bin build/forth_smoke_p5_rom0.bin
+
+# Phase 6: line editing smoke ROM. Feeds core/editor.asm's
+# EDITOR_PROCESS_KEY a canned sequence of key codes (no live keyboard,
+# no Fuse keystroke injection needed) exercising insert, cursor
+# left/right, and delete, then commits each line via INTERPRET_RUN --
+# see rom/forth_smoke_p6.asm's own header for the exact sequences and
+# core/editor.asm's own header for why EDITOR_LOOP_LIVE (the real
+# interactive entry point) isn't exercised here.
+forth-smoke-p6:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p6.sym --lst=build/forth_smoke_p6.lst rom/forth_smoke_p6.asm
+	mv forth_smoke_p6_rom0.bin build/forth_smoke_p6_rom0.bin
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm
