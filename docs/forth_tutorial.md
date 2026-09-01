@@ -256,7 +256,7 @@ written as part of the `IF` itself.
 ```
 
 *(That example uses `."`, which prints text — not built yet, see
-section 10 — so treat it as a preview of the shape rather than something
+section 11 — so treat it as a preview of the shape rather than something
 to try today. Here's the same idea using only what actually works right
 now:)*
 
@@ -326,7 +326,7 @@ down, you build that yourself out of ordinary stack values, the way
 `COUNTDOWN`'s own value does double duty as both the thing being
 counted down *and* the loop's exit test. A loop with a proper built-in
 counter (BASIC's `FOR`/`NEXT`, Forth's own `DO`/`LOOP`) is planned but
-not built yet — see section 10.
+not built yet — see section 11.
 
 **Status:** `BEGIN` and `UNTIL` work today, exactly as shown above.
 
@@ -468,7 +468,42 @@ quietly assumed to be fine.
 
 ---
 
-## 10. What's not here yet
+## 10. Stretch goals: decimal numbers and a wider screen
+
+Two experimental pieces exist outside the main, planned path through
+this document — early, incomplete, and worth knowing about mainly so
+you don't mistake their gaps for something more finished being broken.
+
+**Decimal numbers.** `F+` and `F-` add and subtract numbers with a
+fractional part — the ordinary `+`/`-` from section 1 only ever work on
+whole numbers. There's no way to *write* a decimal number yet (`NUMBER`
+only understands whole numbers, section 3), so these two words can't
+actually be reached by typing an expression today — they exist and
+work, proven by feeding them values directly rather than through typed
+text, but they're not yet reachable the way `+` is. Only addition and
+subtraction exist; multiplying or dividing decimal numbers, and
+printing one, don't yet.
+
+**A wider screen.** `64COL` switches to a 64-column display — twice the
+normal text width — `32COL` switches back, `PALETTE64` picks a color
+pair, and `PLOT64` sets a point on it (`x` 0-511, `y` 0-191, wider than
+the normal screen's own coordinate range). All four are real, working
+words. What isn't yet resolved: this mode's visual behavior hasn't been
+fully characterized — testing it showed the screen rendering somewhat
+differently than expected in ways not yet explained. Treat this one as
+the least mature of everything in this document; it works at the level
+that's been checked, but "what you'll actually see on a real screen"
+isn't yet a settled answer the way it is for section 7's normal-screen
+`PLOT`/`LINE`/`CIRCLE`.
+
+**Status:** `F+`, `F-`, `64COL`, `32COL`, `PALETTE64`, and `PLOT64` all
+exist and do what's described above. Both are explicitly experimental,
+unlike every other section in this document — see
+[`PROJECT_PLAN.md`](PROJECT_PLAN.md)'s Phase 8 for the full detail.
+
+---
+
+## 11. What's not here yet
 
 A few things a Forth veteran would expect, and a BASIC programmer would
 ask about, aren't part of 2068-Forth yet. Each will get its own section
@@ -491,6 +526,8 @@ here once it's real:
   top of the `@`/`!` in section 4.
 - **More graphics and sound** — `FILL`, `AT-XY`, hi-res mode, and
   color/`INK`/`PAPER` words (see section 7's own status note).
+- **Decimal number literals, multiply/divide, and printing** — see
+  section 10.
 
 See [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the full order these are
 planned to arrive in.

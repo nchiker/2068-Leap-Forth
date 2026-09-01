@@ -496,8 +496,95 @@ defer it in favor of the faster fake-transport proof for this pass.
 
 ## Phase 8 — stretch goals
 
-- Floating-point word set (`F+ F- F* F/ F.` etc.) over a ported
-  `exrom_calc.asm`, once the integer core is solid.
+**Status: floating point (F+, F-) and 64-column display both proven as
+a first slice.** Both scoping questions below were put to the user
+directly before writing any code, since each had a large fidelity/cost
+fork.
+
+### Floating point
+
+`core/float.asm` + `rom/forth_smoke_p8.asm` add `F+`/`F-` as a small,
+self-contained, native Forth float implementation — NOT a port of
+2068-Leap's real `rom/exrom_calc.asm`. That engine is the classic
+Sinclair `RST $28` design (the caller does `RST $28` followed by an
+inline literal-bytecode stream; the engine reads its own return address
+to find it), and porting it faithfully would also mean EXROM paging
+around every call, the real Sinclair float-literal bit encoding, and a
+bridge between its own calculator stack and this project's integer data
+stack — assessed as a multi-session undertaking, not a stretch-goal-
+sized first slice, and this project's own charter already grants full
+freedom to diverge from 2068-Leap's conventions rather than stay
+compatible with them.
+
+The format instead: 3 bytes per float (16-bit signed mantissa, 8-bit
+signed exponent, value = mantissa × 2^exponent) — not IEEE-754, no
+normalization, a real and stated limitation that aligning two very
+different exponents can lose precision or shift a mantissa to zero.
+Floats live on their own stack, addressed by `IY` (confirmed by
+grepping the whole `kernel/`+`core/` tree to be completely unused
+anywhere else, the same way `IX` was free for the integer stack in
+Phase 2), placed just below `DSTACK_LIMIT` so it can never collide with
+it even at full depth. Confirmed passing under real Fuse on the first
+attempt: three checkpoints, each testing `F+`/`F-` as genuine
+dictionary words (found via `FIND`, not called directly as assembly),
+with hand-picked values that align without losing any bits, exercising
+all three branches of the shared alignment logic (`e1<e2`, `e1=e2`,
+`e1>e2`). `F*`/`F/` (need a wider multiply this project's `kernel/math`
+doesn't have yet) and `F.` (needs `EMIT`, itself not a Forth word yet)
+remain real follow-up work, not folded into this slice.
+
+### 64-column display
+
+**A real find while researching this, worth remembering:** the ROM
+disassembly ("Timex Sinclair 2068 ROM Disassembly," David Anderson,
+2023) documents port `$FF`'s bits individually (bit 1 = ultra-high-res,
+bit 2 = 64-column) in a way that reads as if bit 2 alone enables
+64-column mode. It does not. The user's own suggestion to check
+`~/Backup` for pre-git snapshots turned up real, working, once-shipped
+2068-Leap code (`~/Backup/ts2068rom.tar.gz "with full graphics"`,
+predating a 2026-08-20 removal for that project's own ROM-budget
+reasons — no trace survives in 2068-Leap's own git history, confirmed
+by `git log -S"64-Column"` finding only the post-removal baseline
+commit) proving 64-column mode actually needs bits 1 AND 2 set
+*together* (video byte bits 0-2 = `%110`, with bits 3-5 as an ink/paper
+palette 0-7). This project's own first draft of
+`kernel/mode64/mode64.asm`, written from the disassembly alone before
+that backup was checked, had exactly the wrong bit pattern — a real bug
+that would have shipped if the user hadn't asked to check the backups
+first, and never caught by static checks or z80sim, since the code was
+internally consistent, just aimed at the wrong port value.
+
+`kernel/mode64/mode64.asm` ports the recovered code (mode switch,
+palette select, pixel plot/read for the wide 512×192 coordinate space)
+into a **new** kernel/ module rather than modifying the inherited
+`kernel/graphics/graphics.asm` (which stays exactly as inherited) —
+matching the user's own chosen scope ("2068-Forth's own kernel-adjacent
+code, diverging from 2068-Leap"). `core/mode64.asm` adds four real
+dictionary words: `64COL`, `32COL`, `PALETTE64`, `PLOT64`.
+`rom/forth_smoke_p8b.asm` confirmed all three checkpoints passing under
+real Fuse on the first attempt once the correct bit pattern was in
+place: a plotted pixel reads back at exactly the right coordinate (and
+nowhere else), a selected palette shows up correctly in port `$FF`'s
+shadow, and returning to Normal mode clears the mode bits.
+
+**A genuine, unexplained empirical observation, recorded rather than
+guessed at:** screenshotting Fuse while still in 64-column mode (a
+separate, throwaway build that freezes right after entering it, not
+part of the committed smoke ROM) showed the *entire* visible area,
+including where the border normally renders, as a uniform light color,
+with the plotted pixel visible as a small dark mark at approximately
+the expected position. The dot is real, positive evidence the
+pixel-level wiring is correct. The uniform full-field color instead of
+a distinct border was not predicted by anything confirmed above and is
+not further explained here — real hardware behavior, a genuine Fuse
+emulation gap for this specific SCLD mode, or something about the
+default palette's color mapping are all plausible and none has been
+checked. Follow-up work, not resolved by this phase.
+
+### Still open
+
+- `F*`/`F/`/`F.` (floating point), line/circle/fill equivalents for
+  64-column mode, and the unexplained rendering observation above.
 - A second dictionary segment in EXROM via the already-proven
   `kernel/bank` trampoline, if the Home-resident dictionary gets tight.
 - Block/screen-style source loading from tape, as an alternative or

@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 check clean
+.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b check clean
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b
 
 # Milestone 0: boot stub only.
 boot:
@@ -69,6 +69,26 @@ forth-smoke-p7:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p7.sym --lst=build/forth_smoke_p7.lst rom/forth_smoke_p7.asm
 	mv forth_smoke_p7_rom0.bin build/forth_smoke_p7_rom0.bin
+
+# Phase 8 (stretch goal, part A): floating point (F+, F-) smoke ROM.
+# Native Forth floats, not a port of 2068-Leap's own RST $28 calculator
+# -- see core/float.asm's own header. No kernel/ dependency.
+forth-smoke-p8:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p8.sym --lst=build/forth_smoke_p8.lst rom/forth_smoke_p8.asm
+	mv forth_smoke_p8_rom0.bin build/forth_smoke_p8_rom0.bin
+
+# Phase 8 (stretch goal, part B): 64-column display smoke ROM.
+# kernel/mode64/mode64.asm is recovered, once-shipped 2068-Leap code
+# (removed from that project for its own ROM-budget reasons, not
+# because it didn't work) -- see that file's own header for the real
+# provenance and docs/PROJECT_PLAN.md's Phase 8 section for the full
+# story, including a first attempt here that had the wrong port bit
+# pattern before that code was found.
+forth-smoke-p8b:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p8b.sym --lst=build/forth_smoke_p8b.lst rom/forth_smoke_p8b.asm
+	mv forth_smoke_p8b_rom0.bin build/forth_smoke_p8b_rom0.bin
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm

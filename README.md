@@ -64,6 +64,23 @@ inherited, what was deliberately left behind, and the phased build order.
   `STORAGE_TEST_FAKE_SEND`/`RECEIVE` hooks); a **real Fuse tape
   round-trip is still open, deliberately deferred** — this proves the
   wiring, not real wire-format compatibility in an actual emulator.
+- Phase 8, stretch goals (`core/float.asm` + `rom/forth_smoke_p8.asm`;
+  `kernel/mode64/mode64.asm` + `core/mode64.asm` + `rom/forth_smoke_p8b.asm`):
+  - **Floating point** — `F+`/`F-`, a small native Forth float
+    implementation (3-byte mantissa+exponent, its own `IY`-addressed
+    stack), NOT a port of 2068-Leap's real `RST $28` calculator engine
+    (assessed as multi-session-sized; this project is free to diverge).
+    Confirmed passing under Fuse. `F*`/`F/`/`F.` remain open.
+  - **64-column display** — `64COL`, `32COL`, `PALETTE64`, `PLOT64`.
+    This is recovered, once-shipped 2068-Leap code (removed from that
+    project 2026-08-20 for its own ROM-budget reasons), found in a
+    pre-git backup tarball at the user's own suggestion — good thing:
+    the ROM disassembly alone led to a real, wrong first attempt (bit 2
+    alone, when the real hardware needs bits 1+2 together). Confirmed
+    passing under Fuse; a genuine unexplained rendering observation
+    (the whole visible area, border included, renders as one uniform
+    color while this mode is active) is recorded, not resolved — see
+    `docs/PROJECT_PLAN.md` Phase 8 for the full story.
 - **Not yet implemented, tracked for later:** the eventual live
   startup screen must play a startup sound. `BEEP` is done (Phase 5);
   the real remaining blocker, precisely identified in Phase 6, is
@@ -91,8 +108,12 @@ core/       language-layer code, not hardware-facing:
               ts2068.asm  (Phase 5 — PLOT/LINE/CIRCLE/BEEP/BORDER)
               editor.asm  (Phase 6 — line editing)
               storage.asm (Phase 7 — SAVE/LOAD)
-kernel/     hardware-facing modules inherited from 2068-Leap: memory,
-            io, graphics, interrupt, math, sound, storage, bank
+              float.asm   (Phase 8 stretch — F+/F-)
+              mode64.asm  (Phase 8 stretch — 64COL/32COL/PALETTE64/PLOT64)
+kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
+            io, graphics, interrupt, math, sound, storage, bank) plus
+            2068-Forth's own addition, mode64/ (recovered, once-shipped
+            2068-Leap code — see that module's own header)
 include/    hardware/keyboard constants and the inherited kernel API
             contract (include/kernel_api.inc)
 rom/        ROM image assembly:
@@ -103,6 +124,8 @@ rom/        ROM image assembly:
               forth_smoke_p5.asm  Phase 5 smoke ROM
               forth_smoke_p6.asm  Phase 6 smoke ROM
               forth_smoke_p7.asm  Phase 7 smoke ROM
+              forth_smoke_p8.asm  Phase 8 stretch smoke ROM (floating point)
+              forth_smoke_p8b.asm Phase 8 stretch smoke ROM (64-column)
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
 docs/       PROJECT_PLAN.md (read this first, project/build-facing),
@@ -126,6 +149,8 @@ make forth-smoke-p4   # Phase 4 control-flow smoke ROM
 make forth-smoke-p5   # Phase 5 TS2068 vocabulary smoke ROM
 make forth-smoke-p6   # Phase 6 line-editing smoke ROM
 make forth-smoke-p7   # Phase 7 storage (SAVE/LOAD) smoke ROM
+make forth-smoke-p8   # Phase 8 stretch: floating point smoke ROM
+make forth-smoke-p8b  # Phase 8 stretch: 64-column display smoke ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
 
