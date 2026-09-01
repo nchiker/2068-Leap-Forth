@@ -440,8 +440,10 @@ beyond what each word's own arguments say.
 | `CIRCLE` | `( xc yc r -- )` | Draw a circle outline centered at `(xc, yc)` with radius `r` |
 | `BORDER` | `( color -- )` | Set the screen border to `color` (0-7, same numbering as BASIC's `BORDER`) |
 | `BEEP` | `( pitch duration -- )` | Produce a tone |
-| `INK` | `( color -- )` | Set the foreground color `PLOT`/`LINE`/`CIRCLE` draw with from now on (0-7) |
+| `INK` | `( color -- )` | Set the foreground color `PLOT`/`LINE`/`CIRCLE`/`FILL` draw with from now on (0-7) |
 | `PAPER` | `( color -- )` | Set the background color the same way |
+| `FILL` | `( x y -- )` | Flood-fill the enclosed area touching `(x, y)` with the current color |
+| `AT-XY` | `( col row -- )` | Move where the next `EMIT`/`.`/`."` prints to (column 0-31, row 0-22) |
 
 ```forth
 10 20 PLOT              \ a single dot
@@ -451,6 +453,10 @@ beyond what each word's own arguments say.
 
 2 INK  6 PAPER
 150 100 20 CIRCLE        \ the same circle again, now red on yellow
+150 100 FILL             \ ...and now solid red inside, too
+
+10 5 AT-XY  ." here"      \ prints "here" starting at column 10, row 5
+                          \ instead of wherever printing last left off
 ```
 
 Reading these left to right follows the same postfix habit as
@@ -474,10 +480,9 @@ typically takes a duration in seconds and a pitch as a semitone offset;
 with no conversion between the two yet. Getting a specific, predictable
 musical note or duration out of it isn't straightforward today.
 
-**Status:** `PLOT`, `LINE`, `CIRCLE`, `BORDER`, `BEEP`, `INK`, and
-`PAPER` all work today, exactly as shown above. `FILL` (flood-fill an
-area), `AT-XY` (position text), and hi-res graphics mode do not exist
-yet.
+**Status:** `PLOT`, `LINE`, `CIRCLE`, `BORDER`, `BEEP`, `INK`, `PAPER`,
+`FILL`, and `AT-XY` all work today, exactly as shown above. Hi-res
+graphics mode does not exist yet.
 
 ---
 
@@ -633,8 +638,7 @@ A few things a Forth veteran would expect, and a BASIC programmer would
 ask about, aren't part of 2068-Forth yet. Each will get its own section
 here once it's real:
 
-- **More graphics** — `FILL` (flood-fill an area), `AT-XY` (position
-  text), and hi-res graphics mode (see section 7's own status note).
+- **Hi-res graphics mode** — see section 7's own status note.
 - **Decimal number literals, multiply, and divide** — see section 11.
 
 See [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the full order these are

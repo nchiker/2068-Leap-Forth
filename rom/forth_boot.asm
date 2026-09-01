@@ -20,9 +20,10 @@
 ; The full dictionary is assembled here: every word from every phase
 ; (0=/IF/ELSE/THEN/BEGIN/UNTIL, PLOT/LINE/CIRCLE/BEEP/BORDER,
 ; SAVE/LOAD, F+/F-, 64COL/32COL/PALETTE64/PLOT64, EMIT/., =/</>,
-; VARIABLE/CONSTANT, .", WHILE/REPEAT, INK/PAPER, DO/LOOP/I), chained
-; into one LATEST list via the same DICT_CHAIN_POINT splices
-; rom/forth_smoke_p9.asm introduced and proved.
+; VARIABLE/CONSTANT, .", WHILE/REPEAT, INK/PAPER, DO/LOOP/I,
+; FILL/AT-XY), chained into one LATEST list via the same
+; DICT_CHAIN_POINT splices rom/forth_smoke_p9.asm introduced and
+; proved.
 ;
 ; WHAT ISN'T HERE YET, stated plainly: no live automated test exercises
 ; the interactive loop this file actually boots into — by its nature,
@@ -91,7 +92,7 @@ COLD_START:
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
-    ld   hl, DICT_LATEST_INIT_DOLOOP ; the full chain's own head — see
+    ld   hl, DICT_LATEST_INIT_MOREGFX ; the full chain's own head — see
                                     ; this file's own header
     ld   (LATEST), hl
     ld   hl, FORTH_DICT_RAM
@@ -190,6 +191,8 @@ DICT_CHAIN_POINT DEFL H_REPEAT
     INCLUDE "core/color.asm"
 DICT_CHAIN_POINT DEFL H_PAPER
     INCLUDE "core/doloop.asm"
+DICT_CHAIN_POINT DEFL H_I
+    INCLUDE "core/moregfx.asm"
     INCLUDE "core/editor.asm"
 
     DS   $4000 - $, $FF

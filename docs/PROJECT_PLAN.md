@@ -1064,6 +1064,51 @@ With this phase, `DO`/`LOOP` is no longer on the open list — `FILL`,
 hi-res mode, and decimal-number multiply/divide remain, along with the
 tracked-but-unscheduled 64-column text mode stretch goal below.
 
+## Phase 17 — FILL and AT-XY
+
+**Status: done.** `core/moregfx.asm` adds `FILL ( x y -- )` and
+`AT-XY ( col row -- )` — the rest of the "More graphics" gap short of
+hi-res mode, which remains a bigger undertaking, left open. `FILL`
+wraps `kernel/graphics`'s own `GFX_FILL` (a proven flood-fill routine,
+already inherited and unused by this project until now), picking up
+`CURRENT_ATTR` the same way `PLOT`/`LINE`/`CIRCLE` have since Phase 15
+— setting `INK` before a `FILL` colors it, exactly like it colors a
+shape. `AT-XY` moves `core/print.asm`'s own `PRINT_ROW`/`PRINT_COL`
+directly, so the next `EMIT`/`.`/`."` lands wherever it's pointed
+instead of wherever printing last left off.
+
+**A real bug caught in the test, not the implementation — the same
+discipline that caught Phase 16's own test bug.** The first draft of
+`rom/forth_smoke_p17.asm`'s `AT-XY` checkpoint used the wrong argument
+order calling `kernel/graphics`'s `GFX_READ_PIXEL` to verify a pixel
+had actually been drawn: that routine's real contract is `B = x (pixel
+column), C = y (pixel row)`, but the checkpoint's own helper had
+conflated it with `GFX_CELL_ATTR_ADDR`'s *different* convention
+(`B = row, C = column`, in cell units) used earlier in the same file —
+two genuinely different coordinate systems with genuinely different
+argument orders, easy to mix up. The checkpoint failed with the
+character visibly drawn in the right place on screen, which is exactly
+what made this worth tracking down rather than dismissing — confirmed
+by reading `GFX_READ_PIXEL`'s own documented header rather than
+guessing, then fixed by swapping which loop variable feeds `B` versus
+`C`.
+
+`rom/forth_smoke_p17.asm` proves both under real Fuse with three
+checkpoints: `FILL` (draw a `CIRCLE` outline, set `INK`, `FILL` its
+interior — verifying a pixel inside is now set, the covering cell's
+attribute has the new ink color, and a pixel far outside stays clear,
+proving the fill stayed bounded), `AT-XY` + `EMIT` (verifying both
+`PRINT_ROW`/`PRINT_COL` land correctly and a real pixel was drawn in
+that exact screen cell), and `AT-XY` positioned right at the
+column-31 wrap boundary (proving it doesn't disturb `core/print.asm`'s
+own existing wrap logic). Wired into `rom/forth_boot.asm`'s full chain
+right after `core/doloop.asm`; re-verified with the same
+full-chain-replica diagnostic technique and a fresh boot screenshot.
+
+Hi-res graphics mode and decimal-number multiply/divide are the only
+items left on the original gap list, along with the
+tracked-but-unscheduled 64-column text mode stretch goal below.
+
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
 **Not yet scheduled as a numbered phase — tracked here so it isn't

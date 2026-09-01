@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-boot check clean
+.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-boot check clean
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-boot
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-boot
 
 # Milestone 0: boot stub only.
 boot:
@@ -178,6 +178,17 @@ forth-smoke-p16:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p16.sym --lst=build/forth_smoke_p16.lst rom/forth_smoke_p16.asm
 	mv forth_smoke_p16_rom0.bin build/forth_smoke_p16_rom0.bin
+
+# Phase 17: FILL/AT-XY smoke ROM. FILL wraps kernel/graphics's own
+# proven GFX_FILL flood-fill, picking up CURRENT_ATTR (Phase 15) like
+# PLOT/LINE/CIRCLE. AT-XY moves core/print.asm's own PRINT_ROW/
+# PRINT_COL directly. A real GFX_READ_PIXEL B/C-argument-order bug was
+# caught in the test itself before trusting it -- see
+# core/moregfx.asm's own header.
+forth-smoke-p17:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p17.sym --lst=build/forth_smoke_p17.lst rom/forth_smoke_p17.asm
+	mv forth_smoke_p17_rom0.bin build/forth_smoke_p17_rom0.bin
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm

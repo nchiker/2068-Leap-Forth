@@ -182,6 +182,19 @@ inherited, what was deliberately left behind, and the phased build order.
   nested-loop stack-discipline case) and re-verified wired into
   `rom/forth_boot.asm`'s full chain. See `docs/PROJECT_PLAN.md` Phase
   16 for the full story.
+- Phase 17 (`core/moregfx.asm` + `rom/forth_smoke_p17.asm`): `FILL`/
+  `AT-XY` — the rest of "More graphics" short of hi-res mode. `FILL`
+  wraps `kernel/graphics`'s own proven `GFX_FILL`, picking up
+  `CURRENT_ATTR` like `PLOT`/`LINE`/`CIRCLE` since Phase 15; `AT-XY`
+  moves `core/print.asm`'s own print position directly. Another real
+  bug caught in the test, not the implementation: a `GFX_READ_PIXEL`
+  B/C argument-order mixup (a different convention from
+  `GFX_CELL_ATTR_ADDR`, used earlier in the same test) — found and
+  fixed before trusting the checkpoint. Confirmed passing under Fuse
+  (three checkpoints, including a bounded-fill verification and a
+  column-wrap-boundary check) and re-verified wired into
+  `rom/forth_boot.asm`'s full chain. See `docs/PROJECT_PLAN.md` Phase
+  17 for the full story.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -214,6 +227,7 @@ core/       language-layer code, not hardware-facing:
               loop.asm    (Phase 14 — WHILE/REPEAT)
               color.asm   (Phase 15 — INK/PAPER)
               doloop.asm  (Phase 16 — DO/LOOP/I)
+              moregfx.asm (Phase 17 — FILL/AT-XY)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
             2068-Forth's own addition, mode64/ (recovered, once-shipped
@@ -238,6 +252,7 @@ rom/        ROM image assembly:
               forth_smoke_p14.asm Phase 14 smoke ROM (WHILE/REPEAT)
               forth_smoke_p15.asm Phase 15 smoke ROM (INK/PAPER)
               forth_smoke_p16.asm Phase 16 smoke ROM (DO/LOOP/I)
+              forth_smoke_p17.asm Phase 17 smoke ROM (FILL/AT-XY)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -272,6 +287,7 @@ make forth-smoke-p13  # Phase 13 smoke ROM: ."
 make forth-smoke-p14  # Phase 14 smoke ROM: WHILE/REPEAT
 make forth-smoke-p15  # Phase 15 smoke ROM: INK/PAPER
 make forth-smoke-p16  # Phase 16 smoke ROM: DO/LOOP/I
+make forth-smoke-p17  # Phase 17 smoke ROM: FILL/AT-XY
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
@@ -291,8 +307,9 @@ It boots to a banner, plays a short startup sound, and drops you at a
 real keyboard-driven prompt. Try `5 BORDER` and press Enter, `5 3 + .`
 to see `.` print `8` on the row below the banner, `5 3 > .` to see `-1`
 (Forth's TRUE) printed, `VARIABLE FOO 42 FOO ! FOO @ .` to see `42`,
-`: GREET ." HI" ; GREET` to see `."` print a literal string, or
-`: FIVE 5 0 DO I . LOOP ; FIVE` to see `0 1 2 3 4` printed.
+`: GREET ." HI" ; GREET` to see `."` print a literal string, `: FIVE 5 0 DO I . LOOP ; FIVE` to see
+`0 1 2 3 4` printed, or `100 100 30 CIRCLE 2 INK 100 100 FILL` to see a
+red-filled circle.
 
 ## License
 
