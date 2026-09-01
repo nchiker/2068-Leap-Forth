@@ -286,21 +286,35 @@ something different.
 
 Since "zero means false" is how every condition in Forth works, you
 often need a word that turns an ordinary calculation into a proper
-true/false answer. `0=` does exactly that:
+true/false answer. `0=`, `=`, `<`, and `>` all do exactly that:
 
 | Word | Effect | What it does |
 |---|---|---|
 | `0=` | `( n -- flag )` | `flag` is true if `n` is exactly `0`, false otherwise |
+| `=`  | `( a b -- flag )` | `flag` is true if `a` and `b` are equal |
+| `<`  | `( a b -- flag )` | `flag` is true if `a` is less than `b` |
+| `>`  | `( a b -- flag )` | `flag` is true if `a` is greater than `b` |
 
 ```forth
 : ISZERO  0= IF 111 ELSE 222 THEN ;
 
 0 ISZERO     \ 0= sees 0 -> true -> 111
 5 ISZERO     \ 0= sees 5 -> false -> 222
+
+: BIGGER  > IF 111 ELSE 222 THEN ;
+
+5 3 BIGGER   \ 5 3 > sees 5>3 -> true -> 111
+3 5 BIGGER   \ 3 5 > sees 3>5 -> false -> 222
 ```
 
-**Status:** `IF`, `ELSE`, `THEN`, and `0=` all work today, exactly as
-shown above (the `."` example is the only preview in this section).
+A true flag prints as `-1`, not `1` — `5 3 > .` prints `-1`. This is
+the standard Forth convention (every bit set), not a bug; it just looks
+unfamiliar coming from BASIC or most other languages, where "true" is
+usually `1`.
+
+**Status:** `IF`, `ELSE`, `THEN`, `0=`, `=`, `<`, and `>` all work
+today, exactly as shown above (the `."` example is the only preview in
+this section).
 
 ## 6. Repeating yourself: `BEGIN` `UNTIL`
 
@@ -544,8 +558,6 @@ here once it's real:
   `FOR`/`NEXT`, complete with a built-in loop counter, unlike
   `BEGIN`/`UNTIL` in section 6) and `BEGIN`/`WHILE`/`REPEAT` (a
   loop that can check its condition *before* each pass, not just after).
-- **More comparisons** — only `0=` (section 5) exists so far. Ordinary
-  `=`, `<`, and `>` between two arbitrary numbers don't exist yet.
 - **Printing literal text** — `.` (section 9) prints a *computed
   number*; there's no `."` yet for printing a fixed piece of text
   (`." hello"`) the way BASIC's `PRINT "hello"` does.

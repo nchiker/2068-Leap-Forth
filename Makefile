@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-boot check clean
+.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-boot check clean
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-boot
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-boot
 
 # Milestone 0: boot stub only.
 boot:
@@ -121,6 +121,15 @@ forth-smoke-p10:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p10.sym --lst=build/forth_smoke_p10.lst rom/forth_smoke_p10.asm
 	mv forth_smoke_p10_rom0.bin build/forth_smoke_p10_rom0.bin
+
+# Phase 11: comparisons (=, <, >) smoke ROM. No kernel/ dependency --
+# pure Z80 logic. Signed < and > use a sign-bit case split, not the
+# Z80's own P/V flag after SBC -- see core/compare.asm's own header for
+# the six hand-verified cases, including both 16-bit extremes.
+forth-smoke-p11:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p11.sym --lst=build/forth_smoke_p11.lst rom/forth_smoke_p11.asm
+	mv forth_smoke_p11_rom0.bin build/forth_smoke_p11_rom0.bin
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm

@@ -786,6 +786,40 @@ still real, open follow-up work, not done here. `KEY` (reading a
 keystroke as a Forth value) and named variables (`VARIABLE`/`CONSTANT`)
 remain absent.
 
+## Phase 11 — comparisons (=, <, >)
+
+**Status: done.** `core/compare.asm` adds `= ( a b -- flag )`,
+`< ( a b -- flag )`, and `> ( a b -- flag )` — the exact gap
+`docs/forth_tutorial.md`'s "What's not here yet" section had named
+since Phase 4 ("only `0=` exists so far"). TRUE/FALSE match
+`core/control.asm`'s own `0=` convention (`-1`/`0`, the ANS Forth TRUE
+— all bits set), not `1`/`0`. No `kernel/` dependency at all — like
+`core/float.asm` before it, this is pure Z80 logic.
+
+Signed `<`/`>` are both built on one internal helper, `CMP_LESS_HL_DE`,
+using a sign-bit case split rather than trusting the Z80's own P/V
+(overflow) flag after `SBC HL, DE`: two numbers with the *same* sign
+can never overflow the signed 16-bit range when subtracted, so that
+subtraction's own result sign directly answers the comparison; two
+numbers with *different* signs can be answered from their own sign
+bits alone, with no subtraction needed at all. The only subtraction
+this file ever performs is therefore one that is structurally
+guaranteed not to overflow — verified by hand against six cases,
+including both 16-bit extremes (`-32768 < -1` and `-1 < -32768`), the
+same rigor `core/print.asm`'s `UDIV10` used for its own `-32768` edge
+case. `>` reuses the same helper by swapping which operand plays which
+role (`a > b` is exactly the same question as `b < a`) rather than
+duplicating the sign-bit logic.
+
+`rom/forth_smoke_p11.asm` proves all three under real Fuse (three
+checkpoints covering ten total comparisons, including every hand-
+verified edge case) with no `kernel/` include at all. Wired into
+`rom/forth_boot.asm`'s full dictionary chain right after `core/print.asm`
+(`DICT_CHAIN_POINT DEFL H_DOT`); re-verified with the same deterministic
+full-chain-replica diagnostic technique Phase 10 introduced — `5 3 > .`
+correctly prints `-1` — rather than relying on live keyboard testing
+for this phase.
+
 ## Testing discipline
 
 Carry forward the validated order from 2068-Leap, applied to Forth
