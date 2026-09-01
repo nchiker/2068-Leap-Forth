@@ -28,29 +28,41 @@
 ; every earlier phase's "no error recovery yet" scope note, not an
 ; oversight specific to this file.
 ;
-; A FIXED DEFAULT ATTRIBUTE: none of these words take an ink/paper
-; color — 2068-Forth has no INK/PAPER words yet (BASIC's equivalent),
-; so DEFAULT_ATTR below (white paper, black ink — the classic Spectrum
-; power-on default) is used for every PLOT/LINE/CIRCLE call. Revisit
-; once color words exist.
+; A SETTABLE CURRENT ATTRIBUTE, since Phase 15: PLOT/LINE/CIRCLE read
+; their attribute byte from CURRENT_ATTR (below), not a hardcoded
+; constant — core/color.asm's INK/PAPER (Phase 15) modify CURRENT_ATTR
+; directly, and nothing here needs to know that file exists. Before
+; Phase 15 this was a fixed compile-time constant (DEFAULT_ATTR, still
+; the correct *initial* value — white paper, black ink, the classic
+; Spectrum power-on default); now it's a REQUIRED runtime
+; initialization, exactly like core/print.asm's own PRINT_ROW/PRINT_COL
+; convention: whatever ROM INCLUDEs this file must set
+; `ld a, DEFAULT_ATTR` / `ld (CURRENT_ATTR), a` at cold start, or
+; PLOT/LINE/CIRCLE will draw with whatever garbage happens to be in
+; that uninitialized RAM byte. Every ROM in this project that already
+; included this file (rom/forth_smoke_p5.asm, rom/forth_smoke_p9.asm,
+; rom/forth_boot.asm) was updated to do this and re-verified under real
+; Fuse when this change landed — see docs/PROJECT_PLAN.md's Phase 15
+; section.
 ;
-; RAM ADDRESS PLANNING — READ BEFORE ADDING SCRATCH HERE: this file
-; needs none of its own RAM state (every word here just moves values
-; between the data stack and kernel sysvars/registers), but the moment
-; a future addition DOES need a scratch cell, don't guess an address —
-; core/interp.asm's own header tells the story of a real collision this
-; project already had between its own scratch and 2068-Leap's
-; kernel/BASIC sysvars, found by literally assembling every kernel/
-; module this ROM needs together and inspecting the resulting .sym
-; file for the address range in question. Repeat that check, don't
-; assume a gap is empty by inspection alone.
+; RAM ADDRESS PLANNING — READ BEFORE ADDING MORE SCRATCH HERE:
+; CURRENT_ATTR's own address ($87CB) was placed by literally assembling
+; every kernel/ module this ROM needs together and inspecting the
+; resulting .sym file for a free byte, not guessed — core/interp.asm's
+; own header tells the story of a real collision this project already
+; had between its own scratch and 2068-Leap's kernel/BASIC sysvars.
+; Repeat that check for anything added here later, don't assume a gap
+; is empty by inspection alone.
 ; ============================================================================
 
     IFNDEF CORE_TS2068_ASM
     DEFINE CORE_TS2068_ASM
 
 DEFAULT_ATTR EQU $38   ; paper 7 (white), ink 0 (black), no bright/flash —
-                       ; the classic Spectrum-family power-on default
+                       ; the classic Spectrum-family power-on default;
+                       ; the value CURRENT_ATTR must be initialized to
+CURRENT_ATTR EQU $87CB ; 1 byte: the attribute PLOT/LINE/CIRCLE draw
+                       ; with — see this file's own header
 
 ; ============================================================================
 ; PLOT ( x y -- )
@@ -63,7 +75,7 @@ W_PLOT:
     ld   c, l
     call DPOP_HL           ; hl = x
     ld   b, l
-    ld   a, DEFAULT_ATTR
+    ld   a, (CURRENT_ATTR)
     ld   d, 0              ; OVER=0: set the pixel, don't XOR-toggle it
     call GFX_WRITE_PIXEL
     ret
@@ -87,7 +99,7 @@ W_LINE:
     call DPOP_HL           ; hl = x1
     ld   a, l
     ld   (GFX_LINE_X0), a
-    ld   a, DEFAULT_ATTR
+    ld   a, (CURRENT_ATTR)
     ld   (GFX_LINE_ATTR), a
     xor  a
     ld   (GFX_LINE_OVER), a
@@ -110,7 +122,7 @@ W_CIRCLE:
     call DPOP_HL           ; hl = xc
     ld   a, l
     ld   (GFX_CIRCLE_XC), a
-    ld   a, DEFAULT_ATTR
+    ld   a, (CURRENT_ATTR)
     ld   (GFX_CIRCLE_ATTR), a
     xor  a
     ld   (GFX_CIRCLE_OVER), a

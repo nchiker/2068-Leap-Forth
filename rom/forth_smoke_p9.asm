@@ -121,6 +121,8 @@ COLD_START:
     ld   (HERE), hl
     xor  a
     ld   (STATE), a
+    ld   a, DEFAULT_ATTR          ; required since Phase 15 -- see
+    ld   (CURRENT_ATTR), a        ; core/ts2068.asm's own header
 
 ; ---- checkpoint 1: FIND every chain-spliced phase's own word ----
     ld   a, 1

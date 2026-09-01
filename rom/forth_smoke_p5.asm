@@ -105,6 +105,8 @@ COLD_START:
     ld   (HERE), hl
     xor  a
     ld   (STATE), a
+    ld   a, DEFAULT_ATTR          ; required since Phase 15 -- see
+    ld   (CURRENT_ATTR), a        ; core/ts2068.asm's own header
 
     call GFX_CLS                 ; start from a known-clear bitmap so a
                                   ; stray already-set pixel can't fake a pass

@@ -153,6 +153,20 @@ inherited, what was deliberately left behind, and the phased build order.
   loop body must never run at all) and re-verified wired into
   `rom/forth_boot.asm`'s full chain. See `docs/PROJECT_PLAN.md` Phase
   14 for the full story.
+- Phase 15 (`core/color.asm` + `rom/forth_smoke_p15.asm`): `INK`/
+  `PAPER`. Unlike every phase since 12, this one genuinely required
+  editing the already-shared `core/ts2068.asm` — `PLOT`/`LINE`/`CIRCLE`
+  now read their attribute from a settable `CURRENT_ATTR` cell instead
+  of a hardcoded constant, a deliberate, consciously-accepted exception
+  to this project's "add a new file, don't touch a shared one"
+  practice. Every existing consumer of `core/ts2068.asm`
+  (`rom/forth_smoke_p5.asm`, `rom/forth_smoke_p9.asm`,
+  `rom/forth_boot.asm`) got a one-line `COLD_START` addition and was
+  rebuilt and re-verified passing under real Fuse with no regression.
+  Confirmed passing under Fuse (three checkpoints, reading back the
+  REAL screen attribute byte, not just internal state) and re-verified
+  wired into `rom/forth_boot.asm`'s full chain. See
+  `docs/PROJECT_PLAN.md` Phase 15 for the full story.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -183,6 +197,7 @@ core/       language-layer code, not hardware-facing:
               variable.asm (Phase 12 — VARIABLE/CONSTANT)
               dotquote.asm (Phase 13 — .")
               loop.asm    (Phase 14 — WHILE/REPEAT)
+              color.asm   (Phase 15 — INK/PAPER)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
             2068-Forth's own addition, mode64/ (recovered, once-shipped
@@ -205,6 +220,7 @@ rom/        ROM image assembly:
               forth_smoke_p12.asm Phase 12 smoke ROM (VARIABLE/CONSTANT)
               forth_smoke_p13.asm Phase 13 smoke ROM (.")
               forth_smoke_p14.asm Phase 14 smoke ROM (WHILE/REPEAT)
+              forth_smoke_p15.asm Phase 15 smoke ROM (INK/PAPER)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -237,6 +253,7 @@ make forth-smoke-p11  # Phase 11 smoke ROM: =/</>
 make forth-smoke-p12  # Phase 12 smoke ROM: VARIABLE/CONSTANT
 make forth-smoke-p13  # Phase 13 smoke ROM: ."
 make forth-smoke-p14  # Phase 14 smoke ROM: WHILE/REPEAT
+make forth-smoke-p15  # Phase 15 smoke ROM: INK/PAPER
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```

@@ -415,12 +415,17 @@ beyond what each word's own arguments say.
 | `CIRCLE` | `( xc yc r -- )` | Draw a circle outline centered at `(xc, yc)` with radius `r` |
 | `BORDER` | `( color -- )` | Set the screen border to `color` (0-7, same numbering as BASIC's `BORDER`) |
 | `BEEP` | `( pitch duration -- )` | Produce a tone |
+| `INK` | `( color -- )` | Set the foreground color `PLOT`/`LINE`/`CIRCLE` draw with from now on (0-7) |
+| `PAPER` | `( color -- )` | Set the background color the same way |
 
 ```forth
 10 20 PLOT              \ a single dot
 60 5 100 45 LINE         \ a diagonal line
 150 100 20 CIRCLE        \ a circle, radius 20, centered at (150,100)
 5 BORDER                 \ cyan border
+
+2 INK  6 PAPER
+150 100 20 CIRCLE        \ the same circle again, now red on yellow
 ```
 
 Reading these left to right follows the same postfix habit as
@@ -431,23 +436,23 @@ conceptually new over section 1 — these are just words, exactly like
 `+` or `DUP`, that happen to affect the screen or speaker instead of a
 number.
 
-Two honest limits worth knowing now rather than discovering by
-surprise:
+`INK`/`PAPER` set state that persists until changed again — every
+`PLOT`/`LINE`/`CIRCLE` after `2 INK 6 PAPER` draws red-on-yellow, not
+just the next one, until some later call changes it again. Calling
+`INK` never disturbs whatever `PAPER` was last set to, and vice versa —
+each only touches its own half of the color.
 
-- **No color choice yet.** Every shape draws in a fixed default (black
-  on white) — there's no `INK`/`PAPER` equivalent to pick a different
-  color per shape, the way BASIC's `INK`/`PAPER` statements do.
-- **`BEEP`'s two numbers aren't musical.** BASIC's `BEEP` typically
-  takes a duration in seconds and a pitch as a semitone offset;
-  2068-Forth's `BEEP` takes lower-level, hardware-timing numbers
-  instead, with no conversion between the two yet. Getting a specific,
-  predictable musical note or duration out of it isn't straightforward
-  today.
+One honest limit worth knowing now rather than discovering by
+surprise: **`BEEP`'s two numbers aren't musical.** BASIC's `BEEP`
+typically takes a duration in seconds and a pitch as a semitone offset;
+2068-Forth's `BEEP` takes lower-level, hardware-timing numbers instead,
+with no conversion between the two yet. Getting a specific, predictable
+musical note or duration out of it isn't straightforward today.
 
-**Status:** `PLOT`, `LINE`, `CIRCLE`, `BORDER`, and `BEEP` all work
-today, exactly as shown above. `FILL` (flood-fill an area), `AT-XY`
-(position text), hi-res graphics mode, and any color/`INK`/`PAPER`
-words do not exist yet.
+**Status:** `PLOT`, `LINE`, `CIRCLE`, `BORDER`, `BEEP`, `INK`, and
+`PAPER` all work today, exactly as shown above. `FILL` (flood-fill an
+area), `AT-XY` (position text), and hi-res graphics mode do not exist
+yet.
 
 ---
 
@@ -607,8 +612,8 @@ here once it's real:
   `FOR`/`NEXT`, complete with a built-in loop counter, unlike
   `BEGIN`/`UNTIL` and `BEGIN`/`WHILE`/`REPEAT`, both in section 6,
   neither of which has one).
-- **More graphics and sound** — `FILL`, `AT-XY`, hi-res mode, and
-  color/`INK`/`PAPER` words (see section 7's own status note).
+- **More graphics** — `FILL` (flood-fill an area), `AT-XY` (position
+  text), and hi-res graphics mode (see section 7's own status note).
 - **Decimal number literals, multiply, and divide** — see section 11.
 
 See [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the full order these are

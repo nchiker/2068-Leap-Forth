@@ -944,6 +944,55 @@ full chain right after `core/dotquote.asm`; re-verified with the same
 full-chain-replica diagnostic technique and a fresh boot screenshot
 confirming no regression.
 
+## Phase 15 — INK and PAPER
+
+**Status: done.** `core/color.asm` adds `INK ( n -- )` and
+`PAPER ( n -- )`, 0-7, the color half of the remaining "More graphics
+and sound" gap. Unlike every phase since 12, this one genuinely
+required editing an already-shared file: `core/ts2068.asm`'s
+`PLOT`/`LINE`/`CIRCLE` previously drew with a hardcoded compile-time
+constant (`DEFAULT_ATTR`) with no way to change it — for `INK`/`PAPER`
+to have any visible effect at all, those three words had to start
+reading their attribute byte from a new, settable RAM cell
+(`CURRENT_ATTR`, `$87CB`, placed by inspecting `forth_boot.sym` for a
+free byte, not guessed) instead.
+
+**This is a real, deliberate exception to the "add a new file, don't
+touch a shared one" practice this project has followed since Phase
+12** — there was no way around it here, since the whole point is for
+existing PLOT/LINE/CIRCLE calls to pick up a color set *earlier*, not
+just for new words to exist alongside them. The cost was accepted
+consciously, with the mitigation that always applies to a shared-file
+change in this project: everything that already includes
+`core/ts2068.asm` (`rom/forth_smoke_p5.asm`, `rom/forth_smoke_p9.asm`,
+`rom/forth_boot.asm`) needed a new one-line `COLD_START` addition
+(`CURRENT_ATTR` initialized to `DEFAULT_ATTR`, exactly like
+`core/print.asm`'s own `PRINT_ROW`/`PRINT_COL` convention), and all
+three were rebuilt and re-verified passing under real Fuse — Phase 5's
+own dot/line/circle screenshot and Phase 9's own three checkpoints,
+both unchanged — before trusting the change.
+
+`INK`/`PAPER` are each a read-modify-write against whatever
+`CURRENT_ATTR` already holds (ink is bits 0-2, paper is bits 3-5 of the
+standard Spectrum-family attribute byte) — calling one never disturbs
+the other. `rom/forth_smoke_p15.asm` proves this under real Fuse by
+reading back the REAL screen attribute byte `PLOT`/`LINE` wrote (via
+`kernel/graphics`'s own `GFX_CELL_ATTR_ADDR`), not just
+`core/color.asm`'s own internal state: setting ink then plotting one
+cell, setting paper then plotting a different cell (confirming the
+first cell's ink survived), and finally resetting both back to their
+original values and confirming the resulting byte exactly equals
+`DEFAULT_ATTR` again — round-tripping the bit arithmetic exactly, and
+proving `LINE` (not just `PLOT`) honors `CURRENT_ATTR` too. Wired into
+`rom/forth_boot.asm`'s full chain right after `core/loop.asm`;
+re-verified with the same full-chain-replica diagnostic technique and a
+fresh boot screenshot.
+
+`FILL` (`kernel/graphics`'s own `GFX_FILL`, a proven flood-fill
+routine, already inherited and unused by this project) and hi-res mode
+remain the rest of the "More graphics and sound" gap, along with
+decimal-number multiply/divide and `DO`/`LOOP` — all still open.
+
 ## Testing discipline
 
 Carry forward the validated order from 2068-Leap, applied to Forth
