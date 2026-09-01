@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-boot check clean
+.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-boot check clean
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-boot
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-boot
 
 # Milestone 0: boot stub only.
 boot:
@@ -130,6 +130,15 @@ forth-smoke-p11:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p11.sym --lst=build/forth_smoke_p11.lst rom/forth_smoke_p11.asm
 	mv forth_smoke_p11_rom0.bin build/forth_smoke_p11_rom0.bin
+
+# Phase 12: VARIABLE and CONSTANT smoke ROM. No kernel/ dependency.
+# Neither uses a real CREATE/DOES> (this project doesn't have one) --
+# both are built on core/interp.asm's own DOLIT compiled-literal idiom
+# plus a compiled RET -- see core/variable.asm's own header.
+forth-smoke-p12:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p12.sym --lst=build/forth_smoke_p12.lst rom/forth_smoke_p12.asm
+	mv forth_smoke_p12_rom0.bin build/forth_smoke_p12_rom0.bin
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm

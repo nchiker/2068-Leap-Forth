@@ -239,12 +239,34 @@ words appear when you write `n addr !`. This trips up almost everyone
 the first time; there's no trick to it beyond remembering the mnemonic.
 
 This is a much lower-level tool than BASIC's variables — there's no
-`DIM`, no named storage, just addresses. A full introduction to
-building your own named variables out of this (Forth's `VARIABLE` word)
-belongs in a later section, once that word exists in 2068-Forth.
+`DIM`, no named storage, just addresses. `VARIABLE` builds named
+storage out of exactly this:
 
-**Status:** `@` and `!` work today. `VARIABLE` and other conveniences
-built on top of them do not exist yet.
+```forth
+VARIABLE SCORE
+42 SCORE !
+SCORE @ .        \ prints 42
+```
+
+`VARIABLE SCORE` creates a new word, `SCORE`, that — every time you run
+it — pushes the address of its own private two-byte storage cell
+(starting out zero). You never see that address as a number you have
+to remember; you just write `SCORE` and get it, then use `@`/`!`
+exactly like with any other address. This is the same shape as BASIC's
+`LET SCORE = 42` and `PRINT SCORE`, just spelled with explicit
+`@`/`!` instead of an assignment operator.
+
+`CONSTANT` is `VARIABLE`'s simpler sibling: it fixes a value
+permanently at the moment you define it, with no cell and no way to
+change it afterward.
+
+```forth
+100 CONSTANT MAXHEALTH
+MAXHEALTH .      \ prints 100, every time, forever
+```
+
+**Status:** `@`, `!`, `VARIABLE`, and `CONSTANT` all work today, exactly
+as shown above.
 
 ---
 
@@ -561,8 +583,6 @@ here once it's real:
 - **Printing literal text** — `.` (section 9) prints a *computed
   number*; there's no `."` yet for printing a fixed piece of text
   (`." hello"`) the way BASIC's `PRINT "hello"` does.
-- **Named variables** (`VARIABLE`) and constants (`CONSTANT`), built on
-  top of the `@`/`!` in section 4.
 - **More graphics and sound** — `FILL`, `AT-XY`, hi-res mode, and
   color/`INK`/`PAPER` words (see section 7's own status note).
 - **Decimal number literals, multiply, and divide** — see section 11.

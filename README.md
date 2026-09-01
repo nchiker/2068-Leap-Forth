@@ -119,6 +119,16 @@ inherited, what was deliberately left behind, and the phased build order.
   checkpoints) and re-verified wired into `rom/forth_boot.asm`'s full
   chain via a deterministic diagnostic. See `docs/PROJECT_PLAN.md`
   Phase 11 for the full story.
+- Phase 12 (`core/variable.asm` + `rom/forth_smoke_p12.asm`):
+  `VARIABLE` and `CONSTANT`, filling the last gap
+  `docs/forth_tutorial.md` had flagged since Phase 4. Neither uses a
+  real `CREATE`/`DOES>` (this project doesn't have one) — both reuse
+  `core/interp.asm`'s own `DOLIT` compiled-literal idiom plus a
+  compiled `RET`. Confirmed passing under Fuse (three checkpoints,
+  including proof that two variables don't alias each other's storage)
+  and re-verified wired into `rom/forth_boot.asm`'s full chain via a
+  deterministic diagnostic. See `docs/PROJECT_PLAN.md` Phase 12 for the
+  full story.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -146,6 +156,7 @@ core/       language-layer code, not hardware-facing:
               mode64.asm  (Phase 8 stretch — 64COL/32COL/PALETTE64/PLOT64)
               print.asm   (Phase 10 — EMIT/.)
               compare.asm (Phase 11 — =/</>)
+              variable.asm (Phase 12 — VARIABLE/CONSTANT)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
             2068-Forth's own addition, mode64/ (recovered, once-shipped
@@ -165,6 +176,7 @@ rom/        ROM image assembly:
               forth_smoke_p9.asm  Phase 9 smoke ROM (dictionary + interrupts)
               forth_smoke_p10.asm Phase 10 smoke ROM (EMIT/.)
               forth_smoke_p11.asm Phase 11 smoke ROM (=/</>)
+              forth_smoke_p12.asm Phase 12 smoke ROM (VARIABLE/CONSTANT)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -194,6 +206,7 @@ make forth-smoke-p8b  # Phase 8 stretch: 64-column display smoke ROM
 make forth-smoke-p9   # Phase 9 smoke ROM: full dictionary + real interrupts
 make forth-smoke-p10  # Phase 10 smoke ROM: EMIT/.
 make forth-smoke-p11  # Phase 11 smoke ROM: =/</>
+make forth-smoke-p12  # Phase 12 smoke ROM: VARIABLE/CONSTANT
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
@@ -211,8 +224,8 @@ fuse --machine ts2068 --rom-ts2068-0 build/forth_boot_rom0.bin \
 
 It boots to a banner, plays a short startup sound, and drops you at a
 real keyboard-driven prompt. Try `5 BORDER` and press Enter, `5 3 + .`
-to see `.` print `8` on the row below the banner, or `5 3 > .` to see
-`-1` (Forth's TRUE) printed.
+to see `.` print `8` on the row below the banner, `5 3 > .` to see `-1`
+(Forth's TRUE) printed, or `VARIABLE FOO 42 FOO ! FOO @ .` to see `42`.
 
 ## License
 

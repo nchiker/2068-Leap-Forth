@@ -820,6 +820,47 @@ full-chain-replica diagnostic technique Phase 10 introduced — `5 3 > .`
 correctly prints `-1` — rather than relying on live keyboard testing
 for this phase.
 
+## Phase 12 — VARIABLE and CONSTANT
+
+**Status: done.** `core/variable.asm` adds `VARIABLE ( "name" -- )` and
+`CONSTANT ( n "name" -- )`, the exact gap `docs/forth_tutorial.md`'s
+"What's not here yet" section had named since Phase 4 ("built on top of
+the `@`/`!` in section 4"). `VARIABLE FOO` creates `FOO` such that
+`FOO ( -- addr )` pushes the address of a fresh, zero-initialized
+2-byte cell, readable/writable with Phase 2's `@`/`!`. `CONSTANT` is
+simpler: `100 CONSTANT BAR` creates `BAR` such that `BAR ( -- n )`
+always pushes `100` — no data cell, no way to change it afterward.
+
+Neither is built on a real `CREATE`/`DOES>` — this project doesn't have
+one (`core/dict.asm`'s own comments flagged "Phase 3's CREATE" as
+future work, never actually built). Instead, both reuse
+`core/interp.asm`'s own `DOLIT` compiled-literal idiom — the same
+mechanism a typed number compiles to inside a colon definition —
+followed by a compiled `RET`: `VARIABLE`'s runtime is a compiled
+literal pushing the cell's own address; `CONSTANT`'s is the identical
+compiled literal pushing the value directly. The trailing `RET` matters
+specifically because a compiled literal is ordinarily followed by more
+code it falls through into once its own 2 inline bytes are consumed —
+here there isn't any, so without the `RET`, execution would fall
+straight into `VARIABLE`'s own 2-byte data cell and try to run its
+*value* as code.
+
+Both words duplicate `:` (`core/interp.asm`'s `W_COLON`)'s own
+header-construction steps (parse a name, link a new header at `HERE`,
+update `LATEST`) rather than factoring them into a shared helper —
+`core/interp.asm` is INCLUDEd by every smoke ROM in this entire
+project, and this project's standing practice is to accept a little
+duplication rather than widen the regression surface of an
+already-stable, heavily shared file for a later phase's convenience.
+
+`rom/forth_smoke_p12.asm` proves both under real Fuse (three
+checkpoints: define-store-fetch a variable, define-and-read a constant,
+and a second independent variable proving separate cells aren't
+aliased). Wired into `rom/forth_boot.asm`'s full chain right after
+`core/compare.asm`; re-verified with the same full-chain-replica
+diagnostic technique — `VARIABLE FOO 42 FOO ! FOO @ .` correctly prints
+`42` — and a fresh boot screenshot confirming no regression.
+
 ## Testing discipline
 
 Carry forward the validated order from 2068-Leap, applied to Forth
