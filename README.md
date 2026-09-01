@@ -50,6 +50,20 @@ inherited, what was deliberately left behind, and the phased build order.
   a real precondition found while writing it (`kernel/io`'s
   `IO_READ_KEY` needs a live interrupt wired up first, which no ROM in
   this project sets up yet).
+- Phase 7 (`core/storage.asm` + `rom/forth_smoke_p7.asm`): storage —
+  `SAVE`/`LOAD` as whole-dictionary-image blobs on `STORAGE_SAVE`/
+  `STORAGE_LOAD`, Jupiter-Ace-style. Calls only the documented public
+  contract, never `kernel/storage`'s own internals — a deliberate
+  design constraint from a real compatibility warning (the tape format
+  is fragile; deviating from it breaks real emulator LOAD). Found and
+  fixed two real integration bugs along the way (`IX` gets destroyed by
+  the storage calls; `STORAGE_LOAD`'s filename match needs a real
+  space-padded 10-byte buffer, not a raw shorter one) — see
+  `docs/PROJECT_PLAN.md` Phase 7 for both. Confirmed passing against an
+  in-memory fake tape transport (kernel/storage's own
+  `STORAGE_TEST_FAKE_SEND`/`RECEIVE` hooks); a **real Fuse tape
+  round-trip is still open, deliberately deferred** — this proves the
+  wiring, not real wire-format compatibility in an actual emulator.
 - **Not yet implemented, tracked for later:** the eventual live
   startup screen must play a startup sound. `BEEP` is done (Phase 5);
   the real remaining blocker, precisely identified in Phase 6, is
@@ -76,6 +90,7 @@ core/       language-layer code, not hardware-facing:
               control.asm (Phase 4 — IF/ELSE/THEN, BEGIN/UNTIL)
               ts2068.asm  (Phase 5 — PLOT/LINE/CIRCLE/BEEP/BORDER)
               editor.asm  (Phase 6 — line editing)
+              storage.asm (Phase 7 — SAVE/LOAD)
 kernel/     hardware-facing modules inherited from 2068-Leap: memory,
             io, graphics, interrupt, math, sound, storage, bank
 include/    hardware/keyboard constants and the inherited kernel API
@@ -87,6 +102,7 @@ rom/        ROM image assembly:
               forth_smoke_p4.asm  Phase 4 smoke ROM
               forth_smoke_p5.asm  Phase 5 smoke ROM
               forth_smoke_p6.asm  Phase 6 smoke ROM
+              forth_smoke_p7.asm  Phase 7 smoke ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
 docs/       PROJECT_PLAN.md (read this first, project/build-facing),
@@ -109,6 +125,7 @@ make forth-smoke-p3   # Phase 3 outer interpreter/colon compiler smoke ROM
 make forth-smoke-p4   # Phase 4 control-flow smoke ROM
 make forth-smoke-p5   # Phase 5 TS2068 vocabulary smoke ROM
 make forth-smoke-p6   # Phase 6 line-editing smoke ROM
+make forth-smoke-p7   # Phase 7 storage (SAVE/LOAD) smoke ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
 

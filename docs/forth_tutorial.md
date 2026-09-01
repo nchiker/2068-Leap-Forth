@@ -256,7 +256,7 @@ written as part of the `IF` itself.
 ```
 
 *(That example uses `."`, which prints text — not built yet, see
-section 9 — so treat it as a preview of the shape rather than something
+section 10 — so treat it as a preview of the shape rather than something
 to try today. Here's the same idea using only what actually works right
 now:)*
 
@@ -326,7 +326,7 @@ down, you build that yourself out of ordinary stack values, the way
 `COUNTDOWN`'s own value does double duty as both the thing being
 counted down *and* the loop's exit test. A loop with a proper built-in
 counter (BASIC's `FOR`/`NEXT`, Forth's own `DO`/`LOOP`) is planned but
-not built yet — see section 9.
+not built yet — see section 10.
 
 **Status:** `BEGIN` and `UNTIL` work today, exactly as shown above.
 
@@ -422,7 +422,53 @@ unfinished or unreliable.
 
 ---
 
-## 9. What's not here yet
+## 9. Saving and loading your work
+
+Programs don't need to be re-typed every time the machine starts —
+`SAVE` and `LOAD` write your definitions to tape and read them back.
+
+```forth
+: DOUBLER DUP + ;
+SAVE MYPROG
+```
+
+`SAVE` takes the name that follows it (not a word to look up — the same
+way `:` treats the name right after it as something to define, not run)
+and writes everything you've defined so far to tape under that name.
+Later — even after switching the machine off and back on, which forgets
+everything you defined — get it back:
+
+```forth
+LOAD MYPROG
+4 DOUBLER
+```
+
+`LOAD MYPROG` restores your definitions exactly as they were, including
+`DOUBLER`, which you can then use immediately, precisely as if you'd
+just typed it in again. `LOAD` with no name at all loads whatever was
+saved most recently, without needing to remember or retype its name.
+
+There's no partial saving or loading of just one definition — `SAVE`
+always writes everything you've defined up to that point, in one piece.
+If you want to save your work at a meaningful checkpoint, that's a
+matter of when you choose to run `SAVE`, not something 2068-Forth
+tracks for you.
+
+**Status:** `SAVE` and `LOAD` both work today, including loading by an
+exact name and loading with no name given. What's genuinely still
+unverified is real tape behavior on real hardware or in a real
+emulator's actual cassette playback — what's been proven so far is that
+2068-Forth's own bookkeeping (what gets saved, how it's found again,
+restoring your definitions so they're immediately usable) is correct,
+using a stand-in for the real tape transport during testing. This
+distinction matters if you're testing this yourself: don't yet treat a
+passing automated check as proof that a real recorded tape will load
+back correctly — that's real, honest, still-open work, not something
+quietly assumed to be fine.
+
+---
+
+## 10. What's not here yet
 
 A few things a Forth veteran would expect, and a BASIC programmer would
 ask about, aren't part of 2068-Forth yet. Each will get its own section
@@ -438,13 +484,13 @@ here once it's real:
   top of the stack) yet, and section 8's editing keys, while working,
   aren't yet connected to a real keyboard-driven prompt. Until both
   exist, none of this document's examples — including section 7's
-  drawing words — can be tried by typing them in and watching them
-  happen; only a fixed, pre-written program can call them so far.
+  drawing words and section 9's `SAVE`/`LOAD` — can be tried by typing
+  them in and watching them happen; only a fixed, pre-written program
+  can call them so far.
 - **Named variables** (`VARIABLE`) and constants (`CONSTANT`), built on
   top of the `@`/`!` in section 4.
 - **More graphics and sound** — `FILL`, `AT-XY`, hi-res mode, and
   color/`INK`/`PAPER` words (see section 7's own status note).
-- **Saving and loading your own definitions** to and from tape.
 
 See [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the full order these are
 planned to arrive in.

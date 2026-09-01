@@ -422,12 +422,77 @@ of follow-up work this phase deliberately didn't try to absorb, to keep
 
 ## Phase 7 — storage
 
-`SAVE`/`LOAD` as whole-dictionary-image blobs (name + pointer + length)
-directly on `STORAGE_SAVE`/`STORAGE_LOAD`, Jupiter-Ace-style: no
-tokenizing, no per-line format, no filename-corruption bug class of the
-kind 2068-Leap had to fix for named BASIC `LOAD` — the payload here is
-just "everything from `DICT_START` to `HERE`," which is a categorically
-simpler contract than BASIC's.
+**Status: `SAVE`/`LOAD` proven against a fake tape transport; real
+emulator tape round-trip is a real, separate, still-open gap.**
+`core/storage.asm` + `rom/forth_smoke_p7.asm` add `SAVE`/`LOAD` as
+whole-dictionary-image blobs, Jupiter-Ace-style: `SAVE "name"` and
+`LOAD "name"` (or `LOAD` alone for a wildcard) call `STORAGE_SAVE`/
+`STORAGE_LOAD` directly on the compiled RAM dictionary
+(`FORTH_DICT_RAM` through `HERE`), no tokenizing, no per-line format —
+a categorically simpler contract than BASIC's, matching the original
+plan for this phase.
+
+**Design constraint that shaped everything here, from an explicit user
+warning before any code was written:** 2068-Leap's own hard-won
+experience is that the tape/storage wire format is fragile — deviate
+from it even slightly and LOAD stops working in real emulators. An
+early draft of this phase considered smuggling `LATEST` (the
+dictionary-head pointer SAVE needs to persist alongside the raw
+dictionary bytes, since headers only link backward — there's no way to
+walk forward from `FORTH_DICT_RAM` to find "the last one" without
+already knowing where it is) through the tape header's own "autostart"
+field. That idea was dropped before being written, not caught by
+testing afterward, because it would have meant reading/writing
+`kernel/storage`'s own internal `STORAGE_HEADER_BUF` layout directly —
+outside the documented public contract this project's own
+`include/kernel_api.inc` says nothing beyond `kernel/` is allowed to
+touch. The actual design: `LATEST` travels as the first 2 bytes of
+*this project's own* data payload (built in a scratch buffer,
+`SAVE_LOAD_TEMP_BUF`), which `STORAGE_SAVE`/`LOAD` transport completely
+opaquely — invisible to and unconstrained by the real wire format.
+
+**Two real bugs found getting this working, both written up in full in
+this project's own memory for reuse in either project**
+(`2068forth_storage_api_gotchas`, captured 2026-09-01):
+
+1. `STORAGE_SAVE`/`STORAGE_LOAD` (via `STORAGE_SEND_BLOCK`/
+   `RECEIVE_BLOCK`) destroy `IX` — which is 2068-Forth's own data stack
+   pointer. `W_SAVE`/`W_LOAD` must `PUSH IX` before and `POP IX` after
+   every call, or the data stack pointer is left corrupted afterward.
+2. `STORAGE_LOAD`'s filename match always compares a fixed
+   `STORAGE_HEADER_FILENAME_LEN`-byte (10) span, space-padded on the
+   saved side — NOT bounded by the caller's supplied length, which is
+   only ever checked for zero (wildcard). Passing a raw, shorter,
+   unpadded buffer (an early draft's mistake) reads past the real name
+   into whatever garbage follows it, which essentially never matches a
+   name that IS really on the tape. `W_LOAD` now builds its own
+   space-padded, exactly-10-byte buffer before every non-wildcard call.
+
+Both were found by a real Fuse run reporting "unknown word" for a word
+that had genuinely just been saved and reloaded — not predicted by
+reading the code — then traced by temporarily rerouting the smoke ROM's
+existing checkpoint-color failure signal to show a disposable debug
+flag set immediately after the `STORAGE_LOAD` call, the same
+diagnostic technique this project has used since Phase 2, applied one
+level deeper than usual. Confirmed passing under real Fuse afterward:
+an explicit-filename round-trip (define a word, `SAVE` it, simulate a
+fresh boot, `LOAD` it back by exact name, call it) and a wildcard
+round-trip (same, but `LOAD` with no name given), both on the same fake
+tape in sequence.
+
+**What this does NOT prove, stated plainly rather than glossed over:**
+`STORAGE_TEST_FAKE_SEND`/`STORAGE_TEST_FAKE_RECEIVE` (conditional-
+compilation hooks already present in `kernel/storage/storage.asm`,
+unused until this phase) swap in an in-memory fake transport with no
+real cassette timing, supplied by `rom/forth_smoke_p7.asm` itself. This
+proves this phase's own wiring — filename handling, the payload format,
+`HERE`/`LATEST` restoration — but does NOT prove the real tape wire
+format actually round-trips correctly in a real emulator, which is
+exactly the risk the design constraint above exists to manage. A real
+Fuse tape-based round-trip (a genuine virtual cassette file, real
+timing) remains real, open, deferred follow-up work — the user was
+asked directly whether to build that now or defer it, and chose to
+defer it in favor of the faster fake-transport proof for this pass.
 
 ## Phase 8 — stretch goals
 

@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 check clean
+.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 check clean
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7
 
 # Milestone 0: boot stub only.
 boot:
@@ -58,6 +58,17 @@ forth-smoke-p6:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p6.sym --lst=build/forth_smoke_p6.lst rom/forth_smoke_p6.asm
 	mv forth_smoke_p6_rom0.bin build/forth_smoke_p6_rom0.bin
+
+# Phase 7: storage (SAVE, LOAD) smoke ROM. Verified against
+# kernel/storage's own STORAGE_TEST_FAKE_SEND/RECEIVE hooks (an
+# in-memory fake tape, not real cassette timing) -- proves this
+# project's own wiring, NOT that the real tape wire format round-trips
+# in a real emulator, which remains open. See rom/forth_smoke_p7.asm
+# and core/storage.asm's own headers.
+forth-smoke-p7:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p7.sym --lst=build/forth_smoke_p7.lst rom/forth_smoke_p7.asm
+	mv forth_smoke_p7_rom0.bin build/forth_smoke_p7_rom0.bin
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm
