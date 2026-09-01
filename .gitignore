@@ -1,0 +1,14 @@
+# Reproducible assembler outputs
+/*.bin
+/*.lst
+/*.sym
+/rom/*.bin
+/rom/*.lst
+/rom/*.sym
+/build/
+
+# Local tool state
+__pycache__/
+*.pyc
+/.claude/
+/CLAUDE.md
