@@ -167,6 +167,21 @@ inherited, what was deliberately left behind, and the phased build order.
   REAL screen attribute byte, not just internal state) and re-verified
   wired into `rom/forth_boot.asm`'s full chain. See
   `docs/PROJECT_PLAN.md` Phase 15 for the full story.
+- Phase 16 (`core/doloop.asm` + `rom/forth_smoke_p16.asm`): `DO`/
+  `LOOP`/`I` — the counted loop deferred since Phase 4, the item
+  repeatedly flagged as the hardest one left. The loop's own
+  limit/index live on the real Z80 hardware stack itself: this
+  project's subroutine threading already uses that stack as a de facto
+  return stack since Phase 2, so `DO`/`LOOP` just reuse that same
+  discipline rather than inventing a separate one. A real bug was
+  caught in the test, not the implementation (trying to use `DO`/`LOOP`
+  outside a colon definition, where the compiled runtime calls never
+  actually run) — fixed by wrapping it properly, the same restriction
+  `IF`/`ELSE`/`THEN`/`BEGIN`/`WHILE`/`REPEAT` already have. Confirmed
+  passing under Fuse (three checkpoints, including the critical
+  nested-loop stack-discipline case) and re-verified wired into
+  `rom/forth_boot.asm`'s full chain. See `docs/PROJECT_PLAN.md` Phase
+  16 for the full story.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -198,6 +213,7 @@ core/       language-layer code, not hardware-facing:
               dotquote.asm (Phase 13 — .")
               loop.asm    (Phase 14 — WHILE/REPEAT)
               color.asm   (Phase 15 — INK/PAPER)
+              doloop.asm  (Phase 16 — DO/LOOP/I)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
             2068-Forth's own addition, mode64/ (recovered, once-shipped
@@ -221,6 +237,7 @@ rom/        ROM image assembly:
               forth_smoke_p13.asm Phase 13 smoke ROM (.")
               forth_smoke_p14.asm Phase 14 smoke ROM (WHILE/REPEAT)
               forth_smoke_p15.asm Phase 15 smoke ROM (INK/PAPER)
+              forth_smoke_p16.asm Phase 16 smoke ROM (DO/LOOP/I)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -254,6 +271,7 @@ make forth-smoke-p12  # Phase 12 smoke ROM: VARIABLE/CONSTANT
 make forth-smoke-p13  # Phase 13 smoke ROM: ."
 make forth-smoke-p14  # Phase 14 smoke ROM: WHILE/REPEAT
 make forth-smoke-p15  # Phase 15 smoke ROM: INK/PAPER
+make forth-smoke-p16  # Phase 16 smoke ROM: DO/LOOP/I
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
@@ -272,8 +290,9 @@ fuse --machine ts2068 --rom-ts2068-0 build/forth_boot_rom0.bin \
 It boots to a banner, plays a short startup sound, and drops you at a
 real keyboard-driven prompt. Try `5 BORDER` and press Enter, `5 3 + .`
 to see `.` print `8` on the row below the banner, `5 3 > .` to see `-1`
-(Forth's TRUE) printed, `VARIABLE FOO 42 FOO ! FOO @ .` to see `42`, or
-`: GREET ." HI" ; GREET` to see `."` print a literal string.
+(Forth's TRUE) printed, `VARIABLE FOO 42 FOO ! FOO @ .` to see `42`,
+`: GREET ." HI" ; GREET` to see `."` print a literal string, or
+`: FIVE 5 0 DO I . LOOP ; FIVE` to see `0 1 2 3 4` printed.
 
 ## License
 

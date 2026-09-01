@@ -993,6 +993,77 @@ routine, already inherited and unused by this project) and hi-res mode
 remain the rest of the "More graphics and sound" gap, along with
 decimal-number multiply/divide and `DO`/`LOOP` — all still open.
 
+## Phase 16 — DO/LOOP and I
+
+**Status: done.** `core/doloop.asm` adds `DO ( limit start -- )`,
+`LOOP ( -- )` (both IMMEDIATE), and `I ( -- index )` — the counted loop
+this project deferred since Phase 4, comparable to BASIC's `FOR`/
+`NEXT`. This was the item repeatedly flagged as the hardest remaining
+one, across Phase 14's own header and the Phase 14/15 sections above,
+because of a real, specific design question: where does a loop's own
+limit/index live, in a subroutine-threaded design that already uses
+the Z80 hardware stack (`SP`) for real `CALL`/`RET` return addresses?
+
+**The answer, once stated plainly, turned out not to need new
+machinery at all: this project's hardware stack already IS a return
+stack, by construction, since Phase 2.** Real Forth systems keep
+`DO`/`LOOP` state on a *separate* return stack specifically because
+ordinary `CALL`/`RET` execution always pushes and pops its own return
+addresses in balanced pairs, never touching what's underneath — and
+that exact property has held for every dictionary word in this project
+without exception since the very first primitives. So `DO_RT` just
+pushes `(limit, index)` onto the SAME hardware stack, underneath
+whatever the loop body's own calls do on top of them, and `LOOP_RT`
+finds them again exactly where it left them once the body's calls have
+all balanced back out. `I` reads the innermost loop's index directly
+off the stack (`ADD HL, SP` copies `SP` into `HL` non-destructively, no
+push/pop peek needed). Both `DO_RT` and `LOOP_RT` pop and re-push their
+own return address around this, exactly like `DOLIT`/`DOSTR` already do
+around their own inline data — the same established idiom, not a new
+one.
+
+**A real bug caught in the test, not the implementation.** The first
+draft of `rom/forth_smoke_p16.asm`'s third checkpoint tried
+`5 0 DO I SUM @ + SUM ! LOOP` directly at the top level, outside any
+colon definition — and it failed, printing a garbage sum (`374`, not
+`10`). Tracing it by hand rather than guessing: `DO`/`LOOP` are
+IMMEDIATE, so at top level they *execute* their own `W_DO`/`W_LOOP`
+code — which only *compiles* `CALL DO_RT`/`CALL LOOP_RT` bytes into
+`HERE`, never actually runs them. With no colon definition to later
+call those compiled bytes, `DO_RT`/`LOOP_RT` never ran at all, and `I`
+(executed immediately too, since interpret state runs everything
+regardless of the immediate flag) read whatever unrelated bytes
+happened to be sitting on the hardware stack. Fixed by wrapping the
+loop in its own colon definition (`: DOSUM 5 0 DO I SUM @ + SUM ! LOOP
+;` then `DOSUM`) — `DO`/`LOOP`, like `IF`/`ELSE`/`THEN`/`BEGIN`/`WHILE`/
+`REPEAT` before them, only work compiled into a real definition, never
+at the top level.
+
+**A real, known Forth gotcha, documented rather than "fixed" away:**
+plain `DO` (this project has no `?DO`) never checks whether `start`
+already equals `limit` before running the body once — if they're equal
+going in, `LOOP`'s own index increments past `limit` and won't match it
+again until a full 65536-count wraparound. Standard, well-documented
+Forth behavior, not a defect; `core/doloop.asm`'s own header flags it
+so nobody rediscovers it as a mystery bug later. No `LEAVE` (early
+exit) and no `+LOOP` (custom step) either — the smallest provable
+slice, matching every earlier phase's own scope discipline.
+
+`rom/forth_smoke_p16.asm` proves it under real Fuse with three
+checkpoints: basic correctness (`5 0 DO I . LOOP` prints `"0 1 2 3
+4 "`), the CRITICAL nested-loop case (`3 0 DO 2 0 DO I . LOOP LOOP`
+prints `"0 1 0 1 0 1 "` — proving an outer loop's own limit/index
+survive correctly underneath an inner loop's, and are found again once
+the inner loop's own `LOOP` has fully removed its own), and full
+combined-phase integration (`DO`/`LOOP` + `VARIABLE` + arithmetic +
+`.`, summing `0+1+2+3+4` to `10`). Wired into `rom/forth_boot.asm`'s
+full chain right after `core/color.asm`; re-verified with the same
+full-chain-replica diagnostic technique and a fresh boot screenshot.
+
+With this phase, `DO`/`LOOP` is no longer on the open list — `FILL`,
+hi-res mode, and decimal-number multiply/divide remain, along with the
+tracked-but-unscheduled 64-column text mode stretch goal below.
+
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
 **Not yet scheduled as a numbered phase — tracked here so it isn't

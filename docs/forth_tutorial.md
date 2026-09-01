@@ -396,8 +396,33 @@ falls through into the loop body, which runs and then jumps back to
 the opposite pairing — worth double-checking against the examples above
 rather than guessing from the keyword names alone.
 
-**Status:** `BEGIN`, `UNTIL`, `WHILE`, and `REPEAT` all work today,
-exactly as shown above.
+Neither `BEGIN`/`UNTIL` nor `BEGIN`/`WHILE`/`REPEAT` has a built-in
+counter — `DO`/`LOOP` is Forth's answer to BASIC's `FOR`/`NEXT`,
+counting for you instead of making you track it on the stack yourself:
+
+```forth
+: FIVE  5 0 DO I . LOOP ;
+
+FIVE     \ prints 0 1 2 3 4
+```
+
+`limit start DO` starts a loop counting up from `start`, stopping just
+*before* it would reach `limit` (so `5 0 DO` runs for index values `0`
+through `4` — five passes, not six). `I` pushes the current index;
+`LOOP` adds one to it and jumps back to `DO` unless it just reached
+`limit`, in which case the loop ends and execution continues normally
+after `LOOP`.
+
+One real trap worth knowing before it bites you: **`DO` doesn't check
+whether `start` already equals `limit` before running the body the
+first time.** `3 3 DO ... LOOP` runs the body once regardless, and then
+`LOOP`'s own counter, having just gone from `3` to `4`, won't match
+`limit` (`3`) again until it wraps all the way around through 65536
+values — in practice, an accidental near-infinite loop. Never write a
+`DO` where `start` and `limit` might already be equal.
+
+**Status:** `BEGIN`, `UNTIL`, `WHILE`, `REPEAT`, `DO`, `LOOP`, and `I`
+all work today, exactly as shown above.
 
 ---
 
@@ -608,10 +633,6 @@ A few things a Forth veteran would expect, and a BASIC programmer would
 ask about, aren't part of 2068-Forth yet. Each will get its own section
 here once it's real:
 
-- **A counted loop** — Forth's `DO`/`LOOP` (comparable to BASIC's
-  `FOR`/`NEXT`, complete with a built-in loop counter, unlike
-  `BEGIN`/`UNTIL` and `BEGIN`/`WHILE`/`REPEAT`, both in section 6,
-  neither of which has one).
 - **More graphics** — `FILL` (flood-fill an area), `AT-XY` (position
   text), and hi-res graphics mode (see section 7's own status note).
 - **Decimal number literals, multiply, and divide** — see section 11.
