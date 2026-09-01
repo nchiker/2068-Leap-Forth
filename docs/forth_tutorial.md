@@ -603,15 +603,16 @@ Two experimental pieces exist outside the main, planned path through
 this document — early, incomplete, and worth knowing about mainly so
 you don't mistake their gaps for something more finished being broken.
 
-**Decimal numbers.** `F+` and `F-` add and subtract numbers with a
-fractional part — the ordinary `+`/`-` from section 1 only ever work on
-whole numbers. There's no way to *write* a decimal number yet (`NUMBER`
-only understands whole numbers, section 3), so these two words can't
+**Decimal numbers.** `F+`, `F-`, and `F*` add, subtract, and multiply
+numbers with a fractional part. There's no plain integer `*` at all in
+2068-Forth yet, for whole numbers or otherwise — only this decimal one.
+There's also no way to *write* a decimal number yet (`NUMBER` only
+understands whole numbers, section 3), so none of `F+`/`F-`/`F*` can
 actually be reached by typing an expression today — they exist and
 work, proven by feeding them values directly rather than through typed
-text, but they're not yet reachable the way `+` is. Only addition and
-subtraction exist; multiplying or dividing decimal numbers doesn't yet,
-and `.` (section 9) only knows how to print whole numbers.
+text, but they're not yet reachable the way `+` is. `F/` (division)
+doesn't exist yet, and `.` (section 9) only knows how to print whole
+numbers, not decimal ones.
 
 **A wider screen.** `64COL` switches to a 64-column display — twice the
 normal text width — `32COL` switches back, `PALETTE64` picks a color
@@ -625,10 +626,11 @@ that's been checked, but "what you'll actually see on a real screen"
 isn't yet a settled answer the way it is for section 7's normal-screen
 `PLOT`/`LINE`/`CIRCLE`.
 
-**Status:** `F+`, `F-`, `64COL`, `32COL`, `PALETTE64`, and `PLOT64` all
-exist and do what's described above. Both are explicitly experimental,
-unlike every other section in this document — see
-[`PROJECT_PLAN.md`](PROJECT_PLAN.md)'s Phase 8 for the full detail.
+**Status:** `F+`, `F-`, `F*`, `64COL`, `32COL`, `PALETTE64`, and
+`PLOT64` all exist and do what's described above. Both are explicitly
+experimental, unlike every other section in this document — see
+[`PROJECT_PLAN.md`](PROJECT_PLAN.md)'s Phase 8 (and Phase 18 for `F*`
+specifically) for the full detail.
 
 ---
 
@@ -639,7 +641,7 @@ ask about, aren't part of 2068-Forth yet. Each will get its own section
 here once it's real:
 
 - **Hi-res graphics mode** — see section 7's own status note.
-- **Decimal number literals, multiply, and divide** — see section 11.
+- **Decimal number literals and `F/` (divide)** — see section 11.
 
 See [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the full order these are
 planned to arrive in.

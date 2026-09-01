@@ -19,7 +19,7 @@
 ;
 ; The full dictionary is assembled here: every word from every phase
 ; (0=/IF/ELSE/THEN/BEGIN/UNTIL, PLOT/LINE/CIRCLE/BEEP/BORDER,
-; SAVE/LOAD, F+/F-, 64COL/32COL/PALETTE64/PLOT64, EMIT/., =/</>,
+; SAVE/LOAD, F+/F-/F*, 64COL/32COL/PALETTE64/PLOT64, EMIT/., =/</>,
 ; VARIABLE/CONSTANT, .", WHILE/REPEAT, INK/PAPER, DO/LOOP/I,
 ; FILL/AT-XY), chained into one LATEST list via the same
 ; DICT_CHAIN_POINT splices rom/forth_smoke_p9.asm introduced and
@@ -178,6 +178,8 @@ DICT_CHAIN_POINT DEFL H_LOAD
     INCLUDE "core/float.asm"
     INCLUDE "core/mode64.asm"
 DICT_CHAIN_POINT DEFL H_PLOT64
+    INCLUDE "core/floatmul.asm"
+DICT_CHAIN_POINT DEFL H_FSTAR
     INCLUDE "core/print.asm"
 DICT_CHAIN_POINT DEFL H_DOT
     INCLUDE "core/compare.asm"

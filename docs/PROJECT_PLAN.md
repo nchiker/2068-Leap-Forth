@@ -1109,6 +1109,71 @@ Hi-res graphics mode and decimal-number multiply/divide are the only
 items left on the original gap list, along with the
 tracked-but-unscheduled 64-column text mode stretch goal below.
 
+## Phase 18 — F* (float multiply)
+
+**Status: done.** `core/floatmul.asm` adds `F* ( f1 f2 -- f1*f2 )` —
+the first half of the "decimal number... multiply, and divide" gap.
+`F/` (division) is deliberately not this phase — a 32-bit dividend /
+16-bit divisor routine is real, harder follow-up work with its own
+edge cases, not rushed in alongside `F*`.
+
+**A real design mistake caught by hand-tracing, before ever
+assembling it, not after.** `kernel/math`'s own `MATH_MULTIPLY16` only
+produces a 16-bit truncated product — useless for a float multiply,
+which needs the FULL 32-bit product of two 16-bit mantissas to
+normalize correctly. The first draft wrote a private 32-bit widening
+multiply (`F_UMUL32`) but then took its high 16 bits unconditionally,
+reasoning that "reasonably scaled" mantissas would naturally be
+top-heavy. Hand-tracing `2.0*3.0` (mantissas 256 and 384, from
+`core/float.asm`'s own smoke-test convention) exposed the flaw before
+any of it was ever run: their product is 98304 (`$00018000`) — the
+high word is just 1, and discarding the low word (`$8000`, nearly half
+the true magnitude) gave 4.0, not 6.0. A fixed-position window is wrong
+whenever the product's significant bits don't land in that exact
+window, which is most of the time for realistic inputs, not a rare
+edge case.
+
+**The real fix: proper normalization.** `F_NORMALIZE32` shifts the
+32-bit product right while it doesn't fit in 15 bits, then left while
+it's using fewer than 14 — landing the result in the same
+"positive, near-full-range" shape `core/float.asm`'s own test mantissas
+already use, tracking the net shift to fold into the result's
+exponent. Both loops are bounded (at most ~16 shrink iterations for
+the largest possible product; at most ~14 grow iterations for the
+smallest). Hand-verified against three cases before trusting it —
+`2.0*3.0=6.0` (2 shrink steps), `0.5*0.5=0.25` (2 shrink steps, a
+different starting shape), and `1.0*1.0=1.0` (14 grow steps, the
+opposite direction entirely) — see `core/floatmul.asm`'s own header
+for the full worked arithmetic. Since normalization guarantees the
+final magnitude fits in 15 bits before sign is reapplied, sign handling
+only ever needs a plain 16-bit negate (`kernel/math`'s own
+`MATH_NEGATE16`) — no 32-bit negation needed at all, simpler than the
+discarded first draft.
+
+**A second real structural bug caught before it shipped: a hardcoded
+dictionary-chain anchor that would have collided with
+`core/mode64.asm`.** The first draft's `H_FSTAR` hardcoded
+`DW H_FMINUS` (core/float.asm's own tail) instead of chaining through
+`DICT_CHAIN_POINT` — but `core/mode64.asm`'s own `H_64COL` *already*
+hardcodes onto that exact same anchor, and `rom/forth_boot.asm`
+includes both. Two words hardcoded onto the same tail are exactly the
+tree-vs-chain bug `DICT_CHAIN_POINT` was invented to prevent back in
+Phase 9 — caught here by recognizing the pattern before ever wiring it
+into `forth_boot.asm`, not discovered later as a mysteriously
+unreachable word. Fixed by chaining `H_FSTAR` through
+`DICT_CHAIN_POINT` like every other addition since Phase 10, and
+splicing `core/floatmul.asm`'s own inclusion between `core/mode64.asm`
+and `core/print.asm` in `rom/forth_boot.asm`.
+
+`rom/forth_smoke_p18.asm` proves `F*` under real Fuse with all four
+hand-verified cases (the three normalization cases above, plus
+`-2.0*3.0=-6.0` for sign handling). Wired into `rom/forth_boot.asm`'s
+full chain; re-verified with a deterministic full-chain diagnostic
+that checks both `F*`'s own correctness AND that `64COL` (from
+`core/mode64.asm`, spliced right before `core/floatmul.asm` in the
+chain) is still `FIND`-able — confirming the chain-anchor fix actually
+worked, not just that it compiled — plus a fresh boot screenshot.
+
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
 **Not yet scheduled as a numbered phase — tracked here so it isn't
@@ -1173,9 +1238,8 @@ designed in detail):**
 
 This is real, multi-file design work — not a quick wrapper the way
 `INK`/`PAPER` was. Sequence it whenever convenient relative to the
-still-open items above (`DO`/`LOOP`, `FILL`/`AT-XY`/hi-res mode,
-decimal multiply/divide); nothing currently planned depends on it, and
-it doesn't block anything currently planned either.
+still-open items above (hi-res mode, `F/`); nothing currently planned
+depends on it, and it doesn't block anything currently planned either.
 
 ## Testing discipline
 

@@ -195,6 +195,20 @@ inherited, what was deliberately left behind, and the phased build order.
   column-wrap-boundary check) and re-verified wired into
   `rom/forth_boot.asm`'s full chain. See `docs/PROJECT_PLAN.md` Phase
   17 for the full story.
+- Phase 18 (`core/floatmul.asm` + `rom/forth_smoke_p18.asm`): `F*`
+  (float multiply) — the first half of the decimal multiply/divide gap
+  (`F/` remains open, deliberately not rushed alongside it). Writes its
+  own 32-bit widening multiply and real normalization pass, since
+  `kernel/math`'s own multiply only gives a 16-bit truncated result. A
+  real design mistake (a fixed-position window instead of proper
+  normalization) was caught by hand-tracing `2.0*3.0` before ever
+  assembling it, and a second real structural bug (a hardcoded
+  dictionary-chain anchor that would have collided with
+  `core/mode64.asm`) was caught before wiring it into
+  `rom/forth_boot.asm`. Confirmed passing under Fuse (four hand-verified
+  cases, including sign handling) and re-verified wired into the full
+  chain, including confirming the chain-anchor fix actually worked. See
+  `docs/PROJECT_PLAN.md` Phase 18 for the full story.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -228,6 +242,7 @@ core/       language-layer code, not hardware-facing:
               color.asm   (Phase 15 — INK/PAPER)
               doloop.asm  (Phase 16 — DO/LOOP/I)
               moregfx.asm (Phase 17 — FILL/AT-XY)
+              floatmul.asm (Phase 18 — F*)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
             2068-Forth's own addition, mode64/ (recovered, once-shipped
@@ -253,6 +268,7 @@ rom/        ROM image assembly:
               forth_smoke_p15.asm Phase 15 smoke ROM (INK/PAPER)
               forth_smoke_p16.asm Phase 16 smoke ROM (DO/LOOP/I)
               forth_smoke_p17.asm Phase 17 smoke ROM (FILL/AT-XY)
+              forth_smoke_p18.asm Phase 18 smoke ROM (F*)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -288,6 +304,7 @@ make forth-smoke-p14  # Phase 14 smoke ROM: WHILE/REPEAT
 make forth-smoke-p15  # Phase 15 smoke ROM: INK/PAPER
 make forth-smoke-p16  # Phase 16 smoke ROM: DO/LOOP/I
 make forth-smoke-p17  # Phase 17 smoke ROM: FILL/AT-XY
+make forth-smoke-p18  # Phase 18 smoke ROM: F*
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
