@@ -17,9 +17,8 @@ each section for exactly what's true right now versus still to come.
 
 **A live prompt genuinely exists.** Turning the machine on shows a
 banner, plays a short startup sound, and drops you at a real,
-keyboard-driven prompt — every example in this document that doesn't
-depend on `.` (there's no way to print a plain number's value yet — see
-section 11) can actually be typed in and run, not just read about.
+keyboard-driven prompt — every example in this document, including `.`
+(section 9), can actually be typed in and run, not just read about.
 
 ---
 
@@ -261,10 +260,11 @@ written as part of the `IF` itself.
 : DESCRIBE  IF ." positive-ish" ELSE ." zero or negative" THEN ;
 ```
 
-*(That example uses `."`, which prints text — not built yet, see
-section 11 — so treat it as a preview of the shape rather than something
-to try today. Here's the same idea using only what actually works right
-now:)*
+*(That example uses `."`, which prints a literal string of text — a
+different, still-not-built feature from `.`'s printing of a computed
+number (section 9); see section 12 — so treat it as a preview of the
+shape rather than something to try today. Here's the same idea using
+only what actually works right now:)*
 
 ```forth
 : SIGNTEST  IF 111 ELSE 222 THEN ;
@@ -332,7 +332,7 @@ down, you build that yourself out of ordinary stack values, the way
 `COUNTDOWN`'s own value does double duty as both the thing being
 counted down *and* the loop's exit test. A loop with a proper built-in
 counter (BASIC's `FOR`/`NEXT`, Forth's own `DO`/`LOOP`) is planned but
-not built yet — see section 11.
+not built yet — see section 12.
 
 **Status:** `BEGIN` and `UNTIL` work today, exactly as shown above.
 
@@ -421,7 +421,39 @@ and watch happen now, not just a description of intended behavior.
 
 ---
 
-## 9. Saving and loading your work
+## 9. Printing
+
+A word like `+` leaves its answer sitting on the stack — nothing shows
+it to you unless you ask. `.` (pronounced "dot") does exactly that:
+
+```
+5 3 + .
+```
+
+prints `8` (followed by a trailing space, so several `.`s in a row read
+as separate, space-separated numbers rather than running together) and
+removes the value from the stack in the process — `.` both reads *and
+consumes* the top of the stack, unlike, say, `DUP`. Negative numbers
+print with a leading `-`, and zero prints as `0`.
+
+`EMIT` is the lower-level word underneath `.`: it takes a single
+number off the stack and prints it as one character, at whatever
+character code that number is. `65 EMIT` prints `A` (65 is `A`'s
+character code); `. ` itself is built out of repeated `EMIT` calls, one
+per digit. Both `.` and `EMIT` share one printing position — text wraps
+to a new line automatically past column 32, and scrolls the screen once
+it reaches the row just above where you're typing, so printed output
+can never collide with the line you're currently entering.
+
+**Status:** both exist and work — see
+[`PROJECT_PLAN.md`](PROJECT_PLAN.md)'s Phase 10 for the underlying
+implementation, including a real bug (found live, by typing at the
+keyboard) where the very first thing printed after booting silently
+overwrote part of the startup banner, since fixed.
+
+---
+
+## 10. Saving and loading your work
 
 Programs don't need to be re-typed every time the machine starts —
 `SAVE` and `LOAD` write your definitions to tape and read them back.
@@ -467,7 +499,7 @@ quietly assumed to be fine.
 
 ---
 
-## 10. Stretch goals: decimal numbers and a wider screen
+## 11. Stretch goals: decimal numbers and a wider screen
 
 Two experimental pieces exist outside the main, planned path through
 this document — early, incomplete, and worth knowing about mainly so
@@ -480,8 +512,8 @@ only understands whole numbers, section 3), so these two words can't
 actually be reached by typing an expression today — they exist and
 work, proven by feeding them values directly rather than through typed
 text, but they're not yet reachable the way `+` is. Only addition and
-subtraction exist; multiplying or dividing decimal numbers, and
-printing one, don't yet.
+subtraction exist; multiplying or dividing decimal numbers doesn't yet,
+and `.` (section 9) only knows how to print whole numbers.
 
 **A wider screen.** `64COL` switches to a 64-column display — twice the
 normal text width — `32COL` switches back, `PALETTE64` picks a color
@@ -502,7 +534,7 @@ unlike every other section in this document — see
 
 ---
 
-## 11. What's not here yet
+## 12. What's not here yet
 
 A few things a Forth veteran would expect, and a BASIC programmer would
 ask about, aren't part of 2068-Forth yet. Each will get its own section
@@ -514,19 +546,14 @@ here once it's real:
   loop that can check its condition *before* each pass, not just after).
 - **More comparisons** — only `0=` (section 5) exists so far. Ordinary
   `=`, `<`, and `>` between two arbitrary numbers don't exist yet.
-- **Printing** — there's no `.` (print the top of the stack) yet. A
-  live, keyboard-driven prompt exists (section 8) and every word in
-  this document can genuinely be typed and run — but a word like `+`
-  that leaves its answer sitting on the stack has no way to *show* you
-  that answer. Only words with some other visible effect — `BORDER`,
-  `PLOT`, `BEEP`, and the rest of section 7's drawing words — let you
-  see a result today without `.` to fall back on.
+- **Printing literal text** — `.` (section 9) prints a *computed
+  number*; there's no `."` yet for printing a fixed piece of text
+  (`." hello"`) the way BASIC's `PRINT "hello"` does.
 - **Named variables** (`VARIABLE`) and constants (`CONSTANT`), built on
   top of the `@`/`!` in section 4.
 - **More graphics and sound** — `FILL`, `AT-XY`, hi-res mode, and
   color/`INK`/`PAPER` words (see section 7's own status note).
-- **Decimal number literals, multiply/divide, and printing** — see
-  section 10.
+- **Decimal number literals, multiply, and divide** — see section 11.
 
 See [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the full order these are
 planned to arrive in.

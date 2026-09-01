@@ -19,8 +19,8 @@
 ;
 ; The full dictionary is assembled here: every word from every phase
 ; (0=/IF/ELSE/THEN/BEGIN/UNTIL, PLOT/LINE/CIRCLE/BEEP/BORDER,
-; SAVE/LOAD, F+/F-, 64COL/32COL/PALETTE64/PLOT64), chained into one
-; LATEST list via the same DICT_CHAIN_POINT splices
+; SAVE/LOAD, F+/F-, 64COL/32COL/PALETTE64/PLOT64, EMIT/.), chained into
+; one LATEST list via the same DICT_CHAIN_POINT splices
 ; rom/forth_smoke_p9.asm introduced and proved.
 ;
 ; WHAT ISN'T HERE YET, stated plainly: no live automated test exercises
@@ -90,7 +90,7 @@ COLD_START:
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
-    ld   hl, DICT_LATEST_INIT_P8B   ; the full chain's own head — see
+    ld   hl, DICT_LATEST_INIT_PRINT ; the full chain's own head — see
                                     ; this file's own header
     ld   (LATEST), hl
     ld   hl, FORTH_DICT_RAM
@@ -103,6 +103,18 @@ COLD_START:
     ld   b, 0
     ld   c, 0
     call GFX_PRINT_STRING
+
+    ; EMIT/.'s own output position starts on the row right under the
+    ; banner, not (0,0) -- (0,0) is where BANNER's own text just went,
+    ; and PRINT_ROW/PRINT_COL have no idea the banner was ever printed
+    ; (core/print.asm's own header: both cells must be initialized by
+    ; whatever ROM uses it, no assumed default). Found live: typing
+    ; "65 EMIT" silently overwrote the banner's own "2" with "A"
+    ; instead of appearing as new, visible output.
+    xor  a
+    ld   (PRINT_COL), a
+    ld   a, 1
+    ld   (PRINT_ROW), a
 
     ld   bc, 100                    ; pitch: short, high-ish tone --
     ld   de, 30                     ; duration: brief, not a
@@ -130,12 +142,13 @@ BANNER: DB "2068-FORTH", 0
 ; (EDITOR_LOOP_LIVE's `call INTERPRET_RUN`). A bare `ret` here abandons
 ; the rest of the current line and returns straight to
 ; EDITOR_LOOP_LIVE, which starts a fresh prompt — real, if minimal,
-; error recovery, not a hang. No error message is shown yet (would need
-; EMIT/a real print path — not built); the line simply stops being
-; processed, with no visible sign it happened. Real, open follow-up
-; work, not hidden: a genuine typo currently looks identical to a typo
-; that happened to be typed slightly differently and got silently
-; discarded, since there is no error indicator of any kind yet.
+; error recovery, not a hang. No error message is shown yet — EMIT/.
+; exist now (core/print.asm) so the print path this comment used to say
+; was missing is no longer the blocker, but wiring an actual "?" or
+; error text into this hook is still real, open follow-up work, not
+; done here: a genuine typo currently looks identical to a typo that
+; happened to be typed slightly differently and got silently discarded,
+; since there is no error indicator of any kind yet.
 ; ============================================================================
 INTERPRET_UNKNOWN_WORD:
     ret
@@ -160,6 +173,8 @@ DICT_CHAIN_POINT DEFL H_BORDER
 DICT_CHAIN_POINT DEFL H_LOAD
     INCLUDE "core/float.asm"
     INCLUDE "core/mode64.asm"
+DICT_CHAIN_POINT DEFL H_PLOT64
+    INCLUDE "core/print.asm"
     INCLUDE "core/editor.asm"
 
     DS   $4000 - $, $FF

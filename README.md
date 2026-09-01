@@ -97,6 +97,19 @@ inherited, what was deliberately left behind, and the phased build order.
   uppercase), both found live with the user typing at the keyboard and
   one diagnosed from a real Fuse memory-dump snapshot. See
   `docs/PROJECT_PLAN.md` Phase 9 for the full story.
+- Phase 10 (`core/print.asm` + `rom/forth_smoke_p10.asm`): `EMIT` and
+  `.` — the first words in this project that can show a computed value
+  on screen. Includes a from-scratch unsigned divide-by-10
+  (`kernel/math`'s divide is signed, which mishandles `-32768`'s
+  magnitude) confirmed correct via a real property of two's-complement
+  negation, not luck. Confirmed passing under Fuse (five checkpoints,
+  including a real `GFX_READ_PIXEL` readback for `EMIT`). Wiring this
+  into `rom/forth_boot.asm` surfaced one more real bug — `COLD_START`
+  started the print cursor at `(0, 0)`, exactly where the boot banner's
+  own text is, so `EMIT`'s first output silently overwrote it — found
+  live by the user, isolated with a deterministic headless diagnostic,
+  and fixed by starting the cursor below the banner instead. See
+  `docs/PROJECT_PLAN.md` Phase 10 for the full story.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -122,6 +135,7 @@ core/       language-layer code, not hardware-facing:
               storage.asm (Phase 7 — SAVE/LOAD)
               float.asm   (Phase 8 stretch — F+/F-)
               mode64.asm  (Phase 8 stretch — 64COL/32COL/PALETTE64/PLOT64)
+              print.asm   (Phase 10 — EMIT/.)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
             2068-Forth's own addition, mode64/ (recovered, once-shipped
@@ -139,6 +153,7 @@ rom/        ROM image assembly:
               forth_smoke_p8.asm  Phase 8 stretch smoke ROM (floating point)
               forth_smoke_p8b.asm Phase 8 stretch smoke ROM (64-column)
               forth_smoke_p9.asm  Phase 9 smoke ROM (dictionary + interrupts)
+              forth_smoke_p10.asm Phase 10 smoke ROM (EMIT/.)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -166,6 +181,7 @@ make forth-smoke-p7   # Phase 7 storage (SAVE/LOAD) smoke ROM
 make forth-smoke-p8   # Phase 8 stretch: floating point smoke ROM
 make forth-smoke-p8b  # Phase 8 stretch: 64-column display smoke ROM
 make forth-smoke-p9   # Phase 9 smoke ROM: full dictionary + real interrupts
+make forth-smoke-p10  # Phase 10 smoke ROM: EMIT/.
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
@@ -182,7 +198,8 @@ fuse --machine ts2068 --rom-ts2068-0 build/forth_boot_rom0.bin \
 ```
 
 It boots to a banner, plays a short startup sound, and drops you at a
-real keyboard-driven prompt. Try `5 BORDER` and press Enter.
+real keyboard-driven prompt. Try `5 BORDER` and press Enter, or
+`5 3 + .` to see `.` print `8` on the row below the banner.
 
 ## License
 

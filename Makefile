@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-boot check clean
+.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-boot check clean
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-boot
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-boot
 
 # Milestone 0: boot stub only.
 boot:
@@ -110,6 +110,17 @@ forth-boot:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_boot.sym --lst=build/forth_boot.lst rom/forth_boot.asm
 	mv forth_boot_rom0.bin build/forth_boot_rom0.bin
+
+# Phase 10: EMIT and . (print) smoke ROM. Five checkpoints: EMIT draws
+# a real pixel and advances the print cursor; . prints positive,
+# negative (including the -32768 signed-magnitude edge case), and zero
+# values with the right trailing-space convention; EMIT's column-wrap
+# arithmetic wraps at exactly column 32. See rom/forth_smoke_p10.asm
+# and core/print.asm's own headers.
+forth-smoke-p10:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p10.sym --lst=build/forth_smoke_p10.lst rom/forth_smoke_p10.asm
+	mv forth_smoke_p10_rom0.bin build/forth_smoke_p10_rom0.bin
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm

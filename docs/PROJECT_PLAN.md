@@ -725,6 +725,67 @@ and named variables (`VARIABLE`/`CONSTANT`) remain exactly as absent as
 `docs/forth_tutorial.md` has said throughout — this phase made the
 existing words interactive, it didn't add new ones.
 
+## Phase 10 — EMIT and . (print)
+
+**Status: done.** `core/print.asm` adds `EMIT ( char -- )` and
+`. ( n -- )`, the first words in this project that can actually show a
+computed value on screen rather than only affecting the stack or
+hardware state. Both maintain their own output cursor
+(`PRINT_ROW`/`PRINT_COL`), independent of `core/editor.asm`'s
+`EDIT_CURSOR` (the input line's own cursor, pinned to row 23) —
+confining `EMIT`'s output to rows 0-22 means it can never collide with
+the input line, wrapping at column 32 and scrolling
+(`kernel/graphics`'s `GFX_SCROLL_TEXT_UP`) at row 22.
+
+`.` needed an unsigned divide-by-10 that `kernel/math`'s
+`MATH_DIVIDE16` doesn't provide (it's signed, which would misread the
+magnitude of any value above 32767 — including `-32768` itself: its
+magnitude, 32768, doesn't fit in a signed 16-bit value at all). Written
+as `UDIV10`, a private helper local to `core/print.asm` rather than
+added to `kernel/math`, matching this project's standing rule of never
+modifying an inherited `kernel/` file. The `-32768` edge case is
+handled correctly by a real property of two's-complement negation, not
+by luck: negating `$8000` (`-32768`) in 16-bit arithmetic yields `$8000`
+back — which read as an *unsigned* value is exactly 32768, the correct
+magnitude to print after the `-` sign. `rom/forth_smoke_p10.asm` proves
+this directly as one of its five checkpoints, alongside positive
+multi-digit numbers, zero, `EMIT`'s pixel output (verified via
+`GFX_READ_PIXEL` readback, not just cursor-position bookkeeping), and
+the column-wrap arithmetic at exactly column 32 — all confirmed passing
+under real Fuse.
+
+**A real, live bug found wiring this into `rom/forth_boot.asm`, not in
+`core/print.asm` itself.** `core/print.asm`'s own header is explicit
+that `PRINT_ROW`/`PRINT_COL` must be initialized by whatever ROM uses
+it — no assumed default. `rom/forth_boot.asm`'s `COLD_START` zeroed both
+to `(0, 0)` without accounting for the fact that `(0, 0)` is exactly
+where `GFX_PRINT_STRING` had just drawn the boot banner (`2068-FORTH`).
+Typing `65 EMIT` at the live prompt silently overwrote the banner's own
+`2` with `A` instead of appearing as new output — reported live by the
+user as "border is... the banner is in the way" after a screenshot
+showed `A068-FORTH`. A deterministic, headless diagnostic (replicating
+`forth_boot.asm`'s exact full dictionary-chain include order, running
+`5 3 + .` through `INTERPRET_RUN` directly — no keyboard needed) proved
+`core/print.asm`'s own logic was correct before touching anything,
+isolating the bug to `COLD_START`'s cursor initialization alone. Fixed
+by starting `PRINT_ROW`/`PRINT_COL` at `(1, 0)` — the row right under
+the one-line banner — instead of `(0, 0)`. Confirmed both ways: a
+second live keyboard session showed two separate `65 EMIT` calls each
+producing a new, separate `A` below the banner rather than overwriting
+it or each other, and a saved `debug.bin` memory-dump snapshot (the
+same technique from Phase 9's bug 2) independently confirmed
+`PRINT_ROW`/`PRINT_COL` at `(1, 2)` and the data stack correctly holding
+`8` after `5 3 +` was typed with no trailing `.` — a case that
+correctly produces no visible output at all, not a bug, since `+` alone
+never prints anything.
+
+`INTERPRET_UNKNOWN_WORD`'s complete lack of error feedback (flagged as
+open at the end of Phase 9) is now fixable in principle — `EMIT`/`.`
+exist — but wiring an actual `?` or error message into that hook is
+still real, open follow-up work, not done here. `KEY` (reading a
+keystroke as a Forth value) and named variables (`VARIABLE`/`CONSTANT`)
+remain absent.
+
 ## Testing discipline
 
 Carry forward the validated order from 2068-Leap, applied to Forth
