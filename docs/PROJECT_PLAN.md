@@ -137,13 +137,52 @@ onward assumes a memory map that's actually this project's own:
 
 ## Phase 2 — minimal inner interpreter + dictionary
 
-Goal: a smoke ROM in the exact spirit of `rom/main.asm` — the smallest
-possible provable step. `CREATE`, `HERE`, `LATEST`, dictionary header
-layout, and enough `CODE`-word primitives to be self-checking: `DUP
-SWAP DROP OVER + - @ ! EMIT KEY`. Provable the same way Milestone 0 is:
-one smoke ROM, one visible behavior (e.g. a hand-threaded test definition
-that reads a key and echoes it via `EMIT`), nothing else required to
-already exist.
+**Status: core proven.** `core/dict.asm` (dictionary header format,
+`LATEST`/`HERE`, the IX-based data stack) and `rom/forth_smoke.asm` (a
+smoke ROM in the exact spirit of `rom/main.asm`) exist, assemble clean
+under `check_asm.py`/`check_z80_opcodes.py`, and pass a self-checking
+sequence of `DUP SWAP DROP OVER + - @ !` calls under real Fuse (border
+goes green; a failing checkpoint shows its own 1-7 number on the border
+instead, so a future regression identifies itself without a debugger).
+`EMIT`/`KEY` were deliberately deferred out of this ROM to keep it
+dependency-free like `main.asm` itself — see the note below.
+
+Two real lessons from getting the smoke ROM to actually pass, worth
+remembering for every ROM file after this one:
+
+1. **Include order matters when an INCLUDE emits real code.**
+   `core/dict.asm` must be `INCLUDE`d *after* `DEVICE`/`ORG $0000` and
+   the fixed RST vector table, not before either exists — the first
+   attempt at `forth_smoke.asm` included it at the top of the file,
+   before any `ORG` was set, so the dictionary's first bytes landed at
+   address 0 and were then silently overwritten by the RST vector
+   table's own `DS ...,$FF` padding. `include/hardware.inc` (constants
+   only, no code) is fine to include early; anything that emits actual
+   bytes is not.
+2. **z80sim proved the arithmetic correct while the real ROM still
+   failed** — because z80sim was driven starting at `COLD_START`
+   directly, skipping the real boot chain (`RST_00`/vector table)
+   entirely, so it couldn't see the corruption bug above. This doesn't
+   make z80sim wrong for what it's actually for (see its own README);
+   it means "z80sim passed" only clears the routines actually exercised
+   from the actual entry point real hardware uses, not the file's
+   layout as a whole. Fuse (or real hardware) remains the only thing
+   that validates the whole ROM image, per the testing-discipline
+   section below.
+
+An unrelated environment gotcha surfaced during the same bring-up and
+is recorded in `rom/forth_smoke.asm`'s own header rather than here:
+running `main.asm` and this smoke ROM under this project's Fuse
+1.9.1/`--machine ts2068` setup with a content-free (all-`$FF`) 8K
+`--rom-ts2068-1` placeholder produced visibly different behavior than
+using a real EXROM image, even for ROMs that never page EXROM in at
+all. Root cause not isolated; treat a blank EXROM placeholder as
+untrustworthy for this machine type until it is.
+
+Remaining Phase 2 scope (not yet done): none — `CREATE`, a real
+colon-compiler, and `FIND`/`WORD`/`NUMBER` belong to Phase 3, not this
+phase; `LATEST`/`HERE` are seeded correctly for Phase 3 to consume but
+nothing yet appends to them at runtime.
 
 ## Phase 3 — outer interpreter
 

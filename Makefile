@@ -1,18 +1,27 @@
-.PHONY: all boot check clean
+.PHONY: all boot forth-smoke check clean
 
-all: boot
+all: boot forth-smoke
 
-# Milestone 0: boot stub only. Later milestones add their own targets here
-# (dictionary/inner-interpreter smoke ROM, outer-interpreter smoke ROM,
-# etc.) as they land — see docs/PROJECT_PLAN.md.
+# Milestone 0: boot stub only.
 boot:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/main.sym --lst=build/main.lst rom/main.asm
 	mv forth_rom0.bin build/forth_rom0.bin
 
+# Phase 2: dictionary header format + subroutine-threaded primitives
+# (DUP SWAP DROP OVER + - @ !) smoke ROM. Border goes green if every
+# self-check passes; otherwise it shows the 1-7 checkpoint number of the
+# first one that failed — see rom/forth_smoke.asm's own header for the
+# full pass/fail contract and a real EXROM-placeholder gotcha hit during
+# this ROM's own bring-up.
+forth-smoke:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke.sym --lst=build/forth_smoke.lst rom/forth_smoke.asm
+	mv forth_smoke_rom0.bin build/forth_smoke_rom0.bin
+
 check:
-	python3 tools/check_asm.py kernel/*/*.asm rom/*.asm
-	python3 tools/check_z80_opcodes.py kernel/*/*.asm rom/*.asm
+	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm
+	python3 tools/check_z80_opcodes.py core/*.asm kernel/*/*.asm rom/*.asm
 
 clean:
 	rm -rf build

@@ -11,23 +11,33 @@ inherited, what was deliberately left behind, and the phased build order.
 
 ## Status
 
-Milestone 0 only: the boot stub (`rom/main.asm`, inherited verbatim from
-2068-Leap's own Milestone 0) assembles and produces a 16K ROM0 image with
-a border-cycle smoke test. Nothing Forth-specific exists yet — see
-`docs/PROJECT_PLAN.md`'s Phase 0 and Phase 1 for what comes next.
+- Milestone 0 (`rom/main.asm`, inherited verbatim from 2068-Leap's own
+  Milestone 0): boot stub, border-cycle smoke test. Done.
+- Phase 2 (`core/dict.asm` + `rom/forth_smoke.asm`): dictionary header
+  format, the IX-based data stack, and eight subroutine-threaded CODE
+  primitives (`DUP SWAP DROP OVER + - @ !`), self-checked and confirmed
+  passing under Fuse. No compiler yet — the dictionary is hand-assembled,
+  not built by `:`/`CREATE`. See `docs/PROJECT_PLAN.md` Phase 2/3.
+- The language core is integer-only by design; see
+  `docs/numeric_model.md` for why floating point is a deferred, optional
+  addition rather than something the language is built on.
 
 ## Layout
 
 ```
+core/       language-layer code, not hardware-facing: core/dict.asm
+            (dictionary header format, data stack, Phase 2 primitives)
 kernel/     hardware-facing modules inherited from 2068-Leap: memory,
             io, graphics, interrupt, math, sound, storage, bank
 include/    hardware/keyboard constants and the inherited kernel API
             contract (include/kernel_api.inc)
-rom/        ROM image assembly; rom/main.asm is the Milestone 0 boot stub
+rom/        ROM image assembly; rom/main.asm is the Milestone 0 boot
+            stub, rom/forth_smoke.asm is the Phase 2 smoke ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
-docs/       PROJECT_PLAN.md (read this first), hardware_notes.md
-            (confirmed hardware facts, inherited from 2068-Leap)
+docs/       PROJECT_PLAN.md (read this first), numeric_model.md
+            (integer-core decision), hardware_notes.md (confirmed
+            hardware facts, inherited from 2068-Leap)
 ```
 
 ## Quick start
@@ -37,8 +47,9 @@ Requires GNU Make, Python 3, and
 or a compatible newer release.
 
 ```sh
-make boot   # assembles rom/main.asm -> build/forth_rom0.bin
-make check  # static asm checks over kernel/ and rom/
+make boot         # assembles rom/main.asm -> build/forth_rom0.bin
+make forth-smoke  # assembles the Phase 2 dictionary/primitives smoke ROM
+make check        # static asm checks over core/, kernel/, and rom/
 ```
 
 ## License
