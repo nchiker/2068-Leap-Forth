@@ -22,7 +22,17 @@ inherited, what was deliberately left behind, and the phased build order.
   (`:`, `;`). Confirmed passing under Fuse: interprets plain arithmetic,
   then defines a new word and calls it. Input is still a fixed buffer,
   not a live keyboard — see `docs/PROJECT_PLAN.md` Phase 3.
-- New to this project: **`docs/forth_tutorial.md`** teaches the Forth
+- Phase 4 (`core/control.asm` + `rom/forth_smoke_p4.asm`): control flow
+  — `IF`/`ELSE`/`THEN` and `BEGIN`/`UNTIL`, plus `0=` (needed to give
+  them a proper boolean flag to test). Confirmed passing under Fuse:
+  both branches of an `IF`, and a loop confirmed to iterate the correct
+  number of times. `WHILE`/`REPEAT` and `DO`/`LOOP` are follow-up work
+  — see `docs/PROJECT_PLAN.md` Phase 4.
+- **Not yet implemented, tracked for later:** the eventual live
+  startup screen must play a startup sound (needs Phase 5's `BEEP` and
+  live-keyboard input, neither built yet) — see `docs/PROJECT_PLAN.md`,
+  "Product requirement — startup screen plays a startup sound."
+- **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
   own build/test process. It assumes BASIC familiarity but not
@@ -36,8 +46,9 @@ inherited, what was deliberately left behind, and the phased build order.
 
 ```
 core/       language-layer code, not hardware-facing:
-              dict.asm   (Phase 2 — dictionary header format, data stack)
-              interp.asm (Phase 3 — outer interpreter, colon compiler)
+              dict.asm    (Phase 2 — dictionary header format, data stack)
+              interp.asm  (Phase 3 — outer interpreter, colon compiler)
+              control.asm (Phase 4 — IF/ELSE/THEN, BEGIN/UNTIL)
 kernel/     hardware-facing modules inherited from 2068-Leap: memory,
             io, graphics, interrupt, math, sound, storage, bank
 include/    hardware/keyboard constants and the inherited kernel API
@@ -46,6 +57,7 @@ rom/        ROM image assembly:
               main.asm            Milestone 0 boot stub
               forth_smoke.asm     Phase 2 smoke ROM
               forth_smoke_p3.asm  Phase 3 smoke ROM
+              forth_smoke_p4.asm  Phase 4 smoke ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
 docs/       PROJECT_PLAN.md (read this first, project/build-facing),
@@ -65,6 +77,7 @@ or a compatible newer release.
 make boot             # assembles rom/main.asm -> build/forth_rom0.bin
 make forth-smoke      # Phase 2 dictionary/primitives smoke ROM
 make forth-smoke-p3   # Phase 3 outer interpreter/colon compiler smoke ROM
+make forth-smoke-p4   # Phase 4 control-flow smoke ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
 

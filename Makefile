@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke forth-smoke-p3 check clean
+.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 check clean
 
-all: boot forth-smoke forth-smoke-p3
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4
 
 # Milestone 0: boot stub only.
 boot:
@@ -27,6 +27,15 @@ forth-smoke-p3:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p3.sym --lst=build/forth_smoke_p3.lst rom/forth_smoke_p3.asm
 	mv forth_smoke_p3_rom0.bin build/forth_smoke_p3_rom0.bin
+
+# Phase 4: control flow (IF/ELSE/THEN, BEGIN/UNTIL) smoke ROM. Defines
+# and uses a word with both branches of an IF, then a word with a
+# BEGIN/UNTIL loop whose result only comes out right if it looped the
+# correct number of times — see rom/forth_smoke_p4.asm's own header.
+forth-smoke-p4:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p4.sym --lst=build/forth_smoke_p4.lst rom/forth_smoke_p4.asm
+	mv forth_smoke_p4_rom0.bin build/forth_smoke_p4_rom0.bin
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm

@@ -230,12 +230,51 @@ could eventually mean in one pass:
 
 ## Phase 4 — control flow
 
-`IF ELSE THEN`, `BEGIN UNTIL`, `BEGIN WHILE REPEAT`, `DO LOOP`/`+LOOP`,
-`I`/`J`/`LEAVE` — compiled branch offsets, resolved at compile time by
-the colon compiler from Phase 3. No runtime statement-boundary scanning
-of the kind `basic.asm` does for `ELSEIF`/`ELSE`/`END IF` — Forth
-compiles the jump once, unlike line-oriented BASIC re-parsing structure
-on every pass.
+**Status: `IF`/`ELSE`/`THEN` and `BEGIN`/`UNTIL` proven.**
+`core/control.asm` + `rom/forth_smoke_p4.asm` add `QBRANCH`/`BRANCH`
+(runtime branch primitives, not dictionary words themselves — compiled
+to directly, the same way `DOLIT` is) and four real, `IMMEDIATE`
+dictionary words built on them: `IF`, `ELSE`, `THEN`, `BEGIN`, `UNTIL`.
+Also adds `0=` (needed because nothing before Phase 4 produced a
+correctly-signed boolean flag — plain subtraction is 0 exactly when two
+values are *equal*, which is backwards for a "loop until true" idiom).
+Confirmed passing under real Fuse on the first attempt: defines a word
+using `IF`/`ELSE`/`THEN` and checks both branches, then defines a
+`BEGIN`/`UNTIL` loop and confirms it iterates exactly the right number
+of times (a wrong iteration count would leave the wrong final value on
+the stack, not just fail to terminate).
+
+Implementation note worth keeping for the next control-flow word
+(`WHILE`/`REPEAT`, `DO`/`LOOP`): `IF`/`ELSE`/`THEN`/`BEGIN`/`UNTIL` all
+need to remember an address between compile-time steps — where a
+branch's target hole is, or where a loop starts. Rather than a third
+stack, they reuse the ordinary data stack for this, which is safe
+specifically because nothing else touches it while a definition is
+being compiled (every non-`IMMEDIATE` word gets compiled, not run, so
+it never pushes/pops at compile time). This is a well-established real
+Forth technique, not a shortcut specific to this project, and it
+generalizes directly to whatever Phase 4 adds next.
+
+One structural lesson from getting `0=` chained in correctly: it does
+NOT live in `core/dict.asm` next to Phase 2's other primitives, even
+though it's arithmetic rather than control flow. `core/interp.asm`
+already hardcodes `H_COLON`'s `LINK` field as `DW H_STORE` (core/dict.asm's
+own tail) — inserting a new dictionary word between them in
+`core/dict.asm` would silently orphan Phase 3's whole chain (`FIND`
+walks backward from `LATEST` following `LINK` pointers; a word not
+reachable that way might as well not exist, even if it assembles fine).
+`0=` chains onto `H_SEMICOLON` (Phase 3's actual tail) inside
+`core/control.asm` instead — extend the chain forward from wherever the
+previous phase actually left it, never splice into the middle of an
+earlier phase's file.
+
+`BEGIN`/`WHILE`/`REPEAT` and `DO`/`LOOP`/`+LOOP`/`I`/`J`/`LEAVE` remain
+for a follow-up pass — not done in this slice, matching every earlier
+phase's practice of proving the smallest meaningful piece first rather
+than building everything a phase could eventually mean in one attempt.
+No runtime statement-boundary scanning of the kind `basic.asm` does for
+`ELSEIF`/`ELSE`/`END IF` is needed here — Forth compiles the jump once,
+unlike line-oriented BASIC re-parsing structure on every pass.
 
 ## Phase 5 — TS2068 vocabulary
 
@@ -247,6 +286,20 @@ each of these is a few lines, no registry, no ABI, no fixed window —
 directly contrasting with what 2068-Leap had to build
 (`docs/loadable_basic_extensions.md`) to get equivalent extensibility
 in BASIC.
+
+## Product requirement — startup screen plays a startup sound
+
+Captured 2026-09-01, not yet implemented: when 2068-Forth boots to its
+first user-visible screen (the live interactive front end — not any of
+the current smoke ROMs, which a real user will never see), that
+startup screen must play a startup sound. Depends on Phase 5's `BEEP`/
+`SOUND` (built on `kernel/sound`, already inherited and proven by
+2068-Leap) and on wiring `INTERPRET_RUN` to live keyboard input (the
+"not a live REPL yet" limitation Phase 3 and Phase 4 both still carry).
+No sound design decided yet (tone, duration, whether it's the same
+kernel/sound `SOUND_BEEP` primitive 2068-Leap's own `BEEP` statement
+uses) — just the requirement that a startup screen without one is
+incomplete.
 
 ## Phase 6 — line editing
 

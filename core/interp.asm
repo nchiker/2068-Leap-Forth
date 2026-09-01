@@ -512,4 +512,26 @@ INTERPRET_RUN:
 
 INTERP_IMM_FLAG EQU $8112          ; 1 byte: INTERPRET_RUN's own scratch
 
+; ============================================================================
+; COMPILE_WORD ( HL = value -- )  added for Phase 4. Compiles 2 raw bytes
+; at HERE, advancing HERE by 2 -- unlike COMPILE_LITERAL, this does NOT
+; wrap the value in "CALL DOLIT". core/control.asm's IF/ELSE/THEN/UNTIL
+; use this to compile a branch-target placeholder (later patched, or
+; already known) that QBRANCH/BRANCH read directly from their own
+; return address, the same inline-data idiom DOLIT itself uses (see
+; DOLIT's own header) -- a branch target is consumed by that mechanism
+; alone, never pushed onto the data stack the way a literal's value is,
+; so it must NOT go through COMPILE_LITERAL/DOLIT.
+; ============================================================================
+COMPILE_WORD:
+    ld   de, (HERE)
+    ld   a, l
+    ld   (de), a
+    inc  de
+    ld   a, h
+    ld   (de), a
+    inc  de
+    ld   (HERE), de
+    ret
+
     ENDIF

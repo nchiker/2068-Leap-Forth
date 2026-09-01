@@ -243,15 +243,107 @@ built on top of them do not exist yet.
 
 ---
 
-## 5. What's not here yet
+## 5. Making decisions: `IF` `ELSE` `THEN`
+
+Every example so far has run straight through, top to bottom, with no
+branching. `IF`/`ELSE`/`THEN` is Forth's equivalent of BASIC's
+`IF...THEN...ELSE`, with one difference worth calling out up front: the
+condition comes from the stack, checked *before* you reach `IF`, not
+written as part of the `IF` itself.
+
+```forth
+: DESCRIBE  IF ." positive-ish" ELSE ." zero or negative" THEN ;
+```
+
+*(That example uses `."`, which prints text — not built yet, see
+section 7 — so treat it as a preview of the shape rather than something
+to try today. Here's the same idea using only what actually works right
+now:)*
+
+```forth
+: SIGNTEST  IF 111 ELSE 222 THEN ;
+
+5 SIGNTEST     \ pushes 5 (true-ish), runs SIGNTEST: leaves 111
+0 SIGNTEST     \ pushes 0 (false), runs SIGNTEST: leaves 222
+```
+
+Reading `SIGNTEST`: when it runs, whatever's already on top of the
+stack is treated as the condition. `IF` pops it and checks: **zero
+means false**, anything else means true. If true, everything up to the
+matching `ELSE` (or `THEN`, if there's no `ELSE`) runs; if false, the
+`ELSE` part runs instead (or nothing, if there's no `ELSE`). `THEN`
+doesn't mean "then do this" the way it does in BASIC — it just marks
+where the `IF`/`ELSE` branching ends and normal execution continues.
+This naming is a common early stumbling block for BASIC programmers
+specifically because the word is so familiar-looking and means
+something different.
+
+Since "zero means false" is how every condition in Forth works, you
+often need a word that turns an ordinary calculation into a proper
+true/false answer. `0=` does exactly that:
+
+| Word | Effect | What it does |
+|---|---|---|
+| `0=` | `( n -- flag )` | `flag` is true if `n` is exactly `0`, false otherwise |
+
+```forth
+: ISZERO  0= IF 111 ELSE 222 THEN ;
+
+0 ISZERO     \ 0= sees 0 -> true -> 111
+5 ISZERO     \ 0= sees 5 -> false -> 222
+```
+
+**Status:** `IF`, `ELSE`, `THEN`, and `0=` all work today, exactly as
+shown above (the `."` example is the only preview in this section).
+
+## 6. Repeating yourself: `BEGIN` `UNTIL`
+
+BASIC has several looping constructs (`FOR`/`NEXT`, `WHILE`/`WEND`).
+2068-Forth currently has the simplest one Forth offers: `BEGIN ...
+UNTIL`, which repeats the code between `BEGIN` and `UNTIL` until the
+condition just before `UNTIL` becomes true. Since the check happens at
+the *end*, the loop body always runs at least once — the same shape as
+BASIC's `REPEAT...UNTIL`, if you've used a dialect with one, or
+`DO...LOOP UNTIL` in some others.
+
+```forth
+: COUNTDOWN  BEGIN 1 - DUP 0= UNTIL ;
+
+5 COUNTDOWN     \ leaves 0
+```
+
+Tracing `COUNTDOWN` with `5` on the stack: `1 -` makes it `4`; `DUP 0=`
+duplicates it and asks "is the duplicate zero?" (no, so false); `UNTIL`
+sees false and loops back to `BEGIN`. This repeats — `4→3→2→1→0` — and
+the moment the value becomes `0`, `DUP 0=` finally answers true,
+`UNTIL` stops looping, and the loop's last computed value (`0`) is left
+on the stack.
+
+This is a good habit to notice early: **Forth loops don't have a
+built-in counter variable the way BASIC's `FOR I = 1 TO 5` does** — if
+you need to know how many times you've looped, or count up rather than
+down, you build that yourself out of ordinary stack values, the way
+`COUNTDOWN`'s own value does double duty as both the thing being
+counted down *and* the loop's exit test. A loop with a proper built-in
+counter (BASIC's `FOR`/`NEXT`, Forth's own `DO`/`LOOP`) is planned but
+not built yet — see section 7.
+
+**Status:** `BEGIN` and `UNTIL` work today, exactly as shown above.
+
+---
+
+## 7. What's not here yet
 
 A few things a Forth veteran would expect, and a BASIC programmer would
 ask about, aren't part of 2068-Forth yet. Each will get its own section
 here once it's real:
 
-- **Control flow** — `IF`/`ELSE`/`THEN`, and loops (`BEGIN`/`UNTIL`,
-  `DO`/`LOOP`). Right now every example in this document runs straight
-  through with no branching or repetition.
+- **Counted loops** — Forth's `DO`/`LOOP` (comparable to BASIC's
+  `FOR`/`NEXT`, complete with a built-in loop counter, unlike
+  `BEGIN`/`UNTIL` in section 6) and `BEGIN`/`WHILE`/`REPEAT` (a
+  loop that can check its condition *before* each pass, not just after).
+- **More comparisons** — only `0=` (section 5) exists so far. Ordinary
+  `=`, `<`, and `>` between two arbitrary numbers don't exist yet.
 - **Printing and input** — there's no `.` (print the top of the stack)
   or way to read a line you type yet, so none of this document's
   examples can be tried interactively at a prompt today; they describe
