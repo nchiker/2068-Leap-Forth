@@ -993,6 +993,74 @@ routine, already inherited and unused by this project) and hi-res mode
 remain the rest of the "More graphics and sound" gap, along with
 decimal-number multiply/divide and `DO`/`LOOP` — all still open.
 
+## Future stretch goal — a real 64-column TEXT mode in the editor
+
+**Not yet scheduled as a numbered phase — tracked here so it isn't
+lost, to pick up whenever convenient.** User request, 2026-09-01,
+after a live investigation (prompted by a genuine question — "can the
+editor switch between 64-column and 32-column mode?") turned up an
+important distinction worth recording:
+
+**What exists today (`64COL`/`32COL`, Phase 8) is a PIXEL graphics
+mode, not a text mode.** `core/print.asm`'s `EMIT`/`.`/`."` (and
+therefore the whole editor) call `kernel/graphics`'s `GFX_PUTCHAR`,
+which never checks `GFX_MODE` at all — text always draws the normal
+8-pixel-wide font glyph into the Primary Display File, always wrapping
+at column 32 (`core/print.asm`'s own hardcoded `cp 32`), regardless of
+whether `64COL` is active. Confirmed directly, not just reasoned about:
+a live Fuse session had the real editor render `test` perfectly legibly
+on the input line while `64COL` was active, and a headless diagnostic
+confirmed printed text and the screen fully recovering after switching
+back to `32COL`. The only real visual effect of toggling `64COL` today
+is the whole screen's background/border going to one uniform color —
+and even that observation carries a caveat: **this session's Fuse
+binary is patched for ULAPlus**, so port `$FF` writes (exactly what
+`MODE64_ON` does) may be getting reinterpreted by that patch rather
+than emulated as genuine TS2068/SCLD hardware behavior. Not yet
+resolved — cross-checking in ZEsarUX (unpatched, with native ULAPlus
+support) is the planned next step before trusting any further
+conclusions about the *visual* side effects of `64COL`.
+
+**Real TS2068 hardware genuinely could do 64-column text**, confirmed
+via web research (not this project's own emulation): connected to a
+monitor via the TS2068's separate RGB/monitor jack (a standard TV's
+bandwidth can't cleanly resolve 64 columns), the machine could show 24
+lines × 64 characters — but this was never a built-in ROM feature.
+Third-party software provided it on top of the same underlying pixel
+mode this project already ports the plotting half of: **TASWIDE**
+(Tasman Software, a BASIC utility), **OS-64** (Zebra Systems, a
+cartridge ROM, "fully compatible with 32 column commands and
+functions"), and a program by Wes Brzozowski published in SINCUS,
+October 1985. ZEsarUX's own documentation names the underlying hardware
+mode "Mode 6: 512×192 monochrome" — the exact same mode
+`kernel/mode64.asm`'s `MODE64_ON` already sets up (SCLD port `$FF` bits
+0-2 = `%110`). The historical 64-column text tools were a **software
+layer of narrower (roughly 4-pixel-wide) font glyphs drawn onto that
+same 512-pixel bitmap** — not a separate hardware text mode.
+
+**What building this for real would require, roughly scoped (not yet
+designed in detail):**
+- A new narrow-glyph font and a character-drawing routine to draw it
+  (`kernel/graphics`'s `GFX_PUTCHAR` draws the existing 8-pixel font
+  only — this needs to be new code, not a mode-aware branch inside it,
+  matching this project's "never modify an inherited kernel/ file"
+  practice).
+- A mode-aware print/column-wrap layer (today's `PRINT_COL` wraps at a
+  hardcoded 32; a real 64-column mode needs its own wrap point, and a
+  decision on whether `EMIT`/`.`/`."` become mode-aware themselves or
+  a parallel set of words exists instead).
+- Editor integration: `core/editor.asm`'s `EDIT_BUF` is a fixed 32
+  bytes today. Making 64-column mode actually *useful* for editing
+  (not just cosmetically narrower glyphs showing the same 32
+  characters) means growing the input line's own capacity too, not
+  only how it's drawn.
+
+This is real, multi-file design work — not a quick wrapper the way
+`INK`/`PAPER` was. Sequence it whenever convenient relative to the
+still-open items above (`DO`/`LOOP`, `FILL`/`AT-XY`/hi-res mode,
+decimal multiply/divide); nothing currently planned depends on it, and
+it doesn't block anything currently planned either.
+
 ## Testing discipline
 
 Carry forward the validated order from 2068-Leap, applied to Forth
