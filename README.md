@@ -142,6 +142,17 @@ inherited, what was deliberately left behind, and the phased build order.
   combination with `IF`/`ELSE`/`THEN`) and re-verified wired into
   `rom/forth_boot.asm`'s full chain. See `docs/PROJECT_PLAN.md` Phase
   13 for the full story.
+- Phase 14 (`core/loop.asm` + `rom/forth_smoke_p14.asm`): `WHILE`/
+  `REPEAT`, the pre-tested counterpart to Phase 4's post-tested
+  `BEGIN`/`UNTIL`. Reuses `core/control.asm`'s own `QBRANCH`/`BRANCH`
+  runtime directly rather than modifying that already-shared file.
+  `DO`/`LOOP` remains open — it needs its own loop-control storage
+  design, since this project's subroutine threading already uses the
+  Z80 hardware stack for real return addresses. Confirmed passing
+  under Fuse (three checkpoints, including the crucial case where the
+  loop body must never run at all) and re-verified wired into
+  `rom/forth_boot.asm`'s full chain. See `docs/PROJECT_PLAN.md` Phase
+  14 for the full story.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -171,6 +182,7 @@ core/       language-layer code, not hardware-facing:
               compare.asm (Phase 11 — =/</>)
               variable.asm (Phase 12 — VARIABLE/CONSTANT)
               dotquote.asm (Phase 13 — .")
+              loop.asm    (Phase 14 — WHILE/REPEAT)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
             2068-Forth's own addition, mode64/ (recovered, once-shipped
@@ -192,6 +204,7 @@ rom/        ROM image assembly:
               forth_smoke_p11.asm Phase 11 smoke ROM (=/</>)
               forth_smoke_p12.asm Phase 12 smoke ROM (VARIABLE/CONSTANT)
               forth_smoke_p13.asm Phase 13 smoke ROM (.")
+              forth_smoke_p14.asm Phase 14 smoke ROM (WHILE/REPEAT)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -223,6 +236,7 @@ make forth-smoke-p10  # Phase 10 smoke ROM: EMIT/.
 make forth-smoke-p11  # Phase 11 smoke ROM: =/</>
 make forth-smoke-p12  # Phase 12 smoke ROM: VARIABLE/CONSTANT
 make forth-smoke-p13  # Phase 13 smoke ROM: ."
+make forth-smoke-p14  # Phase 14 smoke ROM: WHILE/REPEAT
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```

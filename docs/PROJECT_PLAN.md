@@ -905,6 +905,45 @@ yet" section had named since Phase 4 except counted loops
 (`FILL`/`AT-XY`/hi-res/`INK`/`PAPER`), and decimal-number
 multiply/divide is now done.
 
+## Phase 14 — BEGIN/WHILE/REPEAT
+
+**Status: done.** `core/loop.asm` adds `WHILE ( flag -- )` and
+`REPEAT ( -- )`, both IMMEDIATE — the first half of the remaining
+"Counted loops" gap: `BEGIN`/`UNTIL` (Phase 4) tests its condition only
+*after* each pass, so the loop body always runs at least once;
+`BEGIN ... WHILE ... REPEAT` can test *before* the first pass too, or
+exit partway through. `DO`/`LOOP` — a real counted loop with a
+built-in index, comparable to BASIC's `FOR`/`NEXT` — remains open: it
+needs its own place to keep a loop's limit/index across each pass, and
+this project's subroutine-threaded design already uses the Z80
+hardware stack (SP) for real `CALL`/`RET` return addresses, so reusing
+it for loop control too needs careful design this phase didn't
+attempt.
+
+`WHILE`/`REPEAT` reuse `core/control.asm`'s own internal `QBRANCH`/
+`BRANCH` runtime routines directly rather than modifying that
+already-shared file (INCLUDEd by several smoke ROMs and
+`rom/forth_boot.asm` already) — a new small file, not a change to a
+proven one, matching this project's practice since Phase 12. `WHILE`
+is literally `IF`'s own body (compile `QBRANCH` + a placeholder, push
+the placeholder) reused verbatim — the placeholder nests correctly on
+top of whatever `BEGIN` already pushed, on the same borrowed data stack
+this project has used for every compile-time bookkeeping trick since
+Phase 4. `REPEAT` pops both placeholders in the matching LIFO order,
+compiles the unconditional branch back to `BEGIN`'s own loop-start, and
+patches `WHILE`'s placeholder to land right after it.
+
+`rom/forth_smoke_p14.asm` proves it under real Fuse with three
+checkpoints, the second being the crucial one: `0 COUNTDOWN2` (where
+`COUNTDOWN2` is `BEGIN DUP 0 > WHILE 1 - REPEAT`) must leave `0`
+*unchanged* — the loop body must never run at all, which is exactly the
+semantic difference from `BEGIN`/`UNTIL`'s own always-run-once shape.
+The third checkpoint combines `WHILE`/`REPEAT` with Phase 10's `.`
+(`3 PRINTDOWN` prints `"3 2 1 "`). Wired into `rom/forth_boot.asm`'s
+full chain right after `core/dotquote.asm`; re-verified with the same
+full-chain-replica diagnostic technique and a fresh boot screenshot
+confirming no regression.
+
 ## Testing discipline
 
 Carry forward the validated order from 2068-Leap, applied to Forth

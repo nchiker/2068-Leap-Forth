@@ -375,7 +375,29 @@ counted down *and* the loop's exit test. A loop with a proper built-in
 counter (BASIC's `FOR`/`NEXT`, Forth's own `DO`/`LOOP`) is planned but
 not built yet — see section 12.
 
-**Status:** `BEGIN` and `UNTIL` work today, exactly as shown above.
+`BEGIN`/`UNTIL` always runs its body at least once, since the check
+happens at the end. `BEGIN ... WHILE ... REPEAT` checks *before* each
+pass instead, so the body can run zero times:
+
+```forth
+: COUNTDOWN2  BEGIN DUP 0 > WHILE 1 - REPEAT ;
+
+5 COUNTDOWN2    \ leaves 0, same as COUNTDOWN above
+0 COUNTDOWN2    \ leaves 0 too -- but the body never ran at all this
+                \ time, since DUP 0 > was already false on the very
+                \ first check
+```
+
+`WHILE` pops a flag (computed the same way `IF`'s condition is): false
+exits the loop immediately, skipping everything up to `REPEAT`; true
+falls through into the loop body, which runs and then jumps back to
+`BEGIN` via `REPEAT`. This is BASIC's `WHILE`/`WEND` shape, not its
+`REPEAT`/`UNTIL` one, despite Forth's own `UNTIL` keyword suggesting
+the opposite pairing — worth double-checking against the examples above
+rather than guessing from the keyword names alone.
+
+**Status:** `BEGIN`, `UNTIL`, `WHILE`, and `REPEAT` all work today,
+exactly as shown above.
 
 ---
 
@@ -581,10 +603,10 @@ A few things a Forth veteran would expect, and a BASIC programmer would
 ask about, aren't part of 2068-Forth yet. Each will get its own section
 here once it's real:
 
-- **Counted loops** — Forth's `DO`/`LOOP` (comparable to BASIC's
+- **A counted loop** — Forth's `DO`/`LOOP` (comparable to BASIC's
   `FOR`/`NEXT`, complete with a built-in loop counter, unlike
-  `BEGIN`/`UNTIL` in section 6) and `BEGIN`/`WHILE`/`REPEAT` (a
-  loop that can check its condition *before* each pass, not just after).
+  `BEGIN`/`UNTIL` and `BEGIN`/`WHILE`/`REPEAT`, both in section 6,
+  neither of which has one).
 - **More graphics and sound** — `FILL`, `AT-XY`, hi-res mode, and
   color/`INK`/`PAPER` words (see section 7's own status note).
 - **Decimal number literals, multiply, and divide** — see section 11.
