@@ -20,7 +20,7 @@
 ; The full dictionary is assembled here: every word from every phase
 ; (0=/IF/ELSE/THEN/BEGIN/UNTIL, PLOT/LINE/CIRCLE/BEEP/BORDER,
 ; SAVE/LOAD, F+/F-, 64COL/32COL/PALETTE64/PLOT64, EMIT/., =/</>,
-; VARIABLE/CONSTANT), chained into one LATEST list via the same
+; VARIABLE/CONSTANT, ."), chained into one LATEST list via the same
 ; DICT_CHAIN_POINT splices rom/forth_smoke_p9.asm introduced and
 ; proved.
 ;
@@ -91,7 +91,7 @@ COLD_START:
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
-    ld   hl, DICT_LATEST_INIT_VARIABLE ; the full chain's own head — see
+    ld   hl, DICT_LATEST_INIT_DOTQUOTE ; the full chain's own head — see
                                     ; this file's own header
     ld   (LATEST), hl
     ld   hl, FORTH_DICT_RAM
@@ -180,6 +180,8 @@ DICT_CHAIN_POINT DEFL H_DOT
     INCLUDE "core/compare.asm"
 DICT_CHAIN_POINT DEFL H_GREATER
     INCLUDE "core/variable.asm"
+DICT_CHAIN_POINT DEFL H_CONSTANT
+    INCLUDE "core/dotquote.asm"
     INCLUDE "core/editor.asm"
 
     DS   $4000 - $, $FF

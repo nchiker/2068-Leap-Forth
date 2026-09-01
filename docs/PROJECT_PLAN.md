@@ -861,6 +861,50 @@ aliased). Wired into `rom/forth_boot.asm`'s full chain right after
 diagnostic technique — `VARIABLE FOO 42 FOO ! FOO @ .` correctly prints
 `42` — and a fresh boot screenshot confirming no regression.
 
+## Phase 13 — `."` (print a literal string)
+
+**Status: done.** `core/dotquote.asm` adds `." text" ( -- )`, IMMEDIATE
+— the last item on `docs/forth_tutorial.md`'s "What's not here yet"
+list: printing a fixed piece of text the way BASIC's `PRINT "hello"`
+does, distinct from `.`'s printing of a *computed* number. Like
+`IF`/`ELSE`/`THEN`/`BEGIN`/`UNTIL` (`core/control.asm`), `."` is
+compile-time only — meaningless outside a colon definition, and this
+project doesn't support typing it directly at the interpreter prompt.
+
+The runtime mechanism generalizes `core/interp.asm`'s own `DOLIT`
+inline-data idiom from a fixed 2-byte numeric literal to a
+variable-length string: `."` compiles `CALL DOSTR` followed by a length
+byte and the string's own raw bytes; `DOSTR` reads those off its own
+return address, prints each character via `core/print.asm`'s `W_EMIT`,
+then corrects the return address to skip past all of it before
+returning — exactly `DOLIT`'s own trick, generalized.
+
+**A real design mistake caught before assembling, not after.** The
+first draft had `W_DOTQUOTE` explicitly skip one leading space after
+`."` before scanning for the string. That space is already consumed —
+`W_WORD` (`core/interp.asm`) always eats whatever space terminated the
+word it just finished reading, and `."` itself is read as an ordinary
+word by the same `W_WORD`. The extra skip would have silently eaten the
+string's own first real character. Caught by tracing the mechanism by
+hand before ever assembling it, the same discipline this project has
+applied to every inline-data trick since `DOLIT` itself.
+
+`rom/forth_smoke_p13.asm` proves it under real Fuse (three checkpoints:
+a plain string, the empty-string edge case — where the one required
+delimiting space IS the entire gap between the opening and closing
+quotes — and `."` combined with `IF`/`ELSE`/`THEN`, matching
+`docs/forth_tutorial.md`'s own section 5 example almost verbatim).
+Wired into `rom/forth_boot.asm`'s full chain right after
+`core/variable.asm`; re-verified with the same full-chain-replica
+diagnostic technique (`: GREET ." HI" ; GREET` correctly prints `HI`)
+and a fresh boot screenshot confirming no regression.
+
+With this phase, every item `docs/forth_tutorial.md`'s "What's not here
+yet" section had named since Phase 4 except counted loops
+(`DO`/`LOOP`, `BEGIN`/`WHILE`/`REPEAT`), more graphics/sound
+(`FILL`/`AT-XY`/hi-res/`INK`/`PAPER`), and decimal-number
+multiply/divide is now done.
+
 ## Testing discipline
 
 Carry forward the validated order from 2068-Leap, applied to Forth

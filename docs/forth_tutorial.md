@@ -280,13 +280,19 @@ written as part of the `IF` itself.
 
 ```forth
 : DESCRIBE  IF ." positive-ish" ELSE ." zero or negative" THEN ;
+
+5 DESCRIBE     \ pushes 5 (true-ish): prints "positive-ish"
+0 DESCRIBE     \ pushes 0 (false): prints "zero or negative"
 ```
 
-*(That example uses `."`, which prints a literal string of text — a
-different, still-not-built feature from `.`'s printing of a computed
-number (section 9); see section 12 — so treat it as a preview of the
-shape rather than something to try today. Here's the same idea using
-only what actually works right now:)*
+`."` prints a literal piece of text — a different feature from `.`'s
+printing of a *computed* number (section 9). It only works inside a
+colon definition, the same restriction `IF`/`ELSE`/`THEN` themselves
+have. Exactly one space is required right after `."`, and the text
+runs up to (but not including) the next `"`.
+
+Here's the same branching idea again, without `."`, if you'd rather see
+plain numbers on the stack instead of printed text:
 
 ```forth
 : SIGNTEST  IF 111 ELSE 222 THEN ;
@@ -334,9 +340,8 @@ the standard Forth convention (every bit set), not a bug; it just looks
 unfamiliar coming from BASIC or most other languages, where "true" is
 usually `1`.
 
-**Status:** `IF`, `ELSE`, `THEN`, `0=`, `=`, `<`, and `>` all work
-today, exactly as shown above (the `."` example is the only preview in
-this section).
+**Status:** `IF`, `ELSE`, `THEN`, `0=`, `=`, `<`, `>`, and `."` all work
+today, exactly as shown above.
 
 ## 6. Repeating yourself: `BEGIN` `UNTIL`
 
@@ -580,9 +585,6 @@ here once it's real:
   `FOR`/`NEXT`, complete with a built-in loop counter, unlike
   `BEGIN`/`UNTIL` in section 6) and `BEGIN`/`WHILE`/`REPEAT` (a
   loop that can check its condition *before* each pass, not just after).
-- **Printing literal text** — `.` (section 9) prints a *computed
-  number*; there's no `."` yet for printing a fixed piece of text
-  (`." hello"`) the way BASIC's `PRINT "hello"` does.
 - **More graphics and sound** — `FILL`, `AT-XY`, hi-res mode, and
   color/`INK`/`PAPER` words (see section 7's own status note).
 - **Decimal number literals, multiply, and divide** — see section 11.
