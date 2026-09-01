@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke check clean
+.PHONY: all boot forth-smoke forth-smoke-p3 check clean
 
-all: boot forth-smoke
+all: boot forth-smoke forth-smoke-p3
 
 # Milestone 0: boot stub only.
 boot:
@@ -18,6 +18,15 @@ forth-smoke:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke.sym --lst=build/forth_smoke.lst rom/forth_smoke.asm
 	mv forth_smoke_rom0.bin build/forth_smoke_rom0.bin
+
+# Phase 3: outer interpreter (WORD/FIND/NUMBER) + colon compiler (: ;)
+# smoke ROM. Runs two fixed source strings through INTERPRET_RUN: plain
+# arithmetic, then defining and using a new word — see
+# rom/forth_smoke_p3.asm's own header for the full pass/fail contract.
+forth-smoke-p3:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p3.sym --lst=build/forth_smoke_p3.lst rom/forth_smoke_p3.asm
+	mv forth_smoke_p3_rom0.bin build/forth_smoke_p3_rom0.bin
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm

@@ -238,4 +238,32 @@ W_STORE:
 ; ---- dictionary boundary, for the smoke test and for Phase 3's CREATE ----
 DICT_LATEST_INIT EQU H_STORE       ; value LATEST must be seeded with at cold start
 
+; ============================================================================
+; DPUSH_HL / DPOP_HL — shared data-stack plumbing, added for Phase 3.
+;
+; NOT dictionary words themselves (no header, not findable) — just a
+; push/pop pair factored out for core/interp.asm's larger routines
+; (WORD, FIND, NUMBER, the colon compiler), which are text-processing
+; code, not performance-critical hot paths. The eight primitives above
+; predate these and deliberately stay fully inlined instead of calling
+; them: each is only a handful of instructions, and inlining avoids a
+; CALL/RET pair on what real Forth code runs constantly. That tradeoff
+; doesn't apply to WORD/FIND/NUMBER, which are already dozens of
+; instructions each — sharing this pair there is clearer, not slower
+; in any way that matters.
+; ============================================================================
+DPUSH_HL:                  ; push HL onto the data stack
+    dec  ix
+    dec  ix
+    ld   (ix+0), l
+    ld   (ix+1), h
+    ret
+
+DPOP_HL:                   ; pop the data stack into HL
+    ld   l, (ix+0)
+    ld   h, (ix+1)
+    inc  ix
+    inc  ix
+    ret
+
     ENDIF

@@ -16,8 +16,18 @@ inherited, what was deliberately left behind, and the phased build order.
 - Phase 2 (`core/dict.asm` + `rom/forth_smoke.asm`): dictionary header
   format, the IX-based data stack, and eight subroutine-threaded CODE
   primitives (`DUP SWAP DROP OVER + - @ !`), self-checked and confirmed
-  passing under Fuse. No compiler yet — the dictionary is hand-assembled,
-  not built by `:`/`CREATE`. See `docs/PROJECT_PLAN.md` Phase 2/3.
+  passing under Fuse.
+- Phase 3 (`core/interp.asm` + `rom/forth_smoke_p3.asm`): the outer
+  interpreter (`WORD`, `FIND`, `NUMBER`) and a real colon compiler
+  (`:`, `;`). Confirmed passing under Fuse: interprets plain arithmetic,
+  then defines a new word and calls it. Input is still a fixed buffer,
+  not a live keyboard — see `docs/PROJECT_PLAN.md` Phase 3.
+- New to this project: **`docs/forth_tutorial.md`** teaches the Forth
+  *language* to a reader who doesn't already know it — from the
+  standpoint of someone using the finished product, not this project's
+  own build/test process. It assumes BASIC familiarity but not
+  assembly. Meant to grow alongside the language itself, one section
+  per capability as it becomes real and usable.
 - The language core is integer-only by design; see
   `docs/numeric_model.md` for why floating point is a deferred, optional
   addition rather than something the language is built on.
@@ -25,17 +35,22 @@ inherited, what was deliberately left behind, and the phased build order.
 ## Layout
 
 ```
-core/       language-layer code, not hardware-facing: core/dict.asm
-            (dictionary header format, data stack, Phase 2 primitives)
+core/       language-layer code, not hardware-facing:
+              dict.asm   (Phase 2 — dictionary header format, data stack)
+              interp.asm (Phase 3 — outer interpreter, colon compiler)
 kernel/     hardware-facing modules inherited from 2068-Leap: memory,
             io, graphics, interrupt, math, sound, storage, bank
 include/    hardware/keyboard constants and the inherited kernel API
             contract (include/kernel_api.inc)
-rom/        ROM image assembly; rom/main.asm is the Milestone 0 boot
-            stub, rom/forth_smoke.asm is the Phase 2 smoke ROM
+rom/        ROM image assembly:
+              main.asm            Milestone 0 boot stub
+              forth_smoke.asm     Phase 2 smoke ROM
+              forth_smoke_p3.asm  Phase 3 smoke ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
-docs/       PROJECT_PLAN.md (read this first), numeric_model.md
+docs/       PROJECT_PLAN.md (read this first, project/build-facing),
+            forth_tutorial.md (learn the Forth language itself,
+            user-facing — no assembly or build content), numeric_model.md
             (integer-core decision), hardware_notes.md (confirmed
             hardware facts, inherited from 2068-Leap)
 ```
@@ -47,9 +62,10 @@ Requires GNU Make, Python 3, and
 or a compatible newer release.
 
 ```sh
-make boot         # assembles rom/main.asm -> build/forth_rom0.bin
-make forth-smoke  # assembles the Phase 2 dictionary/primitives smoke ROM
-make check        # static asm checks over core/, kernel/, and rom/
+make boot             # assembles rom/main.asm -> build/forth_rom0.bin
+make forth-smoke      # Phase 2 dictionary/primitives smoke ROM
+make forth-smoke-p3   # Phase 3 outer interpreter/colon compiler smoke ROM
+make check            # static asm checks over core/, kernel/, and rom/
 ```
 
 ## License

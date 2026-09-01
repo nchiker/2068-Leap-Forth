@@ -186,12 +186,47 @@ nothing yet appends to them at runtime.
 
 ## Phase 3 — outer interpreter
 
-Line buffer via `kernel/io`'s `IO_READ_KEY`, `WORD` (parse a
-blank-delimited token), `FIND` (dictionary search), `NUMBER` (decimal
-literal parsing — 2068-Leap's own expression-evaluator numeric-literal
-scanning in `basic.asm` is worth reading as a reference for edge cases
-it already found, even though none of that code is reused directly),
-`STATE` (interpret vs. compile), `:` `;`, `IMMEDIATE`.
+**Status: core proven.** `core/interp.asm` + `rom/forth_smoke_p3.asm`
+add `W_WORD` (parse a blank-delimited token), `FIND` (dictionary search,
+also reporting the IMMEDIATE bit), `NUMBER` (signed decimal literal
+parsing), `DOLIT` (runtime support for a compiled literal), `STATE`,
+and real dictionary words `:` and `;` (`;` is IMMEDIATE) — a working
+colon compiler. Confirmed passing under real Fuse on the first attempt
+(the include-ordering lesson from Phase 2 was applied from the start,
+not rediscovered): `rom/forth_smoke_p3.asm` runs `"5 3 + "` through
+`INTERPRET_RUN` (proving WORD/NUMBER/FIND/execute cooperate with
+nothing compiled), then `": DOUBLE DUP + ; 4 DOUBLE "` (proving the
+colon compiler builds a real, callable dictionary entry that `FIND`
+locates like any other word — `DOUBLE` isn't special-cased anywhere).
+
+Deliberately still scoped down, matching Phase 2's own "smallest
+provable step" discipline rather than building everything Phase 3
+could eventually mean in one pass:
+
+- **Input is a fixed in-memory buffer, not a live keyboard.**
+  `INTERPRET_RUN` takes an address and length and runs until exhausted,
+  batch-style — it is not a REPL yet. Wiring it to `kernel/io`'s
+  `IO_READ_KEY` for live interactive use is follow-up work, not done
+  here. (Phase 2's own `EMIT`/`KEY` deferral for the same reason still
+  stands, too.)
+- **One delimiter (space), one error path (fatal).** No tabs/CR
+  handling, no error recovery — an unrecognized token halts via a
+  ROM-level hook (`INTERPRET_UNKNOWN_WORD`) rather than reporting an
+  error and continuing. Both are fine for a fixed, hand-written test
+  source; both need real answers before this is interactive.
+- **Case-sensitive `FIND`.** Every header this project writes and every
+  test source string is already uppercase, so this hasn't mattered yet;
+  a live REPL will need to decide a case-folding policy.
+- **IMMEDIATE has exactly one user (`;`).** Enough to prove the
+  mechanism (a bit in `LENFLAGS`, read by `FIND`, acted on only in
+  `INTERPRET_RUN`) generalizes to Phase 4's `IF`/`ELSE`/`THEN` and
+  friends, without building more of it than one real user justifies yet.
+- 2068-Leap's own expression-evaluator numeric-literal scanning in
+  `basic.asm` was NOT consulted as a reference for this pass (`NUMBER`
+  here is a plain unsigned-run-with-optional-leading-minus scanner) —
+  worth a look before hardening `NUMBER` further (overflow behavior,
+  `$`/`%` radix prefixes, etc.), but not needed to get a first working
+  version passing.
 
 ## Phase 4 — control flow
 
