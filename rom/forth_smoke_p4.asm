@@ -153,7 +153,7 @@ INTERPRET_UNKNOWN_WORD:          ; core/interp.asm's hook -- see
 .hang:
     jr   .hang
 
-CHECKPOINT_NUM EQU $8114         ; 1 byte, alongside core/interp.asm's own
+CHECKPOINT_NUM EQU $8542         ; 1 byte, alongside core/interp.asm's own
                                   ; Phase 3 scratch cells (see that file)
 
 TEST_SRC_A:     DB ": IFTEST 0= IF 111 ELSE 222 THEN ; 0 IFTEST "

@@ -28,10 +28,22 @@ inherited, what was deliberately left behind, and the phased build order.
   both branches of an `IF`, and a loop confirmed to iterate the correct
   number of times. `WHILE`/`REPEAT` and `DO`/`LOOP` are follow-up work
   — see `docs/PROJECT_PLAN.md` Phase 4.
+- Phase 5 (`core/ts2068.asm` + `rom/forth_smoke_p5.asm`): TS2068
+  vocabulary — `PLOT`, `LINE`, `CIRCLE`, `BEEP`, `BORDER`, thin wrappers
+  over `kernel/graphics`/`kernel/sound`. Confirmed passing under Fuse,
+  including a real screenshot of a dot/line/circle drawn exactly where
+  expected. This is also where a real, previously-invisible bug got
+  found and fixed: this project's own Phase 3 scratch RAM aliased real
+  2068-Leap kernel sysvars once `kernel/graphics`/`kernel/sound` were
+  actually assembled alongside `core/` for the first time — see
+  `docs/PROJECT_PLAN.md` Phase 5 for the full story and the probe
+  method used to catch it. `FILL`, `AT-XY`, and hi-res `MODE` are
+  follow-up work.
 - **Not yet implemented, tracked for later:** the eventual live
-  startup screen must play a startup sound (needs Phase 5's `BEEP` and
-  live-keyboard input, neither built yet) — see `docs/PROJECT_PLAN.md`,
-  "Product requirement — startup screen plays a startup sound."
+  startup screen must play a startup sound (needs Phase 5's `BEEP`,
+  done, and live-keyboard input, not yet built) — see
+  `docs/PROJECT_PLAN.md`, "Product requirement — startup screen plays a
+  startup sound."
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -49,6 +61,7 @@ core/       language-layer code, not hardware-facing:
               dict.asm    (Phase 2 — dictionary header format, data stack)
               interp.asm  (Phase 3 — outer interpreter, colon compiler)
               control.asm (Phase 4 — IF/ELSE/THEN, BEGIN/UNTIL)
+              ts2068.asm  (Phase 5 — PLOT/LINE/CIRCLE/BEEP/BORDER)
 kernel/     hardware-facing modules inherited from 2068-Leap: memory,
             io, graphics, interrupt, math, sound, storage, bank
 include/    hardware/keyboard constants and the inherited kernel API
@@ -58,6 +71,7 @@ rom/        ROM image assembly:
               forth_smoke.asm     Phase 2 smoke ROM
               forth_smoke_p3.asm  Phase 3 smoke ROM
               forth_smoke_p4.asm  Phase 4 smoke ROM
+              forth_smoke_p5.asm  Phase 5 smoke ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
 docs/       PROJECT_PLAN.md (read this first, project/build-facing),
@@ -78,6 +92,7 @@ make boot             # assembles rom/main.asm -> build/forth_rom0.bin
 make forth-smoke      # Phase 2 dictionary/primitives smoke ROM
 make forth-smoke-p3   # Phase 3 outer interpreter/colon compiler smoke ROM
 make forth-smoke-p4   # Phase 4 control-flow smoke ROM
+make forth-smoke-p5   # Phase 5 TS2068 vocabulary smoke ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
 

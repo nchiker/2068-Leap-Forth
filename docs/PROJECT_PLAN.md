@@ -87,6 +87,20 @@ behind entirely.
 
 ## Phase 0 — kernel audit (before any Forth-specific code)
 
+**Status: still not formally done** — items 1-3 below remain open. What
+changed as of Phase 5: item 2's exact risk ("don't treat its untrimmed
+contents as this project's actual RAM map") stopped being theoretical
+and actually bit this project once `kernel/graphics`/`kernel/sound`
+were first assembled alongside `core/` — see Phase 5's own section for
+the real collision found and fixed, and the probe method used to find
+it. That method (assemble every needed `kernel/` module with every
+`core/` file in a throwaway build, inspect the `.sym` file for the
+address range in question) is the concrete version of this item 2 that
+should have been run before Phase 3 ever picked an address, not after
+Phase 5 forced the question. Still worth doing formally — the fix so
+far has been "relocate our own scratch out of the way," not "trim the
+inherited file," which is what item 2 actually asks for.
+
 Do this first, not as later cleanup, because everything in Phase 1
 onward assumes a memory map that's actually this project's own:
 
@@ -278,14 +292,66 @@ unlike line-oriented BASIC re-parsing structure on every pass.
 
 ## Phase 5 — TS2068 vocabulary
 
-Thin `CODE` words wrapping the kernel 1:1, matching `include/
-kernel_api.inc` almost verbatim: `PLOT`, `LINE`, `CIRCLE`, `FILL`,
-`BORDER`, `BEEP`, `AT-XY`, hi-res `MODE`. This is the point where the
-project starts feeling like it has real payoff over hand-written Z80:
-each of these is a few lines, no registry, no ABI, no fixed window —
-directly contrasting with what 2068-Leap had to build
-(`docs/loadable_basic_extensions.md`) to get equivalent extensibility
-in BASIC.
+**Status: `PLOT`, `LINE`, `CIRCLE`, `BEEP`, `BORDER` proven.**
+`core/ts2068.asm` + `rom/forth_smoke_p5.asm` add five thin `CODE` words
+wrapping the kernel almost 1:1, matching `include/kernel_api.inc`
+closely: `PLOT` (`GFX_WRITE_PIXEL`), `LINE` (`GFX_LINE`), `CIRCLE`
+(`GFX_CIRCLE`), `BEEP` (`SOUND_BEEP`), `BORDER` (`GFX_SET_BORDER`).
+Confirmed passing under real Fuse on the first attempt, verified two
+ways: `GFX_READ_PIXEL` readback confirms `PLOT`/`LINE`/`CIRCLE` set
+exactly the pixels they should (and nothing they shouldn't) — this
+tests THIS project's own coordinate wiring, not `kernel/graphics`'s own
+drawing algorithms, which are already proven 2068-Leap code — and a
+saved screenshot showing a real dot, line, and circle exactly where
+expected, as an independent visual confirmation beyond the automated
+check. `BORDER` is verified by reading back `PORT_FE_SHADOW` rather
+than the border color itself, since this smoke ROM's own pass/fail
+signal *is* the border color. `BEEP` has no way to verify actual sound
+in this environment — checked for data-stack hygiene (a sentinel value
+survives intact across the call) instead, a real but narrower check,
+documented as such rather than silently passed off as "tested."
+
+`FILL`, `AT-XY`, and hi-res `MODE` remain for a follow-up pass — this
+slice matches the five words actually requested, not the full word list
+this phase's description originally sketched.
+
+**The real finding of this phase wasn't a Forth bug — it was in the
+inherited kernel plumbing.** This is the first ROM in the project to
+actually assemble `kernel/graphics` and `kernel/sound` together with
+`core/`'s own files, because Phases 2-4 were deliberately kernel-free.
+Doing that for the first time immediately surfaced the Phase 0 audit
+risk this document had been flagging since Phase 2 and deferring every
+phase since: `include/sysvars.inc` (2068-Leap's own, inherited
+untrimmed) declares real, actively-used RAM addresses densely packed
+across `$8000`-`$8425` — and `core/interp.asm`'s own Phase 3 scratch
+cells (`SRC_PTR` through `WORD_BUF`, originally `$8100`-`$8141`) sat
+right in the middle of that range, aliasing real kernel state
+(`EDITOR_REDRAW_HOOK`, several `HILITE_*` cells, `PORT_FE_SHADOW`, and
+more) that this project would have started silently corrupting the
+moment a Forth program actually used both `WORD`/`FIND`/`NUMBER` and
+any graphics/sound word in the same session. Invisible through Phase 3
+and 4 because neither of those phases' smoke ROMs ever included a
+kernel/ module that pulls `sysvars.inc` in at all.
+
+**Method used to find and fix it, worth repeating for any future
+addition that needs its own RAM state:** assemble every `kernel/`
+module the ROM actually needs together with every `core/` file, in one
+throwaway probe build, then inspect the resulting `.sym` file for the
+address range in question — don't reason about a gap being "probably
+empty" from reading `sysvars.inc`'s section comments alone (the file's
+own layout is provisional and its comments describe history, not
+necessarily current addresses — see its own header). That probe
+confirmed `$8426` (2068-Leap's own `PROG_AREA_START`, the start of
+*its* dynamic BASIC pool, never written to by anything this project
+calls) through `$8FFF` is genuinely empty, and separately confirmed
+this project's own `DSTACK_LIMIT`-through-`DSTACK_TOP` (`$9000`-`$9800`)
+and `FORTH_DICT_RAM` (`$A000`+) had been safe all along by pure luck,
+not by having been checked. `core/interp.asm`'s scratch was relocated
+to `$8500`, inside the confirmed-empty gap, and Phase 3/4's own smoke
+ROMs were rebuilt and re-confirmed passing under Fuse afterward (they
+were never actually broken — they don't include the colliding kernel
+modules — but re-verifying rather than assuming is the same discipline
+this whole project has followed since Phase 2's own first bug).
 
 ## Product requirement — startup screen plays a startup sound
 

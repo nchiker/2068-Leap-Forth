@@ -256,7 +256,7 @@ written as part of the `IF` itself.
 ```
 
 *(That example uses `."`, which prints text — not built yet, see
-section 7 — so treat it as a preview of the shape rather than something
+section 8 — so treat it as a preview of the shape rather than something
 to try today. Here's the same idea using only what actually works right
 now:)*
 
@@ -326,13 +326,63 @@ down, you build that yourself out of ordinary stack values, the way
 `COUNTDOWN`'s own value does double duty as both the thing being
 counted down *and* the loop's exit test. A loop with a proper built-in
 counter (BASIC's `FOR`/`NEXT`, Forth's own `DO`/`LOOP`) is planned but
-not built yet — see section 7.
+not built yet — see section 8.
 
 **Status:** `BEGIN` and `UNTIL` work today, exactly as shown above.
 
 ---
 
-## 7. What's not here yet
+## 7. Drawing and sound
+
+2068-Forth's graphics and sound words are deliberately thin: each one
+is a direct, single-purpose action, the same way BASIC's `PLOT`,
+`CIRCLE`, and `BEEP` are — there's no drawing "state" to set up first
+beyond what each word's own arguments say.
+
+| Word | Effect | What it does |
+|---|---|---|
+| `PLOT` | `( x y -- )` | Set the pixel at `(x, y)` |
+| `LINE` | `( x1 y1 x2 y2 -- )` | Draw a line from `(x1, y1)` to `(x2, y2)` |
+| `CIRCLE` | `( xc yc r -- )` | Draw a circle outline centered at `(xc, yc)` with radius `r` |
+| `BORDER` | `( color -- )` | Set the screen border to `color` (0-7, same numbering as BASIC's `BORDER`) |
+| `BEEP` | `( pitch duration -- )` | Produce a tone |
+
+```forth
+10 20 PLOT              \ a single dot
+60 5 100 45 LINE         \ a diagonal line
+150 100 20 CIRCLE        \ a circle, radius 20, centered at (150,100)
+5 BORDER                 \ cyan border
+```
+
+Reading these left to right follows the same postfix habit as
+everything else in this document: for `LINE`, the coordinates go on the
+stack in the order you'd say them out loud ("from 60,5 to 100,45"),
+then the word that acts on all four at once. Nothing here is
+conceptually new over section 1 — these are just words, exactly like
+`+` or `DUP`, that happen to affect the screen or speaker instead of a
+number.
+
+Two honest limits worth knowing now rather than discovering by
+surprise:
+
+- **No color choice yet.** Every shape draws in a fixed default (black
+  on white) — there's no `INK`/`PAPER` equivalent to pick a different
+  color per shape, the way BASIC's `INK`/`PAPER` statements do.
+- **`BEEP`'s two numbers aren't musical.** BASIC's `BEEP` typically
+  takes a duration in seconds and a pitch as a semitone offset;
+  2068-Forth's `BEEP` takes lower-level, hardware-timing numbers
+  instead, with no conversion between the two yet. Getting a specific,
+  predictable musical note or duration out of it isn't straightforward
+  today.
+
+**Status:** `PLOT`, `LINE`, `CIRCLE`, `BORDER`, and `BEEP` all work
+today, exactly as shown above. `FILL` (flood-fill an area), `AT-XY`
+(position text), hi-res graphics mode, and any color/`INK`/`PAPER`
+words do not exist yet.
+
+---
+
+## 8. What's not here yet
 
 A few things a Forth veteran would expect, and a BASIC programmer would
 ask about, aren't part of 2068-Forth yet. Each will get its own section
@@ -347,12 +397,14 @@ here once it's real:
 - **Printing and input** — there's no `.` (print the top of the stack)
   or way to read a line you type yet, so none of this document's
   examples can be tried interactively at a prompt today; they describe
-  what typing them *will* do once that exists.
+  what typing them *will* do once that exists. This also means none of
+  section 7's drawing examples can be tried at a live prompt yet either
+  — the words work, but only a fixed, pre-written program can call them
+  so far, not something you type in and watch happen.
 - **Named variables** (`VARIABLE`) and constants (`CONSTANT`), built on
   top of the `@`/`!` in section 4.
-- **Graphics and sound** — TS2068-specific words for pixels, lines,
-  circles, and sound, comparable to BASIC's `PLOT`/`SOUND`/`BEEP`.
-  Nothing like this exists yet.
+- **More graphics and sound** — `FILL`, `AT-XY`, hi-res mode, and
+  color/`INK`/`PAPER` words (see section 7's own status note).
 - **Saving and loading your own definitions** to and from tape.
 
 See [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the full order these are

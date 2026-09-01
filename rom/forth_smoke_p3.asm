@@ -163,7 +163,7 @@ INTERPRET_UNKNOWN_WORD:          ; core/interp.asm's hook for a token that's
 .hang:
     jr   .hang
 
-CHECKPOINT_NUM EQU $8114         ; 1 byte, alongside core/interp.asm's own
+CHECKPOINT_NUM EQU $8542         ; 1 byte, alongside core/interp.asm's own
                                   ; Phase 3 scratch cells (see that file)
 
 TEST_SRC_A:     DB "5 3 + "

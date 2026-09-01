@@ -47,25 +47,47 @@
     DEFINE CORE_INTERP_ASM
 
 ; ============================================================================
-; Phase 3 RAM state — provisional addresses, same caveat as core/dict.asm's
-; DSTACK_TOP/LATEST/HERE (docs/PROJECT_PLAN.md Phase 0 hasn't run yet).
-; Deliberately NOT inside [DSTACK_LIMIT, DSTACK_TOP] ($9000-$9800) or at
-; FORTH_DICT_RAM ($A000+) — this is its own separate scratch area so a
-; deep data stack or a growing compiled dictionary can never collide
-; with it.
+; Phase 3 RAM state.
+;
+; RELOCATED for Phase 5 (2026-09-01): originally $8100-$8141ish, which
+; turned out to collide with real, actively-used 2068-Leap kernel/BASIC
+; sysvars (include/sysvars.inc's own ORG $8000 block is densely packed
+; there — EDITOR_REDRAW_HOOK, HILITE_*, PORT_FE_SHADOW, and dozens more,
+; confirmed by actually assembling kernel/graphics.asm + kernel/sound.asm
+; together with this file and inspecting the resulting .sym). That
+; collision was invisible through Phase 3/4 because neither of those
+; phases' smoke ROMs ever INCLUDEs a kernel/ module that pulls
+; sysvars.inc in — Phase 5 is the first phase where this file coexists
+; in the same ROM image as real kernel/graphics + kernel/sound code, so
+; it's the first place the bug could have actually bitten.
+;
+; The same probe confirmed $8426 (2068-Leap's own PROG_AREA_START — the
+; start of ITS dynamic BASIC program/array/scalar pool, never written to
+; by anything this project calls) through $8FFF is genuinely empty: not
+; one sysvars.inc symbol lands there. This file's own scratch now lives
+; at $8500, comfortably inside that gap, with margin on both sides
+; before DSTACK_LIMIT ($9000, also confirmed collision-free by the same
+; probe) and before core/dict.asm's own DSTACK_TOP/LATEST/HERE.
+;
+; If a future phase adds its own RAM state, verify it against a real
+; probe the same way — see docs/PROJECT_PLAN.md's Phase 5 section for
+; the exact method — rather than picking an address by inspection alone.
 ; ============================================================================
-SRC_PTR           EQU $8100   ; 2 bytes: next unread source character
-SRC_END           EQU $8102   ; 2 bytes: one past the last valid source byte
-STATE             EQU $8104   ; 1 byte: 0 = interpreting, 1 = compiling
-FIND_SEARCH_ADDR  EQU $8105   ; 2 bytes: FIND's own scratch
-FIND_HEADER_ADDR  EQU $8107   ; 2 bytes: FIND's own scratch
-FIND_RAW_LENFLAGS EQU $8109   ; 1 byte:  FIND's own scratch (pre-mask, for the IMMEDIATE bit)
-NUM_PTR           EQU $810A   ; 2 bytes: NUMBER's own scratch
-NUM_COUNT         EQU $810C   ; 1 byte:  NUMBER's own scratch
-NUM_NEG           EQU $810D   ; 1 byte:  NUMBER's own scratch (1 = saw a leading '-')
-WORD_SRC_ADDR     EQU $810E   ; 2 bytes: W_COLON's own scratch
-NEW_HEADER_ADDR   EQU $8110   ; 2 bytes: W_COLON's own scratch
-WORD_BUF          EQU $8120   ; 34 bytes: 1 count byte + up to 32 name bytes
+SRC_PTR           EQU $8500   ; 2 bytes: next unread source character
+SRC_END           EQU $8502   ; 2 bytes: one past the last valid source byte
+STATE             EQU $8504   ; 1 byte: 0 = interpreting, 1 = compiling
+FIND_SEARCH_ADDR  EQU $8505   ; 2 bytes: FIND's own scratch
+FIND_HEADER_ADDR  EQU $8507   ; 2 bytes: FIND's own scratch
+FIND_RAW_LENFLAGS EQU $8509   ; 1 byte:  FIND's own scratch (pre-mask, for the IMMEDIATE bit)
+NUM_PTR           EQU $850A   ; 2 bytes: NUMBER's own scratch
+NUM_COUNT         EQU $850C   ; 1 byte:  NUMBER's own scratch
+NUM_NEG           EQU $850D   ; 1 byte:  NUMBER's own scratch (1 = saw a leading '-')
+WORD_SRC_ADDR     EQU $850E   ; 2 bytes: W_COLON's own scratch
+NEW_HEADER_ADDR   EQU $8510   ; 2 bytes: W_COLON's own scratch
+INTERP_IMM_FLAG   EQU $8512   ; 1 byte:  INTERPRET_RUN's own scratch (moved
+                              ; up here from the file's tail, alongside
+                              ; the rest of this relocated block)
+WORD_BUF          EQU $8520   ; 34 bytes: 1 count byte + up to 32 name bytes
                               ; (header LENFLAGS only has 5 length bits, so
                               ; 32 is already more than a definition name
                               ; can ever use — generous on purpose)
@@ -509,8 +531,6 @@ INTERPRET_RUN:
 
 .done:
     ret
-
-INTERP_IMM_FLAG EQU $8112          ; 1 byte: INTERPRET_RUN's own scratch
 
 ; ============================================================================
 ; COMPILE_WORD ( HL = value -- )  added for Phase 4. Compiles 2 raw bytes

@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 check clean
+.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 check clean
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5
 
 # Milestone 0: boot stub only.
 boot:
@@ -36,6 +36,16 @@ forth-smoke-p4:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p4.sym --lst=build/forth_smoke_p4.lst rom/forth_smoke_p4.asm
 	mv forth_smoke_p4_rom0.bin build/forth_smoke_p4_rom0.bin
+
+# Phase 5: TS2068 vocabulary (PLOT, LINE, CIRCLE, BEEP, BORDER) smoke
+# ROM -- the first to pull in real kernel/ modules (kernel/math,
+# kernel/graphics, kernel/sound) alongside core/. See
+# rom/forth_smoke_p5.asm's own header for its verification strategy
+# (GFX_READ_PIXEL readback, not just a stack check).
+forth-smoke-p5:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p5.sym --lst=build/forth_smoke_p5.lst rom/forth_smoke_p5.asm
+	mv forth_smoke_p5_rom0.bin build/forth_smoke_p5_rom0.bin
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm
