@@ -264,9 +264,11 @@ PI F.               \ prints 3.1416
 `SIN`/`COS` are computed from a lookup table with linear interpolation
 between entries, not a series expansion — accurate to about 3-4 decimal
 digits, which is all `F.` shows anyway. There's no `TAN` yet (it isn't
-hard to add as `SIN`/`COS`, but hasn't come up), and very large angles
-(roughly beyond ±16000 radians) aren't reliable — ordinary trig usage
-is well within range.
+hard to add as `SIN`/`COS`, but hasn't come up), and large angles
+(roughly beyond ±1570 radians, a couple hundred full turns) aren't
+reliable — the internal range-reduction step gives up silently past
+that point rather than erroring — but ordinary trig usage is
+comfortably within range.
 
 ### A few more useful numeric words
 

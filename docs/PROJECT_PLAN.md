@@ -2073,10 +2073,51 @@ respectively — proving `PI`/`SIN`/`COS` are genuinely reachable via
 smoke ROM, and that the decimal-literal parser's own independently-
 rounded values feed correctly into the same algorithm.
 
-**Scope limit, inherited from the still-open `F_ALIGN` finding, not
-new here**: range reduction can misbehave for very large input angles
-(magnitude ≳16384) for the same reason documented above — out of scope
-for ordinary trig usage, not fixed by this phase.
+**UPDATE, external code review**: an outside review of this phase's
+finished code (not caught by this phase's own original design/testing)
+found four things worth recording, three of them documentation fixes
+and one a real, narrow, unfixed edge case:
+
+1. **A real, hard domain limit in `RANGE_REDUCE`, and the ORIGINAL
+   version of this scope-limit note cited the WRONG figure for it.**
+   `RANGE_REDUCE`'s two bounded loops each cap out after
+   `TRIG_GUARD_MAX` (250) iterations of `+`/`-TWO_PI`; reaching the cap
+   silently returns an UNREDUCED value (not just imprecise — genuinely
+   outside `[0,2*PI)`), and every step downstream then runs on a broken
+   precondition with no error signal. This note originally (wrongly)
+   cited the SEPARATE `F_ALIGN` finding's own `≳16384` threshold as if
+   it were this limit too — the real, tighter, operative bound is
+   roughly ±1570 (`250 * TWO_PI`), found by hand-deriving it directly
+   from the guard count once external review pointed at the loop.
+   Ordinary trig usage (a few hundred radians at most) is comfortably
+   inside this; nothing was changed algorithmically beyond widening the
+   single-byte guard's own headroom slightly — see
+   `core/floattrig.asm`'s own `RANGE_REDUCE` header for the exact
+   derivation and `TRIG_GUARD_MAX`'s own definition.
+2. **The "every constant/table entry has a negative exponent" claim
+   (finding (b), above) was too absolute.** `SIN_TABLE[0]` is exact
+   zero (exponent 0), and dividing zero (e.g. `SIN(0)`'s own `idx_f`)
+   can produce a zero mantissa paired with a nonzero exponent, e.g.
+   `(0,+2)`. Both are harmless (`F_ALIGN` may shift a zero mantissa by
+   any amount without changing its value), but the invariant that
+   actually matters is narrower: every NONZERO value produced within
+   `RANGE_REDUCE`'s own successfully-reduced domain has a negative
+   exponent — confirmed by hand-tracing every intermediate value's own
+   realistic magnitude range. `core/floattrig.asm`'s own header now
+   states this precisely instead of the original overclaim.
+3. **The F+/F- overflow fix itself is correct** on every boundary
+   external review checked — both signs, both operations, exact
+   halving, and wrapped-zero mantissas like `-32768+-32768` — with one
+   remaining, narrow, UNFIXED edge case: if the aligned result exponent
+   is exactly +127, the fallback's own exponent increment wraps it to
+   -128, giving a radically wrong result. Needs an exponent of +127 to
+   reach, nowhere near anything this project's own code (SIN/COS
+   included) produces — documented at `core/float.asm`'s own `W_FPLUS`
+   header rather than fixed, since a real fix means deciding what this
+   float format should even do on exponent overflow, a foundational,
+   format-wide question this one bugfix shouldn't answer alone.
+4. Quadrant logic, boundary assignments, and the 17-step interpolation
+   guard were all confirmed correct as designed — no issues found.
 
 ROM budget after this phase: `rom/forth_boot.asm` uses 10924 of 16384
 bytes ($2AAC of $4000), 5460 bytes free — no ROM pressure from this

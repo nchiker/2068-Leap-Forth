@@ -197,6 +197,24 @@ F_ALIGN:
 ; -15, giving 17814*2^-15 ≈ 0.5436 — correctly close to the true sum
 ; ≈0.5449 (0.4714+0.0723 by the same table math), not wrapped or
 ; wrong-signed.
+;
+; A REMAINING, NARROW, UNFIXED EDGE CASE — found by external review,
+; not exercised by anything in this project so far: the fallback's own
+; `inc a`/exponent bump assumes the aligned exponent has room to grow.
+; If F_RESULT_EXP is exactly +127, incrementing it wraps to -128 (an
+; 8-bit signed overflow), producing a radically wrong result instead of
+; a merely imprecise one. Every other case an external review checked —
+; both signs, both F+ and F-, exact-halving cases, and wrapped-zero
+; mantissas like -32768+-32768 — is correct. This is a general gap in
+; this format's own exponent handling (this project's floats have no
+; exponent-overflow guard anywhere), not something specific to the
+; overflow fix itself, and reaching it needs an exponent of +127 —
+; nothing in this project's own existing callers (including
+; core/floattrig.asm's SIN/COS) gets remotely close. Noted here rather
+; than silently relied upon; not fixed, since a real fix means deciding
+; what this float format should even DO on exponent overflow (saturate?
+; a sentinel value?), a foundational, format-wide design question this
+; one bugfix shouldn't answer by itself.
 ; ============================================================================
 H_FPLUS:
     DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL) to
