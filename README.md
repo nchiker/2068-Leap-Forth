@@ -38,7 +38,8 @@ inherited, what was deliberately left behind, and the phased build order.
   actually assembled alongside `core/` for the first time — see
   `docs/PROJECT_PLAN.md` Phase 5 for the full story and the probe
   method used to catch it. `FILL`, `AT-XY`, and hi-res `MODE` are
-  follow-up work.
+  follow-up work. `BEEP`'s own raw-hardware-units behavior was later
+  replaced by a real, semitone/seconds `BEEP` — see Phase 31, below.
 - Phase 6 (`core/editor.asm` + `rom/forth_smoke_p6.asm`): line editing
   — a single-line input buffer with insert, backspace-delete, and
   left/right cursor movement. Confirmed passing under Fuse: three
@@ -448,6 +449,44 @@ inherited, what was deliberately left behind, and the phased build order.
   `rom/forth_boot.asm`'s own real keyboard-driven prompt, printing
   `0.8408`, `3.1416`, and `-0.4156` — proving all three words are
   genuinely reachable via `FIND`, not just callable as raw subroutines.
+- Phase 31 (`core/beep.asm` + `rom/forth_smoke_p31.asm`): a real,
+  semitone/seconds `BEEP`, replacing Phase 5's own raw-hardware-units
+  version — the user asked directly why `BEEP` didn't behave like the
+  real 2068's, then asked for a real attempt. `BEEP ( n-semitones
+  fduration -- )` decomposes the semitone number into a note (0-11) and
+  an octave via a repeated-subtract-12 loop (the same idea the real ROM
+  disassembly's own `BEEP`/`BEEPER` routines use — confirmed directly
+  from the actual ROM disassembly, not guessed), looks the note up in a
+  12-entry frequency-ratio table, and applies the octave as a direct
+  EXPONENT shift (exact, no multiply needed). The frequency-to-hardware
+  conversion is calibrated from first principles against
+  `kernel/sound`'s own `SOUND_BEEP` loop's real, published Z80
+  instruction timings (NOT the real ROM's own BEEPER constants, which
+  are specific to ITS OWN differently-shaped timing loop) and the
+  TS2068's own real, confirmed 3,528,000 Hz clock (libspectrum's own
+  machine timing table) — `222 + 52*pitch` T-states per waveform cycle.
+  The original word is preserved unchanged as `core/rawbeep.asm`,
+  purely for `rom/forth_smoke_p5.asm`'s own historical checkpoint —
+  `core/ts2068.asm` itself no longer defines `BEEP` at all.
+  **A second real, foundational bug found and fixed along the way**:
+  the naive formula subtracts a small constant (222) from
+  `CPU_CLOCK/freq`, which is a LARGE number for low-pitched notes —
+  exactly `core/float.asm`'s own documented `F_ALIGN` large-magnitude
+  hazard (see the `2068forth-float-align-signed-cmp-quirk` memory
+  note), confirmed directly (pitch -60, a real note, not contrived):
+  the buggy float subtraction silently zeroed the large operand. Fixed
+  by doing that step in plain 32-bit integer arithmetic instead (which
+  never touches `F_ALIGN` at all), reusing `core/floatdiv.asm`'s own
+  already-proven `F_UDIV32BY16` for the division — a second, related
+  bug (converting to a plain 16-bit integer first, which silently
+  overflowed for that same low pitch) was caught the same way, by the
+  smoke ROM's own hand-derived checkpoint failing, not by inspection.
+  Confirmed correct under real Fuse (`rom/forth_smoke_p31.asm`'s four
+  checkpoints, checking the computed hardware parameters directly since
+  actual audio output can't be verified in this environment — same
+  strategy Phase 5's own original `BEEP` checkpoint used) and live, by
+  typing `0 1.0 BEEP` at `rom/forth_boot.asm`'s own real prompt and
+  confirming it returns control normally after playing (no hang).
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -468,7 +507,7 @@ core/       language-layer code, not hardware-facing:
               dict.asm    (Phase 2 — dictionary header format, data stack)
               interp.asm  (Phase 3 — outer interpreter, colon compiler)
               control.asm (Phase 4 — IF/ELSE/THEN, BEGIN/UNTIL)
-              ts2068.asm  (Phase 5 — PLOT/LINE/CIRCLE/BEEP/BORDER)
+              ts2068.asm  (Phase 5 — PLOT/LINE/CIRCLE/BORDER)
               editor.asm  (Phase 6 — line editing)
               storage.asm (Phase 7 — SAVE/LOAD)
               float.asm   (Phase 8 stretch — F+/F-)
@@ -492,6 +531,9 @@ core/       language-layer code, not hardware-facing:
               input.asm   (Phase 28 — ACCEPT/INPUT)
               floatsqrt.asm (Phase 29 — FSQRT)
               floattrig.asm (Phase 30 — PI/SIN/COS)
+              rawbeep.asm (Phase 5's original raw-units BEEP, kept for
+                          rom/forth_smoke_p5.asm's own history)
+              beep.asm    (Phase 31 — real, semitone/seconds BEEP)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
             2068-Forth's own addition, mode64/ (recovered, once-shipped
@@ -530,6 +572,7 @@ rom/        ROM image assembly:
               forth_smoke_p28.asm Phase 28 smoke ROM (ACCEPT/INPUT)
               forth_smoke_p29.asm Phase 29 smoke ROM (FSQRT)
               forth_smoke_p30.asm Phase 30 smoke ROM (PI/SIN/COS)
+              forth_smoke_p31.asm Phase 31 smoke ROM (real BEEP)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -578,6 +621,7 @@ make forth-smoke-p27  # Phase 27 smoke ROM: string handling
 make forth-smoke-p28  # Phase 28 smoke ROM: ACCEPT/INPUT
 make forth-smoke-p29  # Phase 29 smoke ROM: FSQRT
 make forth-smoke-p30  # Phase 30 smoke ROM: PI/SIN/COS
+make forth-smoke-p31  # Phase 31 smoke ROM: real BEEP
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```

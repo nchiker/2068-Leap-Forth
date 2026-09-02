@@ -688,7 +688,7 @@ beyond what each word's own arguments say.
 | `INK` | `( color -- )` | Set the foreground color `PLOT`/`LINE`/`CIRCLE`/`FILL` draw with from now on (0-7) |
 | `PAPER` | `( color -- )` | Set the background color the same way |
 | `AT-XY` | `( col row -- )` | Move where the next `EMIT`/`.`/`."` prints to (column 0-31, row 0-22) |
-| `BEEP` | `( pitch duration -- )` | Produce a tone |
+| `BEEP` | `( n-semitones fduration -- )` | Produce a tone |
 
 ```forth
 5 BORDER
@@ -713,14 +713,26 @@ just the next one, until some later call changes it again. Calling
 `INK` never disturbs whatever `PAPER` was last set to, and vice versa —
 each only touches its own half of the color.
 
-One honest limit worth knowing now rather than discovering by
-surprise: **`BEEP`'s two numbers aren't musical.** BASIC's `BEEP`
-typically takes a duration in seconds and a pitch as a semitone offset;
-2068-Forth's `BEEP` takes lower-level, hardware-timing numbers instead,
-with no conversion between the two yet. Getting a specific, predictable
-musical note or duration out of it isn't straightforward today, and
-there's no access yet to the machine's AY-3-8912 sound chip beyond this
-simple tone — see the appendix.
+`BEEP` takes real musical units, the same as BASIC's own `BEEP`: an
+INTEGER number of semitones (0 = middle C, positive goes up, negative
+goes down — the data stack's own job, since a semitone count is a
+whole number) and a decimal DURATION in seconds (the float stack's
+job, since durations are naturally fractional):
+
+```forth
+0 1.0 BEEP        \ middle C for one second
+12 0.5 BEEP        \ one octave above middle C, half a second
+-12 0.5 BEEP        \ one octave below middle C, half a second
+```
+
+Two honest limits worth knowing: only WHOLE semitones are supported
+(BASIC's own `BEEP` also accepts a fractional pitch; this one doesn't),
+and there's a real, physical ceiling of about 12.9 kHz — a note higher
+than that clamps to the ceiling rather than actually going higher,
+since that's as fast as this hardware loop can toggle the speaker.
+Ordinary musical use (a few octaves around middle C) is nowhere near
+either limit. There's also no access yet to the machine's AY-3-8912
+sound chip beyond this simple tone — see the appendix.
 
 ### Getting input: `KEY`
 
@@ -1010,7 +1022,7 @@ the same convention applied to the full ANS Forth standard.
 | `BORDER` | `( color -- )` |
 | `INK` | `( color -- )` |
 | `PAPER` | `( color -- )` |
-| `BEEP` | `( pitch duration -- )` |
+| `BEEP` | `( n-semitones fduration -- )` |
 | `64COL` / `32COL` | `( -- )` |
 | `PALETTE64` | `( n -- )` |
 | `PLOT64` | `( x y -- )` |

@@ -1,14 +1,14 @@
 ; ============================================================================
-; core/ts2068.asm — Phase 5: TS2068 vocabulary (PLOT, LINE, CIRCLE, BEEP,
+; core/ts2068.asm — Phase 5: TS2068 vocabulary (PLOT, LINE, CIRCLE,
 ; BORDER)
 ;
 ; Builds on core/dict.asm, core/interp.asm, and core/control.asm (all
 ; must be INCLUDEd first — chains its own dictionary entries onto
 ; core/control.asm's H_UNTIL, and uses DPOP_HL). This is the first
 ; Phase to also require kernel/ modules: kernel/graphics/graphics.asm
-; and kernel/sound/sound.asm must both be INCLUDEd too (their own
-; internal INCLUDEs pull in include/sysvars.inc, which is why they
-; matter for address planning — see the note below).
+; must be INCLUDEd too (its own internal INCLUDEs pull in
+; include/sysvars.inc, which is why it matters for address planning —
+; see the note below).
 ;
 ; WHAT THIS ADDS — thin wrappers, matching include/kernel_api.inc
 ; almost 1:1, exactly as docs/PROJECT_PLAN.md's Phase 5 description
@@ -16,17 +16,25 @@
 ;   PLOT   ( x y -- )          GFX_WRITE_PIXEL
 ;   LINE   ( x1 y1 x2 y2 -- )  GFX_LINE (reads its args from sysvars)
 ;   CIRCLE ( xc yc r -- )      GFX_CIRCLE (reads its args from sysvars)
-;   BEEP   ( pitch duration -- ) SOUND_BEEP
 ;   BORDER ( color -- )        GFX_SET_BORDER
 ;
-; All five take plain 16-bit stack cells but only ever use the LOW
-; BYTE of each — every TS2068 screen coordinate, radius, and color fits
-; in 8 bits (kernel_api.inc's own comments already document x as 0-255,
-; y as 0-191, color as 0-7), and GFX_LINE_X0/Y0/X1/Y1 and
-; GFX_CIRCLE_XC/YC/R/ATTR/OVER (include/sysvars.inc) are all declared
-; as single bytes, not words. No range checking is done — matching
-; every earlier phase's "no error recovery yet" scope note, not an
-; oversight specific to this file.
+; BEEP originally lived here too (raw hardware-timing units, no
+; conversion) — MOVED OUT as of the real, semitone/seconds BEEP
+; (core/beep.asm, replacing it in rom/forth_boot.asm's own dictionary)
+; and core/rawbeep.asm (the original word, byte-for-byte unchanged,
+; kept only for rom/forth_smoke_p5.asm's own historical checkpoint).
+; kernel/sound/sound.asm is therefore no longer a dependency of THIS
+; file — see core/beep.asm's own header for where that dependency
+; (and BEEP itself) now lives.
+;
+; All four remaining words take plain 16-bit stack cells but only ever
+; use the LOW BYTE of each — every TS2068 screen coordinate, radius,
+; and color fits in 8 bits (kernel_api.inc's own comments already
+; document x as 0-255, y as 0-191, color as 0-7), and GFX_LINE_X0/Y0/
+; X1/Y1 and GFX_CIRCLE_XC/YC/R/ATTR/OVER (include/sysvars.inc) are all
+; declared as single bytes, not words. No range checking is done —
+; matching every earlier phase's "no error recovery yet" scope note,
+; not an oversight specific to this file.
 ;
 ; A SETTABLE CURRENT ATTRIBUTE, since Phase 15: PLOT/LINE/CIRCLE read
 ; their attribute byte from CURRENT_ATTR (below), not a hardcoded
@@ -130,33 +138,10 @@ W_CIRCLE:
     ret
 
 ; ============================================================================
-; BEEP ( pitch duration -- )
-; Raw units, not musical ones — see kernel/sound/sound.asm's own
-; SOUND_BEEP header. pitch is a per-half-cycle busy-wait length, not a
-; frequency in Hz; duration is a count of full waveform cycles, not
-; seconds. No conversion exists yet; a future phase's job, not this
-; one's.
-; ============================================================================
-H_BEEP:
-    DW   H_CIRCLE
-    DB   4, "B", "E", "E", "P"
-W_BEEP:
-    call DPOP_HL           ; hl = duration
-    push hl                ; stashed briefly -- symmetric push/pop within
-                            ; this one routine, safe (same pattern
-                            ; core/control.asm's W_ELSE already uses)
-    call DPOP_HL           ; hl = pitch
-    ld   b, h
-    ld   c, l               ; bc = pitch
-    pop  de                 ; de = duration
-    call SOUND_BEEP
-    ret
-
-; ============================================================================
 ; BORDER ( color -- )
 ; ============================================================================
 H_BORDER:
-    DW   H_BEEP
+    DW   H_CIRCLE
     DB   6, "B", "O", "R", "D", "E", "R"
 W_BORDER:
     call DPOP_HL

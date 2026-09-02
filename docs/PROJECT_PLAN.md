@@ -353,6 +353,14 @@ were never actually broken — they don't include the colliding kernel
 modules — but re-verifying rather than assuming is the same discipline
 this whole project has followed since Phase 2's own first bug).
 
+**UPDATE, Phase 31**: `BEEP`'s own raw-hardware-units behavior
+described above was later replaced by a real, semitone/seconds `BEEP`
+— see that phase's own section, far below. The original word still
+exists, unchanged, as `core/rawbeep.asm`, purely so this phase's own
+smoke ROM (`rom/forth_smoke_p5.asm`) keeps testing exactly what it
+always tested; `core/ts2068.asm` itself no longer defines `BEEP` at
+all.
+
 ## Product requirement — startup screen plays a startup sound
 
 **Status: done, as of Phase 9.** Captured 2026-09-01; resolved the same
@@ -2121,6 +2129,142 @@ and one a real, narrow, unfixed edge case:
 
 ROM budget after this phase: `rom/forth_boot.asm` uses 10924 of 16384
 bytes ($2AAC of $4000), 5460 bytes free — no ROM pressure from this
+addition.
+
+## Phase 31 — real, semitone/seconds BEEP
+
+**Status: done.** The user asked directly why 2068-Forth's `BEEP`
+doesn't behave like the real 2068's, then asked for a real attempt.
+Phase 5's original `BEEP` exposed `kernel/sound`'s own `SOUND_BEEP`
+mechanism directly — a raw per-half-cycle busy-wait count and a raw
+waveform-cycle count, not musical units at all, and explicitly
+documented as such at the time. `core/beep.asm` replaces it with
+`BEEP ( n-semitones fduration -- )`: an INTEGER semitone number (0 =
+middle C, the well-documented Sinclair BASIC convention) on the data
+stack, and a REAL duration in seconds on the float stack — the same
+units the real command uses.
+
+**The real ROM's own algorithm, confirmed directly from the actual
+Timex Sinclair 2068 ROM disassembly** (its "Beeper Subroutine" and
+"BEEP Command Routine" sections — a real primary source, not
+half-remembered or guessed): split the semitone pitch into a
+note-within-octave (0-11) and an octave count via a repeated-subtract-12
+loop starting some fixed number of octaves below middle C; look the
+note up in a 12-entry table of frequency RATIOS for one octave; apply
+the octave count as a DIRECT SHIFT of the resulting float's own
+exponent field (exact — "multiply by 2^N" is just "add N to the
+exponent," not a real multiplication); convert the frequency into a
+hardware timing period and the duration into a cycle count; hand both
+to the real `BEEPER` routine.
+
+**This phase replicates the note/octave math exactly** (same
+convention, same octave-via-exponent-shift trick), but NOT the real
+ROM's own frequency-to-hardware-period formula (`437500/f - 30.125`) —
+those constants are specific to the real ROM's own `BEEPER` timing loop
+(a self-modifying `IX`-relative NOP sled), a structurally different
+loop from `kernel/sound`'s own `SOUND_BEEP` (a plain `DEC BC` countdown,
+no NOP sled). Reusing the real ROM's constants unchanged on a different
+loop shape would silently produce the WRONG frequency while looking
+authentic. Instead, this phase derives its own conversion from first
+principles against `SOUND_BEEP`'s own actual instructions: standard,
+published Z80 T-state timings for its `.half_cycle` body (98+26*pitch
+T-states, charged per call) give `222 + 52*pitch` T-states per full
+waveform cycle, so `pitch_param = (CPU_CLOCK/f - 222) / 52`. `CPU_CLOCK`
+is the TS2068's own REAL, confirmed clock — 3,528,000 Hz
+(`libspectrum`'s own machine timing table, notably NOT the Spectrum's
+own 3.5MHz). `pitch_param` is clamped to a minimum of 1 (pitch 0 would
+make `SOUND_BEEP`'s own countdown wrap from 0 to 65535, the opposite of
+the very high pitch a near-zero pitch_param is trying to reach) — this
+is also a real, quantified hardware ceiling: the fastest the loop can
+toggle is ~12.9 kHz; anything requested above that clamps there instead
+(about -8.5% error for the real ROM's own highest note, +69 semitones,
+~14080 Hz — a real, honestly-quantified limit, not a rounding
+artifact). Ordinary notes land within 0.02%-0.6% of their true target
+frequency purely from truncating `pitch_param` to an integer — the same
+truncate-not-round convention `core/floatprint.asm`'s own `F.` already
+uses.
+
+**TWO REAL, FOUNDATIONAL BUGS FOUND WHILE VERIFYING THIS PHASE UNDER
+REAL FUSE, NEITHER CAUGHT BY THE PRE-WRITING PYTHON SIMULATION** (a
+genuine gap in that simulation's own bit-exactness, worth remembering:
+it modeled `core/float.asm`'s own arithmetic faithfully, but the
+Z80-side integer-conversion steps were written directly in assembly
+without a matching Python model first, unlike Phase 30's own
+discipline):
+1. The `pitch_param` formula's own `- 222` step, done as a FLOAT
+   subtraction, hits `core/float.asm`'s own `F_ALIGN` unsigned-
+   comparison quirk (see the `2068forth-float-align-signed-cmp-quirk`
+   memory note): for a low-pitched note, `CPU_CLOCK/freq` is a LARGE
+   number (hundreds of thousands), normalizing to a POSITIVE float
+   exponent, while `222.0` normalizes to a small NEGATIVE one —
+   `F_ALIGN` wrongly treated `222`'s own tiny negative exponent as
+   "larger," shifting the large period's own mantissa down to nothing
+   and returning essentially `-222` instead of `period-222`. Confirmed
+   directly with a real, reachable note (pitch -60, ~8.18 Hz): the
+   smoke ROM's own checkpoint 3 caught `pitch_param` coming out as 1
+   (the clamp) instead of the correct 8293.
+2. Fixing (1) by converting `CPU_CLOCK/freq` to a plain 16-bit integer
+   (the same `FLOAT_TO_INT16` helper already used safely for
+   `cycle_count`) was ALSO wrong: for that same pitch -60 case,
+   `CPU_CLOCK/freq` is 431504 — comfortably over 65535, so truncating
+   into 16 bits silently wrapped (`ADD HL,HL` drops overflow bits with
+   nowhere to go), corrupting the result a SECOND, independent way
+   (confirmed: gave `pitch_param=732`, matching neither the buggy-
+   `F_ALIGN` answer nor the correct one).
+   The fix for both: a new `FLOAT_TO_UDIVID32` widens the period into a
+   genuine 32-bit integer, landing it exactly where `core/floatdiv.asm`'s
+   own already-proven `F_UDIV32BY16` expects its own dividend — reusing
+   that routine directly for the final division rather than writing a
+   third 32-bit division routine, and using PLAIN 32-bit integer
+   subtraction (two chained `SBC HL,DE`) for the `-222` step, which
+   never touches `F_ALIGN` at all.
+Both were caught by `rom/forth_smoke_p31.asm`'s own hand-derived
+checkpoint 3 failing under real Fuse — not by inspection — and each was
+isolated with a small, throwaway diagnostic ROM that printed the actual
+intermediate values (`BEEP_OCTAVE`, `BEEP_FREQ_M`/`BEEP_FREQ_E`, the
+raw `pitch_param`/`cycle_count`) against hand-computed expectations,
+narrowing down exactly which stage diverged before writing a fix.
+
+**Confirmed under real Fuse, twice.** `rom/forth_smoke_p31.asm`'s four
+checkpoints call `BEEP_COMPUTE` directly (not `SOUND_BEEP`, which
+actually toggles the speaker port and can't be checked in this
+environment — the same "check the inputs to the unverifiable hardware
+call" strategy Phase 5's own original `BEEP` checkpoint used) and check
+the resulting `pitch_param`/`cycle_count` against values hand-derived
+from a bit-exact Python model (reusing Phase 30's own already-proven
+F+/F-/F*/F_UDIV32BY16 arithmetic unchanged): middle C for 1 second,
+one octave up for 0.5 seconds (deliberately landing on the SAME
+`cycle_count` as the first case — not a coincidence, an exact
+verification of the octave-doubling identity), the real ROM's own
+lowest valid note for 2 seconds, and the real ROM's own highest valid
+note (proving the pitch_param clamp actually engages, not just exists
+in the code) — all four pass, border green. Live: typing `0 1.0 BEEP`
+at `rom/forth_boot.asm`'s own real keyboard-driven prompt (lowercase,
+`0 1.0 beep`, exercising the same case-folding already proven since
+Phase 9) played for about one real second and returned control
+normally — confirmed by immediately following it with a second command
+and seeing it execute right away, not hang.
+
+**Extraction, not deletion**: `core/ts2068.asm` no longer defines
+`BEEP` at all — moving it out let that file's own `PLOT`/`LINE`/
+`CIRCLE`/`BORDER` stay completely unchanged rather than gaining a new
+float-stack dependency none of them need. The original word survives,
+byte-for-byte, as `core/rawbeep.asm`, included only by
+`rom/forth_smoke_p5.asm` (the one ROM whose own historical checkpoint
+tests it) — no ROM ever includes both files, since both define a
+global `H_BEEP` label. `rom/forth_smoke_p9.asm`/`p15.asm`/`p17.asm`/
+`p21.asm` all still include `core/ts2068.asm` for its other words and
+never called `BEEP`, so all four rebuild clean, unaffected.
+
+**Scope cut, stated honestly**: only INTEGER semitone pitches are
+supported. The real ROM also accepts a fractional semitone (via a
+linear-interpolation constant applied to the fractional part) — not
+replicated, since ordinary BASIC `BEEP` usage is overwhelmingly integer
+semitones anyway, and the data-stack pitch argument has no fractional
+part to represent one with regardless.
+
+ROM budget after this phase: `rom/forth_boot.asm` uses 11332 of 16384
+bytes ($2C44 of $4000), 5052 bytes free — no ROM pressure from this
 addition.
 
 ## Future stretch goal — a real 64-column TEXT mode in the editor

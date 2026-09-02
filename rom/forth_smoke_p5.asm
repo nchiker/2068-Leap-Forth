@@ -2,9 +2,14 @@
 ; rom/forth_smoke_p5.asm — Phase 5 smoke ROM: TS2068 vocabulary (PLOT,
 ; LINE, CIRCLE, BEEP, BORDER)
 ;
-; Proves core/ts2068.asm's five words correctly wire data-stack values
-; into the kernel/graphics and kernel/sound calls they wrap. This is
-; the first smoke ROM in the project to include real kernel/ modules
+; Proves these five words correctly wire data-stack values into the
+; kernel/graphics and kernel/sound calls they wrap. FOUR of them
+; (PLOT/LINE/CIRCLE/BORDER) still live in core/ts2068.asm as originally
+; written; BEEP was later extracted into its own file, core/rawbeep.asm
+; (byte-for-byte the same code, still tested here unchanged) once a
+; real, semitone/seconds BEEP (core/beep.asm) took over the name
+; "BEEP" everywhere else — see core/ts2068.asm's own header for why.
+; This is the first smoke ROM in the project to include real kernel/ modules
 ; (kernel/math, kernel/graphics, kernel/sound) alongside core/ — see
 ; core/interp.asm's own header for why that matters: this ROM's very
 ; existence is what forced fixing a real RAM-address collision between
@@ -99,7 +104,7 @@ COLD_START:
     ld   sp, $FF00
     ld   ix, DSTACK_TOP
 
-    ld   hl, DICT_LATEST_INIT_P5
+    ld   hl, DICT_LATEST_INIT_RAWBEEP
     ld   (LATEST), hl
     ld   hl, FORTH_DICT_RAM
     ld   (HERE), hl
@@ -247,6 +252,8 @@ TEST_SRC_BEEP_LEN EQU $ - TEST_SRC_BEEP
 DICT_CHAIN_POINT DEFL H_SEMICOLON   ; see core/control.asm's own header
     INCLUDE "core/control.asm"
     INCLUDE "core/ts2068.asm"
+DICT_CHAIN_POINT DEFL H_BORDER
+    INCLUDE "core/rawbeep.asm"
 
     DS   $4000 - $, $FF
 
