@@ -603,16 +603,16 @@ Two experimental pieces exist outside the main, planned path through
 this document — early, incomplete, and worth knowing about mainly so
 you don't mistake their gaps for something more finished being broken.
 
-**Decimal numbers.** `F+`, `F-`, and `F*` add, subtract, and multiply
-numbers with a fractional part. There's no plain integer `*` at all in
-2068-Forth yet, for whole numbers or otherwise — only this decimal one.
-There's also no way to *write* a decimal number yet (`NUMBER` only
-understands whole numbers, section 3), so none of `F+`/`F-`/`F*` can
+**Decimal numbers.** `F+`, `F-`, `F*`, and `F/` add, subtract,
+multiply, and divide numbers with a fractional part — the full set of
+four now exists. There's no plain integer `*` or `/` at all in
+2068-Forth yet, for whole numbers or otherwise — only these decimal
+ones. There's also no way to *write* a decimal number yet (`NUMBER`
+only understands whole numbers, section 3), so none of the four can
 actually be reached by typing an expression today — they exist and
 work, proven by feeding them values directly rather than through typed
-text, but they're not yet reachable the way `+` is. `F/` (division)
-doesn't exist yet, and `.` (section 9) only knows how to print whole
-numbers, not decimal ones.
+text, but they're not yet reachable the way `+` is. `.` (section 9)
+only knows how to print whole numbers, not decimal ones, either.
 
 **A wider screen.** `64COL` switches to a 64-column display — twice the
 normal text width — `32COL` switches back, `PALETTE64` picks a color
@@ -626,11 +626,11 @@ that's been checked, but "what you'll actually see on a real screen"
 isn't yet a settled answer the way it is for section 7's normal-screen
 `PLOT`/`LINE`/`CIRCLE`.
 
-**Status:** `F+`, `F-`, `F*`, `64COL`, `32COL`, `PALETTE64`, and
+**Status:** `F+`, `F-`, `F*`, `F/`, `64COL`, `32COL`, `PALETTE64`, and
 `PLOT64` all exist and do what's described above. Both are explicitly
 experimental, unlike every other section in this document — see
-[`PROJECT_PLAN.md`](PROJECT_PLAN.md)'s Phase 8 (and Phase 18 for `F*`
-specifically) for the full detail.
+[`PROJECT_PLAN.md`](PROJECT_PLAN.md)'s Phase 8 (and Phases 18/19 for
+`F*`/`F/` specifically) for the full detail.
 
 ---
 
@@ -641,7 +641,11 @@ ask about, aren't part of 2068-Forth yet. Each will get its own section
 here once it's real:
 
 - **Hi-res graphics mode** — see section 7's own status note.
-- **Decimal number literals and `F/` (divide)** — see section 11.
+- **Decimal number literals** — see section 11.
+- **`KEY`** — reading a single keystroke as a value, the input
+  counterpart to `EMIT` (section 9).
+- **Error feedback for a typo** — the live prompt silently discards an
+  unrecognized word rather than showing anything went wrong.
 
 See [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the full order these are
 planned to arrive in.

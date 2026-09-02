@@ -1174,6 +1174,66 @@ that checks both `F*`'s own correctness AND that `64COL` (from
 chain) is still `FIND`-able — confirming the chain-anchor fix actually
 worked, not just that it compiled — plus a fresh boot screenshot.
 
+## Phase 19 — F/ (float divide)
+
+**Status: done.** `core/floatdiv.asm` adds `F/ ( f1 f2 -- f1/f2 )`,
+completing the decimal multiply/divide gap. This is the harder of the
+two — division's own version of the exact problem `F*` already solved,
+approached from the opposite direction.
+
+**Derived by direct analogy to `F*`'s already-solved normalization
+problem, then hand-verified before trusting it — not designed from
+scratch by trial and error.** Dividing two mantissas directly
+(`abs(m1)/abs(m2)`, plain 16-bit integer division) would truncate to 0
+almost every time a realistic `abs(m1) < abs(m2)` — the same
+"naive truncation destroys the precision" failure `core/floatmul.asm`'s
+own header already describes for its discarded first draft. The fix is
+`F*`'s mirror image: scale the *dividend* up by 2^16 before dividing
+(representing `abs(m1)` as a 32-bit value with `abs(m1)` itself in the
+high word and 0 in the low word), divide that by `abs(m2)` via a new
+32-bit-dividend/16-bit-divisor restoring division
+(`F_UDIV32BY16`, the same shape as `kernel/math`'s own `MATH_UDIV16`,
+widened), and hand the raw 32-bit quotient to `F_NORMALIZE32` — reusing
+Phase 18's own routine completely unchanged, not a second copy of the
+same shrink/grow logic. The exponent formula was worked out
+algebraically (`e1-e2-16+F_NORM_SHIFT`) and then checked against three
+hand-traced cases before ever assembling any of it: `6.0/3.0=2.0` (the
+shrink path, 8 iterations), `1.0/1.0=1.0` (the shrink path again, a
+much shorter run), and `1.0/4.0=0.25` (the grow path — a quotient small
+enough to need shifting up instead of down). These three between them
+exercise `F_NORMALIZE32`'s shrink path, its boundary case, and its grow
+path — confirming the *shared* routine behaves correctly when called
+from a second, independent caller, not just re-proving `F*`'s own
+already-verified behavior.
+
+Divide by zero matches `kernel/math`'s own `MATH_UDIV16` convention: a
+safe `(mantissa 0, exponent 0)` result rather than looping forever or
+producing garbage.
+
+`rom/forth_smoke_p19.asm` proves `F/` under real Fuse with all four
+hand-verified cases (the three normalization cases above, plus
+`-6.0/3.0=-2.0` for sign handling) — all four passed on the first real
+Fuse run, no bugs found needing a fix this time, a real payoff of the
+careful hand-verification discipline this project has applied
+consistently since Phase 11. Wired into `rom/forth_boot.asm`'s full
+chain (spliced between `core/floatmul.asm` and `core/print.asm`, using
+`DICT_CHAIN_POINT` correctly from the start this time — Phase 18's own
+hardcoded-anchor mistake wasn't repeated); re-verified with a
+deterministic full-chain diagnostic that also confirms `64COL` is still
+`FIND`-able, plus a fresh boot screenshot.
+
+With this phase, decimal multiply and divide are both done. Hi-res
+graphics mode remains the only item left on the original gap list,
+along with the tracked-but-unscheduled 64-column text mode stretch goal
+below — plus a few items raised in conversation but not yet formally
+tracked as phases: `KEY` (reading a keystroke as a value — deferred
+since Phase 2), error feedback for unknown words at the live prompt
+(flagged since Phase 9), `LEAVE`/`+LOOP` (deferred since Phase 16),
+`F.` (printing a float — blocked on `EMIT` until Phase 10, unblocked
+since but not yet built), and decimal number literal parsing (so
+`F+`/`F-`/`F*`/`F/` become actually typeable, not just testable via
+direct `FPUSH`).
+
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
 **Not yet scheduled as a numbered phase — tracked here so it isn't
@@ -1238,7 +1298,8 @@ designed in detail):**
 
 This is real, multi-file design work — not a quick wrapper the way
 `INK`/`PAPER` was. Sequence it whenever convenient relative to the
-still-open items above (hi-res mode, `F/`); nothing currently planned
+still-open items above (hi-res mode, `KEY`, error feedback,
+`LEAVE`/`+LOOP`, `F.`, decimal literals); nothing currently planned
 depends on it, and it doesn't block anything currently planned either.
 
 ## Testing discipline

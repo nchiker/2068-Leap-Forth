@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-boot check clean
+.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-boot check clean
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-boot
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-boot
 
 # Milestone 0: boot stub only.
 boot:
@@ -200,6 +200,17 @@ forth-smoke-p18:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p18.sym --lst=build/forth_smoke_p18.lst rom/forth_smoke_p18.asm
 	mv forth_smoke_p18_rom0.bin build/forth_smoke_p18_rom0.bin
+
+# Phase 19: F/ (float divide) smoke ROM. Scales the dividend up by 2^16
+# before a 32-bit/16-bit restoring division, then reuses
+# core/floatmul.asm's own F_NORMALIZE32 unchanged -- the same
+# normalization problem F* already solved, just approached from the
+# division side. See core/floatdiv.asm's own header for the three
+# hand-verified cases (shrink path twice, grow path once).
+forth-smoke-p19:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p19.sym --lst=build/forth_smoke_p19.lst rom/forth_smoke_p19.asm
+	mv forth_smoke_p19_rom0.bin build/forth_smoke_p19_rom0.bin
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm
