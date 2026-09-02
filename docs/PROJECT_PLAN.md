@@ -1521,6 +1521,103 @@ no `LEAVE`/`+LOOP` in its own source) still passes unchanged after the
 `LEAVE_DEPTH` addition, and `rom/forth_boot.asm` assembles and boots
 cleanly with the extended dictionary.
 
+## Phase 25 — ABS, SGN, MOD, SQRT, RND, RANDOMIZE
+
+**Status: done.** The first phase driven by a direct, read-only audit
+comparing 2068-Leap's own BASIC ROM (`~/ts2068rom`) against this
+project's dictionary, run to find real feature gaps rather than
+guessing. The audit found six BASIC features with genuinely no Forth
+equivalent, ranked by real-world impact: `RND`/`RANDOMISE`, string
+handling, arrays/`DIM`, line-input, math functions, and `DEF FN`. This
+phase covers the math-function half of that list; the rest (string
+handling, arrays, line-input) follow as later phases. `DEF FN` was
+deliberately NOT implemented as a separate word — ANS Forth itself has
+no equivalent either, because `:` already does that job, more
+generally; adding a redundant synonym word would be busywork with no
+real capability behind it.
+
+**A pleasant surprise cutting the actual work way down**: `kernel/math/
+math.asm` (inherited read-only from 2068-Leap, already `INCLUDE`d by
+every ROM in this project for other reasons) already contains
+`MATH_ABS16`, `MATH_SGN16`, `MATH_MOD16`, `MATH_SQRT16`, `MATH_RND16`,
+and `MATH_RND_SEED` — fully implemented, documented, and independently
+verified (each routine's own header in that file describes real
+verification work: exhaustive 65,536-case checks for `MATH_SQRT16`,
+a systematic LFSR tap search for `MATH_RND16`, 6,048 Python-simulated
+cases for `MATH_MOD16`). `core/mathfn.asm` (new) is nothing more than
+six THIN WRAPPERS exposing these as Forth words — `ABS`, `SGN`, `MOD`,
+`SQRT`, `RND`, `RANDOMIZE` — no new algorithm written, the same
+"reuse kernel/, don't reinvent it" pattern `core/ts2068.asm`'s own
+`PLOT`/`LINE`/`CIRCLE`/`BEEP` already established for
+`kernel/graphics`/`kernel/sound`. All six operate on the plain integer
+data stack (IX), matching `kernel/math`'s own integer-only scope — this
+project's separate float stack (IY) has its own `F+`/`F-`/`F*`/`F/`
+words by deliberate design (`docs/numeric_model.md`); float versions of
+some of these (starting with a float square root) are a natural later
+addition, not attempted here.
+
+`rom/forth_smoke_p25.asm` proves all six under real Fuse, five
+checkpoints: `ABS`, `SGN` (all three cases: negative/zero/positive),
+`MOD` (both dividend-sign cases, matching `MATH_MOD16`'s own documented
+convention), `SQRT` (two truncating cases), and — the most interesting
+check — `RND` seeded deterministically (`12345 RANDOMIZE`) then called
+ten times, with the EXACT expected sequence (`72 70 35 67 33 0 84 92 96
+32`) independently derived by hand-simulating `MATH_RND16`'s own
+documented LFSR algorithm in Python *before* ever running the real ROM
+— a genuine cross-check, not just "it printed something plausible."
+The real Fuse run matched the Python simulation exactly on the first
+try.
+
+**A real, previously-undetected bug found and fixed along the way, in
+the single most shared routine in the whole project**: while building a
+diagnostic to verify the full dictionary chain (`rom/forth_boot.asm`,
+which — unlike this phase's own smoke ROM — has `DECIMAL_NUMBER_ENABLED`
+turned on), typing a negative integer literal like `-5 ABS .` failed
+with "unknown word," even though positive integers, and positive
+decimal literals, both worked fine. Root cause, found by bisecting down
+to the smallest possible reproduction (a 6-file ROM: `dict.asm`,
+`interp.asm` with the define, `print.asm`, `float.asm`, `floatmul.asm`,
+`floatdiv.asm`, `decimal.asm`): `core/decimal.asm`'s own
+`CHECK_FOR_DOT` (added in Phase 23) is explicitly documented as
+"Destroys: AF, BC, HL" — it walks its own copy of `HL` across the whole
+token scanning for a `.`. But `core/interp.asm`'s `NUMBER`, right after
+calling it, reads `(HL)` again to check for a leading `-`, silently
+assuming `HL` still pointed at the token's first character. It didn't —
+`CHECK_FOR_DOT` had walked it all the way to the token's end. For a
+negative token, this stale read almost never equals `-`, so `NUMBER`
+took the "not negative" branch without consuming the `-` character;
+the digit-parsing loop then correctly failed on the unconsumed `-`
+itself (not a valid digit), and `NUMBER` reported failure, triggering
+`INTERPRET_UNKNOWN_WORD`. Positive integers were never affected: the
+same stale-`HL` read happens for them too, but its wrong answer just
+happens not to matter (the "not negative" branch is the CORRECT branch
+for a positive token regardless of what triggered it) — pure
+coincidence, not a sign the rest of the code was more careful there.
+This bug had shipped silently since Phase 23 landed (2026-09-01/02)
+because no smoke ROM before now ever combined `DECIMAL_NUMBER_ENABLED`
+with a negative WHOLE number (Phase 23's own checkpoints only used
+positive decimals like `3.5`/`0.25`; Phase 24's `LEAVE`/`+LOOP` smoke
+ROM never defines `DECIMAL_NUMBER_ENABLED` at all).
+
+Fixed with a one-line `ld hl, (NUM_PTR)` reload, added inside the same
+`IFDEF DECIMAL_NUMBER_ENABLED` block that made the bug possible in the
+first place — so a ROM that never opts into decimal literals never
+compiles this line either, and stays byte-for-byte identical to
+before, the same discipline Phase 23 itself established. Verified
+directly, not just reasoned about: `forth_smoke_p3`, `forth_smoke_p9`,
+and `forth_smoke_p16` (none of which define
+`DECIMAL_NUMBER_ENABLED`) were rebuilt and diffed byte-for-byte against
+their pre-fix output — identical in every case. `forth_smoke_p23`
+(decimal literals) and `forth_smoke_p24` (`LEAVE`/`+LOOP`) were both
+re-run under real Fuse and still pass. `rom/forth_boot.asm` was
+rebuilt and the same minimal reproduction, now fixed, was re-confirmed
+under Fuse, alongside the full `-5 ABS . 12345 RANDOMIZE 100 RND .`
+combined check.
+
+`core/mathfn.asm` is wired into `rom/forth_boot.asm`'s own dictionary
+chain right after `core/key.asm` (before `core/editor.asm`, which adds
+no dictionary words of its own and must stay last).
+
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
 **Not yet scheduled as a numbered phase — tracked here so it isn't

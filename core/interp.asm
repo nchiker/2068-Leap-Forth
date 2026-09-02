@@ -299,6 +299,27 @@ NUMBER:
     call CHECK_FOR_DOT
     or   a
     jp   nz, DECIMAL_PARSE_AND_PUSH
+    ld   hl, (NUM_PTR)          ; REQUIRED: CHECK_FOR_DOT's own header
+                                 ; says plainly "Destroys: ... HL" (it
+                                 ; walks its OWN copy of HL to scan the
+                                 ; whole token) -- the very next lines
+                                 ; below read (hl) expecting it to still
+                                 ; point at the token's first character,
+                                 ; an assumption this call just broke. A
+                                 ; real bug, not a hypothetical: without
+                                 ; this reload, a negative integer like
+                                 ; "-5" reads garbage instead of '-' for
+                                 ; its sign check, silently skips the
+                                 ; sign-consuming step, and then fails
+                                 ; in the digit loop on the unconsumed
+                                 ; '-' itself -- found via a real Fuse
+                                 ; run, not by inspection (positive
+                                 ; integers never triggered it: the
+                                 ; garbage byte only needed to not
+                                 ; equal '-' by coincidence, which is
+                                 ; overwhelmingly likely, so the sign
+                                 ; check's wrong answer happened to be
+                                 ; harmless for them).
     ENDIF
     xor  a
     ld   (NUM_NEG), a

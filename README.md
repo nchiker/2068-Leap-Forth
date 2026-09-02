@@ -281,6 +281,31 @@ inherited, what was deliberately left behind, and the phased build order.
   stepping by 2, and nested `DO` loops where an inner `LEAVE` exits
   only the inner loop, all isolated individually before the combined
   smoke ROM.
+- Phase 25 (`core/mathfn.asm` + `rom/forth_smoke_p25.asm`): `ABS`,
+  `SGN`, `MOD`, `SQRT`, `RND`, `RANDOMIZE` — a direct audit of
+  2068-Leap's own BASIC ROM against this project's dictionary (see
+  `docs/PROJECT_PLAN.md`'s Phase 25 section) found these had no Forth
+  equivalent at all. Every one is a thin wrapper around an
+  already-verified `kernel/math/math.asm` routine this project
+  inherited — no new algorithm, matching `core/ts2068.asm`'s own
+  PLOT/LINE/CIRCLE precedent for wrapping kernel/ primitives. `RND`'s
+  underlying LFSR was independently cross-checked: a fixed seed
+  (`12345 RANDOMIZE`) produces a sequence hand-simulated in Python from
+  the kernel routine's own documented algorithm, and the real Fuse run
+  printed the exact predicted values. Along the way, a real,
+  previously-undetected bug was found and fixed in the single most
+  shared routine in the project: `core/interp.asm`'s `NUMBER` failed on
+  ANY negative integer literal (`-5`, say) once `DECIMAL_NUMBER_ENABLED`
+  (Phase 23) was active — `CHECK_FOR_DOT`'s own documented contract
+  destroys `HL`, but `NUMBER`'s sign-check right after calling it never
+  reloaded `HL` from `NUM_PTR`, so it read garbage instead of `-`. Only
+  negative numbers were affected (positive tokens never triggered the
+  broken branch by coincidence), and it had shipped undetected since
+  Phase 23 because no prior smoke ROM combined `DECIMAL_NUMBER_ENABLED`
+  with a negative whole number. Fixed with a one-line reload, gated the
+  same way as every other Phase 23 hook so ROMs that don't opt in stay
+  byte-for-byte identical (re-verified by diffing `forth_smoke_p3`,
+  `forth_smoke_p9`, and `forth_smoke_p16` before/after).
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -319,6 +344,7 @@ core/       language-layer code, not hardware-facing:
               key.asm     (Phase 20 — KEY)
               floatprint.asm (Phase 22 — F.)
               decimal.asm (Phase 23 — decimal literals)
+              mathfn.asm  (Phase 25 — ABS/SGN/MOD/SQRT/RND/RANDOMIZE)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
             2068-Forth's own addition, mode64/ (recovered, once-shipped
@@ -351,6 +377,7 @@ rom/        ROM image assembly:
               forth_smoke_p22.asm Phase 22 smoke ROM (F.)
               forth_smoke_p23.asm Phase 23 smoke ROM (decimal literals)
               forth_smoke_p24.asm Phase 24 smoke ROM (LEAVE/+LOOP)
+              forth_smoke_p25.asm Phase 25 smoke ROM (ABS/SGN/MOD/SQRT/RND/RANDOMIZE)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -393,6 +420,7 @@ make forth-smoke-p21  # Phase 21 smoke ROM: error feedback
 make forth-smoke-p22  # Phase 22 smoke ROM: F.
 make forth-smoke-p23  # Phase 23 smoke ROM: decimal literals
 make forth-smoke-p24  # Phase 24 smoke ROM: LEAVE/+LOOP
+make forth-smoke-p25  # Phase 25 smoke ROM: ABS/SGN/MOD/SQRT/RND/RANDOMIZE
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
@@ -418,7 +446,8 @@ red-filled circle, type a nonsense word like `FOOBAR` to see `?`
 printed and the prompt recover cleanly, `3.5 2.5 F+ F.` to see a
 real decimal literal expression print `6.0000`, or
 `: EVENS 10 0 DO I . 2 +LOOP ; EVENS` to see `+LOOP` step by 2 and
-print `0 2 4 6 8`.
+print `0 2 4 6 8`, or `12345 RANDOMIZE 100 RND .` to see a reproducible
+pseudo-random number in `[0, 100)`.
 
 ## License
 

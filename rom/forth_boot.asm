@@ -95,7 +95,7 @@ COLD_START:
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
-    ld   hl, DICT_LATEST_INIT_KEY   ; the full chain's own head — see
+    ld   hl, DICT_LATEST_INIT_MATHFN   ; the full chain's own head — see
                                     ; this file's own header
     ld   (LATEST), hl
     ld   hl, FORTH_DICT_RAM
@@ -219,6 +219,8 @@ DICT_CHAIN_POINT DEFL H_I
     INCLUDE "core/moregfx.asm"
 DICT_CHAIN_POINT DEFL H_ATXY
     INCLUDE "core/key.asm"
+DICT_CHAIN_POINT DEFL H_KEY
+    INCLUDE "core/mathfn.asm"
     INCLUDE "core/editor.asm"
 
     DS   $4000 - $, $FF

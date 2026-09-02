@@ -244,6 +244,43 @@ using different words for each, is a deliberate, standard Forth design
 — not a limitation specific to this implementation. See
 [`numeric_model.md`](numeric_model.md) for the fuller reasoning.
 
+### A few more useful numeric words
+
+A handful of ordinary whole-number words round out the basics:
+
+| Word | Stack effect | What it does |
+|---|---|---|
+| `ABS` | `( n -- \|n\| )` | Absolute value |
+| `SGN` | `( n -- -1\|0\|1 )` | Sign of `n` |
+| `MOD` | `( a b -- a-mod-b )` | Remainder of `a / b` |
+| `SQRT` | `( n -- isqrt(n) )` | Integer square root, truncating |
+
+```forth
+-5 ABS .        \ prints 5
+-17 5 MOD .     \ prints -2 -- the remainder takes the DIVIDEND's
+                \ sign, not the divisor's (so -17 MOD 5 is -2, not 3)
+16 SQRT .       \ prints 4
+15 SQRT .       \ prints 3 -- truncated, not rounded: 15 isn't a
+                \ perfect square, so this is the largest whole number
+                \ whose square doesn't exceed it
+```
+
+`RND` and `RANDOMIZE` give you a pseudo-random whole number:
+
+```forth
+100 RND .          \ prints something in 0..99
+12345 RANDOMIZE     \ reseed with a fixed number, for a reproducible
+                     \ sequence -- useful for testing
+100 RND .            \ always the same value, right after that
+                      \ specific RANDOMIZE
+0 RANDOMIZE          \ back to unpredictable -- reseeds from a
+                      \ hardware timing source on the next RND
+```
+
+`RND`'s upper bound is exclusive — `100 RND` can produce `0` through
+`99`, never `100` itself, matching the "n possible results" convention
+plenty of other BASICs use for their own `RND(n)`.
+
 ---
 
 ## 4. Reading and writing memory directly
@@ -740,6 +777,12 @@ the same convention applied to the full ANS Forth standard.
 | `=` | `( a b -- flag )` |
 | `<` | `( a b -- flag )` |
 | `>` | `( a b -- flag )` |
+| `ABS` | `( n -- \|n\| )` |
+| `SGN` | `( n -- -1\|0\|1 )` |
+| `MOD` | `( a b -- a-mod-b )` |
+| `SQRT` | `( n -- isqrt(n) )` |
+| `RND` | `( x -- n )` |
+| `RANDOMIZE` | `( n -- )` |
 
 **Decimal (floating-point) arithmetic** — own stack, see section 3
 
