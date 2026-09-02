@@ -1667,6 +1667,114 @@ passing doesn't guarantee the real product ROM's full dictionary chain
 does too. `core/array.asm` is wired in right after `core/mathfn.asm`
 (before `core/editor.asm`, same reasoning as Phase 25).
 
+## Phase 27 — string handling (S", TYPE, STRING, PLACE, COUNT, LEN, VAL)
+
+**Status: done.** The biggest single gap named by the BASIC-vs-Forth
+audit: 2068-Forth had NO string handling at all before this phase.
+`core/string.asm` adds a deliberately scoped slice of it — `S"`
+(string literal), `TYPE` (print an addr/len string), `STRING` (a named
+mutable buffer), `PLACE` (fill a buffer from an addr/len string),
+`COUNT` (bridge a counted string to addr/len), `LEN` (a counted
+string's own length), and `VAL` (parse an addr/len string as an
+integer) — while deliberately NOT including `CHR$`/`STR$`/`UPPER$`/
+`LOWER$`/`LEFT$`/`RIGHT$`/`INSTR`/`CODE`. The six words landed turn "no
+string handling at all" into "hold text in a variable, print it,
+measure it, read a number out of it" — the part of the gap that
+actually blocked real programs; the rest are conveniences layered on
+the SAME `(addr len)`/counted-string foundation, better added once real
+programs reveal which are actually missed.
+
+**Representation, and why**: strings are the standard Forth
+`(addr len)` pair on the stack (addr deeper, len on top, matching ANS
+Forth's own convention) for anything TRANSIENT (a literal, a slice),
+plus a COUNTED string (1 length byte + data) for anything PERSISTENT
+(a named `STRING` buffer) — not a new convention invented for this
+project: counted strings are exactly what this project's own
+`WORD_BUF` (core/interp.asm) and every dictionary name field already
+use internally. `COUNT` is the standard bridge between the two.
+`VAL` duplicates `NUMBER`'s own digit-accumulation algorithm rather
+than sharing it, for the same reason `core/variable.asm`'s own header
+already gives for duplicating header-building code: never modify an
+already-stable, widely-shared file (`core/interp.asm`) for a later
+phase's convenience.
+
+**A real bug found and fixed, in two attempts, not one** — this is the
+most instructive verification story in the project so far:
+
+1. The FIRST version of `S"` compiled `CALL DOSSTR` plus the string's
+   own bytes and simply returned, exactly matching `."`'s own established
+   shape. This is correct ONLY inside a colon definition, where the
+   surrounding word's own later execution eventually reaches and runs
+   that compiled code. Every planned use of `S"` in this phase's own
+   docs and smoke-ROM design — `S" HELLO" BUF PLACE`, `S" 1234" VAL .`
+   — is written directly at the top level, outside any `:`/`;`. Used
+   that way, NOTHING ever calls the freshly-compiled bytes, so NOTHING
+   is pushed. Caught by literally measuring the data stack pointer's
+   own depth before and after `S" AB"` at top level in a real Fuse
+   run: zero change, not the expected 4 bytes.
+2. The FIRST fix made `W_SQUOTE` check `STATE` and, when interpreting,
+   `jp` straight into the just-compiled `CALL DOSSTR`, reasoning that
+   "`DOSSTR` pushes `(addr len)` and returns correctly no matter who
+   called it." True in isolation — DOSSTR's own contract is real — but
+   wrong in this context: DOSSTR returns to whatever code FOLLOWS its
+   inline string data, which is the next compiled word when embedded in
+   a colon definition, but is just blank, uninitialized dictionary
+   space at the top level. A real Fuse run hung completely (not a clean
+   failure — a wild jump into garbage), caught by the SAME smoke ROM
+   that was supposed to prove the feature worked.
+3. The actual fix: `W_SQUOTE`, when interpreting, pushes `(addr len)`
+   onto the data stack ITSELF — the same two values `DOSSTR` would have
+   — and returns normally, never invoking `DOSSTR` or relying on its
+   "return to what follows" assumption at all. It also rolls `HERE`
+   back to reclaim the dictionary bytes used in this case, since none
+   of them are needed once the values are already on the stack.
+   Verified directly: a purpose-built diagnostic confirmed the stack
+   depth changes by exactly 4 bytes now, then the full smoke ROM, then
+   several consecutive top-level uses AND one nested inside a colon
+   definition together in one source string, to prove neither case
+   broke the other.
+
+**A separate, real methodology bug found while investigating the
+above** — this smoke ROM's own first draft reported a false all-green
+pass while checkpoint 4 (`COUNT`+`TYPE`) was silently failing
+underneath it: `FAIL_TEST` writes whatever's in `CHECKPOINT_NUM`
+directly as the border color, and `PASS_TEST` also uses border color
+`4` (green) for "everything passed" — a checkpoint literally numbered 4
+makes its own failure color INDISTINGUISHABLE from genuine success.
+Caught only by switching from trusting the border color to checking
+the actual printed text with a width-and-content check, not just a
+column count (an earlier width-only check had already been fooled once
+this same phase: `"0 "` and `"5 "` are both 2 characters, so a broken
+`PLACE` leaving a buffer's length at 0 "passed" a check meant to catch
+`5`). Fixed by renumbering `forth_smoke_p27.asm`'s own checkpoint
+colors to skip `4` entirely (1, 2, 3, 5, 6). Given this is a real,
+previously-shipped-and-undetected class of bug, every other smoke ROM
+with 4 or more checkpoints was audited: `forth_smoke_p10.asm` and
+`forth_smoke_p25.asm` (5 checkpoints each) are safe by construction —
+checkpoint 5 in each is a DIFFERENT, independently distinguishable
+result, so its own successful completion is itself proof checkpoint 4
+already passed for real (the sequential jump-to-`FAIL_TEST`-on-mismatch
+structure means checkpoint 5 never runs at all if checkpoint 4 failed).
+`forth_smoke_p18.asm` and `forth_smoke_p19.asm` (F*/F/, exactly 4
+checkpoints each, the highest-risk case with no later checkpoint to
+serve as a witness) were each re-verified directly: temporarily
+relabeling checkpoint 4's own border color away from `4` and re-running
+under real Fuse confirmed a genuine, unambiguous green pass in both —
+both are correct in practice, this was a real blind spot in the
+verification method, not a real defect in either feature.
+
+`rom/forth_smoke_p27.asm` proves the whole phase under real Fuse, five
+checkpoints (numbered 1, 2, 3, 5, 6 — see above): `S"`+`TYPE` inside a
+colon definition, `STRING` creating an empty buffer, `PLACE`+`LEN`
+round-tripping a value, `COUNT`+`TYPE` reading it back as text, and
+`VAL` parsing a positive integer, a negative one, and an empty string
+(returning 0, no error signal). Also re-verified end-to-end against
+`rom/forth_boot.asm`'s own full dictionary chain with several
+combined-word diagnostics, including multiple consecutive top-level
+`S"` uses and one nested inside a colon definition in the same source
+string. `core/string.asm` is wired in right after `core/array.asm`
+(before `core/editor.asm`, same reasoning as Phases 25 and 26).
+
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
 **Not yet scheduled as a numbered phase — tracked here so it isn't

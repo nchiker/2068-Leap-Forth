@@ -353,6 +353,69 @@ you a plain BYTE address, and each cell here is 2 bytes wide, so
 INTO element 1. `CELLS` is exactly the `index * 2` conversion that
 gets you to the right place.
 
+### Strings
+
+Forth doesn't have a string *type* the way BASIC does — instead, a
+string is just two ordinary numbers on the stack: an **address** and a
+**length**. `S"` (pronounced "S-quote") makes one:
+
+```forth
+S" HELLO WORLD" TYPE     \ prints HELLO WORLD
+```
+
+`S" text"` pushes the address and length of `text` — nothing prints on
+its own. `TYPE` takes an address and a length and prints exactly that
+many characters. Every other string word in this document works with
+the same address/length pair, so once you have one from `S"`, anything
+here can use it.
+
+A literal from `S"` is read-only and disappears once you move on —
+useful for a one-off piece of text, but not for something you want to
+build up or change. `STRING` reserves a real, mutable slot for text,
+the same way `VARIABLE` does for a single number:
+
+```forth
+20 STRING NAME
+```
+
+`NAME` now pushes the address of a buffer that can hold up to 20
+characters, currently empty. Fill it with `PLACE`, which takes an
+address/length pair (from `S"`, say) and a destination:
+
+```forth
+S" ADA" NAME PLACE
+```
+
+`NAME`'s own buffer now holds `"ADA"`. To get it back out as an
+address/length pair for `TYPE` or anything else, use `COUNT`:
+
+```forth
+NAME COUNT TYPE      \ prints ADA
+```
+
+If all you want is how long the stored text is, `LEN` is a shortcut
+that skips straight to that, without needing the full address/length
+pair `COUNT` gives you:
+
+```forth
+NAME LEN .            \ prints 3
+```
+
+Finally, `VAL` goes the other direction — turning a string into a
+number:
+
+```forth
+S" 1234" VAL .        \ prints 1234
+S" -17" VAL .          \ prints -17
+S" NOTANUMBER" VAL .    \ prints 0 -- not a valid number, no error,
+                         \ just a safe default (the same convention
+                         \ dividing by zero already uses in this project)
+```
+
+`STRING`'s own buffer has a fixed maximum size, decided when you create
+it (`20 STRING NAME` above never holds more than 20 characters) — the
+same limitation BASIC's own string variables have.
+
 ---
 
 ## 5. Comparisons and true/false
@@ -833,6 +896,18 @@ the same convention applied to the full ANS Forth standard.
 | `CONSTANT` | `( n "name" -- )` |
 | `ARRAY` | `( n "name" -- )` |
 | `CELLS` | `( n -- n*2 )` |
+
+**Strings**
+
+| Word | Stack effect | Notes |
+|---|---|---|
+| `S" text"` | `( -- addr len )` | IMMEDIATE, a string literal |
+| `TYPE` | `( addr len -- )` | print a string |
+| `STRING` | `( n "name" -- )` | a mutable buffer, up to `n` characters |
+| `PLACE` | `( addr len dest -- )` | store a string into a buffer |
+| `COUNT` | `( caddr -- addr len )` | a buffer's contents as `(addr len)` |
+| `LEN` | `( caddr -- n )` | a buffer's own length |
+| `VAL` | `( addr len -- n )` | parse a string as an integer |
 
 **Defining and control flow**
 

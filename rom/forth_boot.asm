@@ -95,7 +95,7 @@ COLD_START:
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
-    ld   hl, DICT_LATEST_INIT_ARRAY   ; the full chain's own head — see
+    ld   hl, DICT_LATEST_INIT_STRING   ; the full chain's own head — see
                                     ; this file's own header
     ld   (LATEST), hl
     ld   hl, FORTH_DICT_RAM
@@ -223,6 +223,8 @@ DICT_CHAIN_POINT DEFL H_KEY
     INCLUDE "core/mathfn.asm"
 DICT_CHAIN_POINT DEFL H_RANDOMIZE
     INCLUDE "core/array.asm"
+DICT_CHAIN_POINT DEFL H_CELLS
+    INCLUDE "core/string.asm"
     INCLUDE "core/editor.asm"
 
     DS   $4000 - $, $FF

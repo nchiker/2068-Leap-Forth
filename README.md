@@ -317,6 +317,44 @@ inherited, what was deliberately left behind, and the phased build order.
   correctly, and every OTHER element stays zero after that write
   (proving the zero-init loop covers the whole block, not just element
   0, and the write didn't corrupt a neighboring cell).
+- Phase 27 (`core/string.asm` + `rom/forth_smoke_p27.asm`): `S"`,
+  `TYPE`, `STRING`, `PLACE`, `COUNT`, `LEN`, `VAL` — real string
+  handling, closing the biggest single remaining BASIC-audit gap
+  (2068-Forth had none at all before this: `."` prints a fixed literal,
+  but there was no way to store, measure, or convert text). Strings are
+  the standard Forth `(addr len)` pair on the stack, plus a counted-
+  string representation (1 length byte + data) for mutable `STRING`
+  buffers — not a new convention, the same one this project's own
+  dictionary name fields already use internally. Deliberately does NOT
+  include `CHR$`/`STR$`/`UPPER$`/`LOWER$`/`LEFT$`/`RIGHT$`/`INSTR`/
+  `CODE` — a stated scope cut, not an oversight; the six words here
+  turn "no string handling at all" into "hold text in a variable,
+  print it, measure it, read a number out of it," which is the part
+  that actually blocked writing real programs.
+  Two real bugs were found and fixed during Fuse verification, not
+  just designed around: `S"` originally only compiled its own runtime
+  call and returned, correct inside a colon definition (where the
+  surrounding word's later execution reaches that compiled code) but
+  silently pushing NOTHING when used directly at the interpreter prompt
+  — confirmed by literally measuring the data stack pointer's own depth
+  before/after, not just eyeballing output. A first fix (jump straight
+  into the just-compiled code) traded that bug for a worse one — a real
+  hang, since the compiled runtime tries to return to "whatever comes
+  next," which is blank dictionary space at the top level, not another
+  word's body. Fixed properly by having `S"` push `(addr len)` directly
+  itself when interpreting, never running the compiled code in that
+  case at all. Separately, a review of every smoke ROM with 4+
+  checkpoints found a real methodology footgun: `CHECKPOINT_NUM`'s own
+  FAIL-path border color can numerically collide with `PASS_TEST`'s
+  green (both use plain `4`), making a checkpoint 4 failure
+  indistinguishable from genuine success by color alone — this project
+  had actually shipped exactly that: Phase 27's own first draft smoke
+  ROM showed a false all-green pass while checkpoint 4 was silently
+  failing underneath it. Fixed here by renumbering border colors to
+  avoid literal `4`; `forth_smoke_p18`/`p19` (also 4-checkpoint ROMs)
+  were re-verified by temporarily relabeling their own checkpoint 4 and
+  reconfirming a real, unambiguous pass — both genuinely correct, not
+  affected in practice.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -357,6 +395,7 @@ core/       language-layer code, not hardware-facing:
               decimal.asm (Phase 23 — decimal literals)
               mathfn.asm  (Phase 25 — ABS/SGN/MOD/SQRT/RND/RANDOMIZE)
               array.asm   (Phase 26 — ARRAY/CELLS)
+              string.asm  (Phase 27 — S"/TYPE/STRING/PLACE/COUNT/LEN/VAL)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
             2068-Forth's own addition, mode64/ (recovered, once-shipped
@@ -391,6 +430,7 @@ rom/        ROM image assembly:
               forth_smoke_p24.asm Phase 24 smoke ROM (LEAVE/+LOOP)
               forth_smoke_p25.asm Phase 25 smoke ROM (ABS/SGN/MOD/SQRT/RND/RANDOMIZE)
               forth_smoke_p26.asm Phase 26 smoke ROM (ARRAY/CELLS)
+              forth_smoke_p27.asm Phase 27 smoke ROM (string handling)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -435,6 +475,7 @@ make forth-smoke-p23  # Phase 23 smoke ROM: decimal literals
 make forth-smoke-p24  # Phase 24 smoke ROM: LEAVE/+LOOP
 make forth-smoke-p25  # Phase 25 smoke ROM: ABS/SGN/MOD/SQRT/RND/RANDOMIZE
 make forth-smoke-p26  # Phase 26 smoke ROM: ARRAY/CELLS
+make forth-smoke-p27  # Phase 27 smoke ROM: string handling
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
@@ -460,8 +501,10 @@ red-filled circle, type a nonsense word like `FOOBAR` to see `?`
 printed and the prompt recover cleanly, `3.5 2.5 F+ F.` to see a
 real decimal literal expression print `6.0000`, or
 `: EVENS 10 0 DO I . 2 +LOOP ; EVENS` to see `+LOOP` step by 2 and
-print `0 2 4 6 8`, or `12345 RANDOMIZE 100 RND .` to see a reproducible
-pseudo-random number in `[0, 100)`.
+print `0 2 4 6 8`, `12345 RANDOMIZE 100 RND .` to see a reproducible
+pseudo-random number in `[0, 100)`, `5 ARRAY NUMS 99 3 CELLS NUMS + !
+3 CELLS NUMS + @ .` to see a real array round-trip a value, or
+`S" HELLO WORLD" TYPE` to print a string literal directly.
 
 ## License
 
