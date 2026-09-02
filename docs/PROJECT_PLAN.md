@@ -2663,6 +2663,53 @@ afterward) — all pass.
 ROM budget after this phase: `rom/forth_boot.asm` uses 12195 of 16384
 bytes ($2FA3 of $4000), 4189 bytes free — +85 bytes over Phase 35.
 
+## Backlog — FREE, STICK, error handling (not yet scheduled)
+
+**Not yet scheduled as numbered phases — tracked here so they aren't
+lost.** All three came out of the fresh three-way audit against
+2068-Leap and the real TS2068 ROM's own command set (the same audit
+Phase 36 picked its own "highest value, least cost" group from); these
+three are next in line whenever picked up.
+
+**`STICK`** (joystick read) is actually cheap — in the same shape as
+`KEY?` before Phase 36: `kernel/io/io.asm`'s own `STICK_READ` already
+exists, confirmed directly from the real ROM disassembly's own
+`READ-STICK` routine (AY-3-8912 register 14 via `PORT_AY_REG`/
+`PORT_AY_DATA`), complete with the real hardware's own asymmetry
+(device 1 gets a full 4-bit direction nibble, device 2 only a single
+bit) — nothing invented, already ported, just never wrapped as a
+dictionary word. A thin `STICK ( device -- value )` wrapper is
+realistically a same-shape addition to Phase 36's own `CLS`/`KEY?`
+work, not a new design.
+
+**`FREE`** (remaining-memory introspection) needs one real design
+decision before it can be a thin wrapper: this project's RAM layout has
+the dictionary (`HERE`, starting at `FORTH_DICT_RAM = $A000`) growing
+UPWARD, while the integer stack (`DSTACK_TOP = $9800` down to
+`DSTACK_LIMIT = $9000`) and the float stack (`FSTACK_TOP = $9000` down
+to `FSTACK_LIMIT = $8C00`) both grow DOWNWARD — and `DSTACK_LIMIT`
+and `FSTACK_TOP` already sit at the exact same address ($9000),
+confirmed not a coincidence but this project's own established
+"stacks stacked back-to-back" convention. `FREE` reporting
+"dictionary space remaining" therefore means `(some ceiling) - HERE`,
+but this project has never yet established what that ceiling actually
+is (unlike the well-probed *low* end — `FSTACK_LIMIT`'s own header
+cites the specific probe-verified gap this all sits in) — a real
+question to answer before writing any code, not an oversight to fix
+in passing.
+
+**Error handling** (`THROW`/`CATCH` or an equivalent recovery
+mechanism) is the biggest of the three by far — genuinely new
+control-flow machinery, not a wrapper. Every existing word with
+out-of-range input already has an established, consistent answer
+(silently ignore/no-op — `SOUND`'s own header states this convention
+explicitly, and every other word since has matched it), so this isn't
+fixing a scattered inconsistency; it's deciding whether this project
+wants a real exception mechanism at all, and if so, designing it from
+scratch (this project's own from-scratch Forth has no inherited
+2068-Leap or real-ROM error-handling code to port, unlike almost
+everything else built so far).
+
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
 **Not yet scheduled as a numbered phase — tracked here so it isn't
