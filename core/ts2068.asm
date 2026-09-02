@@ -149,6 +149,26 @@ W_BORDER:
     call GFX_SET_BORDER
     ret
 
-DICT_LATEST_INIT_P5 EQU H_BORDER   ; head of the dictionary as of Phase 5
+DICT_LATEST_INIT_P5 EQU H_BORDER   ; head of the dictionary as of Phase
+                                    ; 5 (PLOT/LINE/CIRCLE/BORDER) --
+                                    ; a historical snapshot; must NOT be
+                                    ; repointed at CLS below
+
+; ============================================================================
+; CLS ( -- )  Phase 36. Clears the screen -- kernel/graphics's own
+; GFX_CLS has been called internally since the very first boot ROM
+; (COLD_START, the editor's own line-shrink path, every smoke ROM's own
+; setup), but nothing ever exposed it as a word a user could actually
+; type, a real and simply-overlooked gap.
+; ============================================================================
+H_CLS:
+    DW   H_BORDER
+    DB   3, "C", "L", "S"
+W_CLS:
+    call GFX_CLS
+    ret
+
+DICT_LATEST_INIT_CLS EQU H_CLS   ; head of the dictionary once this
+                                  ; file's own word (CLS) is included
 
     ENDIF

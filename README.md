@@ -560,6 +560,24 @@ inherited, what was deliberately left behind, and the phased build order.
   plain `F>S(-0.5)=-1` on the exact same input — both smoke ROMs
   confirm this on purpose. +34 bytes (`rom/forth_boot.asm`: 12076 ->
   12110 of 16384).
+- Phase 36 (`core/ts2068.asm` + `core/bytemem.asm` + `core/key.asm` +
+  `kernel/io/io.asm` + `rom/forth_smoke_p36.asm`): `CLS`, `C@`/`C!`, and
+  `KEY?` — the highest-value group from a fresh three-way audit against
+  2068-Leap and the real TS2068 ROM's own command set. `CLS` wraps the
+  already-existing `GFX_CLS` (called internally everywhere, never
+  exposed as a word). `C@`/`C!` are the standard byte-level
+  counterparts to the existing cell-level `@`/`!` (BASIC's own
+  `PEEK`/`POKE`). `KEY?` is the interesting one: the obvious
+  implementation (wrap the already-existing `IO_READ_KEY_NONBLOCK`,
+  built for BASIC's `INKEY$`) would have been WRONG — that routine
+  consumes whatever key it finds, but standard Forth's `KEY?` must be a
+  non-destructive lookahead (`KEY? IF KEY ... THEN` only works if `KEY?`
+  leaves the key for `KEY` to consume). Fixed with a genuinely new,
+  tiny kernel routine (`IO_KEY_AVAILABLE`) instead of repurposing the
+  consuming one. Confirmed via `rom/forth_smoke_p36.asm`'s six
+  checkpoints, including `KEY?` reading TRUE twice in a row (proving it
+  doesn't consume) before `KEY` itself finally does. +85 bytes
+  (`rom/forth_boot.asm`: 12110 -> 12195 of 16384).
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -651,6 +669,7 @@ rom/        ROM image assembly:
               forth_smoke_p33.asm Phase 33 smoke ROM (multi-row word wrap)
               forth_smoke_p34.asm Phase 34 smoke ROM (S>F/F>S)
               forth_smoke_p35.asm Phase 35 smoke ROM (FROUND)
+              forth_smoke_p36.asm Phase 36 smoke ROM (CLS/C@/C!/KEY?)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -704,6 +723,7 @@ make forth-smoke-p32  # Phase 32 smoke ROM: SOUND
 make forth-smoke-p33  # Phase 33 smoke ROM: real multi-row word wrap
 make forth-smoke-p34  # Phase 34 smoke ROM: S>F/F>S
 make forth-smoke-p35  # Phase 35 smoke ROM: FROUND
+make forth-smoke-p36  # Phase 36 smoke ROM: CLS/C@/C!/KEY?
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```

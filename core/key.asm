@@ -41,7 +41,40 @@ W_KEY:
     call DPUSH_HL
     ret
 
-DICT_LATEST_INIT_KEY EQU H_KEY   ; head of the dictionary once this
-                                  ; file's own word is included
+DICT_LATEST_INIT_KEY EQU H_KEY   ; head of the dictionary as of Phase
+                                  ; 20 (KEY only) -- rom/forth_smoke_p20.asm's
+                                  ; own historical snapshot; must NOT be
+                                  ; repointed at KEY? below
+
+; ============================================================================
+; KEY? ( -- flag )  Phase 36. Standard Forth's own non-destructive
+; lookahead: TRUE (-1) if a key is currently waiting, FALSE (0)
+; otherwise -- crucially, does NOT consume it, so `KEY? IF KEY ... THEN`
+; is the correct idiom, exactly like every other Forth's KEY?/KEY pair.
+; Backed by kernel/io's own IO_KEY_AVAILABLE (added alongside this
+; word), NOT the already-existing IO_READ_KEY_NONBLOCK -- that routine
+; consumes whatever it finds (matching BASIC's own INKEY$), which would
+; silently make KEY? swallow the very key a following KEY expects to
+; see. See kernel/io/io.asm's own IO_KEY_AVAILABLE header for the full
+; story.
+; ============================================================================
+H_KEYQ:
+    DW   H_KEY
+    DB   4, "K", "E", "Y", "?"
+W_KEYQ:
+    call IO_KEY_AVAILABLE
+    or   a
+    jr   z, .false
+    ld   hl, -1
+    call DPUSH_HL
+    ret
+.false:
+    ld   hl, 0
+    call DPUSH_HL
+    ret
+
+DICT_LATEST_INIT_KEYQ EQU H_KEYQ   ; head of the dictionary once this
+                                    ; file's own words (KEY and KEY?)
+                                    ; are both included
 
     ENDIF

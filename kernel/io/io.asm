@@ -558,6 +558,24 @@ IO_READ_KEY_NONBLOCK:
     jr   IO_LATCH_AND_CLEAR
 
 ; ============================================================================
+; IO_KEY_AVAILABLE
+; TRUE non-destructive lookahead — reads KBD_KEYHIT WITHOUT clearing it,
+; unlike IO_READ_KEY_NONBLOCK (which is a consuming read, matching
+; BASIC's own INKEY$, not standard Forth's KEY?). Backs Forth's own
+; KEY? ( -- flag ), which by definition must leave a pending key
+; available for a SUBSEQUENT IO_READ_KEY/KEY to actually consume — see
+; core/key.asm's own header for why IO_READ_KEY_NONBLOCK itself isn't
+; the right primitive for that word despite the similar name.
+; In:  none
+; Out: A = 0 (nothing latched) or nonzero (a key is waiting);
+;      KBD_KEYHIT left completely unchanged either way
+; Destroys: AF
+; ============================================================================
+IO_KEY_AVAILABLE:
+    ld   a, (KBD_KEYHIT)
+    ret
+
+; ============================================================================
 ; STICK_READ
 ; Reads a joystick's state through the AY-3-8912's I/O port A —
 ; confirmed from the real ROM disassembly's own STICK command routine

@@ -48,6 +48,7 @@
     EXTERN IO_ANY_KEY_DOWN      ; -> carry set if any key is down
     EXTERN IO_READ_KEY          ; blocking -> A = ASCII code (0 if unmapped)
     EXTERN IO_READ_KEY_NONBLOCK ; non-blocking -> A = ASCII code, or 0
+    EXTERN IO_KEY_AVAILABLE     ; non-destructive lookahead -> A = 0 or nonzero
                                  ; if nothing is currently latched —
                                  ; backs BASIC's INKEY$
     EXTERN IO_CHECK_BREAK       ; non-blocking -> carry set if CAPS

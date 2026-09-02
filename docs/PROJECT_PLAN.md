@@ -2613,6 +2613,56 @@ disagree in the documented direction, not an oversight.
 ROM budget after this phase: `rom/forth_boot.asm` uses 12110 of 16384
 bytes ($2F4E of $4000), 4274 bytes free — +34 bytes over Phase 34.
 
+## Phase 36 — CLS, KEY?, C@, C!
+
+**Status: done, confirmed under real Fuse.** Direct follow-up to a
+fresh three-way audit (2068-Forth vs. the sibling 2068-Leap BASIC
+project vs. the real TS2068 ROM's own command set, re-run to account
+for everything added since the original Phase 24-ish BASIC-gap audit)
+— the user picked this group specifically as "highest value for the
+least ROM cost," all four being thin wrappers around kernel routines
+that mostly already existed.
+
+`CLS` (`core/ts2068.asm`) wraps `kernel/graphics`'s own `GFX_CLS` —
+already called internally everywhere (`COLD_START`, the editor's own
+line-shrink path, every smoke ROM's own setup) but never once exposed
+as a word a user could actually type. A real, simply-overlooked gap,
+not a design decision.
+
+`C@`/`C!` (`core/bytemem.asm`, new file) are the standard byte-level
+counterparts to the existing cell-level `@`/`!` — BASIC's own
+`PEEK`/`POKE` equivalent, and a real, previously-unfilled hole: only
+16-bit memory access existed before this phase. Exactly `@`/`!`'s own
+shape, byte-sized instead of cell-sized (`C@` zero-extends into the
+cell; `C!` stores only the low byte) — no new design decisions.
+
+`KEY?` (`core/key.asm`) is the more interesting one: the audit's own
+first guess was to wrap the ALREADY-EXISTING `IO_READ_KEY_NONBLOCK`
+(built for BASIC's own `INKEY$`), but that routine CONSUMES whatever
+key it finds — exactly wrong for standard Forth's own `KEY?`, which by
+definition is a non-destructive lookahead (`KEY? IF KEY ... THEN` is
+the standard idiom, and it only works if `KEY?` leaves the key for
+`KEY` to actually consume). Using the consuming primitive would have
+made `KEY?` silently swallow the very key a following `KEY` expects to
+see. Fixed by adding a genuinely new, tiny kernel routine instead —
+`IO_KEY_AVAILABLE` (`kernel/io/io.asm`) — that reads `KBD_KEYHIT`
+without ever clearing it, alongside the already-existing consuming
+`IO_READ_KEY_NONBLOCK` rather than repurposing it.
+
+**Confirmed under real Fuse**: `rom/forth_smoke_p36.asm`'s six
+checkpoints — `C!`'s low-byte-only truncation, `C@`'s zero-extension,
+`CLS` actually resetting a poisoned attribute cell back to
+`ATTR_DEFAULT`, `KEY?` reading FALSE against a forced-clear
+`KBD_KEYHIT`, `KEY?` reading TRUE against a forced-set one AND STAYING
+true on a second call (proving the non-destructive property, not just
+that it returns SOMETHING), and finally the existing `KEY` word
+actually consuming that same latched key (checked two ways at once:
+the character it returns, and a follow-up `KEY?` going FALSE
+afterward) — all pass.
+
+ROM budget after this phase: `rom/forth_boot.asm` uses 12195 of 16384
+bytes ($2FA3 of $4000), 4189 bytes free — +85 bytes over Phase 35.
+
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
 **Not yet scheduled as a numbered phase — tracked here so it isn't

@@ -21,7 +21,7 @@
 ; (0=/IF/ELSE/THEN/BEGIN/UNTIL, PLOT/LINE/CIRCLE/BEEP/BORDER,
 ; SAVE/LOAD, F+/F-/F*/F/, 64COL/32COL/PALETTE64/PLOT64, EMIT/., =/</>,
 ; VARIABLE/CONSTANT, .", WHILE/REPEAT, INK/PAPER, DO/LOOP/I,
-; FILL/AT-XY, KEY, F., S>F/F>S/FROUND), chained into one LATEST list via the same
+; FILL/AT-XY, KEY/KEY?, F., S>F/F>S/FROUND, CLS, C@/C!), chained into one LATEST list via the same
 ; DICT_CHAIN_POINT splices rom/forth_smoke_p9.asm introduced and
 ; proved. DECIMAL_NUMBER_ENABLED is also DEFINEd here (core/decimal.asm,
 ; Phase 23) — not a dictionary word, a NUMBER/INTERPRET_RUN parsing
@@ -327,7 +327,7 @@ INTERPRET_UNKNOWN_WORD:
 DICT_CHAIN_POINT DEFL H_SEMICOLON
     INCLUDE "core/control.asm"
     INCLUDE "core/ts2068.asm"
-DICT_CHAIN_POINT DEFL H_BORDER
+DICT_CHAIN_POINT DEFL H_CLS
     INCLUDE "core/storage.asm"
 DICT_CHAIN_POINT DEFL H_LOAD
     INCLUDE "core/float.asm"
@@ -367,13 +367,15 @@ DICT_CHAIN_POINT DEFL H_I
     INCLUDE "core/moregfx.asm"
 DICT_CHAIN_POINT DEFL H_ATXY
     INCLUDE "core/key.asm"
-DICT_CHAIN_POINT DEFL H_KEY
+DICT_CHAIN_POINT DEFL H_KEYQ
     INCLUDE "core/mathfn.asm"
 DICT_CHAIN_POINT DEFL H_RANDOMIZE
     INCLUDE "core/array.asm"
 DICT_CHAIN_POINT DEFL H_CELLS
     INCLUDE "core/string.asm"
 DICT_CHAIN_POINT DEFL H_VAL
+    INCLUDE "core/bytemem.asm"
+DICT_CHAIN_POINT DEFL H_CSTORE
     INCLUDE "core/input.asm"
     INCLUDE "core/editor.asm"
 
