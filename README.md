@@ -528,6 +528,21 @@ inherited, what was deliberately left behind, and the phased build order.
   attribute-memory readback probes rather than guessed, then fixed and
   re-verified against the exact reported repro. +660 bytes total
   (`rom/forth_boot.asm`: 11364 -> 12024 of 16384).
+- Phase 34 (`core/floatconv.asm` + `rom/forth_smoke_p34.asm`): `S>F`
+  and `F>S`, the standard ANS Forth integer/float conversion words —
+  asked about directly ("is that a standard Forth feature?"), confirmed
+  yes, then added. `S>F` is exact (`mantissa=n, exponent=0`); `F>S`
+  truncates, per the user's own explicit choice, via the exponent's
+  sign shifting the mantissa left or right (reusing `core/float.asm`'s
+  existing `F_SHRA` for the right-shift case). A real, documented
+  caveat: reusing `F_SHRA` means `F>S` rounds toward negative infinity
+  for negative fractional values, not toward zero (`F>S(-0.5) = -1`,
+  not `0`) — whole numbers are unaffected either way. Confirmed via
+  `rom/forth_smoke_p34.asm`'s five checkpoints AND via a throwaway
+  diagnostic that fed `42 S>F F>S` through the real `forth_boot.asm`
+  dictionary chain and `INTERPRET_RUN`, not just direct word calls —
+  proving the dictionary splice itself is wired correctly. +52 bytes
+  (`rom/forth_boot.asm`: 12024 -> 12076 of 16384).
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -617,6 +632,7 @@ rom/        ROM image assembly:
               forth_smoke_p31.asm Phase 31 smoke ROM (real BEEP)
               forth_smoke_p32.asm Phase 32 smoke ROM (SOUND)
               forth_smoke_p33.asm Phase 33 smoke ROM (multi-row word wrap)
+              forth_smoke_p34.asm Phase 34 smoke ROM (S>F/F>S)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -668,6 +684,7 @@ make forth-smoke-p30  # Phase 30 smoke ROM: PI/SIN/COS
 make forth-smoke-p31  # Phase 31 smoke ROM: real BEEP
 make forth-smoke-p32  # Phase 32 smoke ROM: SOUND
 make forth-smoke-p33  # Phase 33 smoke ROM: real multi-row word wrap
+make forth-smoke-p34  # Phase 34 smoke ROM: S>F/F>S
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```

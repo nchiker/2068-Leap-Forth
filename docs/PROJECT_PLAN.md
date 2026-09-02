@@ -2495,6 +2495,72 @@ bytes ($2EF8 of $4000), 4360 bytes free — combined cost of the color
 change, flashing-cursor fix, multi-row wrap rewrite, and startup chime
 is +660 bytes over Phase 32.
 
+## Phase 34 — S>F and F>S (integer/float conversion)
+
+**Status: done, confirmed under real Fuse and via the real interpreter
+pipeline.** Standard ANS Forth's Floating-Point word set defines
+`S>F ( n -- r )` and `F>S ( r -- n )` for converting a single-cell
+integer to/from a float — asked about directly ("should we have
+conversion words between integer and float stacks? Is that a standard
+Forth feature?"), confirmed as standard, then added at the user's own
+request. Until now the only way to get a value onto the float stack at
+all was `FPUSH`ing a raw (mantissa, exponent) pair by hand, with no way
+back — a real, previously undocumented gap. (`D>F`/`F>D`, the
+double-cell half of the same standard word set, don't apply — this
+project's integer stack is single-cell only.)
+
+`S>F` is exact and needs no thought: this project's float format is
+`mantissa * 2^exponent` (`core/float.asm`'s own header) with no
+required normalization, so `mantissa=n, exponent=0` represents `n`
+exactly, positive or negative, every time.
+
+`F>S` **truncates**, per the user's own explicit choice (not ANS
+Forth's own default, which is implementation-defined but usually
+rounds to nearest) — the simplest option, matching this project's
+established posture of accepting and stating approximation rather than
+hiding it (`F.`'s and `FSQRT`'s own truncating/lossy behavior). The
+exponent decides direction: zero needs no shift (already exact); a
+positive exponent shifts the mantissa left (a new `F_SHLA`, the mirror
+image of `core/float.asm`'s existing `F_SHRA`); a negative exponent
+reuses `F_SHRA` unchanged.
+
+**A real caveat, found by hand-deriving test cases before writing any
+Z80** (this project's own established discipline): reusing `F_SHRA`
+means `F>S` truncates via an ARITHMETIC (sign-preserving) right shift,
+which rounds toward NEGATIVE INFINITY for a negative fractional value,
+not toward zero the way C's `(int)` cast or many other Forths' own
+`F>S` do. A whole-number float is completely unaffected either way
+(there's no remainder to round), so this only shows up for a genuinely
+fractional negative input — concretely, `F>S(0.5) = 0` (ordinary) but
+`F>S(-0.5) = -1`, not `0`. Reusing `F_SHRA` was a deliberate choice
+(one already-proven routine, not a second subtly-different shift), but
+the direction it truncates in is real, user-visible behavior, not an
+implementation detail — documented plainly in `core/floatconv.asm`'s
+own header rather than glossed over.
+
+A positive exponent's left shift has no overflow guard, matching this
+format's own established position (`core/float.asm`'s header: no
+overflow handling anywhere in this format) — a float whose true value
+doesn't fit in 16 bits silently loses its high bits.
+
+**Confirmed under real Fuse**: `rom/forth_smoke_p34.asm`'s five
+checkpoints (S>F/F>S round-trip for both a positive and a negative
+integer; F>S(0.5)=0; F>S(-0.5)=-1, the documented caveat made concrete;
+F>S(-4.0)=-4, a whole negative number unaffected by that same caveat)
+all pass. **Also confirmed through the real interpreter, not just
+direct word calls**: a throwaway diagnostic built from `rom/forth_boot.asm`
+itself (same full dictionary chain, same `FIND`/`INTERPRET_RUN` path a
+live user's own keystrokes go through) fed the line `42 S>F F>S`
+through `EDITOR_PROCESS_KEY`/`INTERPRET_RUN` exactly the way a typed
+line would be, and the integer stack held exactly `42` afterward —
+proving the dictionary-chain splice (`core/floatconv.asm` inserted
+between `core/floatsqrt.asm` and `core/floattrig.asm`) is wired
+correctly, not just that the underlying routines are correct in
+isolation.
+
+ROM budget after this phase: `rom/forth_boot.asm` uses 12076 of 16384
+bytes ($2F2C of $4000), 4308 bytes free — +52 bytes over Phase 33.
+
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
 **Not yet scheduled as a numbered phase — tracked here so it isn't
