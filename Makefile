@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-boot check clean
+.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-boot check clean
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-boot
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-boot
 
 # Milestone 0: boot stub only.
 boot:
@@ -211,6 +211,24 @@ forth-smoke-p19:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p19.sym --lst=build/forth_smoke_p19.lst rom/forth_smoke_p19.asm
 	mv forth_smoke_p19_rom0.bin build/forth_smoke_p19_rom0.bin
+
+# Phase 20: KEY smoke ROM. Simulates a keypress by writing
+# KBD_LASTK/KBD_KEYHIT directly (the same sysvars a real ISR tick would
+# latch) rather than needing a live interrupt running -- see
+# core/key.asm's own header.
+forth-smoke-p20:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p20.sym --lst=build/forth_smoke_p20.lst rom/forth_smoke_p20.asm
+	mv forth_smoke_p20_rom0.bin build/forth_smoke_p20_rom0.bin
+
+# Phase 21: error feedback smoke ROM. Replicates rom/forth_boot.asm's
+# own real (now-updated) INTERPRET_UNKNOWN_WORD hook verbatim, proving
+# an unknown word prints "?" + newline AND that the interpreter
+# recovers to run a subsequent line normally afterward.
+forth-smoke-p21:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p21.sym --lst=build/forth_smoke_p21.lst rom/forth_smoke_p21.asm
+	mv forth_smoke_p21_rom0.bin build/forth_smoke_p21_rom0.bin
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm

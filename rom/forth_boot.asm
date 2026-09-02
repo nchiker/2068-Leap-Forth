@@ -21,7 +21,7 @@
 ; (0=/IF/ELSE/THEN/BEGIN/UNTIL, PLOT/LINE/CIRCLE/BEEP/BORDER,
 ; SAVE/LOAD, F+/F-/F*/F/, 64COL/32COL/PALETTE64/PLOT64, EMIT/., =/</>,
 ; VARIABLE/CONSTANT, .", WHILE/REPEAT, INK/PAPER, DO/LOOP/I,
-; FILL/AT-XY), chained into one LATEST list via the same
+; FILL/AT-XY, KEY), chained into one LATEST list via the same
 ; DICT_CHAIN_POINT splices rom/forth_smoke_p9.asm introduced and
 ; proved.
 ;
@@ -92,7 +92,7 @@ COLD_START:
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
-    ld   hl, DICT_LATEST_INIT_MOREGFX ; the full chain's own head — see
+    ld   hl, DICT_LATEST_INIT_KEY   ; the full chain's own head — see
                                     ; this file's own header
     ld   (LATEST), hl
     ld   hl, FORTH_DICT_RAM
@@ -143,18 +143,29 @@ BANNER: DB "2068-FORTH", 0
 ; reset to recover from. INTERPRET_RUN reaches this hook via a bare
 ; `jp`, not `call`, so the Z80 return-address stack at this point still
 ; holds exactly one entry — INTERPRET_RUN's own caller
-; (EDITOR_LOOP_LIVE's `call INTERPRET_RUN`). A bare `ret` here abandons
-; the rest of the current line and returns straight to
-; EDITOR_LOOP_LIVE, which starts a fresh prompt — real, if minimal,
-; error recovery, not a hang. No error message is shown yet — EMIT/.
-; exist now (core/print.asm) so the print path this comment used to say
-; was missing is no longer the blocker, but wiring an actual "?" or
-; error text into this hook is still real, open follow-up work, not
-; done here: a genuine typo currently looks identical to a typo that
-; happened to be typed slightly differently and got silently discarded,
-; since there is no error indicator of any kind yet.
+; (EDITOR_LOOP_LIVE's `call INTERPRET_RUN`).
+;
+; Prints "?" followed by a newline (both via core/print.asm's own
+; W_EMIT, called directly — safe to do mid-line, since EMIT's own data-
+; stack use is self-contained: it pops exactly what it's given, however
+; much of the interpreter's own expression-in-progress is sitting below
+; that at this point) before returning straight to EDITOR_LOOP_LIVE,
+; which starts a fresh prompt on the next line. A genuine typo now
+; looks visibly different from one that happened to be typed slightly
+; differently and got silently discarded — real, if minimal, error
+; feedback, not just error recovery. Still real, open follow-up work:
+; no distinction is made between "unknown word" and other possible
+; failures (there's only one kind right now), and the rest of the
+; current line is simply abandoned rather than reporting which word
+; specifically wasn't understood.
 ; ============================================================================
 INTERPRET_UNKNOWN_WORD:
+    ld   hl, "?"
+    call DPUSH_HL
+    call W_EMIT
+    ld   hl, 13
+    call DPUSH_HL
+    call W_EMIT
     ret
 
 ; ---- kernel + dictionary: included here, after the vector table and
@@ -197,6 +208,8 @@ DICT_CHAIN_POINT DEFL H_PAPER
     INCLUDE "core/doloop.asm"
 DICT_CHAIN_POINT DEFL H_I
     INCLUDE "core/moregfx.asm"
+DICT_CHAIN_POINT DEFL H_ATXY
+    INCLUDE "core/key.asm"
     INCLUDE "core/editor.asm"
 
     DS   $4000 - $, $FF

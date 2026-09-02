@@ -1222,17 +1222,67 @@ hardcoded-anchor mistake wasn't repeated); re-verified with a
 deterministic full-chain diagnostic that also confirms `64COL` is still
 `FIND`-able, plus a fresh boot screenshot.
 
-With this phase, decimal multiply and divide are both done. Hi-res
-graphics mode remains the only item left on the original gap list,
-along with the tracked-but-unscheduled 64-column text mode stretch goal
-below — plus a few items raised in conversation but not yet formally
-tracked as phases: `KEY` (reading a keystroke as a value — deferred
-since Phase 2), error feedback for unknown words at the live prompt
-(flagged since Phase 9), `LEAVE`/`+LOOP` (deferred since Phase 16),
+With this phase, decimal multiply and divide are both done.
+
+## Phase 20 — KEY
+
+**Status: done.** `core/key.asm` adds `KEY ( -- char )`, the input
+counterpart to `EMIT` (Phase 10) — deferred since Phase 2 ("`EMIT`/
+`KEY` were deliberately deferred... to keep it minimal"), never
+revisited until now. A thin wrapper over `kernel/io`'s own
+`IO_READ_KEY`: blocks until a real key is pressed (needs the same real
+IM 1 interrupt precondition `core/editor.asm`'s `EDITOR_LOOP_LIVE` has
+always had — `IO_READ_KEY` only consumes a key already latched by
+`kernel/interrupt`'s `KBD_ISR_TICK`, it doesn't scan the matrix
+itself), then pushes the translated code.
+
+`rom/forth_smoke_p20.asm` proves it under real Fuse without needing a
+live interrupt at all: simulating a keypress by writing
+`KBD_LASTK`/`KBD_KEYHIT` directly (the same sysvars a real ISR tick
+would latch) tests `KEY`'s own wrapper code in isolation, the same way
+`core/editor.asm`'s own Phase 6 smoke ROM tested key handling with
+canned codes instead of a live keyboard. Two checkpoints, two different
+simulated keys, confirming `KEY` re-reads state each time rather than
+caching. Wired into `rom/forth_boot.asm`'s full chain; re-verified with
+a boot screenshot.
+
+## Phase 21 — error feedback for an unknown word
+
+**Status: done.** `rom/forth_boot.asm`'s own `INTERPRET_UNKNOWN_WORD`
+hook — silent since Phase 9, flagged as open the whole time — now
+prints `"?"` followed by a newline (via `core/print.asm`'s own `W_EMIT`,
+called directly) before returning to `EDITOR_LOOP_LIVE` for a fresh
+prompt. A genuine typo now looks visibly different from one that
+happened to be typed slightly differently and got silently discarded.
+
+Tested via `rom/forth_smoke_p21.asm`, which replicates
+`rom/forth_boot.asm`'s own real hook verbatim (there's no way to
+`INCLUDE` just that one hook without pulling in the whole
+`COLD_START`, so it's copied, matching how every smoke ROM already
+defines its own independent `INTERPRET_UNKNOWN_WORD`). Two checkpoints:
+an unknown word prints `"?"` and a newline (`PRINT_ROW`/`PRINT_COL`
+checked directly), and — the more important check — a SEPARATE, later
+`INTERPRET_RUN` call still executes normally afterward, proving the
+interpreter recovers rather than being left broken by the first
+checkpoint's `ret`. Re-verified against the real, complete dictionary
+chain (not just the isolated replica) with a deterministic diagnostic,
+plus a fresh boot screenshot.
+
+Still real, open follow-up work, not done here: no distinction between
+"unknown word" and any other possible failure (there's only one kind
+right now), and the rest of the current line is simply abandoned
+rather than reporting which word specifically wasn't understood.
+
+Hi-res graphics mode remains the only item left on the original gap
+list, along with the tracked-but-unscheduled 64-column text mode
+stretch goal below — plus `LEAVE`/`+LOOP` (deferred since Phase 16),
 `F.` (printing a float — blocked on `EMIT` until Phase 10, unblocked
-since but not yet built), and decimal number literal parsing (so
-`F+`/`F-`/`F*`/`F/` become actually typeable, not just testable via
-direct `FPUSH`).
+since but not yet built), decimal number literal parsing (so
+`F+`/`F-`/`F*`/`F/` become actually typeable), and AY-3-8912 `SOUND`
+(real register-level sound access, distinct from the existing simple
+`BEEP` — exists and works in the sibling `ts2068rom` BASIC project via
+ports `$F5`/`$F6`, never ported here), tracked as its own future phase
+per the user's own request 2026-09-01.
 
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 

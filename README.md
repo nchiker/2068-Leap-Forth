@@ -221,6 +221,17 @@ inherited, what was deliberately left behind, and the phased build order.
   chain, using `DICT_CHAIN_POINT` correctly from the start (Phase 18's
   hardcoded-anchor mistake wasn't repeated). See `docs/PROJECT_PLAN.md`
   Phase 19 for the full story.
+- Phase 20 (`core/key.asm` + `rom/forth_smoke_p20.asm`): `KEY` — the
+  input counterpart to `EMIT`, deferred since Phase 2. Thin wrapper
+  over `kernel/io`'s `IO_READ_KEY`. Tested by simulating a keypress
+  (writing `KBD_LASTK`/`KBD_KEYHIT` directly) rather than needing a
+  live interrupt. Wired into `rom/forth_boot.asm`'s full chain.
+- Phase 21 (`rom/forth_boot.asm` update + `rom/forth_smoke_p21.asm`):
+  error feedback — an unknown word at the live prompt now prints `"?"`
+  and a newline instead of silently discarding the line. Verified both
+  in isolation and against the real, complete dictionary chain, plus
+  confirming the interpreter genuinely recovers for the next line, not
+  just that it doesn't crash.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -256,6 +267,7 @@ core/       language-layer code, not hardware-facing:
               moregfx.asm (Phase 17 — FILL/AT-XY)
               floatmul.asm (Phase 18 — F*)
               floatdiv.asm (Phase 19 — F/)
+              key.asm     (Phase 20 — KEY)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
             2068-Forth's own addition, mode64/ (recovered, once-shipped
@@ -283,6 +295,8 @@ rom/        ROM image assembly:
               forth_smoke_p17.asm Phase 17 smoke ROM (FILL/AT-XY)
               forth_smoke_p18.asm Phase 18 smoke ROM (F*)
               forth_smoke_p19.asm Phase 19 smoke ROM (F/)
+              forth_smoke_p20.asm Phase 20 smoke ROM (KEY)
+              forth_smoke_p21.asm Phase 21 smoke ROM (error feedback)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -320,6 +334,8 @@ make forth-smoke-p16  # Phase 16 smoke ROM: DO/LOOP/I
 make forth-smoke-p17  # Phase 17 smoke ROM: FILL/AT-XY
 make forth-smoke-p18  # Phase 18 smoke ROM: F*
 make forth-smoke-p19  # Phase 19 smoke ROM: F/
+make forth-smoke-p20  # Phase 20 smoke ROM: KEY
+make forth-smoke-p21  # Phase 21 smoke ROM: error feedback
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
@@ -340,8 +356,9 @@ real keyboard-driven prompt. Try `5 BORDER` and press Enter, `5 3 + .`
 to see `.` print `8` on the row below the banner, `5 3 > .` to see `-1`
 (Forth's TRUE) printed, `VARIABLE FOO 42 FOO ! FOO @ .` to see `42`,
 `: GREET ." HI" ; GREET` to see `."` print a literal string, `: FIVE 5 0 DO I . LOOP ; FIVE` to see
-`0 1 2 3 4` printed, or `100 100 30 CIRCLE 2 INK 100 100 FILL` to see a
-red-filled circle.
+`0 1 2 3 4` printed, `100 100 30 CIRCLE 2 INK 100 100 FILL` to see a
+red-filled circle, or type a nonsense word like `FOOBAR` to see `?`
+printed and the prompt recover cleanly.
 
 ## License
 

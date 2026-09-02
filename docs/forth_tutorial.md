@@ -512,6 +512,13 @@ model as typing into practically any text field — but it's worth
 stating plainly since BASIC on this same family of machines historically
 handled line editing somewhat differently.
 
+What happens if you press Enter on a word that doesn't exist? A typo —
+`5 BRODER` instead of `5 BORDER`, say — prints a `?` on its own line
+and drops you right back at a fresh prompt, rather than doing nothing
+visible or crashing. It's minimal (it doesn't say *which* word wasn't
+recognized, or why), but a real mistake now looks different from
+nothing having happened at all.
+
 **Status:** all of it — insert, delete, cursor movement, and a real,
 live, keyboard-driven prompt to try them at — works today. This
 section's own `13`→`123` example is something you can actually type
@@ -543,7 +550,11 @@ to a new line automatically past column 32, and scrolls the screen once
 it reaches the row just above where you're typing, so printed output
 can never collide with the line you're currently entering.
 
-**Status:** both exist and work — see
+`KEY` is `EMIT`'s opposite: instead of printing a character, it waits
+for you to press one key and leaves its code on the stack. `KEY .`
+waits for a keypress, then prints its character code as a number.
+
+**Status:** `.`, `EMIT`, and `KEY` all exist and work — see
 [`PROJECT_PLAN.md`](PROJECT_PLAN.md)'s Phase 10 for the underlying
 implementation, including a real bug (found live, by typing at the
 keyboard) where the very first thing printed after booting silently
@@ -642,10 +653,13 @@ here once it's real:
 
 - **Hi-res graphics mode** — see section 7's own status note.
 - **Decimal number literals** — see section 11.
-- **`KEY`** — reading a single keystroke as a value, the input
-  counterpart to `EMIT` (section 9).
-- **Error feedback for a typo** — the live prompt silently discards an
-  unrecognized word rather than showing anything went wrong.
+- **`LEAVE`/`+LOOP`** — exiting a counted loop (section 6) early, or
+  stepping by something other than 1.
+- **`F.`** — printing a decimal number (section 11's own words have no
+  way to show their result yet).
+- **Real AY-3-8912 sound** — `BEEP` (section 7) only toggles a simple
+  tone; the sound chip's own richer tone/volume/noise controls aren't
+  exposed yet.
 
 See [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the full order these are
 planned to arrive in.
