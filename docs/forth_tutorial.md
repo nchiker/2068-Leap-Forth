@@ -9,16 +9,20 @@ not assume you know assembly language or anything about how this
 project is built; that's a separate audience covered by
 [`PROJECT_PLAN.md`](PROJECT_PLAN.md) and the source code itself.
 
-**This document teaches the language, not this project's construction
-of it.** Everything below describes what you, typing at a 2068-Forth
-prompt, would see and do. Sections are added as each part of the
-language becomes real and usable — see the status note at the end of
-each section for exactly what's true right now versus still to come.
+Sections are ordered the way you'd want to *learn* the language —
+starting from the stack, through defining your own words, to control
+flow, data, and finally the screen and keyboard — not the order any of
+it happened to get built in. Every example here is something you can
+actually type at a real, live 2068-Forth prompt right now, not a
+preview of something still being built. A short appendix at the very
+end lists the handful of things that genuinely aren't here yet, so
+that gap doesn't need repeating throughout the main text.
 
-**A live prompt genuinely exists.** Turning the machine on shows a
-banner, plays a short startup sound, and drops you at a real,
-keyboard-driven prompt — every example in this document, including `.`
-(section 9), can actually be typed in and run, not just read about.
+A live prompt genuinely exists: turning the machine on shows a banner,
+plays a short startup sound, and drops you at a real, keyboard-driven
+prompt.
+
+![2068-Forth boot screen, showing the banner and `5 3 + .` printing `8`](images/boot_and_arithmetic.png)
 
 ---
 
@@ -34,7 +38,7 @@ there's only one rule for the whole language: *read the next word, then
 either run it or compile it.* That's it. That one rule, repeated, is
 the entire language.
 
-### 1.1 The stack, and why `5 3 +` means "5 + 3"
+### The stack, and why `5 3 +` means "5 + 3"
 
 BASIC writes arithmetic *infix*: the operator sits between its operands
 (`5 + 3`). Forth writes it **postfix**: the operands come first, the
@@ -73,11 +77,13 @@ the machine will actually do the work — push 5, push 3, add them, push
 expressions into Forth in your head; you're thinking in the order
 operations actually happen.
 
+### Rearranging the stack
+
 A handful of words exist just to rearrange the stack itself, since with
 no variable names, getting a value into the right position *is* often
 the whole problem:
 
-| Word | Effect | What it does |
+| Word | Stack effect | What it does |
 |---|---|---|
 | `DUP` | `( n -- n n )` | Duplicate the top value |
 | `SWAP` | `( a b -- b a )` | Swap the top two values |
@@ -88,23 +94,29 @@ That `( n -- n n )` notation is standard Forth shorthand: what the
 stack looks like right before the word runs, an arrow, then right
 after — top of stack is always the rightmost item in each group. You'll
 see it throughout Forth documentation (including this project's own
-source code) and it's worth getting comfortable reading it now.
+source code, and the reference table at the very end of this document)
+and it's worth getting comfortable reading it now.
 
 For example, doubling a number without a variable to hold it in:
 `5 DUP +` — push 5, duplicate it (`[5, 5]`), add (`[10]`).
 
-**Status:** `DUP`, `SWAP`, `DROP`, `OVER`, `+`, `-`, and the fetch/store
-words `@`/`!` (covered in section 4) all exist and work in 2068-Forth
-today, exactly as described above.
+Or swapping two values to compute both differences of a subtraction:
 
-### 1.2 Words and the dictionary
+```forth
+10 3 OVER OVER -    \ [10, 3, 10, 3] then [10, 3, 7]
+SWAP -              \ [3, 10] then [-7]
+```
+
+### Words and the dictionary
 
 Everything in Forth — `+`, `DUP`, a word you define yourself — lives in
 the **dictionary**: the complete list of every word the system
 currently knows. When you type a word, Forth looks it up in the
 dictionary by name. If it's not found, Forth tries to read it as a
 plain number instead. If that fails too, you've made a typo or used an
-undefined word, and Forth reports an error.
+undefined word, and Forth prints `?` on its own line and gives you a
+fresh prompt rather than doing nothing visible or crashing (more on
+this in [Typing and editing at the prompt](#13-typing-and-editing-at-the-prompt)).
 
 The dictionary is searched **newest-first**. If you define a word with
 the same name as an existing one, your new definition takes over for
@@ -115,9 +127,9 @@ This is occasionally useful (redefining a word to fix a mistake without
 restarting) and occasionally a source of confusion (forgetting you
 shadowed something) — worth knowing about either way.
 
-**Status:** the dictionary and name lookup work today.
+---
 
-### 1.3 Defining your own words
+## 2. Defining your own words
 
 This is the part of Forth that BASIC has no real equivalent for. In
 BASIC, you write a program; the language itself doesn't grow while
@@ -126,7 +138,7 @@ language** — your word becomes exactly as usable as `+` or `DUP` from
 that point on, no different in kind.
 
 ```forth
-: DOUBLE DUP + ;
+: DOUBLE  DUP + ;
 ```
 
 Reading this left to right: `:` says "define a new word, named
@@ -138,7 +150,7 @@ Nothing has actually *run* yet at this point — you've just taught Forth
 a new word. Now use it:
 
 ```forth
-4 DOUBLE
+4 DOUBLE   \ leaves 8
 ```
 
 `4` is pushed (`[4]`). `DOUBLE` is looked up, found, and run: running it
@@ -152,50 +164,16 @@ real Forth program is mostly a sequence of small definitions like this,
 each built out of the ones before it, until the last few definitions
 read almost like plain English of what the program does.
 
-**Status:** `:` and `;` both work today — you can define new words
-built out of any word 2068-Forth currently knows, and immediately use
-your new word by name, exactly as shown above.
-
-### 1.4 Interpreting vs. compiling — why `;` is special
-
-There's a flag Forth keeps internally, usually just called **STATE**:
-it's either "interpreting" (run each word as you type it — everything
-in section 1.1) or "compiling" (remember each word as part of a
-definition instead — what happens between `:` and `;`).
-
-`;` has to flip that flag back to "interpreting" the *moment* it's
-read, or compiling would never stop. That means `;` can't follow the
-normal rule of "get remembered as part of the definition" — it has to
-act immediately, even while compiling is otherwise in effect. A word
-that always runs immediately like this, even in the middle of a
-definition, is called **IMMEDIATE**.
-
-You won't need to define your own IMMEDIATE words for ordinary Forth
-programming, but it's worth knowing the concept exists, because it's
-also how words like `IF` and `ELSE` behave (once available — see
-section 5): they aren't ordinary words that get compiled into a
-definition's body, they're IMMEDIATE words that shape *how* the
-surrounding definition gets compiled.
-
-**Status:** interpreting vs. compiling, and `;` as the one IMMEDIATE
-word, both work today. Nothing else IMMEDIATE exists yet.
-
----
-
-## 2. A complete worked example
-
-Putting the last two sections together, here's a small but complete
-piece of Forth: a word that squares a number, built out of a word that
-doubles one.
+Here's a slightly bigger example putting that habit into practice: a
+word that squares a number, built out of a word that doubles one.
 
 ```forth
-: DOUBLE DUP + ;
-: QUADRUPLE DOUBLE DOUBLE ;
+: DOUBLE     DUP + ;
+: QUADRUPLE  DOUBLE DOUBLE ;
 
-3 QUADRUPLE
+3 QUADRUPLE   \ leaves 12
 ```
 
-- `DOUBLE` is defined as before.
 - `QUADRUPLE` is defined *using* `DOUBLE` — this is completely ordinary;
   a word's definition can use any word that exists at the time it's
   defined, including one you just wrote yourself a moment ago.
@@ -207,20 +185,64 @@ Notice that `QUADRUPLE` never mentions the stack, arithmetic, or how
 This is the normal shape of Forth programming: small words, each
 trivially checkable by hand, combined into larger ones.
 
+### Interpreting vs. compiling — why `;` is special
+
+There's a flag Forth keeps internally, usually just called **STATE**:
+it's either "interpreting" (run each word as you type it — everything
+in section 1) or "compiling" (remember each word as part of a
+definition instead — what happens between `:` and `;`).
+
+`;` has to flip that flag back to "interpreting" the *moment* it's
+read, or compiling would never stop. That means `;` can't follow the
+normal rule of "get remembered as part of the definition" — it has to
+act immediately, even while compiling is otherwise in effect. A word
+that always runs immediately like this, even in the middle of a
+definition, is called **IMMEDIATE**. You won't need to define your own
+IMMEDIATE words for ordinary Forth programming, but it's worth knowing
+the concept exists — it's also how `IF`, `ELSE`, and the loop words
+later in this document work: they aren't ordinary words that get
+compiled into a definition's body, they're IMMEDIATE words that shape
+*how* the surrounding definition gets compiled.
+
 ---
 
 ## 3. Numbers
 
-2068-Forth's numbers are whole numbers only — no decimal points. `5`,
-`-12`, and `0` are all valid; `3.14` is not (yet — see
-[`numeric_model.md`](numeric_model.md) for why this was a deliberate
-choice rather than an oversight, and what it would take to add decimal
-numbers later). If you're used to BASIC letting you write `3.14`
-anywhere a number goes, this is the one place 2068-Forth will feel more
-restrictive than what you're used to.
+Whole numbers — `5`, `-12`, `0` — work exactly as you'd expect,
+including negative numbers via a leading `-`.
 
-**Status:** whole numbers, including negative numbers (a leading `-`),
-work today.
+2068-Forth also supports **decimal numbers**, written with a `.`:
+
+```forth
+3.5 2.5 F+ F.       \ prints 6.0000
+2.0 3.0 F* F.       \ prints 6.0000
+1.0 4.0 F/ F.       \ prints 0.2500
+```
+
+The moment a typed number contains a `.`, it's treated as a decimal
+value instead of a whole one, and pushed onto its *own*, separate
+stack — decimal arithmetic uses its own words, `F+ F- F* F/` (the `F`
+prefix is the standard Forth convention for "floating-point"), not the
+plain `+`/`-` from section 1. There's no plain integer `*` or `/` at
+all in 2068-Forth yet — only these decimal versions. `F.` prints a
+decimal result, always showing exactly 4 digits after the point
+(`6.0` prints as `"6.0000"`, not `"6"`), rounded toward zero rather
+than to the nearest digit, so very small differences near the 4th
+digit can look slightly off from what a calculator would show for the
+same expression.
+
+Decimal literals work inside colon definitions too, compiled in
+exactly like a whole-number literal would be:
+
+```forth
+: HALVE  2.0 F/ ;
+5.0 HALVE F.        \ prints 2.5000
+```
+
+Keeping whole numbers and decimal numbers on two separate stacks,
+using different words for each, is a deliberate, standard Forth design
+— not a limitation specific to this implementation. See
+[`numeric_model.md`](numeric_model.md) for the fuller reasoning.
 
 ---
 
@@ -228,10 +250,10 @@ work today.
 
 Forth gives you direct access to memory as two words:
 
-| Word | Effect | What it does |
+| Word | Stack effect | What it does |
 |---|---|---|
-| `@` (read "fetch") | `( addr -- n )` | Read the value stored at `addr` |
-| `!` (read "store") | `( n addr -- )` | Write `n` to `addr` |
+| `@` (pronounced "fetch") | `( addr -- n )` | Read the value stored at `addr` |
+| `!` (pronounced "store") | `( n addr -- )` | Write `n` to `addr` |
 
 Note the order for `!`: the *value* goes on the stack first, then the
 *address* — read it as "store `n` at `addr`," matching the order the
@@ -265,34 +287,39 @@ change it afterward.
 MAXHEALTH .      \ prints 100, every time, forever
 ```
 
-**Status:** `@`, `!`, `VARIABLE`, and `CONSTANT` all work today, exactly
-as shown above.
+---
+
+## 5. Comparisons and true/false
+
+Before looking at `IF`, it helps to know how Forth represents "true"
+and "false" — they're just numbers, like everything else on the stack.
+**Zero means false; anything else means true.** `0=`, `=`, `<`, and
+`>` all turn an ordinary comparison into one of these flags:
+
+| Word | Stack effect | What it does |
+|---|---|---|
+| `0=` | `( n -- flag )` | `flag` is true if `n` is exactly `0` |
+| `=`  | `( a b -- flag )` | `flag` is true if `a` and `b` are equal |
+| `<`  | `( a b -- flag )` | `flag` is true if `a` is less than `b` |
+| `>`  | `( a b -- flag )` | `flag` is true if `a` is greater than `b` |
+
+```forth
+5 3 > .    \ prints -1
+5 3 = .    \ prints 0
+```
+
+A true flag prints as `-1`, not `1` — this is the standard Forth
+convention (every bit set), not a bug; it just looks unfamiliar coming
+from BASIC or most other languages, where "true" is usually `1`.
 
 ---
 
-## 5. Making decisions: `IF` `ELSE` `THEN`
+## 6. Making decisions: `IF` `ELSE` `THEN`
 
-Every example so far has run straight through, top to bottom, with no
-branching. `IF`/`ELSE`/`THEN` is Forth's equivalent of BASIC's
+`IF`/`ELSE`/`THEN` is Forth's equivalent of BASIC's
 `IF...THEN...ELSE`, with one difference worth calling out up front: the
 condition comes from the stack, checked *before* you reach `IF`, not
 written as part of the `IF` itself.
-
-```forth
-: DESCRIBE  IF ." positive-ish" ELSE ." zero or negative" THEN ;
-
-5 DESCRIBE     \ pushes 5 (true-ish): prints "positive-ish"
-0 DESCRIBE     \ pushes 0 (false): prints "zero or negative"
-```
-
-`."` prints a literal piece of text — a different feature from `.`'s
-printing of a *computed* number (section 9). It only works inside a
-colon definition, the same restriction `IF`/`ELSE`/`THEN` themselves
-have. Exactly one space is required right after `."`, and the text
-runs up to (but not including) the next `"`.
-
-Here's the same branching idea again, without `."`, if you'd rather see
-plain numbers on the stack instead of printed text:
 
 ```forth
 : SIGNTEST  IF 111 ELSE 222 THEN ;
@@ -302,55 +329,53 @@ plain numbers on the stack instead of printed text:
 ```
 
 Reading `SIGNTEST`: when it runs, whatever's already on top of the
-stack is treated as the condition. `IF` pops it and checks: **zero
-means false**, anything else means true. If true, everything up to the
-matching `ELSE` (or `THEN`, if there's no `ELSE`) runs; if false, the
-`ELSE` part runs instead (or nothing, if there's no `ELSE`). `THEN`
-doesn't mean "then do this" the way it does in BASIC — it just marks
-where the `IF`/`ELSE` branching ends and normal execution continues.
-This naming is a common early stumbling block for BASIC programmers
-specifically because the word is so familiar-looking and means
-something different.
+stack is treated as the condition. `IF` pops it and checks it the same
+way section 5's comparisons produce it — zero means false, anything
+else means true. If true, everything up to the matching `ELSE` (or
+`THEN`, if there's no `ELSE`) runs; if false, the `ELSE` part runs
+instead (or nothing, if there's no `ELSE`). `THEN` doesn't mean "then
+do this" the way it does in BASIC — it just marks where the
+`IF`/`ELSE` branching ends and normal execution continues. This naming
+is a common early stumbling block for BASIC programmers specifically
+because the word is so familiar-looking and means something different.
 
-Since "zero means false" is how every condition in Forth works, you
-often need a word that turns an ordinary calculation into a proper
-true/false answer. `0=`, `=`, `<`, and `>` all do exactly that:
-
-| Word | Effect | What it does |
-|---|---|---|
-| `0=` | `( n -- flag )` | `flag` is true if `n` is exactly `0`, false otherwise |
-| `=`  | `( a b -- flag )` | `flag` is true if `a` and `b` are equal |
-| `<`  | `( a b -- flag )` | `flag` is true if `a` is less than `b` |
-| `>`  | `( a b -- flag )` | `flag` is true if `a` is greater than `b` |
+Combining this with section 5's own comparisons:
 
 ```forth
-: ISZERO  0= IF 111 ELSE 222 THEN ;
-
-0 ISZERO     \ 0= sees 0 -> true -> 111
-5 ISZERO     \ 0= sees 5 -> false -> 222
-
 : BIGGER  > IF 111 ELSE 222 THEN ;
 
 5 3 BIGGER   \ 5 3 > sees 5>3 -> true -> 111
 3 5 BIGGER   \ 3 5 > sees 3>5 -> false -> 222
 ```
 
-A true flag prints as `-1`, not `1` — `5 3 > .` prints `-1`. This is
-the standard Forth convention (every bit set), not a bug; it just looks
-unfamiliar coming from BASIC or most other languages, where "true" is
-usually `1`.
+`IF`/`ELSE`/`THEN` can also print text directly, using `."`
+("dot-quote"), which prints a literal piece of text — a different
+feature from `.`'s printing of a *computed* number (covered fully in
+[Printing](#8-printing)). It only works inside a colon definition, the
+same restriction `IF`/`ELSE`/`THEN` themselves have. Exactly one space
+is required right after `."`, and the text runs up to (but not
+including) the next `"`:
 
-**Status:** `IF`, `ELSE`, `THEN`, `0=`, `=`, `<`, `>`, and `."` all work
-today, exactly as shown above.
+```forth
+: DESCRIBE  IF ." positive-ish" ELSE ." zero or negative" THEN ;
 
-## 6. Repeating yourself: `BEGIN` `UNTIL`
+5 DESCRIBE     \ prints "positive-ish"
+0 DESCRIBE     \ prints "zero or negative"
+```
 
-BASIC has several looping constructs (`FOR`/`NEXT`, `WHILE`/`WEND`).
-2068-Forth currently has the simplest one Forth offers: `BEGIN ...
-UNTIL`, which repeats the code between `BEGIN` and `UNTIL` until the
-condition just before `UNTIL` becomes true. Since the check happens at
-the *end*, the loop body always runs at least once — the same shape as
-BASIC's `REPEAT...UNTIL`, if you've used a dialect with one, or
+---
+
+## 7. Repeating yourself
+
+Forth has three loop shapes, covering the same ground as BASIC's
+`FOR`/`NEXT` and `WHILE`/`WEND` between them.
+
+### `BEGIN` `UNTIL` — the simplest loop
+
+`BEGIN ... UNTIL` repeats the code between `BEGIN` and `UNTIL` until
+the condition just before `UNTIL` becomes true. Since the check happens
+at the *end*, the loop body always runs at least once — the same shape
+as BASIC's `REPEAT...UNTIL`, if you've used a dialect with one, or
 `DO...LOOP UNTIL` in some others.
 
 ```forth
@@ -371,9 +396,9 @@ built-in counter variable the way BASIC's `FOR I = 1 TO 5` does** — if
 you need to know how many times you've looped, or count up rather than
 down, you build that yourself out of ordinary stack values, the way
 `COUNTDOWN`'s own value does double duty as both the thing being
-counted down *and* the loop's exit test. A loop with a proper built-in
-counter (BASIC's `FOR`/`NEXT`, Forth's own `DO`/`LOOP`) is planned but
-not built yet — see section 12.
+counted down *and* the loop's exit test.
+
+### `BEGIN` `WHILE` `REPEAT` — check first, not last
 
 `BEGIN`/`UNTIL` always runs its body at least once, since the check
 happens at the end. `BEGIN ... WHILE ... REPEAT` checks *before* each
@@ -396,9 +421,11 @@ falls through into the loop body, which runs and then jumps back to
 the opposite pairing — worth double-checking against the examples above
 rather than guessing from the keyword names alone.
 
-Neither `BEGIN`/`UNTIL` nor `BEGIN`/`WHILE`/`REPEAT` has a built-in
-counter — `DO`/`LOOP` is Forth's answer to BASIC's `FOR`/`NEXT`,
-counting for you instead of making you track it on the stack yourself:
+### `DO` `LOOP` `I` — a real counter
+
+Neither loop above has a built-in counter — `DO`/`LOOP` is Forth's
+answer to BASIC's `FOR`/`NEXT`, counting for you instead of making you
+track it on the stack yourself:
 
 ```forth
 : FIVE  5 0 DO I . LOOP ;
@@ -421,43 +448,101 @@ first time.** `3 3 DO ... LOOP` runs the body once regardless, and then
 values — in practice, an accidental near-infinite loop. Never write a
 `DO` where `start` and `limit` might already be equal.
 
-**Status:** `BEGIN`, `UNTIL`, `WHILE`, `REPEAT`, `DO`, `LOOP`, and `I`
-all work today, exactly as shown above.
+### `LEAVE` — exiting a loop early
+
+`LEAVE`, used inside a `DO` loop's body, ends the loop immediately —
+skipping the rest of the current pass and any remaining ones — the
+moment it runs. It's almost always written inside an `IF`, since
+running unconditionally would make the rest of the loop pointless:
+
+```forth
+: FINDTHREE  10 0 DO I . I 3 = IF LEAVE THEN LOOP ;
+
+FINDTHREE     \ prints 0 1 2 3, then stops -- the remaining six
+              \ passes (I = 4 through 9) never run
+```
+
+`LEAVE` only exits the loop it's directly inside — if one `DO` loop is
+nested inside another, `LEAVE` exits just the inner one, and the outer
+loop keeps counting normally.
+
+### `+LOOP` — stepping by something other than 1
+
+`LOOP` always counts up by exactly 1. `+LOOP` takes a number off the
+stack instead and steps by that many each pass — including a negative
+number, to count downward:
+
+```forth
+: EVENS  10 0 DO I . 2 +LOOP ;
+
+EVENS     \ prints 0 2 4 6 8
+```
+
+`+LOOP` ends the loop once stepping would carry the index at or past
+`limit`, even if it jumps clean over it — `10 0 DO ... 3 +LOOP` stops
+after index `9` (the next step would land on `12`, past `10`) without
+ever landing on `10` exactly. This is why `+LOOP` can't just check for
+an exact match the way plain `LOOP` does.
 
 ---
 
-## 7. Drawing and sound
+## 8. Printing
+
+A word like `+` leaves its answer sitting on the stack — nothing shows
+it to you unless you ask. `.` (pronounced "dot") does exactly that:
+
+```forth
+5 3 + .
+```
+
+prints `8` (followed by a trailing space, so several `.`s in a row read
+as separate, space-separated numbers rather than running together) and
+removes the value from the stack in the process — `.` both reads *and
+consumes* the top of the stack, unlike, say, `DUP`. Negative numbers
+print with a leading `-`, and zero prints as `0`. (`F.`, for printing
+a *decimal* number, is covered in [Numbers](#3-numbers).)
+
+`EMIT` is the lower-level word underneath `.`: it takes a single
+number off the stack and prints it as one character, at whatever
+character code that number is. `65 EMIT` prints `A` (65 is `A`'s
+character code); `.` itself is built out of repeated `EMIT` calls, one
+per digit. Both `.` and `EMIT` share one printing position — text wraps
+to a new line automatically past column 32, and scrolls the screen once
+it reaches the row just above where you're typing, so printed output
+can never collide with the line you're currently entering. `AT-XY`
+(covered in [Drawing and sound](#9-drawing-and-sound)) moves that
+printing position directly, if you want output somewhere other than
+wherever the last thing printed left off.
+
+---
+
+## 9. Drawing and sound
 
 2068-Forth's graphics and sound words are deliberately thin: each one
 is a direct, single-purpose action, the same way BASIC's `PLOT`,
 `CIRCLE`, and `BEEP` are — there's no drawing "state" to set up first
 beyond what each word's own arguments say.
 
-| Word | Effect | What it does |
+| Word | Stack effect | What it does |
 |---|---|---|
 | `PLOT` | `( x y -- )` | Set the pixel at `(x, y)` |
 | `LINE` | `( x1 y1 x2 y2 -- )` | Draw a line from `(x1, y1)` to `(x2, y2)` |
 | `CIRCLE` | `( xc yc r -- )` | Draw a circle outline centered at `(xc, yc)` with radius `r` |
+| `FILL` | `( x y -- )` | Flood-fill the enclosed area touching `(x, y)` with the current color |
 | `BORDER` | `( color -- )` | Set the screen border to `color` (0-7, same numbering as BASIC's `BORDER`) |
-| `BEEP` | `( pitch duration -- )` | Produce a tone |
 | `INK` | `( color -- )` | Set the foreground color `PLOT`/`LINE`/`CIRCLE`/`FILL` draw with from now on (0-7) |
 | `PAPER` | `( color -- )` | Set the background color the same way |
-| `FILL` | `( x y -- )` | Flood-fill the enclosed area touching `(x, y)` with the current color |
 | `AT-XY` | `( col row -- )` | Move where the next `EMIT`/`.`/`."` prints to (column 0-31, row 0-22) |
+| `BEEP` | `( pitch duration -- )` | Produce a tone |
 
 ```forth
-10 20 PLOT              \ a single dot
-60 5 100 45 LINE         \ a diagonal line
-150 100 20 CIRCLE        \ a circle, radius 20, centered at (150,100)
-5 BORDER                 \ cyan border
-
+5 BORDER
 2 INK  6 PAPER
-150 100 20 CIRCLE        \ the same circle again, now red on yellow
-150 100 FILL             \ ...and now solid red inside, too
-
-10 5 AT-XY  ." here"      \ prints "here" starting at column 10, row 5
-                          \ instead of wherever printing last left off
+128 96 40 CIRCLE
+128 96 FILL
 ```
+
+![A red, filled circle on a cyan-bordered screen](images/drawing_example.png)
 
 Reading these left to right follows the same postfix habit as
 everything else in this document: for `LINE`, the coordinates go on the
@@ -478,91 +563,47 @@ surprise: **`BEEP`'s two numbers aren't musical.** BASIC's `BEEP`
 typically takes a duration in seconds and a pitch as a semitone offset;
 2068-Forth's `BEEP` takes lower-level, hardware-timing numbers instead,
 with no conversion between the two yet. Getting a specific, predictable
-musical note or duration out of it isn't straightforward today.
+musical note or duration out of it isn't straightforward today, and
+there's no access yet to the machine's AY-3-8912 sound chip beyond this
+simple tone — see the appendix.
 
-**Status:** `PLOT`, `LINE`, `CIRCLE`, `BORDER`, `BEEP`, `INK`, `PAPER`,
-`FILL`, and `AT-XY` all work today, exactly as shown above. Hi-res
-graphics mode does not exist yet.
-
----
-
-## 8. Typing and editing a line
-
-Everything so far in this document has described *what happens* when a
-line of Forth runs — this section is about *typing the line itself*.
-When you're entering something at the keyboard, before you press
-Enter, a few keys behave specially rather than just adding a letter:
-
-| Key | What it does |
-|---|---|
-| any ordinary character | Inserted at the cursor position |
-| Enter | Finishes the line and runs it |
-| Delete / backspace | Removes the character just before the cursor |
-| Cursor left / right | Moves the cursor without changing anything |
-
-The important habit to notice: **the cursor doesn't have to be at the
-end of the line.** You can type `13`, move the cursor left one position
-(now sitting between the `1` and the `3`), type `2`, and the line
-becomes `123` — the `2` was inserted exactly where the cursor was, and
-everything after it shifted over to make room. The same works in
-reverse for fixing a typo: move the cursor past a wrong character, hit
-Delete to remove the one *before* the cursor, then keep typing or press
-Enter. Nothing about this is specific to Forth — it's the same editing
-model as typing into practically any text field — but it's worth
-stating plainly since BASIC on this same family of machines historically
-handled line editing somewhat differently.
-
-What happens if you press Enter on a word that doesn't exist? A typo —
-`5 BRODER` instead of `5 BORDER`, say — prints a `?` on its own line
-and drops you right back at a fresh prompt, rather than doing nothing
-visible or crashing. It's minimal (it doesn't say *which* word wasn't
-recognized, or why), but a real mistake now looks different from
-nothing having happened at all.
-
-**Status:** all of it — insert, delete, cursor movement, and a real,
-live, keyboard-driven prompt to try them at — works today. This
-section's own `13`→`123` example is something you can actually type
-and watch happen now, not just a description of intended behavior.
-
----
-
-## 9. Printing
-
-A word like `+` leaves its answer sitting on the stack — nothing shows
-it to you unless you ask. `.` (pronounced "dot") does exactly that:
-
-```
-5 3 + .
-```
-
-prints `8` (followed by a trailing space, so several `.`s in a row read
-as separate, space-separated numbers rather than running together) and
-removes the value from the stack in the process — `.` both reads *and
-consumes* the top of the stack, unlike, say, `DUP`. Negative numbers
-print with a leading `-`, and zero prints as `0`.
-
-`EMIT` is the lower-level word underneath `.`: it takes a single
-number off the stack and prints it as one character, at whatever
-character code that number is. `65 EMIT` prints `A` (65 is `A`'s
-character code); `. ` itself is built out of repeated `EMIT` calls, one
-per digit. Both `.` and `EMIT` share one printing position — text wraps
-to a new line automatically past column 32, and scrolls the screen once
-it reaches the row just above where you're typing, so printed output
-can never collide with the line you're currently entering.
+### Getting input: `KEY`
 
 `KEY` is `EMIT`'s opposite: instead of printing a character, it waits
-for you to press one key and leaves its code on the stack. `KEY .`
-waits for a keypress, then prints its character code as a number.
+for you to press one key and leaves its code on the stack.
 
-**Status:** `.`, `EMIT`, and `KEY` all exist and work — see
-[`PROJECT_PLAN.md`](PROJECT_PLAN.md)'s Phase 10 for the underlying
-implementation, including a real bug (found live, by typing at the
-keyboard) where the very first thing printed after booting silently
-overwrote part of the startup banner, since fixed.
+```forth
+KEY .     \ waits for a keypress, then prints its character code
+```
 
 ---
 
-## 10. Saving and loading your work
+## 10. Variables, constants, and comparisons in combination
+
+Sections 4 and 5 introduced `VARIABLE`/`CONSTANT` and the comparison
+words separately; here's a slightly larger example putting several
+pieces together — a simple counter that stops at a limit:
+
+```forth
+VARIABLE COUNT
+0 COUNT !
+
+: TICK  COUNT @ 1 + DUP COUNT ! ;
+: DONE?  COUNT @ 5 > ;
+
+TICK TICK TICK
+DONE? .          \ prints 0 (false) -- only ticked 3 times
+TICK TICK TICK
+DONE? .          \ prints -1 (true) -- now ticked 6 times, past 5
+```
+
+Nothing here is a new word — it's the same `VARIABLE`, `@`, `!`, `+`,
+`>`, and `.` from earlier sections, combined the way a real program
+would.
+
+---
+
+## 11. Saving and loading your work
 
 Programs don't need to be re-typed every time the machine starts —
 `SAVE` and `LOAD` write your definitions to tape and read them back.
@@ -594,87 +635,192 @@ If you want to save your work at a meaningful checkpoint, that's a
 matter of when you choose to run `SAVE`, not something 2068-Forth
 tracks for you.
 
-**Status:** `SAVE` and `LOAD` both work today, including loading by an
-exact name and loading with no name given. What's genuinely still
-unverified is real tape behavior on real hardware or in a real
-emulator's actual cassette playback — what's been proven so far is that
-2068-Forth's own bookkeeping (what gets saved, how it's found again,
-restoring your definitions so they're immediately usable) is correct,
-using a stand-in for the real tape transport during testing. This
-distinction matters if you're testing this yourself: don't yet treat a
-passing automated check as proof that a real recorded tape will load
-back correctly — that's real, honest, still-open work, not something
-quietly assumed to be fine.
+One honest gap: what's proven so far is 2068-Forth's own bookkeeping
+(what gets saved, how it's found again, restoring your definitions so
+they're immediately usable) — real tape behavior on real hardware or a
+real emulator's actual cassette playback remains separately unverified.
+Don't yet treat this as proof that a real recorded tape will load back
+correctly on real hardware.
 
 ---
 
-## 11. Stretch goals: decimal numbers and a wider screen
+## 12. A wider screen
 
-Two experimental pieces exist outside the main, planned path through
-this document — early, incomplete, and worth knowing about mainly so
-you don't mistake their gaps for something more finished being broken.
-
-**Decimal numbers.** `F+`, `F-`, `F*`, and `F/` add, subtract,
-multiply, and divide numbers with a fractional part; `F.` prints one,
-always showing exactly 4 digits after the decimal point (`6.0`
-prints as `"6.0000"`, not `"6"`). Unlike earlier phases of this
-project, these are genuinely typeable now:
+`64COL` switches to a 64-column *pixel graphics* display — twice the
+normal horizontal resolution — `32COL` switches back, `PALETTE64`
+picks a color pair, and `PLOT64` sets a point on it (`x` 0-511, `y`
+0-191, wider than the normal screen's own coordinate range). All four
+are real, working words:
 
 ```forth
-3.5 2.5 F+ F.       \ prints 6.0000
-2.0 3.0 F* F.       \ prints 6.0000
-1.0 4.0 F/ F.       \ prints 0.2500
+64COL
+3 PALETTE64
+100 50 PLOT64
+32COL
 ```
 
-A decimal literal — any number written with a `.` in it — pushes a
-float instead of a plain integer, the moment `NUMBER` sees the dot.
-It works inside colon definitions too, compiled in exactly like an
-integer literal would be:
-
-```forth
-: HALVE  2.0 F/ ;
-5.0 HALVE F.        \ prints 2.5000
-```
-
-There's no plain integer `*` or `/` at all in 2068-Forth yet, for
-whole numbers or otherwise — only these decimal ones. The precision is
-real but limited: `F.` always shows exactly 4 decimal digits, rounded
-toward zero rather than to the nearest digit, so very small differences
-near the 4th digit can look slightly off from what a calculator would
-show for the same expression.
-
-**A wider screen.** `64COL` switches to a 64-column display — twice the
-normal text width — `32COL` switches back, `PALETTE64` picks a color
-pair, and `PLOT64` sets a point on it (`x` 0-511, `y` 0-191, wider than
-the normal screen's own coordinate range). All four are real, working
-words. What isn't yet resolved: this mode's visual behavior hasn't been
-fully characterized — testing it showed the screen rendering somewhat
-differently than expected in ways not yet explained. Treat this one as
-the least mature of everything in this document; it works at the level
-that's been checked, but "what you'll actually see on a real screen"
-isn't yet a settled answer the way it is for section 7's normal-screen
-`PLOT`/`LINE`/`CIRCLE`.
-
-**Status:** `F+`, `F-`, `F*`, `F/`, `F.`, `64COL`, `32COL`, `PALETTE64`,
-and `PLOT64` all exist and do what's described above. Both are
-explicitly experimental, unlike every other section in this document —
-see [`PROJECT_PLAN.md`](PROJECT_PLAN.md)'s Phase 8 (and Phases 18/19/22
-for `F*`/`F/`/`F.` specifically) for the full detail.
+This is a **pixel graphics mode**, not a wider *text* display — typed
+text and `EMIT`/`.`/`."` output are unaffected by it either way, still
+always 32 columns wide. What isn't yet resolved: `64COL`'s own visual
+behavior hasn't been fully characterized on real hardware — testing it
+showed the screen rendering somewhat differently than expected, in
+ways not yet explained. Treat this one as the least mature word group
+in this document; it works at the level that's been checked, but
+"what you'll actually see on a real screen" isn't yet a settled answer
+the way it is for section 9's normal-screen `PLOT`/`LINE`/`CIRCLE`.
 
 ---
 
-## 12. What's not here yet
+## 13. Typing and editing at the prompt
 
-A few things a Forth veteran would expect, and a BASIC programmer would
-ask about, aren't part of 2068-Forth yet. Each will get its own section
-here once it's real:
+Everything so far in this document has described *what happens* when a
+line of Forth runs — this section is about *typing the line itself*.
+When you're entering something at the keyboard, before you press
+Enter, a few keys behave specially rather than just adding a letter:
 
-- **Hi-res graphics mode** — see section 7's own status note.
-- **`LEAVE`/`+LOOP`** — exiting a counted loop (section 6) early, or
-  stepping by something other than 1.
-- **Real AY-3-8912 sound** — `BEEP` (section 7) only toggles a simple
+| Key | What it does |
+|---|---|
+| any ordinary character | Inserted at the cursor position |
+| Enter | Finishes the line and runs it |
+| Delete / backspace | Removes the character just before the cursor |
+| Cursor left / right | Moves the cursor without changing anything |
+
+The important habit to notice: **the cursor doesn't have to be at the
+end of the line.** You can type `13`, move the cursor left one position
+(now sitting between the `1` and the `3`), type `2`, and the line
+becomes `123` — the `2` was inserted exactly where the cursor was, and
+everything after it shifted over to make room:
+
+![The input line reading "123" with the cursor positioned before the final digit](images/live_editing.png)
+
+The same works in reverse for fixing a typo: move the cursor past a
+wrong character, hit Delete to remove the one *before* the cursor,
+then keep typing or press Enter. Nothing about this is specific to
+Forth — it's the same editing model as typing into practically any
+text field — but it's worth stating plainly since BASIC on this same
+family of machines historically handled line editing somewhat
+differently.
+
+What happens if you press Enter on a word that doesn't exist? A typo —
+`5 BRODER` instead of `5 BORDER`, say — prints a `?` on its own line
+and drops you right back at a fresh prompt, rather than doing nothing
+visible or crashing:
+
+![A "?" printed after typing an unrecognized word](images/typo_error.png)
+
+It's minimal (it doesn't say *which* word wasn't recognized, or why),
+but a real mistake now looks different from nothing having happened at
+all.
+
+---
+
+## Appendix A: word reference
+
+A quick-lookup table of every word covered in this document, grouped
+by topic, in the style of a standard Forth word-set reference — see
+[forth-standard.org](https://forth-standard.org/standard/words) for
+the same convention applied to the full ANS Forth standard.
+
+**Stack manipulation**
+
+| Word | Stack effect |
+|---|---|
+| `DUP` | `( n -- n n )` |
+| `SWAP` | `( a b -- b a )` |
+| `DROP` | `( n -- )` |
+| `OVER` | `( a b -- a b a )` |
+
+**Arithmetic and comparison**
+
+| Word | Stack effect |
+|---|---|
+| `+` | `( a b -- a+b )` |
+| `-` | `( a b -- a-b )` |
+| `0=` | `( n -- flag )` |
+| `=` | `( a b -- flag )` |
+| `<` | `( a b -- flag )` |
+| `>` | `( a b -- flag )` |
+
+**Decimal (floating-point) arithmetic** — own stack, see section 3
+
+| Word | Stack effect |
+|---|---|
+| `F+` | `( f1 f2 -- f1+f2 )` |
+| `F-` | `( f1 f2 -- f1-f2 )` |
+| `F*` | `( f1 f2 -- f1*f2 )` |
+| `F/` | `( f1 f2 -- f1/f2 )` |
+| `F.` | `( f -- )` |
+
+**Memory**
+
+| Word | Stack effect |
+|---|---|
+| `@` | `( addr -- n )` |
+| `!` | `( n addr -- )` |
+| `VARIABLE` | `( "name" -- )` |
+| `CONSTANT` | `( n "name" -- )` |
+
+**Defining and control flow**
+
+| Word | Stack effect | Notes |
+|---|---|---|
+| `:` ... `;` | — | define a new word |
+| `IF` ... `ELSE` ... `THEN` | `( flag -- )` | IMMEDIATE, compile-only |
+| `BEGIN` ... `UNTIL` | `( flag -- )` | IMMEDIATE, compile-only |
+| `BEGIN` ... `WHILE` ... `REPEAT` | `( flag -- )` | IMMEDIATE, compile-only |
+| `DO` ... `LOOP` | `( limit start -- )` | IMMEDIATE, compile-only |
+| `DO` ... `+LOOP` | `( limit start -- )` / `( step -- )` | IMMEDIATE, compile-only |
+| `LEAVE` | `( -- )` | IMMEDIATE, compile-only; exits the innermost `DO` loop |
+| `I` | `( -- index )` | innermost `DO` loop's index |
+
+**Printing and input**
+
+| Word | Stack effect |
+|---|---|
+| `.` | `( n -- )` |
+| `."` text`"` | `( -- )` — compile-only |
+| `EMIT` | `( char -- )` |
+| `KEY` | `( -- char )` |
+| `AT-XY` | `( col row -- )` |
+
+**Drawing and sound**
+
+| Word | Stack effect |
+|---|---|
+| `PLOT` | `( x y -- )` |
+| `LINE` | `( x1 y1 x2 y2 -- )` |
+| `CIRCLE` | `( xc yc r -- )` |
+| `FILL` | `( x y -- )` |
+| `BORDER` | `( color -- )` |
+| `INK` | `( color -- )` |
+| `PAPER` | `( color -- )` |
+| `BEEP` | `( pitch duration -- )` |
+| `64COL` / `32COL` | `( -- )` |
+| `PALETTE64` | `( n -- )` |
+| `PLOT64` | `( x y -- )` |
+
+**Storage**
+
+| Word | Stack effect |
+|---|---|
+| `SAVE` | `( "name" -- )` |
+| `LOAD` | `( "name" -- )` |
+
+---
+
+## Appendix B: what's not here yet
+
+A few things a Forth veteran would expect, and a BASIC programmer
+would ask about, aren't part of 2068-Forth yet:
+
+- **Hi-res graphics mode** — beyond the normal-resolution words in
+  section 9 and the experimental 64-column pixel mode in section 12.
+- **Real AY-3-8912 sound** — `BEEP` (section 9) only toggles a simple
   tone; the sound chip's own richer tone/volume/noise controls aren't
   exposed yet.
+- **Plain integer `*` and `/`** — only the decimal versions, `F*`/`F/`
+  (section 3), exist so far.
 
-See [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the full order these are
-planned to arrive in.
+See [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for this project's own
+build history and phased development order, if you're curious how
+2068-Forth was actually put together rather than just how to use it.

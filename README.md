@@ -255,15 +255,41 @@ inherited, what was deliberately left behind, and the phased build order.
   (a decimal literal typed directly, one compiled inside a word, `F*`,
   and `F.` together) and re-verified against the real, complete
   dictionary chain.
-- **`docs/forth_tutorial.md`** teaches the Forth
-  *language* to a reader who doesn't already know it — from the
-  standpoint of someone using the finished product, not this project's
+- Phase 24 (`core/doloop.asm` update + `rom/forth_smoke_p24.asm`):
+  `LEAVE` (exit a `DO`/`+LOOP` loop early) and `+LOOP` (step by
+  something other than 1, including negative). `+LOOP`'s runtime
+  compares the SIGN of `(index - limit)` before and after adding the
+  step rather than testing for exact equality, since a non-1 step can
+  jump clean past `limit` without ever landing on it — the standard
+  fix for the same reason real Forth systems need it. `LEAVE` threads
+  its own placeholder branch targets into a linked list per loop
+  nesting level (`LEAVE_HEAD_TABLE`, indexed by `LEAVE_DEPTH`), patched
+  once `LOOP`/`+LOOP` finally know the real loop-exit address — a
+  dedicated side table, not the borrowed compile-time stack `IF`/
+  `BEGIN` already use, because `LEAVE` is normally written as
+  `IF LEAVE THEN`, and at the moment `LEAVE` compiles, `IF`'s own
+  still-open placeholder — not the loop's own bookkeeping — is what's
+  sitting on top of that shared stack. Two more real, Fuse-reproduced
+  bugs got caught and fixed along the way, not just reasoned past: new
+  `+LOOP` scratch RAM addresses picked by extending the prior phase's
+  own block turned out to alias `core/print.asm`'s `PRINT_ROW`/
+  `PRINT_COL` (silently corrupting print position on every `+LOOP`
+  pass), and a helper shared between `LOOP`/`+LOOP` clobbered `DE`
+  after the caller had already loaded it with the real loop-exit
+  address, sending every `LEAVE` into raw RAM data instead of past the
+  loop. Confirmed passing under Fuse: `LEAVE` firing mid-loop, `+LOOP`
+  stepping by 2, and nested `DO` loops where an inner `LEAVE` exits
+  only the inner loop, all isolated individually before the combined
+  smoke ROM.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
   own build/test process. It assumes BASIC familiarity but not
-  assembly. Meant to grow alongside the language itself, one section
-  per capability as it becomes real and usable.
+  assembly, is organized the way Forth is actually taught (stack first,
+  then defining words, then control flow and data, then the screen and
+  keyboard) rather than the order features were built in, and includes
+  real screenshots taken from a live Fuse session plus a
+  forth-standard.org-style word-reference appendix.
 - The language core is integer-only by design; see
   `docs/numeric_model.md` for why floating point is a deferred, optional
   addition rather than something the language is built on.
@@ -286,7 +312,7 @@ core/       language-layer code, not hardware-facing:
               dotquote.asm (Phase 13 — .")
               loop.asm    (Phase 14 — WHILE/REPEAT)
               color.asm   (Phase 15 — INK/PAPER)
-              doloop.asm  (Phase 16 — DO/LOOP/I)
+              doloop.asm  (Phase 16 — DO/LOOP/I; Phase 24 — LEAVE/+LOOP)
               moregfx.asm (Phase 17 — FILL/AT-XY)
               floatmul.asm (Phase 18 — F*)
               floatdiv.asm (Phase 19 — F/)
@@ -324,6 +350,7 @@ rom/        ROM image assembly:
               forth_smoke_p21.asm Phase 21 smoke ROM (error feedback)
               forth_smoke_p22.asm Phase 22 smoke ROM (F.)
               forth_smoke_p23.asm Phase 23 smoke ROM (decimal literals)
+              forth_smoke_p24.asm Phase 24 smoke ROM (LEAVE/+LOOP)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -365,6 +392,7 @@ make forth-smoke-p20  # Phase 20 smoke ROM: KEY
 make forth-smoke-p21  # Phase 21 smoke ROM: error feedback
 make forth-smoke-p22  # Phase 22 smoke ROM: F.
 make forth-smoke-p23  # Phase 23 smoke ROM: decimal literals
+make forth-smoke-p24  # Phase 24 smoke ROM: LEAVE/+LOOP
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
@@ -387,8 +415,10 @@ to see `.` print `8` on the row below the banner, `5 3 > .` to see `-1`
 `: GREET ." HI" ; GREET` to see `."` print a literal string, `: FIVE 5 0 DO I . LOOP ; FIVE` to see
 `0 1 2 3 4` printed, `100 100 30 CIRCLE 2 INK 100 100 FILL` to see a
 red-filled circle, type a nonsense word like `FOOBAR` to see `?`
-printed and the prompt recover cleanly, or `3.5 2.5 F+ F.` to see a
-real decimal literal expression print `6.0000`.
+printed and the prompt recover cleanly, `3.5 2.5 F+ F.` to see a
+real decimal literal expression print `6.0000`, or
+`: EVENS 10 0 DO I . 2 +LOOP ; EVENS` to see `+LOOP` step by 2 and
+print `0 2 4 6 8`.
 
 ## License
 

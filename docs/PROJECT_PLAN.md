@@ -1390,11 +1390,136 @@ re-verified with a deterministic full-chain diagnostic (also confirming
 
 Hi-res graphics mode remains the only item left on the original gap
 list, along with the tracked-but-unscheduled 64-column text mode
-stretch goal below — plus `LEAVE`/`+LOOP` (deferred since Phase 16) and
-AY-3-8912 `SOUND` (real register-level sound access, distinct from the
-existing simple `BEEP` — exists and works in the sibling `ts2068rom`
-BASIC project via ports `$F5`/`$F6`, never ported here), tracked as its
-own future phase per the user's own request 2026-09-01.
+stretch goal below — plus `LEAVE`/`+LOOP` (deferred since Phase 16,
+picked up next as Phase 24) and AY-3-8912 `SOUND` (real register-level
+sound access, distinct from the existing simple `BEEP` — exists and
+works in the sibling `ts2068rom` BASIC project via ports `$F5`/`$F6`,
+never ported here), tracked as its own future phase per the user's own
+request 2026-09-01.
+
+## Phase 24 — LEAVE and +LOOP
+
+**Status: done.** `core/doloop.asm` (Phase 16) gains `LEAVE` (exit a
+`DO` loop early) and `+LOOP` (step by something other than 1, including
+negative) — the two items deferred from Phase 16 as "the smallest
+provable slice."
+
+**`+LOOP`'s own algorithm**: plain `LOOP` (Phase 16) can test for EXACT
+equality between the incremented index and `limit`, because stepping by
+1 can never jump past `limit` without landing on it first. `+LOOP`'s
+step can be any value, including negative, so the index can cross
+`limit` cleanly without ever equaling it — the standard fix (used by
+real Forth systems for the same reason) is to compare the SIGN of
+`(index - limit)` before and after adding the step; once that sign
+flips, the boundary has been crossed. Hand-verified against three cases
+before trusting it: ascending step 1 (`limit=3, start=0` — 3 passes,
+matching plain `LOOP`'s own known-correct behavior exactly), ascending
+step 2 (`limit=10, start=0` — the crossing lands one step FROM 8 to 10,
+never touching 9), and descending step -1 (`limit=0, start=5` — 6
+passes, `I` = 5 down to 0 inclusive).
+
+**`LEAVE`'s own design question, and a real bug caught along the way,
+not just reasoned past**: `LEAVE` must compile an unconditional branch
+to wherever the loop ends, but it's always compiled BEFORE that address
+is known — the same forward-reference problem `IF`/`WHILE`
+(core/control.asm, core/loop.asm) already solve by leaving a
+placeholder address on the borrowed compile-time (data) stack for a
+later word to patch. The FIRST implementation reused that exact
+mechanism for `LEAVE` too (a linked list of placeholders, threaded
+through their own still-blank inline bytes, with the list's head kept
+on the same borrowed stack `DO` already uses for its own loop-start
+address) — and it was wrong, caught by a genuinely erratic real Fuse
+run (garbage `PRINT_ROW`, no output at all), not by review: `LEAVE` is
+essentially always written as `IF LEAVE THEN`, and at the exact moment
+`LEAVE` compiles, `IF`'s own not-yet-patched placeholder — not the
+loop's own head — is what's actually sitting on top of that shared
+stack, since `IF` hasn't reached its own `THEN` yet. `LEAVE` was
+silently corrupting `IF`'s own bookkeeping instead of reading the
+loop's.
+
+**The fix**: a dedicated side table, `LEAVE_HEAD_TABLE`, indexed by
+loop nesting depth (`LEAVE_DEPTH`) rather than by stack position —
+immune to whatever `IF`/`BEGIN` placeholders happen to be live on the
+shared stack at the time. `DO` increments `LEAVE_DEPTH` and clears its
+new slot; `LEAVE` reads/writes only the slot for the CURRENT depth,
+regardless of anything else mid-compile around it; `LOOP`/`+LOOP` patch
+that slot's whole chain once the true exit address is finally known,
+then decrement `LEAVE_DEPTH` — since an outer loop's own slot is never
+touched while an inner one is open, this "restores" the outer loop's
+own pending chain with no explicit save/restore step. `DO`'s own
+loop-start address stays on the ordinary borrowed stack unchanged —
+that value was never the problem, since `IF`/`THEN` always fully closes
+before `LOOP` is reached in well-formed code; only `LEAVE`'s own
+bookkeeping needed to move out. `LEAVE_DEPTH` must start at 0 —
+`rom/forth_boot.asm`, `rom/forth_smoke_p16.asm`, and
+`rom/forth_smoke_p24.asm`'s own `COLD_START` each gained the one extra
+zeroing line this required, alongside `STATE`/`LATEST`/etc.
+
+**A second real bug, also Fuse-reproduced**: after fixing the above,
+`LEAVE` compiled but jumped to garbage. Root cause: `LOOP`/`+LOOP`'s own
+compile-time code read `DE = (HERE)` (the real loop-exit address) and
+THEN called the shared `LEAVE_SLOT_ADDR_CALC` helper — which clobbers
+`DE` internally as part of its own table-address arithmetic. By the
+time the loop's pending `LEAVE` chain got patched, `DE` held
+`LEAVE_HEAD_TABLE`'s own constant address instead of the real exit
+address, so every `LEAVE` jumped into raw RAM data. Fixed by reordering
+both `W_LOOP` and `W_PLUSLOOP` to call `LEAVE_SLOT_ADDR_CALC` FIRST,
+reading `(HERE)` only afterward (safe, since nothing in between changes
+`HERE`).
+
+**A third, much smaller bug, caught by the static checker before ever
+running anything**: `W_LEAVE`'s own chain-linking code used
+`ld (de), l` / `ld (de), h` to write the new head into the table slot —
+neither is a real Z80 opcode (only `(DE)`/`(BC)` indirect stores via
+`A` exist). `tools/check_z80_opcodes.py` flagged both immediately;
+fixed by swapping which register held the address vs. the value being
+stored.
+
+**A fourth bug, from an overly hasty scratch-address choice**: `+LOOP`'s
+own new scratch RAM was placed by extending Phase 23's own block
+(`core/decimal.asm`'s `DIVISOR10`) forward by a few bytes — without
+checking whether OTHER files also claim addresses in that range. They
+did: `core/print.asm`'s `PRINT_ROW`/`PRINT_COL` sit exactly there. Two
+of the float/mode64 scratch blocks earlier in this same `$87xx` range
+already legitimately overlap each other (safe only because those
+features never run interleaved with one another) — but `+LOOP` almost
+always shares a loop body with `.`, so the two ARE live at the same
+time, and every `+LOOP` pass was silently corrupting the print
+cursor. Root-caused via a purpose-built diagnostic ROM that captured
+`PRINT_ROW`/`PRINT_COL` as raw hex digits on a separate screen row
+after each isolated test, rather than relying on the smoke ROM's own
+pass/fail border color (which turned out to be actively misleading
+here — see below). Fixed by grepping every existing `EQU $87..` across
+`core/`, `kernel/`, and `include/` first, then picking the genuinely
+free range starting right after the last claimed byte
+(`core/ts2068.asm`'s own `CURRENT_ATTR`).
+
+**A verification-methodology lesson worth keeping**: the smoke ROM's
+own checkpoints reset `PRINT_ROW`/`PRINT_COL` to 0 between checkpoints
+WITHOUT clearing the screen (established, working convention since
+Phase 16) — so a LATER checkpoint's output can fully overwrite an
+EARLIER one's on screen, and a border-color failure code can reflect a
+DIFFERENT checkpoint than whichever one's text is still visible. Several
+early debugging screenshots were misread for exactly this reason before
+switching to isolated, single-checkpoint diagnostic ROMs (one word under
+test at a time, real captured `PRINT_ROW`/`PRINT_COL` values rendered
+as hex, no pass/fail coloring to misinterpret) — the technique that
+actually found all three bugs above. Once each of `LEAVE`, `+LOOP`, and
+nested `LEAVE` were separately confirmed correct in isolation, the
+combined three-checkpoint `rom/forth_smoke_p24.asm` passed on its very
+first run afterward.
+
+`rom/forth_smoke_p24.asm` proves it under real Fuse: `LEAVE` firing
+partway through a loop (`10 0 DO I . I 3 = IF LEAVE THEN LOOP` prints
+`"0 1 2 3"`), `+LOOP` stepping by 2 (`"0 2 4 6 8"`), and — the critical
+nested-safety check, re-verifying Phase 16's own already-proven nested
+`DO`/`LOOP` stack discipline still holds with `LEAVE` added — an inner
+loop's `LEAVE` exiting only the inner loop three separate times while
+the outer loop keeps counting (`"0 1 2 0 1 2 0 1 2"`), not just once.
+Also re-verified: `rom/forth_smoke_p16.asm` (plain `DO`/`LOOP`/`I`,
+no `LEAVE`/`+LOOP` in its own source) still passes unchanged after the
+`LEAVE_DEPTH` addition, and `rom/forth_boot.asm` assembles and boots
+cleanly with the extended dictionary.
 
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
@@ -1460,9 +1585,9 @@ designed in detail):**
 
 This is real, multi-file design work — not a quick wrapper the way
 `INK`/`PAPER` was. Sequence it whenever convenient relative to the
-still-open items above (hi-res mode, `KEY`, error feedback,
-`LEAVE`/`+LOOP`, `F.`, decimal literals); nothing currently planned
-depends on it, and it doesn't block anything currently planned either.
+other open items (hi-res mode, AY-3-8912 `SOUND`); nothing currently
+planned depends on it, and it doesn't block anything currently planned
+either.
 
 ## Testing discipline
 

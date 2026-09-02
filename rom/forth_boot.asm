@@ -102,6 +102,8 @@ COLD_START:
     ld   (HERE), hl
     xor  a
     ld   (STATE), a
+    ld   (LEAVE_DEPTH), a         ; core/doloop.asm's own LEAVE
+                                   ; bookkeeping -- must start at 0
     ld   a, DEFAULT_ATTR          ; required since Phase 15 -- see
     ld   (CURRENT_ATTR), a        ; core/ts2068.asm's own header
 

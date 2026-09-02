@@ -1,24 +1,25 @@
 ; ============================================================================
-; rom/forth_smoke_p16.asm — Phase 16 smoke ROM: DO/LOOP and I
+; rom/forth_smoke_p24.asm — Phase 24 smoke ROM: LEAVE and +LOOP
 ;
 ; THREE CHECKPOINTS:
-;   1. : FIVETIMES 5 0 DO I . LOOP ; FIVETIMES
-;      -> prints "0 1 2 3 4 " (PRINT_COL advances by 10) -- basic
-;      correctness: exactly 5 iterations, indices 0-4, limit itself
-;      excluded
-;   2. : NEST 3 0 DO 2 0 DO I . LOOP LOOP ; NEST
-;      -> prints "0 1 0 1 0 1 " (PRINT_COL advances by 12) -- the
-;      CRITICAL nested-loop stack-discipline check: an outer loop's own
-;      limit/index must survive underneath an inner loop's own, fully
-;      restored once the inner loop finishes and removes its own
-;   3. VARIABLE SUM  0 SUM !  : DOSUM 5 0 DO I SUM @ + SUM ! LOOP ;
-;      DOSUM  SUM @ .
-;      -> prints "10 " (PRINT_COL advances by 3) -- combined-phase
-;      integration: DO/LOOP + VARIABLE (Phase 12) + arithmetic +
-;      printing (Phase 10), summing 0+1+2+3+4. DO/LOOP themselves MUST
-;      be used inside a colon definition (like IF/ELSE/THEN/BEGIN/
-;      WHILE/REPEAT) -- VARIABLE, like `:` itself, stays at the top
-;      level instead, matching its own Phase 12 scope.
+;   1. : TESTLEAVE 10 0 DO I . I 3 = IF LEAVE THEN LOOP ; TESTLEAVE
+;      -> prints "0 1 2 3 " (PRINT_COL advances by 8) -- LEAVE fires
+;      the moment I reaches 3, skipping the remaining six passes (I
+;      would otherwise run through 9) entirely.
+;   2. : EVENS 10 0 DO I . 2 +LOOP ; EVENS
+;      -> prints "0 2 4 6 8 " (PRINT_COL advances by 10) -- +LOOP steps
+;      by 2 instead of 1, and correctly stops once the index CROSSES
+;      10 (at index 10 itself, which is never printed) rather than
+;      requiring an exact match.
+;   3. : NEST2 3 0 DO 5 0 DO I . I 2 = IF LEAVE THEN LOOP LOOP ; NEST2
+;      -> prints "0 1 2 0 1 2 0 1 2 " (PRINT_COL advances by 18) -- the
+;      CRITICAL nested check: an inner loop's own LEAVE must exit only
+;      the inner loop, leaving the outer loop's own limit/index
+;      undisturbed underneath it, matching (and re-verifying) plain
+;      DO/LOOP's own already-proven nested stack discipline
+;      (rom/forth_smoke_p16.asm's own checkpoint 2) -- if LEAVE instead
+;      corrupted the outer loop's control values, this would run only
+;      once ("0 1 2 ") instead of three times.
 ;
 ; Border goes GREEN (4) if all three pass; otherwise it shows the
 ; failing checkpoint's number.
@@ -73,7 +74,7 @@ COLD_START:
 
     call GFX_CLS
 
-; ---- checkpoint 1: basic DO/LOOP/I ----
+; ---- checkpoint 1: LEAVE ----
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
     ld   hl, SRC_CP1
@@ -83,10 +84,10 @@ COLD_START:
     or   a
     jp   nz, FAIL_TEST
     ld   a, (PRINT_COL)
-    cp   10
+    cp   8
     jp   nz, FAIL_TEST
 
-; ---- checkpoint 2: nested DO/LOOP stack discipline ----
+; ---- checkpoint 2: +LOOP ----
     ld   a, 2
     ld   (CHECKPOINT_NUM), a
     xor  a
@@ -99,10 +100,10 @@ COLD_START:
     or   a
     jp   nz, FAIL_TEST
     ld   a, (PRINT_COL)
-    cp   12
+    cp   10
     jp   nz, FAIL_TEST
 
-; ---- checkpoint 3: DO/LOOP + VARIABLE + arithmetic + printing ----
+; ---- checkpoint 3: nested LEAVE stack discipline ----
     ld   a, 3
     ld   (CHECKPOINT_NUM), a
     xor  a
@@ -115,7 +116,7 @@ COLD_START:
     or   a
     jp   nz, FAIL_TEST
     ld   a, (PRINT_COL)
-    cp   3
+    cp   18
     jp   nz, FAIL_TEST
 
     jp   PASS_TEST
@@ -139,13 +140,13 @@ INTERPRET_UNKNOWN_WORD:
 
 CHECKPOINT_NUM EQU $8800
 
-SRC_CP1: DB ": FIVETIMES 5 0 DO I . LOOP ; FIVETIMES "
+SRC_CP1: DB ": TESTLEAVE 10 0 DO I . I 3 = IF LEAVE THEN LOOP ; TESTLEAVE "
 SRC_CP1_LEN EQU $ - SRC_CP1
 
-SRC_CP2: DB ": NEST 3 0 DO 2 0 DO I . LOOP LOOP ; NEST "
+SRC_CP2: DB ": EVENS 10 0 DO I . 2 +LOOP ; EVENS "
 SRC_CP2_LEN EQU $ - SRC_CP2
 
-SRC_CP3: DB "VARIABLE SUM 0 SUM ! : DOSUM 5 0 DO I SUM @ + SUM ! LOOP ; DOSUM SUM @ . "
+SRC_CP3: DB ": NEST2 3 0 DO 5 0 DO I . I 2 = IF LEAVE THEN LOOP LOOP ; NEST2 "
 SRC_CP3_LEN EQU $ - SRC_CP3
 
 ; ---- dictionary: included here, after the vector table and the
@@ -155,12 +156,14 @@ SRC_CP3_LEN EQU $ - SRC_CP3
     INCLUDE "core/dict.asm"
     INCLUDE "core/interp.asm"
 DICT_CHAIN_POINT DEFL H_SEMICOLON
+    INCLUDE "core/control.asm"
+DICT_CHAIN_POINT DEFL H_UNTIL
     INCLUDE "core/print.asm"
 DICT_CHAIN_POINT DEFL H_DOT
-    INCLUDE "core/variable.asm"
-DICT_CHAIN_POINT DEFL H_CONSTANT
+    INCLUDE "core/compare.asm"
+DICT_CHAIN_POINT DEFL H_GREATER
     INCLUDE "core/doloop.asm"
 
     DS   $4000 - $, $FF
 
-    SAVEBIN "forth_smoke_p16_rom0.bin", $0000, $4000
+    SAVEBIN "forth_smoke_p24_rom0.bin", $0000, $4000
