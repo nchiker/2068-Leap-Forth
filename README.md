@@ -232,6 +232,15 @@ inherited, what was deliberately left behind, and the phased build order.
   in isolation and against the real, complete dictionary chain, plus
   confirming the interpreter genuinely recovers for the next line, not
   just that it doesn't crash.
+- Phase 22 (`core/floatprint.asm` + `rom/forth_smoke_p22.asm`): `F.`
+  (print a float) — a fixed 4 decimal digits (e.g. `"6.0000"`,
+  `"-2.0000"`), reusing `F*`'s widening multiply and `F/`'s division
+  engine rather than duplicating either. A real register-clobbering bug
+  was caught on the first real Fuse run (not by hand-tracing this
+  time): a loop counter shared register `B` with `UDIV10`, which
+  destroys `B` internally, causing a genuine hang confirmed by two
+  screenshots seconds apart showing identical, frozen state. Fixed and
+  re-verified against the real, complete dictionary chain.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -268,6 +277,7 @@ core/       language-layer code, not hardware-facing:
               floatmul.asm (Phase 18 — F*)
               floatdiv.asm (Phase 19 — F/)
               key.asm     (Phase 20 — KEY)
+              floatprint.asm (Phase 22 — F.)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
             2068-Forth's own addition, mode64/ (recovered, once-shipped
@@ -297,6 +307,7 @@ rom/        ROM image assembly:
               forth_smoke_p19.asm Phase 19 smoke ROM (F/)
               forth_smoke_p20.asm Phase 20 smoke ROM (KEY)
               forth_smoke_p21.asm Phase 21 smoke ROM (error feedback)
+              forth_smoke_p22.asm Phase 22 smoke ROM (F.)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -336,6 +347,7 @@ make forth-smoke-p18  # Phase 18 smoke ROM: F*
 make forth-smoke-p19  # Phase 19 smoke ROM: F/
 make forth-smoke-p20  # Phase 20 smoke ROM: KEY
 make forth-smoke-p21  # Phase 21 smoke ROM: error feedback
+make forth-smoke-p22  # Phase 22 smoke ROM: F.
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```

@@ -615,15 +615,15 @@ this document — early, incomplete, and worth knowing about mainly so
 you don't mistake their gaps for something more finished being broken.
 
 **Decimal numbers.** `F+`, `F-`, `F*`, and `F/` add, subtract,
-multiply, and divide numbers with a fractional part — the full set of
-four now exists. There's no plain integer `*` or `/` at all in
-2068-Forth yet, for whole numbers or otherwise — only these decimal
-ones. There's also no way to *write* a decimal number yet (`NUMBER`
-only understands whole numbers, section 3), so none of the four can
-actually be reached by typing an expression today — they exist and
-work, proven by feeding them values directly rather than through typed
-text, but they're not yet reachable the way `+` is. `.` (section 9)
-only knows how to print whole numbers, not decimal ones, either.
+multiply, and divide numbers with a fractional part; `F.` prints one,
+always showing exactly 4 digits after the decimal point (`6.0`
+prints as `"6.0000"`, not `"6"`). There's no plain integer `*` or `/`
+at all in 2068-Forth yet, for whole numbers or otherwise — only these
+decimal ones. There's also no way to *write* a decimal number yet
+(`NUMBER` only understands whole numbers, section 3), so none of the
+five can actually be reached by typing an expression today — they
+exist and work, proven by feeding them values directly rather than
+through typed text, but they're not yet reachable the way `+` is.
 
 **A wider screen.** `64COL` switches to a 64-column display — twice the
 normal text width — `32COL` switches back, `PALETTE64` picks a color
@@ -637,11 +637,11 @@ that's been checked, but "what you'll actually see on a real screen"
 isn't yet a settled answer the way it is for section 7's normal-screen
 `PLOT`/`LINE`/`CIRCLE`.
 
-**Status:** `F+`, `F-`, `F*`, `F/`, `64COL`, `32COL`, `PALETTE64`, and
-`PLOT64` all exist and do what's described above. Both are explicitly
-experimental, unlike every other section in this document — see
-[`PROJECT_PLAN.md`](PROJECT_PLAN.md)'s Phase 8 (and Phases 18/19 for
-`F*`/`F/` specifically) for the full detail.
+**Status:** `F+`, `F-`, `F*`, `F/`, `F.`, `64COL`, `32COL`, `PALETTE64`,
+and `PLOT64` all exist and do what's described above. Both are
+explicitly experimental, unlike every other section in this document —
+see [`PROJECT_PLAN.md`](PROJECT_PLAN.md)'s Phase 8 (and Phases 18/19/22
+for `F*`/`F/`/`F.` specifically) for the full detail.
 
 ---
 
@@ -655,8 +655,6 @@ here once it's real:
 - **Decimal number literals** — see section 11.
 - **`LEAVE`/`+LOOP`** — exiting a counted loop (section 6) early, or
   stepping by something other than 1.
-- **`F.`** — printing a decimal number (section 11's own words have no
-  way to show their result yet).
 - **Real AY-3-8912 sound** — `BEEP` (section 7) only toggles a simple
   tone; the sound chip's own richer tone/volume/noise controls aren't
   exposed yet.

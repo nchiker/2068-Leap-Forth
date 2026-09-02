@@ -58,6 +58,13 @@
 ; ("divide by zero" returns a safe 0 rather than a nonsense result) —
 ; f1 F/ 0.0 pushes (mantissa 0, exponent 0) rather than looping forever
 ; or producing garbage.
+;
+; UPDATE, PHASE 22: F_UDIV32BY16 also exposes its final remainder now
+; (F_DIV_REM), added purely so core/floatprint.asm's own F. can reuse
+; this same 32-bit division engine for splitting a scaled value into
+; integer and fractional decimal digits — F/ itself never reads
+; F_DIV_REM, so this is a backward-compatible addition, not a behavior
+; change.
 ; ============================================================================
 
     IFNDEF CORE_FLOATDIV_ASM
@@ -72,6 +79,9 @@ F_DIVID_LO EQU $87B4   ; 2 bytes: F_UDIV32BY16's own scratch (the
 F_DIVID_HI EQU $87B6   ; 2 bytes: dividend, high 16 bits (starts as
                        ; abs(m1) itself)
 F_DIV_CNT  EQU $87B8   ; 1 byte:  loop counter
+F_DIV_REM  EQU $87B9   ; 2 bytes: the final 16-bit remainder, exposed
+                       ; for core/floatprint.asm's own use (Phase 22) --
+                       ; F/ itself never reads this
 
 ; ============================================================================
 ; F_UDIV32BY16 (internal, not a dictionary word) — F_DIVID_HI:
@@ -129,6 +139,13 @@ F_UDIV32BY16:
     dec  a
     ld   (F_DIV_CNT), a
     jr   nz, .loop
+    ld   (F_DIV_REM), de     ; expose the final remainder too -- F/
+                             ; itself never reads this, but Phase 22's
+                             ; F. (core/floatprint.asm) needs it for
+                             ; splitting a scaled value into integer
+                             ; and fractional decimal digits; a
+                             ; backward-compatible addition, not a
+                             ; behavior change for F/
     ret
 
 ; ============================================================================

@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-boot check clean
+.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-boot check clean
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-boot
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-boot
 
 # Milestone 0: boot stub only.
 boot:
@@ -229,6 +229,17 @@ forth-smoke-p21:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p21.sym --lst=build/forth_smoke_p21.lst rom/forth_smoke_p21.asm
 	mv forth_smoke_p21_rom0.bin build/forth_smoke_p21_rom0.bin
+
+# Phase 22: F. (print a float) smoke ROM. Scales by 10000 and reuses
+# core/floatdiv.asm's own F_UDIV32BY16 to split into integer/fractional
+# decimal digits. A real register-clobbering bug (UDIV10 destroys B,
+# which a first draft also used as its own outer loop counter) was
+# caught on the very first real Fuse run -- see core/floatprint.asm's
+# own header.
+forth-smoke-p22:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p22.sym --lst=build/forth_smoke_p22.lst rom/forth_smoke_p22.asm
+	mv forth_smoke_p22_rom0.bin build/forth_smoke_p22_rom0.bin
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm

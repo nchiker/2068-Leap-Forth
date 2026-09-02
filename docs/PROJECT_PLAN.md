@@ -1273,16 +1273,63 @@ Still real, open follow-up work, not done here: no distinction between
 right now), and the rest of the current line is simply abandoned
 rather than reporting which word specifically wasn't understood.
 
+## Phase 22 — F. (print a float)
+
+**Status: done.** `core/floatprint.asm` adds `F. ( f -- )`, printing a
+float as a signed decimal number with a fixed 4 digits after the
+decimal point (e.g. `"6.0000"`, `"0.2500"`, `"-2.0000"`) — blocked on
+`EMIT` existing at all until Phase 10, unblocked since but not built
+until now.
+
+**The algorithm**: scale the float's magnitude up by exactly 10000 as
+an exact 32-bit integer (reusing `core/floatmul.asm`'s own `F_UMUL32`
+— already a proven unsigned widening multiply), shift that scaled
+value by the float's own exponent (a new small pair of helpers,
+`F_SHIFT32_LEFT`/`RIGHT`), then divide by 10000 (reusing
+`core/floatdiv.asm`'s own `F_UDIV32BY16`) to split cleanly into an
+integer part (the quotient) and a 4-digit fractional part (the
+remainder — `F_UDIV32BY16` was extended to expose it, a
+backward-compatible addition `F/` itself never reads). Digits print via
+`core/print.asm`'s own `UDIV10`, the same idiom `.` already uses.
+Hand-verified against three cases — reusing the exact float values
+already proven in Phases 18/19 — before ever assembling any of it:
+`6.0` (from `F*`'s own `2.0*3.0` test), `0.25` (from `F*`'s own
+`0.5*0.5` test), and `-2.0` (from `F/`'s own `-6.0/3.0` test, exercising
+sign handling).
+
+**A real register-clobbering bug caught on the very first real Fuse
+run, not by hand-tracing this time** — the arithmetic itself was
+correct, but a genuinely different class of mistake slipped through
+review: the first draft's `PRINT_UDEC16_PAD4` (the fixed-4-digit
+fractional-part printer) used register `B` as its own outer loop
+counter *while calling* `UDIV10` inside that same loop — but `UDIV10`
+destroys `B` internally (its own documented contract, already known,
+just not cross-checked against this new caller). After the first
+`UDIV10` call, `B` got silently reset, and the outer `DJNZ` then
+wrapped to 255 instead of ever reaching zero — a real, live hang: the
+integer part and `"."` printed correctly on screen, then execution
+froze completely, confirmed by two screenshots several seconds apart
+showing identical, unchanging state. Fixed by using `C` instead (which
+`UDIV10` never touches, confirmed by re-reading its own header) for the
+outer counter, matching the same register discipline
+`core/print.asm`'s own `W_DOT` already uses in its analogous loop. All
+four checkpoints passed cleanly once fixed.
+
+`rom/forth_smoke_p22.asm` proves `F.` under real Fuse with the three
+hand-verified cases above. Wired into `rom/forth_boot.asm`'s full chain
+right after `core/print.asm`; re-verified with a deterministic
+full-chain diagnostic that also confirms `KEY` is still `FIND`-able,
+plus a fresh boot screenshot.
+
 Hi-res graphics mode remains the only item left on the original gap
 list, along with the tracked-but-unscheduled 64-column text mode
 stretch goal below — plus `LEAVE`/`+LOOP` (deferred since Phase 16),
-`F.` (printing a float — blocked on `EMIT` until Phase 10, unblocked
-since but not yet built), decimal number literal parsing (so
-`F+`/`F-`/`F*`/`F/` become actually typeable), and AY-3-8912 `SOUND`
-(real register-level sound access, distinct from the existing simple
-`BEEP` — exists and works in the sibling `ts2068rom` BASIC project via
-ports `$F5`/`$F6`, never ported here), tracked as its own future phase
-per the user's own request 2026-09-01.
+decimal number literal parsing (so `F+`/`F-`/`F*`/`F/`/`F.` become
+actually typeable), and AY-3-8912 `SOUND` (real register-level sound
+access, distinct from the existing simple `BEEP` — exists and works in
+the sibling `ts2068rom` BASIC project via ports `$F5`/`$F6`, never
+ported here), tracked as its own future phase per the user's own
+request 2026-09-01.
 
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
