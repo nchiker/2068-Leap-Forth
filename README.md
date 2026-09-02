@@ -487,6 +487,26 @@ inherited, what was deliberately left behind, and the phased build order.
   strategy Phase 5's own original `BEEP` checkpoint used) and live, by
   typing `0 1.0 BEEP` at `rom/forth_boot.asm`'s own real prompt and
   confirming it returns control normally after playing (no hang).
+- Phase 32 (`core/sound.asm` + `rom/forth_smoke_p32.asm`): `SOUND
+  ( register data -- )`, the authentic register-level AY-3-8912
+  command, distinct from `BEEP`'s computed musical notes — writes one
+  raw byte straight into one chip register (1-16; out of range is
+  silently ignored), confirmed from the real ROM disassembly's own
+  `SOUND` routine. A documentation bug in this phase's own first draft
+  (claiming a "register 1 = chip register 0" offset that the real ROM
+  disassembly doesn't actually have) was caught and fixed by
+  re-reading the actual bytes rather than trusting a summary — the code
+  itself never had the bug. Confirmed under real Fuse
+  (`rom/forth_smoke_p32.asm`'s three checkpoints, the same data-stack-
+  hygiene proof `core/rawbeep.asm`'s own original `BEEP` checkpoint
+  used) and, for the first time in this project, confirmed with REAL
+  AUDIO by the user listening live: `8 15 SOUND` alone (the real ROM's
+  own documented example) produced static, not a bug but the expected
+  result of setting only a volume register with no tone period or
+  mixer routing configured; a proper four-register sequence (tone
+  period, mixer, volume) on Channel B produced a real, steady,
+  recognizable tone the user confirmed by ear, then silenced again —
+  the strongest verification any sound word in this project has had.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -534,6 +554,7 @@ core/       language-layer code, not hardware-facing:
               rawbeep.asm (Phase 5's original raw-units BEEP, kept for
                           rom/forth_smoke_p5.asm's own history)
               beep.asm    (Phase 31 — real, semitone/seconds BEEP)
+              sound.asm   (Phase 32 — real, register-level SOUND)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
             2068-Forth's own addition, mode64/ (recovered, once-shipped
@@ -573,6 +594,7 @@ rom/        ROM image assembly:
               forth_smoke_p29.asm Phase 29 smoke ROM (FSQRT)
               forth_smoke_p30.asm Phase 30 smoke ROM (PI/SIN/COS)
               forth_smoke_p31.asm Phase 31 smoke ROM (real BEEP)
+              forth_smoke_p32.asm Phase 32 smoke ROM (SOUND)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -622,6 +644,7 @@ make forth-smoke-p28  # Phase 28 smoke ROM: ACCEPT/INPUT
 make forth-smoke-p29  # Phase 29 smoke ROM: FSQRT
 make forth-smoke-p30  # Phase 30 smoke ROM: PI/SIN/COS
 make forth-smoke-p31  # Phase 31 smoke ROM: real BEEP
+make forth-smoke-p32  # Phase 32 smoke ROM: SOUND
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```

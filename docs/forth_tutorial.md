@@ -689,6 +689,7 @@ beyond what each word's own arguments say.
 | `PAPER` | `( color -- )` | Set the background color the same way |
 | `AT-XY` | `( col row -- )` | Move where the next `EMIT`/`.`/`."` prints to (column 0-31, row 0-22) |
 | `BEEP` | `( n-semitones fduration -- )` | Produce a tone |
+| `SOUND` | `( register data -- )` | Write directly to an AY-3-8912 sound-chip register |
 
 ```forth
 5 BORDER
@@ -731,8 +732,36 @@ and there's a real, physical ceiling of about 12.9 kHz — a note higher
 than that clamps to the ceiling rather than actually going higher,
 since that's as fast as this hardware loop can toggle the speaker.
 Ordinary musical use (a few octaves around middle C) is nowhere near
-either limit. There's also no access yet to the machine's AY-3-8912
-sound chip beyond this simple tone — see the appendix.
+either limit.
+
+For anything `BEEP` can't do — a sustained tone, more than one note at
+once, precise volume control — `SOUND ( register data -- )` gives
+direct, register-level access to the machine's own AY-3-8912 sound
+chip, the same authentic command real BASIC has. It writes one raw
+byte into one of the chip's registers (1-16; out-of-range values are
+silently ignored) and does nothing else — getting an actual tone out
+of it takes THREE coordinated calls, not one, since the chip's own
+registers each control a different piece (a tone's pitch, which
+channels are actually switched on, and how loud):
+
+```forth
+2 251 SOUND        \ channel B's tone pitch (fine byte)
+3   0 SOUND        \ channel B's tone pitch (coarse byte)
+7 253 SOUND        \ mixer: turn on ONLY channel B's tone
+9  15 SOUND        \ channel B's volume -- THIS is what you'll hear
+9   0 SOUND        \ silence it again
+```
+
+Nothing is audible until that fourth line — the first three just set
+up state the chip remembers, the same way `INK`/`PAPER` persist until
+changed. `SOUND` has no idea what a "note" is, unlike `BEEP` — the 251
+above is a raw chip register value, worked out from the machine's own
+sound-chip clock speed (1,764,000 Hz) and the formula
+`period = clock / (16 * frequency)` for a note near 439 Hz. Getting a
+different pitch means recomputing that period yourself; there's no
+semitone convenience here, on purpose — `SOUND` trades convenience for
+direct access to everything the chip can do (three tones, volume
+envelopes, noise) that `BEEP` was never meant to reach.
 
 ### Getting input: `KEY`
 
@@ -1023,6 +1052,7 @@ the same convention applied to the full ANS Forth standard.
 | `INK` | `( color -- )` |
 | `PAPER` | `( color -- )` |
 | `BEEP` | `( n-semitones fduration -- )` |
+| `SOUND` | `( register data -- )` |
 | `64COL` / `32COL` | `( -- )` |
 | `PALETTE64` | `( n -- )` |
 | `PLOT64` | `( x y -- )` |
@@ -1043,9 +1073,6 @@ would ask about, aren't part of 2068-Forth yet:
 
 - **Hi-res graphics mode** — beyond the normal-resolution words in
   section 9 and the experimental 64-column pixel mode in section 12.
-- **Real AY-3-8912 sound** — `BEEP` (section 9) only toggles a simple
-  tone; the sound chip's own richer tone/volume/noise controls aren't
-  exposed yet.
 - **Plain integer `*` and `/`** — only the decimal versions, `F*`/`F/`
   (section 3), exist so far.
 

@@ -2267,6 +2267,86 @@ ROM budget after this phase: `rom/forth_boot.asm` uses 11332 of 16384
 bytes ($2C44 of $4000), 5052 bytes free — no ROM pressure from this
 addition.
 
+## Phase 32 — real, register-level SOUND
+
+**Status: done, confirmed with real audio.** Tracked since the
+original BASIC-gap audit as its own future phase (AY-3-8912 `SOUND`,
+"real register-level sound access, distinct from the existing simple
+`BEEP`... never ported here"), and picked up right after Phase 31 at
+the user's own request. `core/sound.asm` adds `SOUND ( register data
+-- )`: writes `data` directly into AY-3-8912 chip `register`, exactly
+the authentic real BASIC command — confirmed from the actual ROM
+disassembly's own `SOUND` routine (M2127): register to port `$F5`,
+data to port `$F6`, register validated 1-16 (0 and 17+ rejected).
+Unlike `BEEP`, there is no note/duration computation at all — `SOUND`
+is a raw primitive, one register at a time.
+
+**A real documentation bug, caught before it could mislead anyone**:
+this phase's own first draft claimed the real ROM applies a "register 1
+= chip register 0" offset before the `OUT`, reasoning that the AY chip
+only has 16 registers (0-15) while `SOUND`'s own valid range is 1-16.
+Re-reading the ACTUAL disassembly bytes (not just the sibling project's
+own prose summary) settled it: `OUT ($F5),A` uses the register value
+straight off the calculator stack — the preceding `DEC A`/`INC A` pair
+is solely a zero-check idiom (restoring `A` before the `OUT`, not
+transforming it). No offset exists, in the real ROM OR in this file's
+own code (which never applied one either) — confirmed by cross-checking
+against the sibling `ts2068rom` project's own already-verified
+`SOUND_EXROM`, which matches exactly. The header comment was fixed;
+the code was already correct. A real, worth-stating consequence of NO
+offset existing: chip register 0 (Channel A's own tone-period FINE
+byte) can never be reached through `SOUND` at all, since register 0 is
+rejected — only its coarse byte (chip register 1) is reachable for
+that specific field. Channels B and C don't have this limitation (both
+halves of their own tone periods, chip registers 2-5, are fully
+reachable).
+
+**Confirmed under real Fuse**: `rom/forth_smoke_p32.asm`'s three
+checkpoints (a valid register/data pair, and both rejected boundary
+values, 0 and 17) all pass — the same data-stack-hygiene proof shape
+`core/rawbeep.asm`'s own original `BEEP` checkpoint used, since neither
+this project nor the sibling one has ever confirmed AY register
+read-back is even possible on this hardware.
+
+**Real audio confirmed live, by the user — something no automated
+check in this project can do, and a real lesson in AY-3-8912
+programming along the way.** The first live attempt used the real
+ROM's own documented example verbatim, `8 15 SOUND` alone — and
+produced audible STATIC, not a tone, reported directly by the user
+listening over real speakers. Not a bug: register 8 only sets Channel
+A's volume; with the mixer register (7) and a tone period left at
+whatever the emulator's own AY chip happens to hold, there's no reason
+to expect a clean tone (most likely: noise routed to that channel, or
+a near-zero tone period). A clean tone needs THREE coordinated writes,
+not one. Using Channel B (to sidestep Channel A's own unreachable
+fine-period register, above) with the TS2068's own real AY clock
+(1,764,000 Hz — the same `libspectrum` `timings.c` source `core/beep.asm`'s
+own header already cites for the CPU clock) and the standard
+`period = clock/(16*frequency)` formula for a ~439 Hz tone:
+```forth
+2 251 SOUND   \ Channel B tone period, fine byte
+3   0 SOUND   \ Channel B tone period, coarse byte
+7 253 SOUND   \ mixer: only Channel B's tone enabled, everything else off
+9  15 SOUND   \ Channel B volume, fixed, maximum
+```
+Typed one line at a time (an earlier attempt combining all four onto
+one line produced a spurious "?" — almost certainly a dropped keystroke
+during this session's own known-flaky X11 keyboard injection, not a
+real parsing bug, confirmed by the SAME four commands succeeding
+individually right after). The user confirmed a real, steady,
+recognizable tone starting exactly at the volume write (the third and
+fourth register writes, period and mixer, are silent by themselves,
+since volume was still zero) and confirmed silence again after
+`9 0 SOUND` — exactly the expected behavior, not a partial failure.
+This is genuine, human-confirmed proof `SOUND` reaches real, working
+AY-3-8912 hardware state, not just "the port write instruction
+executed" — the strongest verification any sound-producing word in
+this project has ever had.
+
+ROM budget after this phase: `rom/forth_boot.asm` uses 11364 of 16384
+bytes ($2C64 of $4000), 5020 bytes free — no ROM pressure from this
+addition.
+
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
 **Not yet scheduled as a numbered phase — tracked here so it isn't
