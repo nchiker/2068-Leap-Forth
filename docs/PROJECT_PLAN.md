@@ -2663,24 +2663,46 @@ afterward) — all pass.
 ROM budget after this phase: `rom/forth_boot.asm` uses 12195 of 16384
 bytes ($2FA3 of $4000), 4189 bytes free — +85 bytes over Phase 35.
 
-## Backlog — FREE, STICK, error handling (not yet scheduled)
+## Phase 37 — STICK (joystick read)
 
-**Not yet scheduled as numbered phases — tracked here so they aren't
-lost.** All three came out of the fresh three-way audit against
-2068-Leap and the real TS2068 ROM's own command set (the same audit
-Phase 36 picked its own "highest value, least cost" group from); these
-three are next in line whenever picked up.
-
-**`STICK`** (joystick read) is actually cheap — in the same shape as
-`KEY?` before Phase 36: `kernel/io/io.asm`'s own `STICK_READ` already
-exists, confirmed directly from the real ROM disassembly's own
+**Status: done, confirmed under real Fuse.** Picked up first from the
+Phase 36-era backlog, exactly because it was flagged there as the
+cheapest of the three: `kernel/io/io.asm`'s own `STICK_READ` already
+existed, confirmed directly from the real ROM disassembly's own
 `READ-STICK` routine (AY-3-8912 register 14 via `PORT_AY_REG`/
 `PORT_AY_DATA`), complete with the real hardware's own asymmetry
-(device 1 gets a full 4-bit direction nibble, device 2 only a single
-bit) — nothing invented, already ported, just never wrapped as a
-dictionary word. A thin `STICK ( device -- value )` wrapper is
-realistically a same-shape addition to Phase 36's own `CLS`/`KEY?`
-work, not a new design.
+(device 1 reports a full 4-bit direction nibble, device 2 only a
+single bit) — nothing invented, already ported, just never wrapped as
+a dictionary word. `core/stick.asm` (new file) adds exactly that: a
+thin `STICK ( device -- value )` wrapper, same shape as Phase 36's own
+`CLS`/`KEY?`, no new hardware logic. No input validation, matching
+`STICK_READ`'s own stated contract ("the caller's own job to
+validate") and this project's established no-error-mechanism
+convention (`SOUND`'s own header states the same posture explicitly).
+
+**Confirmed under real Fuse, with the same honest verification-limit
+`core/sound.asm`'s own header already states for a hardware word with
+no way to fake real input**: no joystick is actually connected in this
+emulated environment, so this can't prove `STICK` reads a REAL
+joystick correctly — only that it reaches real AY-3-8912 hardware
+without hanging, returns the value real Fuse's own AY register 14
+gives with nothing pressed (confirmed live via a throwaway diagnostic
+BEFORE writing any checkpoint — both devices read back as `0` in this
+environment, not guessed), and consumes/produces exactly its own one
+argument/one result (`rom/forth_smoke_p37.asm`'s own two checkpoints
+each place a sentinel value below the device number and confirm it
+survives the call completely untouched).
+
+ROM budget after this phase: `rom/forth_boot.asm` uses 12213 of 16384
+bytes ($2FB5 of $4000), 4171 bytes free — +18 bytes over Phase 36.
+
+## Backlog — FREE, error handling (not yet scheduled)
+
+**Not yet scheduled as numbered phases — tracked here so they aren't
+lost.** Both came out of the fresh three-way audit against 2068-Leap
+and the real TS2068 ROM's own command set (the same audit Phase 36
+picked its own "highest value, least cost" group from, and Phase 37's
+own `STICK` came from too).
 
 **`FREE`** (remaining-memory introspection) needs one real design
 decision before it can be a thin wrapper: this project's RAM layout has

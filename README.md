@@ -578,6 +578,20 @@ inherited, what was deliberately left behind, and the phased build order.
   checkpoints, including `KEY?` reading TRUE twice in a row (proving it
   doesn't consume) before `KEY` itself finally does. +85 bytes
   (`rom/forth_boot.asm`: 12110 -> 12195 of 16384).
+- Phase 37 (`core/stick.asm` + `rom/forth_smoke_p37.asm`): `STICK`, the
+  real ROM's own joystick-read command — the cheapest of the three
+  items left in the post-Phase-36 backlog, since `kernel/io/io.asm`'s
+  own `STICK_READ` (AY-3-8912 register 14, real hardware asymmetry
+  between the two devices) already existed and just needed a thin
+  `STICK ( device -- value )` wrapper. Confirmed under real Fuse with
+  the same honest limit `SOUND`'s own smoke test already states: no
+  joystick is actually connected in this environment, so the two
+  checkpoints confirm STICK reaches real hardware without hanging,
+  returns the value Fuse's own AY register 14 gives with nothing
+  pressed (`0` for both devices, confirmed live before writing the
+  checkpoints), and leaves a sentinel value below the device number
+  completely untouched. +18 bytes (`rom/forth_boot.asm`: 12195 ->
+  12213 of 16384).
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -670,6 +684,7 @@ rom/        ROM image assembly:
               forth_smoke_p34.asm Phase 34 smoke ROM (S>F/F>S)
               forth_smoke_p35.asm Phase 35 smoke ROM (FROUND)
               forth_smoke_p36.asm Phase 36 smoke ROM (CLS/C@/C!/KEY?)
+              forth_smoke_p37.asm Phase 37 smoke ROM (STICK)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -724,6 +739,7 @@ make forth-smoke-p33  # Phase 33 smoke ROM: real multi-row word wrap
 make forth-smoke-p34  # Phase 34 smoke ROM: S>F/F>S
 make forth-smoke-p35  # Phase 35 smoke ROM: FROUND
 make forth-smoke-p36  # Phase 36 smoke ROM: CLS/C@/C!/KEY?
+make forth-smoke-p37  # Phase 37 smoke ROM: STICK
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```

@@ -21,7 +21,7 @@
 ; (0=/IF/ELSE/THEN/BEGIN/UNTIL, PLOT/LINE/CIRCLE/BEEP/BORDER,
 ; SAVE/LOAD, F+/F-/F*/F/, 64COL/32COL/PALETTE64/PLOT64, EMIT/., =/</>,
 ; VARIABLE/CONSTANT, .", WHILE/REPEAT, INK/PAPER, DO/LOOP/I,
-; FILL/AT-XY, KEY/KEY?, F., S>F/F>S/FROUND, CLS, C@/C!), chained into one LATEST list via the same
+; FILL/AT-XY, KEY/KEY?, F., S>F/F>S/FROUND, CLS, C@/C!, STICK), chained into one LATEST list via the same
 ; DICT_CHAIN_POINT splices rom/forth_smoke_p9.asm introduced and
 ; proved. DECIMAL_NUMBER_ENABLED is also DEFINEd here (core/decimal.asm,
 ; Phase 23) — not a dictionary word, a NUMBER/INTERPRET_RUN parsing
@@ -376,6 +376,8 @@ DICT_CHAIN_POINT DEFL H_CELLS
 DICT_CHAIN_POINT DEFL H_VAL
     INCLUDE "core/bytemem.asm"
 DICT_CHAIN_POINT DEFL H_CSTORE
+    INCLUDE "core/stick.asm"
+DICT_CHAIN_POINT DEFL H_STICK
     INCLUDE "core/input.asm"
     INCLUDE "core/editor.asm"
 
