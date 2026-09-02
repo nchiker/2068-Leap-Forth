@@ -355,6 +355,28 @@ inherited, what was deliberately left behind, and the phased build order.
   were re-verified by temporarily relabeling their own checkpoint 4 and
   reconfirming a real, unambiguous pass — both genuinely correct, not
   affected in practice.
+- Phase 28 (`core/input.asm` + `rom/forth_smoke_p28.asm`): `ACCEPT` and
+  `INPUT` — line input, closing the last of the six real BASIC-audit
+  gaps. `ACCEPT ( dest maxlen -- len )` is the standard ANS Forth line-
+  reading word (echoing as it goes, `DELETE` supported, typing past
+  `maxlen` silently ignored); `INPUT ( -- n )` is a BASIC-style
+  convenience built on top of it, reading a line into a small internal
+  buffer and parsing it with `VAL` (Phase 27) — the same shape as
+  BASIC's own `INPUT A` for a numeric variable. Verification needed a
+  different technique than every earlier phase's single-simulated-
+  keypress trick (`KEY`'s own Phase 20 smoke ROM): `ACCEPT`'s internal
+  loop calls the keyboard read routine many times in a row with no
+  point to intervene in between, so this smoke ROM uses REAL `IM 1`
+  interrupts with its own scripted fake keyboard ISR, feeding one
+  character per real hardware tick — the same interrupt wiring
+  `rom/forth_smoke_p9.asm` first proved, repurposed to drive a canned
+  typing sequence instead of a live keyboard. Confirmed under Fuse:
+  typing past a buffer's limit is correctly ignored, `DELETE` visually
+  erases the right character, and `INPUT` correctly parses a typed
+  number — plus a real duplicate-label collision caught immediately by
+  the assembler (this project's own new `INPUT_BUF` name collided with
+  an unrelated, pre-existing sysvar of the same name already defined in
+  the inherited `include/sysvars.inc`) fixed by renaming.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -396,6 +418,7 @@ core/       language-layer code, not hardware-facing:
               mathfn.asm  (Phase 25 — ABS/SGN/MOD/SQRT/RND/RANDOMIZE)
               array.asm   (Phase 26 — ARRAY/CELLS)
               string.asm  (Phase 27 — S"/TYPE/STRING/PLACE/COUNT/LEN/VAL)
+              input.asm   (Phase 28 — ACCEPT/INPUT)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
             2068-Forth's own addition, mode64/ (recovered, once-shipped
@@ -431,6 +454,7 @@ rom/        ROM image assembly:
               forth_smoke_p25.asm Phase 25 smoke ROM (ABS/SGN/MOD/SQRT/RND/RANDOMIZE)
               forth_smoke_p26.asm Phase 26 smoke ROM (ARRAY/CELLS)
               forth_smoke_p27.asm Phase 27 smoke ROM (string handling)
+              forth_smoke_p28.asm Phase 28 smoke ROM (ACCEPT/INPUT)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -476,6 +500,7 @@ make forth-smoke-p24  # Phase 24 smoke ROM: LEAVE/+LOOP
 make forth-smoke-p25  # Phase 25 smoke ROM: ABS/SGN/MOD/SQRT/RND/RANDOMIZE
 make forth-smoke-p26  # Phase 26 smoke ROM: ARRAY/CELLS
 make forth-smoke-p27  # Phase 27 smoke ROM: string handling
+make forth-smoke-p28  # Phase 28 smoke ROM: ACCEPT/INPUT
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
@@ -504,7 +529,8 @@ real decimal literal expression print `6.0000`, or
 print `0 2 4 6 8`, `12345 RANDOMIZE 100 RND .` to see a reproducible
 pseudo-random number in `[0, 100)`, `5 ARRAY NUMS 99 3 CELLS NUMS + !
 3 CELLS NUMS + @ .` to see a real array round-trip a value, or
-`S" HELLO WORLD" TYPE` to print a string literal directly.
+`S" HELLO WORLD" TYPE` to print a string literal directly, or
+`INPUT .` to type a number and have it printed back.
 
 ## License
 

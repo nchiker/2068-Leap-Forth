@@ -705,6 +705,41 @@ for you to press one key and leaves its code on the stack.
 KEY .     \ waits for a keypress, then prints its character code
 ```
 
+### Reading a whole line: `ACCEPT` and `INPUT`
+
+`KEY` reads one keypress at a time — useful for reacting to individual
+keys, but tedious for something like "ask the player to type their
+name." `ACCEPT` reads a whole LINE: it takes a buffer address and a
+maximum length, and returns however many characters were actually
+typed once you press Enter:
+
+```forth
+10 STRING NAME
+NAME 1 + 10 ACCEPT NAME !     \ waits for you to type, echoing as you
+                               \ go; store the length in NAME's own
+                               \ count byte once you press Enter
+NAME COUNT TYPE                \ prints back whatever you typed
+```
+
+(`NAME 1 +` is `STRING`'s own data area, skipping past its count byte
+— see [Arrays](#4-reading-and-writing-memory-directly)'s own section
+on memory addresses for why `+` is how you get there.) Delete/backspace
+works while typing, and typing past the buffer's own limit is simply
+ignored rather than causing an error.
+
+`INPUT` is a shortcut for the most common case — reading a single
+typed number:
+
+```forth
+INPUT .    \ waits for you to type a number, then prints it back
+```
+
+`INPUT` reads a line the same way `ACCEPT` does, then parses it with
+`VAL` (section on [Strings](#4-reading-and-writing-memory-directly))
+and leaves the result on the stack — exactly BASIC's own `INPUT A` for
+a single numeric variable, just spelled as a word instead of a
+statement.
+
 ---
 
 ## 10. Variables, constants, and comparisons in combination
@@ -930,6 +965,8 @@ the same convention applied to the full ANS Forth standard.
 | `."` text`"` | `( -- )` — compile-only |
 | `EMIT` | `( char -- )` |
 | `KEY` | `( -- char )` |
+| `ACCEPT` | `( dest maxlen -- len )` |
+| `INPUT` | `( -- n )` |
 | `AT-XY` | `( col row -- )` |
 
 **Drawing and sound**

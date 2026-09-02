@@ -1775,6 +1775,79 @@ combined-word diagnostics, including multiple consecutive top-level
 string. `core/string.asm` is wired in right after `core/array.asm`
 (before `core/editor.asm`, same reasoning as Phases 25 and 26).
 
+## Phase 28 — ACCEPT and INPUT (line input)
+
+**Status: done.** The last of the six real gaps found by the
+BASIC-vs-Forth audit (Phase 25's own header): `KEY` (Phase 20) reads a
+single raw keypress, but there was no way to read a whole LINE of
+typed text, the way BASIC's own `INPUT` statement does. `core/
+input.asm` adds `ACCEPT ( dest maxlen -- len )` — the standard ANS
+Forth line-input word, not a name invented for this project — and
+`INPUT ( -- n )`, a BASIC-style convenience built on top of it that
+reads a line into a small internal buffer and parses it with Phase
+27's own `VAL`, matching the exact shape of BASIC's `INPUT A` for a
+numeric variable.
+
+**A real verification problem this phase's own smoke ROM had to solve,
+different from every earlier phase**: `KEY`'s own Phase 20 smoke ROM
+tested a single simulated keypress by writing `KBD_LASTK`/`KBD_KEYHIT`
+directly before one `INTERPRET_RUN` call — sufficient because `KEY`
+itself only ever reads ONE key per call. `ACCEPT`'s own internal loop
+calls the same underlying read routine MANY times in a row with no
+point for outside test code to "step in" between characters — the
+single-write trick has nothing to attach to. The fix: real `IM 1`
+interrupts, the same wiring `rom/forth_smoke_p9.asm` first proved
+against 2068-Leap's own working ROM files, but with this smoke ROM's
+own `RST 38` handler replaced by a scripted fake keyboard ISR that
+feeds the NEXT character from a small canned array into `KBD_LASTK`/
+`KBD_KEYHIT` on every real hardware tick (Fuse's own emulated ~50Hz
+frame interrupt) — exactly what a real keyboard-scanning ISR does on
+every tick, just from a script instead of the physical keyboard
+matrix. `ACCEPT`'s own busy-wait loop picks up one new character per
+tick automatically, with no changes needed to `ACCEPT` itself to make
+it testable this way.
+
+**A real, if minor, bug caught immediately by the assembler, not by
+running anything**: the first draft named `INPUT`'s own internal
+buffer `INPUT_BUF` — sjasmplus rejected it outright with "Duplicate
+label," because `include/sysvars.inc` (inherited read-only from
+2068-Leap) already has its own, completely unrelated `INPUT_BUF` (8
+bytes of raw digit-accumulation scratch for BASIC's own numeric input
+routines). Renamed to `FINPUT_BUF` (an `F` for "Forth," distinguishing
+it from the inherited kernel's own name) — a small, one-line fix, but
+a real instance of the same class of collision this project has hit
+before with ADDRESSES (Phase 24's own `+LOOP` scratch colliding with
+`PRINT_ROW`/`PRINT_COL`) — this time with a NAME instead, caught
+immediately because sjasmplus itself flagged it as a hard error rather
+than silently aliasing two different runtime values the way an address
+collision would have.
+
+`rom/forth_smoke_p28.asm` proves both words under real Fuse with two
+checkpoints: `ACCEPT` into a 5-character buffer, scripted to type
+`"HELLOX"` then `DELETE` then `ENTER` — the 6th character is silently
+ignored (buffer already at its limit when it arrives, matching this
+project's own "no error signal, safe default" convention), then
+`DELETE` removes the 5th, leaving `"HELL"` (length 4) — confirmed by
+`TYPE`-ing the buffer's own contents back out, not just checking the
+returned length (the same "check the real content, not just a
+coincidentally-matching width" discipline Phase 27's own verification
+story established); and `INPUT`, scripted to type `"123"` then
+`ENTER`, correctly returning `123` on the data stack. Also re-verified
+end-to-end against `rom/forth_boot.asm`'s own full dictionary chain
+with the same scripted-interrupt technique (typing `"42"` then `ENTER`
+into `INPUT .`). `core/input.asm` is wired in right after `core/
+string.asm` (before `core/editor.asm`, same reasoning as every phase
+since 25).
+
+With this phase, ALL SIX real gaps found by the original BASIC-vs-Forth
+audit are closed: `RND`/`RANDOMIZE` (Phase 25), math functions (Phase
+25), arrays (Phase 26), string handling (Phase 27), and line input
+(this phase) are all done; `DEF FN` was deliberately skipped (Phase
+25's own header explains why: `:` already does that job, more
+generally). The lower-priority bucket from that same audit (sprites,
+hi-res `MODE`, real AY-3-8912 `SOUND`, `CALL`) remains open and
+unscheduled, as the user originally scoped it.
+
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
 **Not yet scheduled as a numbered phase — tracked here so it isn't
