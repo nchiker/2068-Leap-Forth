@@ -324,6 +324,35 @@ change it afterward.
 MAXHEALTH .      \ prints 100, every time, forever
 ```
 
+### Arrays
+
+`ARRAY` is `VARIABLE` scaled up: instead of one storage cell, it
+reserves however many you ask for, all zeroed out to start:
+
+```forth
+5 ARRAY SCORES
+```
+
+`SCORES` now pushes the address of the FIRST cell, exactly like
+`VARIABLE` does. To reach a different element, add its index (times
+the size of a cell) to that base address before using `@`/`!`. `CELLS`
+does that multiplication for you:
+
+```forth
+99 3 CELLS SCORES + !     \ store 99 in element 3
+3 CELLS SCORES + @ .       \ prints 99
+0 CELLS SCORES + @ .        \ prints 0 -- element 0 is untouched
+```
+
+There's no special "array-indexing" word — `index CELLS name +` is the
+whole idiom, the same way real Forth systems handle it. Read it as one
+phrase: "the address `CELLS` past `name`." Skipping `CELLS` and writing
+plain `3 SCORES +` is a real mistake, not a shortcut: `SCORES` gives
+you a plain BYTE address, and each cell here is 2 bytes wide, so
+`3 SCORES +` doesn't land on element 3 at all — it lands one byte
+INTO element 1. `CELLS` is exactly the `index * 2` conversion that
+gets you to the right place.
+
 ---
 
 ## 5. Comparisons and true/false
@@ -802,6 +831,8 @@ the same convention applied to the full ANS Forth standard.
 | `!` | `( n addr -- )` |
 | `VARIABLE` | `( "name" -- )` |
 | `CONSTANT` | `( n "name" -- )` |
+| `ARRAY` | `( n "name" -- )` |
+| `CELLS` | `( n -- n*2 )` |
 
 **Defining and control flow**
 

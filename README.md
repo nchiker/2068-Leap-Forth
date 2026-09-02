@@ -306,6 +306,17 @@ inherited, what was deliberately left behind, and the phased build order.
   same way as every other Phase 23 hook so ROMs that don't opt in stay
   byte-for-byte identical (re-verified by diffing `forth_smoke_p3`,
   `forth_smoke_p9`, and `forth_smoke_p16` before/after).
+- Phase 26 (`core/array.asm` + `rom/forth_smoke_p26.asm`): `ARRAY` and
+  `CELLS` — closing the BASIC-audit's `DIM` gap. `n ARRAY name` creates
+  a fresh, zero-initialized `n`-cell array whose name pushes its base
+  address; elements are read/written with plain `@`/`!` at
+  `index CELLS name +`, the same address-arithmetic convention real
+  Forth systems use (no dedicated indexing word, matching ANS Forth's
+  own `CREATE`/`ALLOT` idiom). Confirmed under Fuse: a fresh array
+  reads back as zero, a `CELLS`-indexed write/read round-trips
+  correctly, and every OTHER element stays zero after that write
+  (proving the zero-init loop covers the whole block, not just element
+  0, and the write didn't corrupt a neighboring cell).
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -345,6 +356,7 @@ core/       language-layer code, not hardware-facing:
               floatprint.asm (Phase 22 — F.)
               decimal.asm (Phase 23 — decimal literals)
               mathfn.asm  (Phase 25 — ABS/SGN/MOD/SQRT/RND/RANDOMIZE)
+              array.asm   (Phase 26 — ARRAY/CELLS)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
             2068-Forth's own addition, mode64/ (recovered, once-shipped
@@ -378,6 +390,7 @@ rom/        ROM image assembly:
               forth_smoke_p23.asm Phase 23 smoke ROM (decimal literals)
               forth_smoke_p24.asm Phase 24 smoke ROM (LEAVE/+LOOP)
               forth_smoke_p25.asm Phase 25 smoke ROM (ABS/SGN/MOD/SQRT/RND/RANDOMIZE)
+              forth_smoke_p26.asm Phase 26 smoke ROM (ARRAY/CELLS)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -421,6 +434,7 @@ make forth-smoke-p22  # Phase 22 smoke ROM: F.
 make forth-smoke-p23  # Phase 23 smoke ROM: decimal literals
 make forth-smoke-p24  # Phase 24 smoke ROM: LEAVE/+LOOP
 make forth-smoke-p25  # Phase 25 smoke ROM: ABS/SGN/MOD/SQRT/RND/RANDOMIZE
+make forth-smoke-p26  # Phase 26 smoke ROM: ARRAY/CELLS
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```

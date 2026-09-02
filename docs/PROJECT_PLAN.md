@@ -1618,6 +1618,55 @@ combined check.
 chain right after `core/key.asm` (before `core/editor.asm`, which adds
 no dictionary words of its own and must stay last).
 
+## Phase 26 — ARRAY and CELLS
+
+**Status: done.** The second phase closing a real gap from the
+BASIC-vs-Forth audit (Phase 25's own header): BASIC's `DIM` (numeric
+arrays) had no Forth equivalent. `core/array.asm` adds:
+
+- `ARRAY ( n "name" -- )` — creates `<name>` such that
+  `<name> ( -- addr )` pushes the address of a fresh, zero-initialized
+  block of `n` 2-byte cells.
+- `CELLS ( n -- n*2 )` — converts a cell count into a byte offset
+  (just a left shift, since this project's cell size is 2 bytes) —
+  named for intent (`3 CELLS name +` reads clearer than `3 2 * name
+  +`), matching how real Forth code writes array access, not a
+  meaningfully different computation.
+
+**Design choice, and why**: neither a dedicated indexing word nor a
+real `CREATE`/`ALLOT` pair (this project doesn't have one — the same
+gap `core/variable.asm`'s own header already notes for `VARIABLE`/
+`CONSTANT`) — `ARRAY`'s own runtime is the identical compiled-literal-
+then-RET idiom those two already established, just with `n*2` reserved
+bytes after it instead of a fixed 2, and elements are addressed with
+plain `@`/`!` at `index CELLS name +`. This is not a simplification for
+this project's own sake — it's the SAME idiom real, ANS-conformant
+Forth systems use for `CREATE`-based arrays; there is no special array-
+indexing operator in standard Forth either. A single combined `ARRAY`
+word (rather than separate `CREATE`+`ALLOT` primitives) was chosen as
+the more direct, appropriately-scoped translation of `DIM`'s own single-
+statement shape, and because `VARIABLE`/`CONSTANT` already established
+the "one word, one header-building routine" pattern this reuses almost
+line-for-line. A generic `CREATE`/`ALLOT` remains a reasonable future
+generalization (strings, a later phase, will need their own memory-
+reservation primitive) but wasn't necessary to close this specific,
+concrete gap.
+
+`rom/forth_smoke_p26.asm` proves it under real Fuse, three checkpoints:
+a freshly-created array reads back as zero at element 0; a
+`CELLS`-indexed write (`99 3 CELLS NUMS + !`) and read round-trip
+correctly; and — the check that actually exercises the zero-init loop's
+own correctness, not just its first iteration — every OTHER element
+(0, 1, 2) still reads as zero after that write to element 3, confirming
+the loop covers the WHOLE block and the write didn't corrupt a
+neighboring cell. All three passed on the first real Fuse run. Also
+re-verified end-to-end with a full-chain diagnostic against
+`rom/forth_boot.asm` (`10 ARRAY A 99 3 CELLS A + ! 3 CELLS A + @ .`),
+learning from Phase 25's own lesson that a phase's isolated smoke ROM
+passing doesn't guarantee the real product ROM's full dictionary chain
+does too. `core/array.asm` is wired in right after `core/mathfn.asm`
+(before `core/editor.asm`, same reasoning as Phase 25).
+
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
 **Not yet scheduled as a numbered phase — tracked here so it isn't
