@@ -46,16 +46,29 @@
 ; ---- character grid ----
 GFX_ROWS   EQU 24
 GFX_COLS   EQU 32
-ATTR_DEFAULT EQU $38     ; PAPER 7 (white), INK 0 (black) — this
-                        ; project's default attribute, used by both
-                        ; GFX_CLS and GFX_CLEAR_ROW; previously a bare
-                        ; $38 in just GFX_CLS, promoted to a symbolic
-                        ; constant now that a second routine needs the
-                        ; same value
-ATTR_STATUS_BAR EQU $07   ; PAPER 0 (black), INK 7 (white) — ATTR_
-                          ; DEFAULT with ink/paper swapped, i.e. what
-                          ; GFX_INVERT_ATTR_STATIC would produce
-                          ; starting from ATTR_DEFAULT. Verified
+ATTR_DEFAULT EQU $44     ; PAPER 0 (black), INK 4 (green), BRIGHT 1 —
+                        ; this project's default attribute, used by
+                        ; both GFX_CLS and GFX_CLEAR_ROW; previously a
+                        ; bare $38 (PAPER 7 white / INK 0 black, the
+                        ; classic Sinclair power-on default) until the
+                        ; user asked for a more comfortable color
+                        ; scheme — bright green on black, the familiar
+                        ; phosphor-terminal look, chosen specifically
+                        ; because this project's own border was never
+                        ; set away from its own hardware-default black
+                        ; (BORDER_DEFAULT below is defined but never
+                        ; actually applied by rom/forth_boot.asm), so a
+                        ; black PAPER also finally makes the visible
+                        ; border and the 32x24 text screen match
+                        ; seamlessly instead of the old black-border/
+                        ; white-paper mismatch.
+ATTR_STATUS_BAR EQU $07   ; PAPER 0 (black), INK 7 (white) — STALE
+                          ; relative to the new ATTR_DEFAULT above (it
+                          ; was ATTR_DEFAULT's own ink/paper swap back
+                          ; when that was $38); left unchanged since
+                          ; nothing in this project actually uses this
+                          ; constant (confirmed by grep) — inherited
+                          ; from 2068-Leap, never adopted here. Verified
                           ; against GFX_ATTR_SWAP's own bit logic
                           ; (ink bits shifted into paper position,
                           ; paper bits shifted into ink position)
@@ -81,11 +94,14 @@ ATTR_SWATCH_RED   EQU $10   ; PAPER 2 (red),   INK 0
 ATTR_SWATCH_GREEN EQU $20   ; PAPER 4 (green), INK 0
 ATTR_SWATCH_BLUE  EQU $08   ; PAPER 1 (blue),  INK 0
 
-BORDER_DEFAULT  EQU 7     ; white — matches ATTR_DEFAULT's white PAPER,
-                          ; so a freshly-reset screen has a consistent
-                          ; white background top to bottom, border
-                          ; included. Used by basic/'s cold-boot setup
-                          ; and NEW (both real "start fresh" moments) —
+BORDER_DEFAULT  EQU 7     ; white — matched ATTR_DEFAULT's own PAPER
+                          ; color back when that was white ($38); now
+                          ; stale relative to ATTR_DEFAULT's new black
+                          ; PAPER, but harmless — never actually applied
+                          ; anywhere in this project (confirmed by
+                          ; grep), only in the inherited 2068-Leap
+                          ; BASIC's own cold-boot setup and NEW (both
+                          ; real "start fresh" moments there) —
                           ; deliberately NOT applied by GFX_CLS itself,
                           ; since real Sinclair BASIC's CLS clears only
                           ; the text screen and never touches the
@@ -97,7 +113,8 @@ BORDER_DEFAULT  EQU 7     ; white — matches ATTR_DEFAULT's white PAPER,
 ; ============================================================================
 ; GFX_CLS
 ; Clears the screen bitmap to all-off and the attribute area to a
-; default (white paper, black ink — INK 0, PAPER 7 = $38).
+; default (black paper, bright green ink — INK 4, PAPER 0, BRIGHT 1 =
+; $44).
 ; In:  none
 ; Out: none
 ; Destroys: AF, BC, DE, HL
@@ -111,10 +128,10 @@ GFX_CLS:
     ld   (hl), a
     ldir
 
-    ld   a, ATTR_DEFAULT           ; PAPER 7, INK 0 — falls straight
-                                   ; into GFX_PAINT_ATTR below for the
-                                   ; actual attribute-area fill, same
-                                   ; loop, no ROM-budget cost for
+    ld   a, ATTR_DEFAULT           ; PAPER 0, INK 4, BRIGHT 1 — falls
+                                   ; straight into GFX_PAINT_ATTR below
+                                   ; for the actual attribute-area fill,
+                                   ; same loop, no ROM-budget cost for
                                    ; duplicating it here
 ; ============================================================================
 ; GFX_PAINT_ATTR

@@ -507,6 +507,27 @@ inherited, what was deliberately left behind, and the phased build order.
   period, mixer, volume) on Channel B produced a real, steady,
   recognizable tone the user confirmed by ear, then silenced again —
   the strongest verification any sound word in this project has had.
+- Phase 33 (`core/editor.asm` + `kernel/graphics/graphics.asm` +
+  `rom/forth_smoke_p33.asm`): a better color scheme (black paper,
+  bright green ink), a genuinely flashing cursor (the editor was
+  calling the kernel's own non-flashing invert routine by mistake — one
+  line to switch to the FLASH-setting one), real word-boundary-aware
+  multi-row input wrapping (replacing Phase 6's single-row, 31-char,
+  silently-truncating editor), and an old-Mac-style startup chord
+  (picked from several options) replacing the old flat `SOUND_BEEP`
+  tone. Three real bugs found along the way, the third the most
+  interesting: a capacity-check design bug caught by Python simulation
+  before any Z80 was trusted; a genuine stack-corruption hang in the
+  new multi-row redraw code, found via a real Fuse hang and a
+  border-color waypoint diagnostic; and — found live by the user, not
+  by any automated test — backspacing a fully-typed line left several
+  cells stuck flashing instead of going blank, because `EDITOR_REDRAW`'s
+  blank-fill loop reused register `D` for a row parameter right after a
+  call (`GFX_PUTCHAR`) documented to destroy it, silently no-oping the
+  reset via `GFX_SET_ATTR`'s own bounds check. Root-caused with direct
+  attribute-memory readback probes rather than guessed, then fixed and
+  re-verified against the exact reported repro. +660 bytes total
+  (`rom/forth_boot.asm`: 11364 -> 12024 of 16384).
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -595,6 +616,7 @@ rom/        ROM image assembly:
               forth_smoke_p30.asm Phase 30 smoke ROM (PI/SIN/COS)
               forth_smoke_p31.asm Phase 31 smoke ROM (real BEEP)
               forth_smoke_p32.asm Phase 32 smoke ROM (SOUND)
+              forth_smoke_p33.asm Phase 33 smoke ROM (multi-row word wrap)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -645,6 +667,7 @@ make forth-smoke-p29  # Phase 29 smoke ROM: FSQRT
 make forth-smoke-p30  # Phase 30 smoke ROM: PI/SIN/COS
 make forth-smoke-p31  # Phase 31 smoke ROM: real BEEP
 make forth-smoke-p32  # Phase 32 smoke ROM: SOUND
+make forth-smoke-p33  # Phase 33 smoke ROM: real multi-row word wrap
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```

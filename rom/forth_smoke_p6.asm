@@ -15,7 +15,13 @@
 ; core/control.asm/core/ts2068.asm, since this test never uses BEEP,
 ; PLOT, IF, or any other word from those files; LATEST is seeded to
 ; core/interp.asm's own DICT_LATEST_INIT_P3 (Phase 3's tail — DUP
-; SWAP DROP OVER + - @ ! and : ; are all this test needs).
+; SWAP DROP OVER + - @ ! and : ; are all this test needs). core/print.asm
+; is now ALSO included, purely to satisfy core/editor.asm's own new
+; PRINT_ROW dependency (its word-wrap rewrite reads PRINT_ROW to decide
+; whether growing the input area needs to scroll first) — EMIT/. are
+; spliced into the dictionary's own byte layout to satisfy the
+; assembler but stay genuinely unreachable via FIND, since LATEST is
+; still seeded to DICT_LATEST_INIT_P3, never extended past it.
 ;
 ; SELF-TEST, three canned key sequences, each ending in KEY_ENTER, each
 ; fed to EDITOR_PROCESS_KEY one byte at a time and then committed via
@@ -95,6 +101,19 @@ COLD_START:
     ld   (HERE), hl
     xor  a
     ld   (STATE), a
+    ld   (PRINT_ROW), a          ; required since core/print.asm was
+    ld   (PRINT_COL), a          ; added purely to satisfy core/
+                                 ; editor.asm's own new PRINT_ROW
+                                 ; dependency (see this ROM's own
+                                 ; include-order comment) -- EMIT/. stay
+                                 ; unreachable via FIND regardless,
+                                 ; since LATEST is still seeded to
+                                 ; DICT_LATEST_INIT_P3 above, not
+                                 ; extended past it
+    ld   a, 1
+    ld   (FWRAP_OLD_COUNT), a ; required once at cold start -- see
+                                  ; core/editor.asm's own header on this
+                                  ; cell
 
     call GFX_CLS
 
@@ -197,6 +216,14 @@ KEYS_3_LEN  EQU $ - KEYS_3
     INCLUDE "kernel/graphics/graphics.asm"
     INCLUDE "core/dict.asm"
     INCLUDE "core/interp.asm"
+DICT_CHAIN_POINT DEFL H_SEMICOLON   ; satisfies core/print.asm's own
+                                    ; chain requirement below; LATEST
+                                    ; itself stays seeded to
+                                    ; DICT_LATEST_INIT_P3 (= H_SEMICOLON)
+                                    ; above, so EMIT/. this splices in
+                                    ; are present in ROM but genuinely
+                                    ; unreachable via FIND for this test
+    INCLUDE "core/print.asm"
     INCLUDE "core/editor.asm"
 
     DS   $4000 - $, $FF

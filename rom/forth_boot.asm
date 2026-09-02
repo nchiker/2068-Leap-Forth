@@ -33,9 +33,19 @@
 ; that needs a real or simulated keyboard, not a fixed source string.
 ; Manual confirmation in Fuse (or real hardware) with an actual keyboard
 ; remains the honest gap, exactly as core/editor.asm's own header
-; already says for EDITOR_LOOP_LIVE. The startup sound is BEEP's own
-; existing raw hardware-timing units (kernel/sound's SOUND_BEEP), not a
-; considered musical choice — a real, open follow-up, not hidden.
+; already says for EDITOR_LOOP_LIVE.
+;
+; STARTUP SOUND (revised after real live-audio testing — see
+; core/sound.asm's own header for the full "8 15 SOUND produced static,
+; not a tone" story): no longer SOUND_BEEP's raw hardware-timing beeper.
+; An old-Mac-style startup chord — C4/E4/G4 rung out together across
+; all three AY channels and held ~800ms — picked by the user from
+; several presented options (a single-channel rising arpeggio and a
+; simpler two-note beep among them). Same clock/formula core/sound.asm's
+; own header already uses for its own confirmed-clean tone; held via
+; CHIME_DELAY (a frame-count wait via kernel/interrupt's own
+; INT_GET_FRAMES, so interrupts must already be enabled —
+; KBD_ISR_INIT/IM1/EI now run BEFORE the chime, not after).
 ; ============================================================================
 
     INCLUDE "include/hardware.inc"
@@ -106,6 +116,10 @@ COLD_START:
                                    ; bookkeeping -- must start at 0
     ld   a, DEFAULT_ATTR          ; required since Phase 15 -- see
     ld   (CURRENT_ATTR), a        ; core/ts2068.asm's own header
+    ld   a, 1
+    ld   (FWRAP_OLD_COUNT), a ; required once at cold start -- see
+                                  ; core/editor.asm's own header on this
+                                  ; cell
 
     call GFX_CLS
     ld   hl, BANNER
@@ -125,17 +139,141 @@ COLD_START:
     ld   a, 1
     ld   (PRINT_ROW), a
 
-    ld   bc, 100                    ; pitch: short, high-ish tone --
-    ld   de, 30                     ; duration: brief, not a
-    call SOUND_BEEP                 ; considered musical choice, see
-                                    ; this file's own header
-
     call KBD_ISR_INIT               ; must run before EI -- confirmed
                                     ; 2068-Leap ordering
     im   1
-    ei
+    ei                              ; must be on before CHIME_DELAY --
+                                    ; it waits on FRAMES, which only the
+                                    ; ISR ever advances
+
+    call STARTUP_CHIME
 
     jp   EDITOR_LOOP_LIVE
+
+; ============================================================================
+; STARTUP_CHIME — an old-Mac-style startup chord: C4/E4/G4 across all
+; three AY channels, echoing the classic System 7-era Macintosh boot
+; chime (picked from several options presented to the user, including
+; the original rising single-channel arpeggio this replaces). Periods
+; use the same TS2068 AY clock (1,764,000 Hz) and
+; period = clock/(16*freq) formula core/sound.asm's own header already
+; derives its confirmed-clean tone from.
+;
+; REVISED after a real recording (WAV) of the first version was made
+; and analyzed by FFT: the notes themselves were exactly right (261.7/
+; 330.0/391.7 Hz measured against a 262/330/392 Hz target, no
+; clipping), so the "didn't sound correct" report wasn't a wrong-pitch
+; bug — it's the AY's raw square waves. Three of them snapping to full
+; volume in the same instant produces a harsh click (an audible step
+; discontinuity) plus a buzzy stack of clashing square-wave harmonics,
+; quite unlike the real Mac's smooth SAMPLED synth chime. Two real
+; fixes for that, neither changing the notes themselves: (1) a stepped
+; volume ramp on attack/release instead of an instant on/off, so each
+; note fades in/out rather than clicking; (2) a staggered entrance —
+; Channel A rings first, then B, then C roll in on top of it (like an
+; actual bell chime), rather than all three hitting at once.
+;
+; Channel A's tone-period FINE byte is chip register 0 — and
+; core/sound.asm's own SOUND_WRITE (faithfully matching the real ROM's
+; SOUND command) refuses register 0 as out-of-range, since SOUND's own
+; documented range is 1-16 and can never reach it (see that file's own
+; header). That restriction exists to keep SOUND itself authentic to
+; the real ROM; it doesn't bind this boot code, which is free to write
+; the AY ports directly for that one otherwise-unreachable register.
+; ============================================================================
+STARTUP_CHIME:
+    ld   a, 0                       ; Channel A tone period, fine --
+    out  (PORT_AY_REG), a           ; chip register 0, unreachable via
+    ld   a, 165                     ; SOUND_WRITE/SOUND (see header
+    out  (PORT_AY_DATA), a          ; above) -- written directly instead
+
+    ld   b, 1                       ; Channel A tone period, coarse
+    ld   c, 1                       ; -> period 421, C4 (~262 Hz)
+    call SOUND_WRITE
+
+    ld   b, 2                       ; Channel B tone period, fine
+    ld   c, 78
+    call SOUND_WRITE
+    ld   b, 3                       ; Channel B tone period, coarse
+    ld   c, 1                       ; -> period 334, E4 (~330 Hz)
+    call SOUND_WRITE
+
+    ld   b, 4                       ; Channel C tone period, fine
+    ld   c, 25
+    call SOUND_WRITE
+    ld   b, 5                       ; Channel C tone period, coarse
+    ld   c, 1                       ; -> period 281, G4 (~392 Hz)
+    call SOUND_WRITE
+
+    ld   b, 7                       ; mixer: all three tones enabled,
+    ld   c, 248                     ; all three noise generators off
+    call SOUND_WRITE                ; ($FF with bits 0-2 cleared)
+
+    ld   b, 8                       ; all three silent until each
+    ld   c, 0                       ; channel's own staggered attack
+    call SOUND_WRITE                ; below brings it in
+    ld   b, 9
+    call SOUND_WRITE
+    ld   b, 10
+    call SOUND_WRITE
+
+    ; ---- staggered, ramped attack: A rolls in first, then B, then C,
+    ; each fading up over 3 steps instead of snapping to full volume ----
+    ld   b, 8  : ld c, 4  : call SOUND_WRITE
+    ld   b, 3  : call CHIME_DELAY
+    ld   b, 8  : ld c, 8  : call SOUND_WRITE
+    ld   b, 3  : call CHIME_DELAY
+    ld   b, 8  : ld c, 12 : call SOUND_WRITE
+    ld   b, 3  : call CHIME_DELAY             ; gap before B enters
+
+    ld   b, 9  : ld c, 4  : call SOUND_WRITE
+    ld   b, 3  : call CHIME_DELAY
+    ld   b, 9  : ld c, 8  : call SOUND_WRITE
+    ld   b, 3  : call CHIME_DELAY
+    ld   b, 9  : ld c, 12 : call SOUND_WRITE
+    ld   b, 3  : call CHIME_DELAY             ; gap before C enters
+
+    ld   b, 10 : ld c, 4  : call SOUND_WRITE
+    ld   b, 3  : call CHIME_DELAY
+    ld   b, 10 : ld c, 8  : call SOUND_WRITE
+    ld   b, 3  : call CHIME_DELAY
+    ld   b, 10 : ld c, 12 : call SOUND_WRITE  ; full chord now sounding
+
+    ld   b, 22                      ; hold the full chord ~440ms
+    call CHIME_DELAY
+
+    ; ---- release: all three fade down together ----
+    ld   b, 8  : ld c, 8  : call SOUND_WRITE
+    ld   b, 9  : ld c, 8  : call SOUND_WRITE
+    ld   b, 10 : ld c, 8  : call SOUND_WRITE
+    ld   b, 3  : call CHIME_DELAY
+    ld   b, 8  : ld c, 4  : call SOUND_WRITE
+    ld   b, 9  : ld c, 4  : call SOUND_WRITE
+    ld   b, 10 : ld c, 4  : call SOUND_WRITE
+    ld   b, 3  : call CHIME_DELAY
+    ld   b, 8  : ld c, 0  : call SOUND_WRITE  ; the AY holds its last
+    ld   b, 9  : ld c, 0  : call SOUND_WRITE  ; register state
+    ld   b, 10 : ld c, 0  : call SOUND_WRITE  ; indefinitely otherwise
+    ret
+
+; ============================================================================
+; CHIME_DELAY — busy-waits until FRAMES (kernel/interrupt.asm) has
+; advanced by B ticks. In: B = frame count. Destroys: AF, HL, DE
+; ============================================================================
+CHIME_DELAY:
+    ld   h, 0
+    ld   l, b
+    ex   de, hl                     ; de = frame count to wait
+    call INT_GET_FRAMES             ; hl = current frames
+    add  hl, de
+    ex   de, hl                     ; de = target frame count
+.wait:
+    call INT_GET_FRAMES             ; only touches hl -- de (target)
+                                    ; survives across this loop
+    or   a
+    sbc  hl, de
+    jr   c, .wait                   ; current < target -- keep waiting
+    ret
 
 BANNER: DB "2068-FORTH", 0
 

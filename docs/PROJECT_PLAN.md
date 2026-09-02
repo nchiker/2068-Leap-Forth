@@ -2347,6 +2347,154 @@ ROM budget after this phase: `rom/forth_boot.asm` uses 11364 of 16384
 bytes ($2C64 of $4000), 5020 bytes free — no ROM pressure from this
 addition.
 
+## Phase 33 — color scheme, flashing cursor, real multi-row word wrap, startup chime
+
+**Status: done, confirmed under real Fuse.** Picked up right after
+Phase 32 at the user's own combined request: a better color scheme, a
+flashing cursor, a better startup sound (now that `BEEP`/`SOUND` are
+both confirmed working), and a direct question about word wrap.
+
+**Color scheme.** `kernel/graphics/graphics.asm`'s `ATTR_DEFAULT`
+changed from `$38` (white paper, black ink) to `$44` (black paper,
+bright green ink) — the user's own chosen option, picked from a set of
+proposed combinations. This also incidentally fixed a pre-existing
+mismatch: the border was already black by default (`BORDER_DEFAULT`'s
+own white was never actually applied anywhere in this project), so the
+old white-paper scheme never matched its own border.
+
+**Flashing cursor.** `core/editor.asm`'s cursor already used a
+dedicated invert routine, but the WRONG one:
+`GFX_INVERT_ATTR_STATIC` (no FLASH bit — meant for static highlights
+like a status line), not `GFX_INVERT_ATTR` (sets the FLASH bit,
+already existing in the kernel, already unused by the editor). The ULA
+blinks any attribute cell with FLASH set entirely in hardware, at
+roughly 1.5Hz on real silicon — confirmed in Fuse by sampling
+screenshots several seconds apart and observing the cursor cell
+genuinely toggle between solid (ink/paper swapped) and invisible
+(normal, and the cursor's own character is a space, so "normal" reads
+as blank against the black background). The toggle period observed in
+this Fuse session was much longer than 1.5Hz — a host emulation-speed
+artifact of this environment (see this project's own recurring notes
+on X11/timing flakiness here), not a code defect; the FLASH bit itself
+is unconditionally hardware-driven regardless of CPU speed.
+
+**Real multi-row word wrap.** The original Phase 6 editor was a
+deliberate scope cut: one fixed row (`EDIT_ROW`), a 31-character cap,
+extra keystrokes silently dropped. Asked directly "how does the print
+system handle a line over 32 characters?" first — answer: `core/print.asm`'s
+`EMIT` already had its own independent hard-wrap-at-column-32 plus
+auto-scroll for *output*, entirely unaffected by the editor's own
+separate *input* limitation. The user chose real, word-boundary-aware
+multi-row wrap for input anyway.
+
+Design, informed by researching the sibling `ts2068rom` project's own
+already-proven `EDITOR_WRAP_CALC`/`EDITOR_WRAP_OFFSET_TO_ROWCOL`
+(`rom/exrom_editor.asm`): the input line's LAST row stays anchored at
+`EDIT_ROW` (23) and grows UPWARD as needed, up to `FWRAP_MAX_ROWS` (4);
+`WRAP_CALC` breaks each row at the last space at-or-before column 32
+(hard-breaking at exactly 32 only when no space exists, matching the
+sibling project's own algorithm); `EDIT_CURSOR_TO_ROWCOL` converts a
+linear cursor offset to (row, col). A key simplification over the
+sibling project: 2068-Forth's REPL never changes input and output on
+screen at the same moment (strictly type → ENTER → run/print → fresh
+line), so growth only needs a one-time comparison against `PRINT_ROW`'s
+own current value, not continuous negotiation.
+
+**Two real bugs found before/during this work, neither hypothetical:**
+
+1. *Design bug, caught by Python simulation before any Z80 was
+   written* (this project's own established discipline — see e.g.
+   Phase 30's `F_ALIGN` note): `WRAP_CALC` caps at exactly
+   `FWRAP_MAX_ROWS` rows by construction, so `FWRAP_COUNT` can never
+   exceed 4 — meaning the original capacity check (comparing the row
+   count itself) could never fire, silently truncating characters into
+   `EDIT_BUF` that would never appear in any row's own wrap-table
+   entry. Fixed with a dedicated `FWRAP_OVERFLOW` flag, set only when
+   the row cap is hit with content still remaining.
+2. *Real stack-corruption bug, found via a genuine Fuse hang, not
+   inspection*: `rom/forth_smoke_p33.asm`'s first checkpoint showed a
+   stuck border color under real Fuse. A throwaway diagnostic ROM with
+   a border-color waypoint marker placed right before the type-loop
+   confirmed the program was genuinely HANGING mid-loop, not merely
+   failing an assertion. Hand-tracing `EDITOR_REDRAW`'s own per-row
+   setup code instruction-by-instruction found an unmatched `pop hl` —
+   a value was popped a second time with no matching push, silently
+   consuming the routine's own return address off the hardware stack
+   on every row drawn. Fixed with one `push hl` at the correct point;
+   re-verified afterward with all four `rom/forth_smoke_p33.asm`
+   checkpoints passing (green border) and `rom/forth_smoke_p6.asm`/
+   `rom/forth_smoke_p9.asm`/`rom/forth_boot.asm` all re-confirmed
+   unaffected.
+3. *Real flashing-cursor-never-clears bug, found live by the user, not
+   by any automated test*: typing "console" then backspacing it all
+   away left several cells at the start of the line stuck flashing
+   green instead of the line going blank. None of `rom/forth_smoke_p33.asm`'s
+   four checkpoints caught this because they only inspect `WRAP_CALC`'s
+   own table values, never the actual screen attributes `EDITOR_REDRAW`
+   paints — a real gap in that smoke ROM's own coverage, now understood
+   rather than hidden. Root-caused with a sequence of purpose-built
+   diagnostic ROMs (a deterministic `EDITOR_PROCESS_KEY`-driven repro of
+   the exact keystrokes, then direct attribute-memory readback probes
+   immediately after each `GFX_SET_ATTR` call) rather than guessing from
+   the symptom: `EDITOR_REDRAW`'s blank-fill loop calls `GFX_PUTCHAR`
+   (draws a space) and then reuses register `D` for the following
+   `GFX_SET_ATTR` call's own row parameter — but `GFX_PUTCHAR` is
+   documented to destroy `DE`, and it genuinely does: by the time it
+   returns, `D` holds a leftover screen-bitmap address byte (for row 23
+   specifically, `$58` — arithmetically one past the bitmap area,
+   landing right at the boundary with attribute memory's own `$5800`
+   base), not the row. `GFX_SET_ATTR`'s own bounds check (row must be
+   <24) then silently rejects the write — exactly this project's
+   established "clip rather than corrupt" convention working exactly as
+   designed, just against a caller bug rather than genuine out-of-range
+   input. The content-drawing loop directly above (`.printloop`) already
+   restores `D` from the stack between its own two calls; `.blank` was
+   simply missing that same restore. Every column that was NEVER a past
+   cursor position happened to already read back correctly by sheer
+   coincidence (either `GFX_CLS`'s own initial screen-clear, or the
+   correct content loop, had already set it to the right value, and the
+   broken blank-loop write silently no-oping left that alone) — which is
+   exactly what made this bug invisible until backspacing was tried:
+   typing alone never exposes it, since each cursor position becomes
+   real content on the very next keystroke, correctly maintained by the
+   working content loop from then on. Fixed by adding the matching
+   `pop de` / `push de` restore `.blank` was missing; re-verified with
+   the exact reported repro (type "console", backspace all seven
+   characters) showing a clean single-cell cursor, plus
+   `rom/forth_smoke_p33.asm`/`p6`/`p9`/`rom/forth_boot.asm` all
+   re-confirmed still passing.
+
+**Startup chime.** Phase 4's original startup sound requirement was met
+with a flat `SOUND_BEEP` tone — explicitly flagged in
+`rom/forth_boot.asm`'s own header as "not a considered musical choice."
+The user was offered several real options (a rising single-channel
+arpeggio, a two-note beep, a two-note "power chord," and an old-Mac-
+style full chord) and picked the Mac-style chord. First version: C4/E4/
+G4 struck simultaneously across all three AY channels, held ~800ms.
+Recorded live by the user and analyzed by FFT — the three fundamental
+frequencies measured (261.7/330.0/391.7 Hz) matched the C4/E4/G4 target
+almost exactly, with no clipping, so the "didn't sound correct" report
+wasn't a wrong-note bug: three raw AY square waves snapping to full
+volume in the same instant is inherently harsh (clashing square-wave
+harmonics, an instant-on click) compared to the real Mac's smooth
+*sampled* synth chime. Revised to a staggered, ramped attack — Channel
+A rings first, fading up over 3 steps, then B, then C roll in on top
+(like an actual rolled bell chime) — followed by a shared 3-step fade
+on release, using a new `CHIME_DELAY` helper (a real frame-count wait
+backed by `kernel/interrupt.asm`'s own `INT_GET_FRAMES`, which required
+moving `KBD_ISR_INIT`/`IM 1`/`EI` to run BEFORE the chime instead of
+after — `FRAMES` only advances once the ISR is live). Channel A's own
+tone-period FINE byte (chip register 0) is written directly via the AY
+ports rather than through `core/sound.asm`'s `SOUND_WRITE`, since that
+routine faithfully refuses register 0 to match the real ROM's `SOUND`
+command — a restriction that protects `SOUND`'s own authenticity but
+doesn't bind this boot code.
+
+ROM budget after this phase: `rom/forth_boot.asm` uses 12024 of 16384
+bytes ($2EF8 of $4000), 4360 bytes free — combined cost of the color
+change, flashing-cursor fix, multi-row wrap rewrite, and startup chime
+is +660 bytes over Phase 32.
+
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
 **Not yet scheduled as a numbered phase — tracked here so it isn't

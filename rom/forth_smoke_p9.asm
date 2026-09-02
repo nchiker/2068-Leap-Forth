@@ -121,8 +121,16 @@ COLD_START:
     ld   (HERE), hl
     xor  a
     ld   (STATE), a
+    ld   (PRINT_ROW), a           ; required since core/editor.asm's
+    ld   (PRINT_COL), a           ; own word-wrap rewrite added a
+                                  ; PRINT_ROW dependency -- see
+                                  ; core/print.asm's own header
     ld   a, DEFAULT_ATTR          ; required since Phase 15 -- see
     ld   (CURRENT_ATTR), a        ; core/ts2068.asm's own header
+    ld   a, 1
+    ld   (FWRAP_OLD_COUNT), a ; required once at cold start -- see
+                                  ; core/editor.asm's own header on this
+                                  ; cell
 
 ; ---- checkpoint 1: FIND every chain-spliced phase's own word ----
     ld   a, 1
@@ -266,6 +274,16 @@ DICT_CHAIN_POINT DEFL H_BORDER
 DICT_CHAIN_POINT DEFL H_LOAD
     INCLUDE "core/float.asm"
     INCLUDE "core/mode64.asm"
+DICT_CHAIN_POINT DEFL DICT_LATEST_INIT_P8B   ; satisfies core/print.asm's
+                                              ; own chain requirement
+                                              ; below; LATEST itself
+                                              ; stays seeded to this
+                                              ; same tail above, so
+                                              ; EMIT/. this splices in
+                                              ; don't change what this
+                                              ; ROM's own checkpoint 1
+                                              ; FINDs
+    INCLUDE "core/print.asm"
     INCLUDE "core/editor.asm"
 
     DS   $4000 - $, $FF
