@@ -268,10 +268,38 @@ NUMBER:
     call DPOP_HL
     ld   a, (hl)
     or   a
+    IFDEF DECIMAL_NUMBER_ENABLED
+    jp   z, .fail                 ; JP, not JR -- gated the same as the
+                                   ; rest of Phase 23's own hook below:
+                                   ; that IFDEF block pushed this
+                                   ; displacement within 10 bytes of
+                                   ; JR's +-127 limit (flagged by
+                                   ; tools/check_z80_opcodes.py) only
+                                   ; when it's actually compiled in; a
+                                   ; ROM that doesn't opt in never grew
+                                   ; NUMBER, so its own JR was never at
+                                   ; risk and stays byte-for-byte
+                                   ; unchanged
+    ELSE
     jr   z, .fail
+    ENDIF
     ld   (NUM_COUNT), a
     inc  hl
     ld   (NUM_PTR), hl
+    IFDEF DECIMAL_NUMBER_ENABLED
+    ; Phase 23 (core/decimal.asm) hook: a token containing '.' is a
+    ; decimal literal, parsed and pushed onto the FLOAT stack entirely
+    ; by DECIMAL_PARSE_AND_PUSH, not by any of the plain-integer code
+    ; below. Gated behind DECIMAL_NUMBER_ENABLED (the including ROM
+    ; must DEFINE it before this INCLUDE) so that every ROM which
+    ; doesn't opt in gets this NUMBER completely unchanged, byte for
+    ; byte — confirmed directly by diffing a rebuilt
+    ; rom/forth_smoke_p3.asm against its own pre-Phase-23 output, not
+    ; just reasoned about.
+    call CHECK_FOR_DOT
+    or   a
+    jp   nz, DECIMAL_PARSE_AND_PUSH
+    ENDIF
     xor  a
     ld   (NUM_NEG), a
     ld   a, (hl)
@@ -536,12 +564,31 @@ INTERPRET_RUN:
     ld   a, l
     or   a
     jr   z, .badword
+    IFDEF DECIMAL_NUMBER_ENABLED
+    ; Phase 23 (core/decimal.asm): flag=2 means NUMBER already pushed a
+    ; FLOAT onto the float stack (DECIMAL_PARSE_AND_PUSH), not an
+    ; integer onto the data stack — nothing below this check applies to
+    ; it. Gated the same way as NUMBER's own hook, for the same reason:
+    ; a ROM without core/float.asm INCLUDEd can't even resolve FPOP.
+    cp   2
+    jr   z, .gotfloat
+    ENDIF
     ld   a, (STATE)
     or   a
     jr   z, .loop                  ; interpreting: leave n on the stack
     call DPOP_HL                   ; compiling: take n back off ...
     call COMPILE_LITERAL           ; ... and compile it as a literal instead
     jr   .loop
+    IFDEF DECIMAL_NUMBER_ENABLED
+.gotfloat:
+    ld   a, (STATE)
+    or   a
+    jr   z, .loop                  ; interpreting: float already on the
+                                    ; float stack, nothing more to do
+    call FPOP                      ; compiling: take the float back off
+    call COMPILE_FLOAT_LITERAL     ; the float stack and compile it as
+    jr   .loop                     ; a literal instead
+    ENDIF
 
 .badword:
     jp   INTERPRET_UNKNOWN_WORD    ; see rom/forth_smoke_p3.asm: this smoke

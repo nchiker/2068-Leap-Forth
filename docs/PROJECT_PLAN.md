@@ -1321,15 +1321,80 @@ right after `core/print.asm`; re-verified with a deterministic
 full-chain diagnostic that also confirms `KEY` is still `FIND`-able,
 plus a fresh boot screenshot.
 
+## Phase 23 — decimal number literal parsing
+
+**Status: done.** Typing a decimal number literal like `3.5` now
+pushes a real float directly, in both interpret and compile contexts —
+the last piece keeping `F+`/`F-`/`F*`/`F/`/`F.` (Phases 8/18/19/22)
+reachable only by feeding the float stack directly via `FPUSH`, never
+by typing an expression.
+
+**The real risk, and how it was managed**: `core/interp.asm`'s `NUMBER`
+and `INTERPRET_RUN` are the single most shared routines in this
+project — every smoke ROM and `rom/forth_boot.asm` depends on them.
+Rather than changing them unconditionally, both call sites are wrapped
+in `IFDEF DECIMAL_NUMBER_ENABLED` / `ENDIF` (`core/decimal.asm`'s own
+new file). The including ROM must `DEFINE DECIMAL_NUMBER_ENABLED`
+before `INCLUDE`ing `core/interp.asm` to opt in; any ROM that doesn't —
+every existing smoke ROM, unchanged — gets `core/interp.asm`'s compiled
+bytes byte-for-byte IDENTICAL to before this phase. This was verified
+directly, not just reasoned about: `rom/forth_smoke_p3.asm` (which
+doesn't even `INCLUDE core/float.asm`, so an ungated reference to a
+float routine from dead code would have been a hard assembly error,
+not just an unreachable branch), `rom/forth_smoke_p9.asm`, and
+`rom/forth_smoke_p16.asm` were all rebuilt and diffed byte-for-byte
+against their prior output — identical in every case.
+
+**The algorithm**, reusing Phase 18/19's own machinery rather than
+inventing a new one: accumulate the token's digits into one running
+integer (the exact `*10+digit` technique `NUMBER` already uses for
+plain integers, dot skipped over instead of rejected), counting how
+many digits followed the decimal point; widen that integer by 2^16 and
+divide by 10^(digit count after the point) via `core/floatdiv.asm`'s
+own `F_UDIV32BY16` — exactly `F/`'s own "scale the dividend up, then
+divide" trick, reused verbatim because it's the identical problem;
+normalize the 32-bit quotient via `core/floatmul.asm`'s own
+`F_NORMALIZE32` (also reused unchanged); final exponent =
+`F_NORM_SHIFT - 16`. Hand-verified against two cases before ever
+assembling any of it: `"3.5"` → mantissa 28672, exponent -13 (exactly
+3.5), and `"0.25"` → mantissa 16384, exponent -16 — the SAME
+representation already hand-picked by a human for "0.25" in three
+earlier smoke ROMs (Phases 18/19/22), a genuine cross-check that this
+parser's output matches independently-chosen values for the same
+number.
+
+Compiling a decimal literal inside a colon definition needed its own
+small addition: `DOFLIT` (`core/interp.asm`'s own `DOLIT` idiom widened
+from a 2-byte integer to a 3-byte float) and `COMPILE_FLOAT_LITERAL`
+(the analogous widening of `COMPILE_LITERAL`) — both in
+`core/decimal.asm`, mirroring established patterns rather than
+inventing new ones.
+
+**A real, timely warning caught and fixed along the way**: adding the
+new `IFDEF` block to `NUMBER` made the routine longer, pushing an
+*existing*, unrelated `jr z, .fail` within 10 bytes of `JR`'s ±127-byte
+range limit — flagged by `tools/check_z80_opcodes.py`, whose own
+documentation says exactly this is worth a second look when a routine
+grows. Fixed by converting that one jump to `JP` (unlimited range) —
+gated behind the same `IFDEF`, so a ROM that never opts in keeps its
+original `JR` untouched, preserving its own byte-identical guarantee.
+
+`rom/forth_smoke_p23.asm` proves it under real Fuse with three
+checkpoints: the two hand-verified parsing cases above, plus a full
+combined test (`: DOUBLEIT 2.0 F* ; 3.5 DOUBLEIT F.`) exercising a
+decimal literal typed directly, one compiled inside a word definition,
+`F*`, and `F.` together — printing `"7.0000"` correctly on the very
+first real Fuse run. Wired into `rom/forth_boot.asm`'s full chain;
+re-verified with a deterministic full-chain diagnostic (also confirming
+`KEY` is still `FIND`-able) plus a fresh boot screenshot.
+
 Hi-res graphics mode remains the only item left on the original gap
 list, along with the tracked-but-unscheduled 64-column text mode
-stretch goal below — plus `LEAVE`/`+LOOP` (deferred since Phase 16),
-decimal number literal parsing (so `F+`/`F-`/`F*`/`F/`/`F.` become
-actually typeable), and AY-3-8912 `SOUND` (real register-level sound
-access, distinct from the existing simple `BEEP` — exists and works in
-the sibling `ts2068rom` BASIC project via ports `$F5`/`$F6`, never
-ported here), tracked as its own future phase per the user's own
-request 2026-09-01.
+stretch goal below — plus `LEAVE`/`+LOOP` (deferred since Phase 16) and
+AY-3-8912 `SOUND` (real register-level sound access, distinct from the
+existing simple `BEEP` — exists and works in the sibling `ts2068rom`
+BASIC project via ports `$F5`/`$F6`, never ported here), tracked as its
+own future phase per the user's own request 2026-09-01.
 
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 

@@ -617,13 +617,31 @@ you don't mistake their gaps for something more finished being broken.
 **Decimal numbers.** `F+`, `F-`, `F*`, and `F/` add, subtract,
 multiply, and divide numbers with a fractional part; `F.` prints one,
 always showing exactly 4 digits after the decimal point (`6.0`
-prints as `"6.0000"`, not `"6"`). There's no plain integer `*` or `/`
-at all in 2068-Forth yet, for whole numbers or otherwise — only these
-decimal ones. There's also no way to *write* a decimal number yet
-(`NUMBER` only understands whole numbers, section 3), so none of the
-five can actually be reached by typing an expression today — they
-exist and work, proven by feeding them values directly rather than
-through typed text, but they're not yet reachable the way `+` is.
+prints as `"6.0000"`, not `"6"`). Unlike earlier phases of this
+project, these are genuinely typeable now:
+
+```forth
+3.5 2.5 F+ F.       \ prints 6.0000
+2.0 3.0 F* F.       \ prints 6.0000
+1.0 4.0 F/ F.       \ prints 0.2500
+```
+
+A decimal literal — any number written with a `.` in it — pushes a
+float instead of a plain integer, the moment `NUMBER` sees the dot.
+It works inside colon definitions too, compiled in exactly like an
+integer literal would be:
+
+```forth
+: HALVE  2.0 F/ ;
+5.0 HALVE F.        \ prints 2.5000
+```
+
+There's no plain integer `*` or `/` at all in 2068-Forth yet, for
+whole numbers or otherwise — only these decimal ones. The precision is
+real but limited: `F.` always shows exactly 4 decimal digits, rounded
+toward zero rather than to the nearest digit, so very small differences
+near the 4th digit can look slightly off from what a calculator would
+show for the same expression.
 
 **A wider screen.** `64COL` switches to a 64-column display — twice the
 normal text width — `32COL` switches back, `PALETTE64` picks a color
@@ -652,7 +670,6 @@ ask about, aren't part of 2068-Forth yet. Each will get its own section
 here once it's real:
 
 - **Hi-res graphics mode** — see section 7's own status note.
-- **Decimal number literals** — see section 11.
 - **`LEAVE`/`+LOOP`** — exiting a counted loop (section 6) early, or
   stepping by something other than 1.
 - **Real AY-3-8912 sound** — `BEEP` (section 7) only toggles a simple

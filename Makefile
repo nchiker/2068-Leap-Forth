@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-boot check clean
+.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-boot check clean
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-boot
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-boot
 
 # Milestone 0: boot stub only.
 boot:
@@ -240,6 +240,16 @@ forth-smoke-p22:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p22.sym --lst=build/forth_smoke_p22.lst rom/forth_smoke_p22.asm
 	mv forth_smoke_p22_rom0.bin build/forth_smoke_p22_rom0.bin
+
+# Phase 23: decimal number literal parsing smoke ROM. DEFINEs
+# DECIMAL_NUMBER_ENABLED before INCLUDEing core/interp.asm -- the
+# opt-in gate that keeps every OTHER ROM in this project byte-for-byte
+# unaffected (verified directly by diffing rebuilt binaries, not just
+# reasoned about). See core/decimal.asm's own header.
+forth-smoke-p23:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p23.sym --lst=build/forth_smoke_p23.lst rom/forth_smoke_p23.asm
+	mv forth_smoke_p23_rom0.bin build/forth_smoke_p23_rom0.bin
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm

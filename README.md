@@ -241,6 +241,20 @@ inherited, what was deliberately left behind, and the phased build order.
   destroys `B` internally, causing a genuine hang confirmed by two
   screenshots seconds apart showing identical, frozen state. Fixed and
   re-verified against the real, complete dictionary chain.
+- Phase 23 (`core/decimal.asm` + `rom/forth_smoke_p23.asm`): decimal
+  number literal parsing — typing `3.5` now pushes a real float
+  directly, completing what `F+`/`F-`/`F*`/`F/`/`F.` needed to be
+  actually typeable. `core/interp.asm`'s `NUMBER`/`INTERPRET_RUN` (the
+  single most shared routines in the project) are only changed behind
+  an `IFDEF DECIMAL_NUMBER_ENABLED` opt-in — verified byte-for-byte
+  identical for every ROM that doesn't opt in, not just reasoned about.
+  Reuses `F*`'s `F_NORMALIZE32` and `F/`'s `F_UDIV32BY16` rather than
+  inventing new conversion logic. A real, timely `JR` range warning
+  (caught by the static checker, not by running anything) was fixed
+  along the way. Confirmed passing under Fuse with a full combined test
+  (a decimal literal typed directly, one compiled inside a word, `F*`,
+  and `F.` together) and re-verified against the real, complete
+  dictionary chain.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -278,6 +292,7 @@ core/       language-layer code, not hardware-facing:
               floatdiv.asm (Phase 19 — F/)
               key.asm     (Phase 20 — KEY)
               floatprint.asm (Phase 22 — F.)
+              decimal.asm (Phase 23 — decimal literals)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
             2068-Forth's own addition, mode64/ (recovered, once-shipped
@@ -308,6 +323,7 @@ rom/        ROM image assembly:
               forth_smoke_p20.asm Phase 20 smoke ROM (KEY)
               forth_smoke_p21.asm Phase 21 smoke ROM (error feedback)
               forth_smoke_p22.asm Phase 22 smoke ROM (F.)
+              forth_smoke_p23.asm Phase 23 smoke ROM (decimal literals)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -348,6 +364,7 @@ make forth-smoke-p19  # Phase 19 smoke ROM: F/
 make forth-smoke-p20  # Phase 20 smoke ROM: KEY
 make forth-smoke-p21  # Phase 21 smoke ROM: error feedback
 make forth-smoke-p22  # Phase 22 smoke ROM: F.
+make forth-smoke-p23  # Phase 23 smoke ROM: decimal literals
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
@@ -369,8 +386,9 @@ to see `.` print `8` on the row below the banner, `5 3 > .` to see `-1`
 (Forth's TRUE) printed, `VARIABLE FOO 42 FOO ! FOO @ .` to see `42`,
 `: GREET ." HI" ; GREET` to see `."` print a literal string, `: FIVE 5 0 DO I . LOOP ; FIVE` to see
 `0 1 2 3 4` printed, `100 100 30 CIRCLE 2 INK 100 100 FILL` to see a
-red-filled circle, or type a nonsense word like `FOOBAR` to see `?`
-printed and the prompt recover cleanly.
+red-filled circle, type a nonsense word like `FOOBAR` to see `?`
+printed and the prompt recover cleanly, or `3.5 2.5 F+ F.` to see a
+real decimal literal expression print `6.0000`.
 
 ## License
 

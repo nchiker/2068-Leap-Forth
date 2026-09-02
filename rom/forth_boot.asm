@@ -23,7 +23,10 @@
 ; VARIABLE/CONSTANT, .", WHILE/REPEAT, INK/PAPER, DO/LOOP/I,
 ; FILL/AT-XY, KEY, F.), chained into one LATEST list via the same
 ; DICT_CHAIN_POINT splices rom/forth_smoke_p9.asm introduced and
-; proved.
+; proved. DECIMAL_NUMBER_ENABLED is also DEFINEd here (core/decimal.asm,
+; Phase 23) — not a dictionary word, a NUMBER/INTERPRET_RUN parsing
+; capability: typing a literal like `3.5` now pushes a real float
+; directly, in both interpret and compile contexts.
 ;
 ; WHAT ISN'T HERE YET, stated plainly: no live automated test exercises
 ; the interactive loop this file actually boots into — by its nature,
@@ -179,6 +182,7 @@ INTERPRET_UNKNOWN_WORD:
     INCLUDE "kernel/storage/storage.asm"
     INCLUDE "kernel/mode64/mode64.asm"
     INCLUDE "core/dict.asm"
+    DEFINE DECIMAL_NUMBER_ENABLED
     INCLUDE "core/interp.asm"
 DICT_CHAIN_POINT DEFL H_SEMICOLON
     INCLUDE "core/control.asm"
@@ -193,6 +197,7 @@ DICT_CHAIN_POINT DEFL H_PLOT64
 DICT_CHAIN_POINT DEFL H_FSTAR
     INCLUDE "core/floatdiv.asm"
 DICT_CHAIN_POINT DEFL H_FSLASH
+    INCLUDE "core/decimal.asm"
     INCLUDE "core/print.asm"
 DICT_CHAIN_POINT DEFL H_DOT
     INCLUDE "core/floatprint.asm"
