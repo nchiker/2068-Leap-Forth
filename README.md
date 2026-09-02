@@ -402,6 +402,27 @@ inherited, what was deliberately left behind, and the phased build order.
   computed representation of 9.0, not the hand-picked test value —
   confirming the algorithm generalizes correctly, not just for the
   specific inputs it was hand-verified against).
+- **Foundational fix, its own commit** (`core/float.asm` +
+  `rom/forth_smoke_p8.asm`): `F+`/`F-` had a silent 16-bit
+  mantissa-overflow bug present since Phase 8, found while designing
+  `SIN`/`COS` (Phase 30) — a Python simulation of the planned table
+  interpolation caught it before any Z80 trig code was written. Adding
+  two same-sign, already-normalized mantissas near the ~32767 ceiling
+  (routine for table-driven math, not a contrived edge case) could
+  silently wrap into a wrong-signed result with no error raised. Fixed
+  with standard post-add signed-overflow detection: a same-sign-in,
+  opposite-sign-out result triggers a fallback that redoes the add from
+  the aligned mantissas each halved by one bit, with the exponent
+  bumped by one to compensate — costing one bit of precision only on
+  the inputs that actually need it. Re-verified with a new fourth
+  checkpoint proving the exact overflow case now returns the correct
+  answer under real Fuse, the original three checkpoints still passing
+  unchanged, and every dependent smoke ROM (`p18`/`p19`/`p29`,
+  `rom/forth_boot.asm`'s full chain) rebuilding clean with no visible
+  regression. See `docs/PROJECT_PLAN.md`'s own "Foundational fix"
+  section for the full story, including a separate, narrower,
+  not-yet-fixed `F_ALIGN` signed-comparison quirk found and ruled out
+  (but not fixed) during the same investigation.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's

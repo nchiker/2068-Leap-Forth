@@ -145,6 +145,29 @@ COLD_START:
     call CHECK_FTOP
     call FPOP
 
+; ---- checkpoint 4 (border color 5, not 4 -- see
+; rom/forth_smoke_p27.asm's own header for why a checkpoint literally
+; numbered 4 would collide with PASS_TEST's own green): F+ mantissa
+; overflow. (30893,-16) + (18950,-18) aligns to (30893,-16) +
+; (4737,-16) -- a direct add overflows (35630 > 32767, wrapping
+; negative); the fix halves both aligned mantissas, adds (17814),
+; and bumps the exponent by 1, giving (17814,-15) ~ 0.5436 -- close to
+; the true sum ~0.5440, not a wrapped, wrong-signed nonsense value.
+; See core/float.asm's own W_FPLUS header for the full story. ----
+    ld   a, 5
+    ld   (CHECKPOINT_NUM), a
+    ld   hl, 30893
+    ld   a, -16
+    call FPUSH
+    ld   hl, 18950
+    ld   a, -18
+    call FPUSH
+    call W_FPLUS
+    ld   hl, 17814
+    ld   a, -15
+    call CHECK_FTOP
+    call FPOP
+
     jp   PASS_TEST
 
 ; ---- test-harness-only helpers: NOT dictionary words ----

@@ -1929,6 +1929,66 @@ specific inputs it was hand-verified against. `core/floatsqrt.asm` is
 wired in right after `core/floatprint.asm` (before `core/compare.asm`,
 which now chains from `H_FSQRT` instead of `H_FDOT`).
 
+## Foundational fix — F+/F- silent mantissa-overflow bug
+
+**Status: done, its own commit, separate from Phase 30.** Found while
+designing Phase 30 (`SIN`/`COS`), before any Z80 trig code was written:
+a Python simulation of the planned table-interpolation step (adding two
+already-normalized mantissas each close to the 15-bit ceiling, exactly
+the shape `SIN`'s own lookup table produces) turned up a genuine bug in
+`core/float.asm`'s `W_FPLUS`/`W_FMINUS` that has existed, unnoticed,
+since Phase 8: after `F_ALIGN` shifts the two mantissas onto a common
+exponent, the actual `ADD HL,DE` (or `SBC HL,DE` for `F-`) is a plain
+16-bit op with no overflow check. Two same-sign mantissas that are each
+already normalized toward the ~32767 ceiling — the everyday case for
+table-driven interpolation, not a contrived edge case — can sum past
+32767 and silently wrap into a wrong-signed result. Concretely:
+`(30893,-16) + (18950,-18)` aligns to `(30893,-16) + (4737,-16)`; the
+direct sum `35630` overflows a signed 16-bit range and wraps to
+`-29906` — a large NEGATIVE result from adding two positive numbers,
+with no error, no flag, nothing to signal it happened.
+
+**The fix**: standard signed-overflow detection, applied after the
+add/subtract rather than trying to predict it beforehand. For `F+`:
+compute `HL+DE` as before; if the two input mantissas had DIFFERENT
+signs, overflow is mathematically impossible (the true sum's magnitude
+can only shrink), so the fast path is left untouched. If they had the
+SAME sign, compare that sign against the result's own sign — a flip
+means overflow happened — and only then redo the add from the ORIGINAL
+aligned mantissas, each halved by one arithmetic-shift-right (`SRA`
+into `RR`, preserving sign) first, with the result exponent bumped by
+one to compensate. `F-` mirrors this exactly (matching signs can never
+overflow a subtraction; differing signs can, checked the same way).
+The fallback trades exactly one bit of precision only on the rare
+inputs that actually need it — the common case (Phase 8's own three
+original checkpoints, none of which are anywhere near the overflow
+boundary) is bit-for-bit unchanged.
+
+Re-verified with a new fourth checkpoint added to
+`rom/forth_smoke_p8.asm` (border color 5 for its failure case, not 4 —
+see that file's own Phase 27 color-collision note) proving the exact
+overflow case above now correctly returns `(17814,-15)` (≈0.5436, close
+to the true ≈0.5440, not a wrapped negative value) under real Fuse, and
+the original three checkpoints re-run unchanged (still green) to
+confirm no regression. `core/float.asm`, `kernel/math`'s own routines,
+and every other smoke ROM in the chain (`p18`/`p19`/`p29`,
+`rom/forth_boot.asm`'s full dictionary) were rebuilt clean with no
+assembly errors; `rom/forth_boot.asm` re-verified booting to its normal
+banner under real Fuse with no visible regression.
+
+**A separate, narrower, NOT-yet-fixed quirk was found and ruled out
+during the same investigation** (see the
+`2068forth-float-align-signed-cmp-quirk` memory note for the full
+story): `F_ALIGN` itself compares the two operand exponents with plain
+`CP`/`JR C` — an unsigned comparison applied to signed exponent bytes.
+Confirmed benign for the common "add exact zero" case (`X + 0.0` and
+`0.0 + X` both still return `X` exactly, verified on real Fuse), but
+flagged as a real risk, not yet exercised or fixed, for any future
+calculation mixing a very-large-magnitude operand (≳16384, needing a
+non-negative exponent) with a normal small one — out of scope for
+`SIN`/`COS`'s own bounded-range inputs, but worth remembering before
+trusting `F+`/`F-` more broadly.
+
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
 **Not yet scheduled as a numbered phase — tracked here so it isn't

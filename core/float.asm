@@ -152,6 +152,51 @@ F_ALIGN:
 
 ; ============================================================================
 ; F+ ( f1 f2 -- f1+f2 )
+;
+; A REAL BUG FOUND AND FIXED HERE (discovered while designing a later
+; SIN/COS phase's own table interpolation, which routinely adds two
+; ALREADY-near-maximum mantissas together): the ORIGINAL version of
+; this word did a plain `add hl,de` on the two aligned mantissas with
+; NO overflow handling at all. Two mantissas of the SAME sign, once
+; aligned to a common exponent, can sum to more than +32767 (or less
+; than -32768) — perfectly ordinary, e.g. adding two values each
+; already using close to the full 15-bit mantissa range (exactly how
+; core/floatmul.asm's own F_NORMALIZE32 likes to leave things,
+; including every entry in a lookup table normalized that way). The
+; 16-bit ADD doesn't "overflow" in the sense of trapping or setting a
+; usable flag for this (Z80's `ADD HL,DE` doesn't touch the P/V flag
+; at all, only 8-bit ALU ops do) — it just silently WRAPS, flipping the
+; result's own sign, with no renormalization step to catch it (unlike
+; F*/F/, which already call F_NORMALIZE32 after their own wider
+; computation). Confirmed as a real, reproducible defect via a Python
+; simulation of this exact routine's own arithmetic (not guessed): two
+; real table values from the not-yet-written SIN phase, (30893,-16) and
+; an aligned (4737,-16), sum to 35630 — wraps to -29906, a wrong-signed
+; nonsense result, not merely an imprecise one.
+;
+; THE FIX: standard signed-addition overflow detection — if the two
+; (aligned) mantissas have DIFFERENT signs, their sum can never exceed
+; either operand's own magnitude, so overflow is impossible and the
+; plain `add hl,de` is trusted unchanged (the common case, no added
+; cost). If they have the SAME sign, add normally, then check whether
+; the RESULT's own sign matches — if it doesn't, overflow occurred, so
+; the addition is redone from the two ORIGINAL (still available in
+; F_M1/F_M2, untouched by the discarded first attempt) mantissas, each
+; first halved with a sign-preserving arithmetic shift (SRA/RR), and
+; the result's own exponent incremented by 1 to compensate — trading
+; one bit of precision (the same category of approximation this
+; project's own truncating `F.` and integer `SQRT`/`FSQRT` already
+; accept) for a result that's actually correctly signed and in the
+; right ballpark, instead of wildly wrong.
+;
+; HAND-VERIFIED against the real failing case before trusting it:
+; (30893,-16) + (18950,-18) — aligning the second operand to the
+; first's own exponent (-16) gives (4737,-16); the direct sum overflows
+; (35630, wraps to -29906) as described above; the fallback instead
+; computes (30893>>1)+(4737>>1) = 15446+2368 = 17814, exponent -16+1 =
+; -15, giving 17814*2^-15 ≈ 0.5436 — correctly close to the true sum
+; ≈0.5449 (0.4714+0.0723 by the same table math), not wrapped or
+; wrong-signed.
 ; ============================================================================
 H_FPLUS:
     DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL) to
@@ -170,13 +215,49 @@ W_FPLUS:
     call F_ALIGN
     ld   hl, (F_M1)
     ld   de, (F_M2)
+    ld   a, h
+    xor  d
+    and  $80
+    jr   nz, .fplus_add          ; signs differ -- overflow impossible,
+                                  ; trust the straightforward sum
     add  hl, de
+    ld   a, h
+    ld   c, a
+    ld   a, (F_M1+1)
+    xor  c
+    and  $80
+    jr   z, .fplus_push          ; same sign going in, same sign coming
+                                  ; out -- no overflow
+    ; overflow: redo from the ORIGINAL (untouched) aligned mantissas,
+    ; each halved first, exponent bumped by 1 to compensate
+    ld   hl, (F_M1)
+    sra  h
+    rr   l
+    ld   de, (F_M2)
+    sra  d
+    rr   e
+    add  hl, de
+    ld   a, (F_RESULT_EXP)
+    inc  a
+    ld   (F_RESULT_EXP), a
+    jr   .fplus_push
+.fplus_add:
+    add  hl, de
+.fplus_push:
     ld   a, (F_RESULT_EXP)
     call FPUSH
     ret
 
 ; ============================================================================
 ; F- ( f1 f2 -- f1-f2 )
+; Same overflow bug and fix as F+ above (see its own header for the
+; full story) — subtraction's own overflow rule is the mirror image:
+; two aligned mantissas of DIFFERENT signs behave like adding same-
+; signed magnitudes (A - (-B) = A + B), so THAT'S the case that can
+; overflow; same-signed operands can't (subtracting a value can't push
+; the result further from zero than the larger operand's own
+; magnitude). The fallback is identical: halve both original aligned
+; mantissas, subtract, bump the exponent by 1.
 ; ============================================================================
 H_FMINUS:
     DW   H_FPLUS
@@ -191,8 +272,38 @@ W_FMINUS:
     call F_ALIGN
     ld   hl, (F_M1)
     ld   de, (F_M2)
+    ld   a, h
+    xor  d
+    and  $80
+    jr   z, .fminus_sub          ; signs match -- overflow impossible,
+                                  ; trust the straightforward difference
     or   a
     sbc  hl, de
+    ld   a, h
+    ld   c, a
+    ld   a, (F_M1+1)
+    xor  c
+    and  $80
+    jr   z, .fminus_push         ; result's sign still matches F_M1's
+                                  ; own -- no overflow
+    ; overflow: redo from the ORIGINAL (untouched) aligned mantissas,
+    ; each halved first, exponent bumped by 1 to compensate
+    ld   hl, (F_M1)
+    sra  h
+    rr   l
+    ld   de, (F_M2)
+    sra  d
+    rr   e
+    or   a
+    sbc  hl, de
+    ld   a, (F_RESULT_EXP)
+    inc  a
+    ld   (F_RESULT_EXP), a
+    jr   .fminus_push
+.fminus_sub:
+    or   a
+    sbc  hl, de
+.fminus_push:
     ld   a, (F_RESULT_EXP)
     call FPUSH
     ret
