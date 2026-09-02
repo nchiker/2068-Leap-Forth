@@ -543,6 +543,23 @@ inherited, what was deliberately left behind, and the phased build order.
   dictionary chain and `INTERPRET_RUN`, not just direct word calls —
   proving the dictionary splice itself is wired correctly. +52 bytes
   (`rom/forth_boot.asm`: 12024 -> 12076 of 16384).
+- Phase 35 (`core/floatconv.asm` + `rom/forth_smoke_p35.asm`): `FROUND`,
+  standard ANS Forth's "round a float to the nearest integer" word —
+  asked for right after trying `2.0 FSQRT F>S .` live and getting the
+  (correct, truncated) `1` for `sqrt(2)`, wanting rounding as an option
+  too rather than a replacement. `FROUND` stays a float (composes with
+  the existing `F>S` for a rounded integer: `FROUND F>S`). The obvious
+  "add half, then shift" rounding technique risks overflowing the
+  16-bit mantissa before the shift runs; avoided instead by reusing
+  `F_SHRA` unchanged and reading the CARRY FLAG it already leaves
+  behind (an existing side effect of its own `SRA`/`RR`/`DJNZ` shift
+  loop) as the rounding-decision bit — no addition, no overflow risk.
+  Round-half-up (ties move toward positive infinity), hand-verified via
+  Python simulation before any Z80 was written:
+  `FROUND(0.5)=1` but `FROUND(-0.5)=0`, genuinely disagreeing with
+  plain `F>S(-0.5)=-1` on the exact same input — both smoke ROMs
+  confirm this on purpose. +34 bytes (`rom/forth_boot.asm`: 12076 ->
+  12110 of 16384).
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -633,6 +650,7 @@ rom/        ROM image assembly:
               forth_smoke_p32.asm Phase 32 smoke ROM (SOUND)
               forth_smoke_p33.asm Phase 33 smoke ROM (multi-row word wrap)
               forth_smoke_p34.asm Phase 34 smoke ROM (S>F/F>S)
+              forth_smoke_p35.asm Phase 35 smoke ROM (FROUND)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -685,6 +703,7 @@ make forth-smoke-p31  # Phase 31 smoke ROM: real BEEP
 make forth-smoke-p32  # Phase 32 smoke ROM: SOUND
 make forth-smoke-p33  # Phase 33 smoke ROM: real multi-row word wrap
 make forth-smoke-p34  # Phase 34 smoke ROM: S>F/F>S
+make forth-smoke-p35  # Phase 35 smoke ROM: FROUND
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```

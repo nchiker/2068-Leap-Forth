@@ -1,10 +1,61 @@
 ; ============================================================================
 ; core/floatconv.asm — Phase 34: S>F and F>S (integer/float conversion)
+;                      Phase 35 adds FROUND (round to nearest integer)
 ;
 ; Builds on core/dict.asm (DPUSH_HL/DPOP_HL) and core/float.asm
 ; (FPUSH/FPOP, F_SHRA, and this project's own float format — both must
 ; be INCLUDEd first; this file's own first header chains through
 ; DICT_CHAIN_POINT).
+;
+; PHASE 35: after F>S's own truncating behavior surprised the user live
+; (`2.0 FSQRT F>S .` printing `1`, not `1` rounded from `1.41421` —
+; correct, just a reminder that truncation isn't rounding), they asked
+; for rounding as an option too, not a replacement — F>S keeps
+; truncating exactly as before (this file's own header on it,
+; unchanged). Standard ANS Forth's own answer to "round a float" is
+; FROUND ( r1 -- r2 ) — rounds to the nearest INTEGRAL value, but
+; leaves the result as a float (not `n` on the integer stack), so it
+; composes with the EXISTING F>S rather than duplicating it:
+; `FROUND F>S` gives a rounded integer, since by the time F>S sees it,
+; the value already has no fractional part left to truncate away.
+;
+; THE ALGORITHM, chosen specifically to avoid a real overflow trap: the
+; obvious "add 2^(N-1), then shift right by N" rounding technique (bias
+; the value by half a unit before flooring) risks overflowing the
+; 16-bit mantissa BEFORE the shift even runs — this project's own
+; normalized mantissas often already sit near the top of the 16-bit
+; range (core/floatsqrt.asm's own header: "mantissa in [16384,32767]"),
+; and adding a bias up to 2^14 on top of that overflows routinely, not
+; as a rare edge case. Avoided entirely by never adding anything:
+; F_SHRA (core/float.asm, reused completely unchanged, exactly like
+; F>S's own negative-exponent case) shifts one bit at a time via
+; SRA/RR, and DJNZ — which doesn't touch flags at all — means the
+; CARRY FLAG left over when F_SHRA returns is exactly the bit shifted
+; out on its OWN last iteration: bit (N-1) of the original mantissa,
+; i.e. "is the discarded fraction >= 0.5?" This was already true of
+; F_SHRA before this phase ever existed; nothing there needed to
+; change, only USING that already-present side effect. If that bit is
+; set, the floored (truncated-toward-negative-infinity, same as F>S's
+; own documented direction) result is incremented by one — round-half-
+; UP (ties move toward positive infinity), the simplest of the several
+; standard tie-breaking rules and consistent with "add half, then
+; floor" without ever performing the risky addition.
+;
+; HAND-VERIFIED with a Python simulation of this exact algorithm before
+; any Z80 was written (this project's own established discipline):
+;   FROUND(1.41421 = sqrt(2), as (23170,-14)) = 1 — the fraction (.41)
+;     is below .5, floors as before, matches F>S's own already-correct
+;     truncated answer here (nothing to disagree about).
+;   FROUND(0.5 = (16384,-15)) = 1; FROUND(-0.5 = (-16384,-15)) = 0 —
+;     the round-half-up rule made concrete: a positive tie rounds away
+;     from zero, a negative tie rounds TOWARD zero (both "up," i.e.
+;     toward positive infinity) — not symmetric around zero, a real,
+;     stated consequence of picking round-half-up specifically.
+;   FROUND(2.5 = (20480,-13)) = 3; FROUND(-2.5 = (-20480,-13)) = -2 —
+;     same rule at a larger magnitude, confirming the pattern isn't
+;     specific to the exact-0.5 case.
+;   FROUND(4.0) = 4; FROUND(-4.0) = -4 — whole numbers pass through
+;     unchanged regardless of sign, same as F>S's own equivalent cases.
 ;
 ; WHAT THIS ADDS: standard ANS Forth's Floating-Point word set defines
 ; S>F ( n -- r ) and F>S ( r -- n ) for exactly this — converting a
@@ -136,8 +187,49 @@ W_FTOS:
     call DPUSH_HL
     ret
 
-DICT_LATEST_INIT_FLOATCONV EQU H_FTOS   ; head of the dictionary once
-                                         ; this file's own words are
-                                         ; included
+DICT_LATEST_INIT_FLOATCONV EQU H_FTOS   ; head of the dictionary as of
+                                         ; Phase 34 (S>F/F>S only) --
+                                         ; rom/forth_smoke_p34.asm's own
+                                         ; historical snapshot; must NOT
+                                         ; be repointed at FROUND below
+
+; ============================================================================
+; FROUND ( r1 -- r2 )  round to nearest integral value (round-half-up
+; — see this file's own header for exactly why that direction, and the
+; overflow trap it was chosen to avoid). Result is still a FLOAT (with
+; exponent 0, since it's now an exact integer) — compose with F>S for
+; a rounded integer on the data stack: `FROUND F>S`.
+; ============================================================================
+H_FROUND:
+    DW   H_FTOS
+    DB   6, "F", "R", "O", "U", "N", "D"
+W_FROUND:
+    call FPOP                ; hl = mantissa, a = exponent
+    or   a
+    jp   p, .no_round        ; exponent >= 0 -- already an exact
+                              ; integer at this exponent, nothing to
+                              ; round (this also correctly covers
+                              ; exponent == 0)
+    neg                        ; a = -exponent (shift count) -- only
+    ld   b, a                  ; reached when exponent < 0
+    call F_SHRA                 ; hl = floored mantissa; CARRY = the
+                                 ; bit F_SHRA's own last shift discarded
+                                 ; -- exactly the rounding-decision bit
+                                 ; (see this file's own header)
+    jr   nc, .push_rounded
+    inc  hl                     ; discarded fraction >= 0.5 -- round up
+.push_rounded:
+    xor  a                      ; exponent 0 -- now an exact integer
+    call FPUSH
+    ret
+.no_round:
+    call FPUSH                  ; re-push unchanged -- FPOP's own hl/a
+                                 ; were never touched on this path
+    ret
+
+DICT_LATEST_INIT_FROUND EQU H_FROUND   ; head of the dictionary once
+                                        ; this file's own words
+                                        ; (including FROUND) are all
+                                        ; included
 
     ENDIF

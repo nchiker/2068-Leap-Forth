@@ -2561,6 +2561,58 @@ isolation.
 ROM budget after this phase: `rom/forth_boot.asm` uses 12076 of 16384
 bytes ($2F2C of $4000), 4308 bytes free — +52 bytes over Phase 33.
 
+## Phase 35 — FROUND (round to nearest)
+
+**Status: done, confirmed under real Fuse.** Picked up immediately
+after Phase 34, live: the user tried `2.0 FSQRT F>S .` and got `1` —
+correct (`sqrt(2)≈1.41421` truncates to `1`), but a natural moment to
+ask for rounding as an option too, not a replacement for truncating
+`F>S`. Standard ANS Forth's own answer is `FROUND ( r1 -- r2 )` —
+rounds to the nearest integral value but stays a FLOAT, composing with
+the existing (unchanged) `F>S` rather than duplicating it:
+`FROUND F>S` gives a rounded integer, since by the time `F>S` sees it
+there's no fractional part left to truncate away.
+
+**A real overflow trap avoided by construction, not caught after the
+fact**: the obvious rounding technique — add half a unit (`2^(N-1)`)
+to the mantissa, then shift right by `N` — risks overflowing the
+16-bit mantissa BEFORE the shift ever runs, since this project's own
+normalized mantissas routinely already sit near the top of the 16-bit
+range (`core/floatsqrt.asm`'s own header: "mantissa in
+[16384,32767]"). Avoided entirely by never adding anything: `F_SHRA`
+(`core/float.asm`, reused completely unchanged) shifts one bit at a
+time via `SRA`/`RR`, and `DJNZ` — which doesn't touch flags — means the
+CARRY FLAG left over when `F_SHRA` returns is exactly the bit shifted
+out on its own last iteration: bit `(N-1)` of the original mantissa,
+i.e. "is the discarded fraction ≥ 0.5?" That side effect was already
+true of `F_SHRA` before this phase existed; nothing there needed to
+change, only using it. If that bit is set, the floored result gets
+incremented by one — round-half-UP (ties move toward positive
+infinity), chosen as the simplest of the standard tie-breaking rules.
+
+**Hand-verified with a Python simulation of the exact algorithm before
+any Z80 was written** (this project's own established discipline):
+`FROUND(1.41421) = 1` (agrees with plain `F>S` here — no tie
+involved); `FROUND(0.5) = 1` but `FROUND(-0.5) = 0`, NOT `-1` — the
+round-half-up rule made concrete: a positive tie rounds away from
+zero, a negative tie rounds TOWARD zero (both "up"), genuinely
+asymmetric around zero, a real stated consequence of picking this
+particular tie-breaking rule rather than round-half-away-from-zero;
+`FROUND(2.5) = 3`, `FROUND(-2.5) = -2` — same pattern at a larger
+magnitude; `FROUND(-4.0) = -4` — a whole number passes through
+unchanged (exponent ≥ 0 branch), same as `F>S`'s own equivalent case.
+
+**Confirmed under real Fuse**: `rom/forth_smoke_p35.asm`'s six
+checkpoints (all five hand-derived cases above, each piped through the
+existing `F>S` to land on the integer stack) all pass — including
+checkpoint 3 (`FROUND(-0.5)` then `F>S` = `0`) directly contradicting
+`rom/forth_smoke_p34.asm`'s own checkpoint 4 (plain `F>S(-0.5)` = `-1`)
+on the exact same input, by design — proof the two words genuinely
+disagree in the documented direction, not an oversight.
+
+ROM budget after this phase: `rom/forth_boot.asm` uses 12110 of 16384
+bytes ($2F4E of $4000), 4274 bytes free — +34 bytes over Phase 34.
+
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
 **Not yet scheduled as a numbered phase — tracked here so it isn't
