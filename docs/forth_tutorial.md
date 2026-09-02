@@ -252,6 +252,22 @@ using different words for each, is a deliberate, standard Forth design
                       \ computer's square root of an irrational number
 ```
 
+Trigonometry works the same way: `PI` pushes a decimal approximation of
+π, and `SIN`/`COS` take an angle in radians:
+
+```forth
+PI F.               \ prints 3.1416
+1.0 SIN F.          \ prints 0.8408
+2.0 COS F.           \ prints -0.4156
+```
+
+`SIN`/`COS` are computed from a lookup table with linear interpolation
+between entries, not a series expansion — accurate to about 3-4 decimal
+digits, which is all `F.` shows anyway. There's no `TAN` yet (it isn't
+hard to add as `SIN`/`COS`, but hasn't come up), and very large angles
+(roughly beyond ±16000 radians) aren't reliable — ordinary trig usage
+is well within range.
+
 ### A few more useful numeric words
 
 A handful of ordinary whole-number words round out the basics:
@@ -928,6 +944,9 @@ the same convention applied to the full ANS Forth standard.
 | `F*` | `( f1 f2 -- f1*f2 )` |
 | `F/` | `( f1 f2 -- f1/f2 )` |
 | `FSQRT` | `( f -- sqrt(f) )` |
+| `PI` | `( -- f )` |
+| `SIN` | `( f -- sin(f) )` |
+| `COS` | `( f -- cos(f) )` |
 | `F.` | `( f -- )` |
 
 **Memory**

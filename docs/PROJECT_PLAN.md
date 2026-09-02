@@ -1989,6 +1989,99 @@ non-negative exponent) with a normal small one — out of scope for
 `SIN`/`COS`'s own bounded-range inputs, but worth remembering before
 trusting `F+`/`F-` more broadly.
 
+## Phase 30 — PI, SIN, COS
+
+**Status: done.** The user's own direct follow-up to Phase 29 (FSQRT):
+"lets do SQRT, SIN, COS 0 is PI already done?" `core/floattrig.asm`
+adds `PI ( -- f )`, `SIN ( f -- sin(f) )`, and `COS ( f -- cos(f) )`.
+`COS(x) = SIN(x + HALF_PI)`, so there is only one real trig routine
+underneath (`RAW_SIN`) — `COS` just adds `HALF_PI` first and falls into
+the same code `SIN` uses.
+
+**The algorithm, designed in a Python simulation BEFORE any Z80 was
+written** (following this project's own established discipline of
+hand-deriving expected values first): range-reduce the input into
+`[0, 2*PI)` with a bounded loop of `F+`/`F-` against a `TWO_PI`
+constant; quadrant-reduce that into a reference angle `r` in
+`[0, HALF_PI]` plus a sign, using the standard four-case rule
+(`x < HALF_PI` → `r=x`; `x < PI` → `r=PI-x`; `x < THREE_HALF_PI` →
+`r=x-PI, sign=-1`; else → `r=TWO_PI-x, sign=-1`); look `r` up in a
+17-entry table of `SIN(i*PI/32)` for `i=0..16` and linearly interpolate
+between the two nearest entries (`idx_f = r/TABLE_STEP` via `F/`, then
+`idx`/`frac` extracted by repeated `F-` against `1.0` rather than a
+dedicated float-to-integer routine, since `idx_f` is always small);
+apply the sign last via a plain mantissa negate.
+
+**THIS PHASE IS WHY the F+/F- overflow bug (above) was found at all**:
+designing the interpolation step's own Python simulation first (before
+writing any Z80) is what surfaced it — table entries are all
+normalized close to the mantissa ceiling, exactly the shape that
+triggers the bug. The fix for that had to land, its own commit, before
+this phase's own code could be trusted.
+
+**A second real design lesson, caught the same way — by simulating
+first, not by guessing**: an early version of the Python simulation
+used an "idealized," CORRECTED signed comparison for `F_ALIGN` (reasoning
+that the real unsigned-CP quirk was just a bug to route around), and it
+broke `SIN(0.0)`/`COS(0.0)` — aligning onto the zero operand's own
+exponent (0) instead of the real operand's, destroying the real
+operand's mantissa. Only after modeling the REAL (buggy) F_ALIGN
+faithfully did the simulation start giving correct answers. This means
+the zero-safety documented in the `2068forth-float-align-signed-cmp-quirk`
+memory note is not incidental to this phase — `SIN`/`COS` actively
+depend on it (`SIN_TABLE[0]` is exact zero, `SIN(0)` and `COS(HALF_PI)`
+are exact zero, and any input landing exactly on a table step produces
+an exact-zero fractional part) — so `core/floattrig.asm`'s own
+comparisons are deliberately built ONLY from a direct mantissa-sign
+peek (comparing against exact zero — no float op, no quirk exposure at
+all) or a real `F-` against a NONZERO constant followed by a sign check
+(comparing against `PI`/`HALF_PI`/etc — squarely inside `F_ALIGN`'s own
+well-behaved, same-sign-exponent region) — never a comparison that
+would put a genuine zero operand through `F_ALIGN` in a way this file
+doesn't already know is safe.
+
+**Validated end-to-end in Python, bit-exact, before writing any Z80**:
+not just an idealized floating-point simulation — the model reproduces
+`F_ALIGN`'s own real unsigned-comparison quirk, `F+`/`F-`'s (now-fixed)
+overflow handling, and `F*`/`F_UDIV32BY16`'s exact integer arithmetic,
+sanity-checked against `core/floatprint.asm`'s own three hand-verified
+`F.` examples before being trusted for anything new. Across 26 test
+values spanning all four quadrants, negative inputs, and inputs past
+`2*PI` (exercising range reduction): worst `SIN` error 0.00103, worst
+`COS` error 0.00119 — consistent with a 17-entry table's own
+linear-interpolation error, not a logic bug.
+
+**Confirmed under real Fuse, twice — once in isolation, once live**:
+`rom/forth_smoke_p30.asm`'s six checkpoints (PI's exact constant;
+`SIN(0.0)`; `COS(0.0)` — the F_ALIGN zero-quirk-dependency case;
+`SIN(HALF_PI)` at the table's own upper boundary; `SIN(1.0)` and
+`COS(2.0)` printed via `F.`) all pass — border green, and the two
+printed values (`"0.8408 "`, `"-0.4156 "`) read correctly off a real
+screenshot, matching the bit-exact Python model exactly, not just
+approximately. One checkpoint (`SIN(0.0)`) needed a fix on the very
+first real run: it originally demanded an exact `(0,0)` match, but
+`SIN(0.0)`'s own internal arithmetic legitimately leaves a nonzero
+exponent alongside a zero mantissa (e.g. `(0,-16)`) — this project's
+own established convention already treats that as an equally valid
+zero (see `core/floatmul.asm`'s own `F_NORMALIZE32` header: "any
+exponent is fine for 0"), so the checkpoint was too strict, not the
+code under test. Also re-verified live: typing `1.0 SIN F.`,
+`PI F.`, and `2.0 COS F.` at `rom/forth_boot.asm`'s own real
+keyboard-driven prompt printed `0.8408`, `3.1416`, and `-0.4156`
+respectively — proving `PI`/`SIN`/`COS` are genuinely reachable via
+`FIND`/`INTERPRET_RUN`, not just callable as raw subroutines from a
+smoke ROM, and that the decimal-literal parser's own independently-
+rounded values feed correctly into the same algorithm.
+
+**Scope limit, inherited from the still-open `F_ALIGN` finding, not
+new here**: range reduction can misbehave for very large input angles
+(magnitude ≳16384) for the same reason documented above — out of scope
+for ordinary trig usage, not fixed by this phase.
+
+ROM budget after this phase: `rom/forth_boot.asm` uses 10924 of 16384
+bytes ($2AAC of $4000), 5460 bytes free — no ROM pressure from this
+addition.
+
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
 **Not yet scheduled as a numbered phase — tracked here so it isn't

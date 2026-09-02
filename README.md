@@ -423,6 +423,31 @@ inherited, what was deliberately left behind, and the phased build order.
   section for the full story, including a separate, narrower,
   not-yet-fixed `F_ALIGN` signed-comparison quirk found and ruled out
   (but not fixed) during the same investigation.
+- Phase 30 (`core/floattrig.asm` + `rom/forth_smoke_p30.asm`): `PI`,
+  `SIN`, `COS` — the user's own direct follow-up to Phase 29.
+  `COS(x) = SIN(x+HALF_PI)`, so one routine (`RAW_SIN`) does the real
+  work: range-reduce into `[0,2*PI)`, quadrant-reduce into a reference
+  angle in `[0,HALF_PI]` plus a sign, then look up and linearly
+  interpolate a 17-entry `SIN` table. Designed in a bit-exact Python
+  simulation before any Z80 was written — the same simulation that
+  surfaced the F+/F- overflow bug above, since table interpolation adds
+  two near-ceiling mantissas together. A second lesson from that same
+  simulation: an "idealized," corrected `F_ALIGN` comparison broke
+  `SIN(0.0)`/`COS(0.0)` in the model, because `SIN`/`COS` genuinely
+  depend on the REAL (buggy) `F_ALIGN`'s own zero-safety (`SIN_TABLE[0]`
+  is exact zero, and `SIN(0)`/`COS(HALF_PI)` are too) — so this file's
+  own comparisons are deliberately built only from a direct
+  mantissa-sign peek (against zero) or a real `F-` against a nonzero
+  constant (against `PI`/`HALF_PI`/etc), never a comparison that would
+  put a stray zero through `F_ALIGN` unsafely. Confirmed under real
+  Fuse twice: `rom/forth_smoke_p30.asm`'s six checkpoints all pass
+  (one needed a fix on the first run — `SIN(0.0)` legitimately returns
+  a zero mantissa with a nonzero exponent, and the checkpoint was
+  wrongly demanding an exact `(0,0)`, not a bug in `SIN` itself); and
+  live, by typing `1.0 SIN F.`, `PI F.`, and `2.0 COS F.` at
+  `rom/forth_boot.asm`'s own real keyboard-driven prompt, printing
+  `0.8408`, `3.1416`, and `-0.4156` — proving all three words are
+  genuinely reachable via `FIND`, not just callable as raw subroutines.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -466,6 +491,7 @@ core/       language-layer code, not hardware-facing:
               string.asm  (Phase 27 — S"/TYPE/STRING/PLACE/COUNT/LEN/VAL)
               input.asm   (Phase 28 — ACCEPT/INPUT)
               floatsqrt.asm (Phase 29 — FSQRT)
+              floattrig.asm (Phase 30 — PI/SIN/COS)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
             2068-Forth's own addition, mode64/ (recovered, once-shipped
@@ -503,6 +529,7 @@ rom/        ROM image assembly:
               forth_smoke_p27.asm Phase 27 smoke ROM (string handling)
               forth_smoke_p28.asm Phase 28 smoke ROM (ACCEPT/INPUT)
               forth_smoke_p29.asm Phase 29 smoke ROM (FSQRT)
+              forth_smoke_p30.asm Phase 30 smoke ROM (PI/SIN/COS)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -550,6 +577,7 @@ make forth-smoke-p26  # Phase 26 smoke ROM: ARRAY/CELLS
 make forth-smoke-p27  # Phase 27 smoke ROM: string handling
 make forth-smoke-p28  # Phase 28 smoke ROM: ACCEPT/INPUT
 make forth-smoke-p29  # Phase 29 smoke ROM: FSQRT
+make forth-smoke-p30  # Phase 30 smoke ROM: PI/SIN/COS
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```

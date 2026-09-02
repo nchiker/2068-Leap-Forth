@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-boot check clean
+.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-boot check clean
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-boot
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-boot
 
 # Milestone 0: boot stub only.
 boot:
@@ -293,6 +293,11 @@ forth-smoke-p29:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p29.sym --lst=build/forth_smoke_p29.lst rom/forth_smoke_p29.asm
 	mv forth_smoke_p29_rom0.bin build/forth_smoke_p29_rom0.bin
+
+forth-smoke-p30:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p30.sym --lst=build/forth_smoke_p30.lst rom/forth_smoke_p30.asm
+	mv forth_smoke_p30_rom0.bin build/forth_smoke_p30_rom0.bin
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm
