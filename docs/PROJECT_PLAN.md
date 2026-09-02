@@ -1848,6 +1848,87 @@ generally). The lower-priority bucket from that same audit (sprites,
 hi-res `MODE`, real AY-3-8912 `SOUND`, `CALL`) remains open and
 unscheduled, as the user originally scoped it.
 
+## Phase 29 — FSQRT (float square root)
+
+**Status: done.** Beyond the original BASIC-vs-Forth audit's own six
+gaps (all closed as of Phase 28), the user asked directly for float
+math functions next: `FSQRT`, `SIN`, `COS`. This phase is the first of
+those — `SIN`/`COS` are real, separate follow-up work (their own
+phase), needing angle range reduction and a lookup table that `FSQRT`
+doesn't. `core/floatsqrt.asm` adds `FSQRT ( f -- sqrt(f) )`, following
+up on Phase 25's own note that "float versions of some of these...
+[are] a natural later addition" (that phase's own `SQRT` is
+integer-only).
+
+**The algorithm**: `value = M * 2^E` (this project's own float
+representation). `sqrt(M * 2^E) = sqrt(M) * 2^(E/2)` only works
+cleanly when `E` is even; an odd `E` is first rewritten as
+`(M*2) * 2^(E-1)` — an EXACT, lossless rewrite, since `M` is at most
+32767 and `M*2` is at most 65534, comfortably inside a 16-bit unsigned
+register — making the new exponent even with no precision cost. From
+there, `sqrt(M)` itself needs far more precision than `M`'s own ~15
+bits directly give, so `M` is scaled up by exactly `2^16` (an exact
+power-of-2 scale, losing nothing — the same "widen before dividing"
+trick `core/floatdiv.asm`'s own header describes for `F/`) into a
+32-bit value, and ITS integer square root is taken with a new routine,
+`F_SQRT32` — `kernel/math`'s own `MATH_SQRT16` widened from a 16-bit
+input/8-iteration form to a 32-bit input/16-iteration one, exactly the
+way `core/floatmul.asm`'s own `F_UMUL32` already widened
+`MATH_UMUL16`, and `core/floatdiv.asm`'s own `F_UDIV32BY16` already
+widened `MATH_UDIV16` — the THIRD time this exact "take an
+already-proven 16-bit kernel/math routine and widen it the same way"
+move has been made in this project. `F_SQRT32`'s own raw integer result
+is then run through `core/floatmul.asm`'s own `F_NORMALIZE32`
+(reused unchanged, the same routine `F*`/`F/` already share) to land it
+in this project's usual normalized mantissa shape. Since
+`sqrt(M * 2^16) = sqrt(M) * 2^8`, the final exponent works out to
+`(E/2) - 8 + F_NORM_SHIFT`; `E/2` is a single Z80 `SRA` (arithmetic
+right shift), exact because `E` is guaranteed even by this point — no
+rounding ambiguity. A neat implementation detail: `F_SQRT32`'s own
+running "result" accumulator IS `core/floatmul.asm`'s own
+`F_PROD_LO`/`F_PROD_HI` scratch, not a separate pair — so the moment
+`F_SQRT32` finishes, its raw result is already sitting exactly where
+`F_NORMALIZE32` expects its own input, with no copy step needed (the
+same handoff shape `F_UMUL32`→`F_NORMALIZE32` and
+`F_UDIV32BY16`→`F_NORMALIZE32` already use). Negative input returns 0,
+matching `MATH_SQRT16`'s own convention (and, by extension, Phase 25's
+own integer `SQRT`).
+
+**Hand-verified against three cases before ever assembling anything**,
+covering the even-exponent path, the odd-exponent path twice (once
+exact, once approximate), and two independently exact perfect squares:
+`sqrt(4.0)=2.0` exactly (even exponent, `(16384,-12)` → `(16384,-13)`);
+`sqrt(9.0)=3.0` exactly (odd exponent, `(18432,-11)` → `(24576,-13)`,
+`36864²·2¹⁶` happening to be a perfect square too); and
+`sqrt(2.0)≈1.41421` (odd exponent, `(16384,-13)` → `(23170,-14)`,
+`23170/16384 = 1.41418457...`, which `F.`'s own truncating-toward-zero
+convention prints as exactly `"1.4141"` — a single deterministic
+expected string worked out by hand, not a guessed range). All three
+matched exactly on the very first real Fuse run — see
+`core/floatsqrt.asm`'s own header for the full worked arithmetic.
+
+**A real, if minor, bug caught by the static checker, not by running
+anything**: `F_SQRT32`'s own 16-iteration loop ended up too long for a
+plain `JR` back-edge (`tools/check_z80_opcodes.py` flagged the exact
+displacement, not a guess) — fixed by switching that one jump to `JP`,
+the same class of fix Phase 23's own `NUMBER` growth needed.
+
+`rom/forth_smoke_p29.asm` proves the three hand-verified cases under
+real Fuse — the `sqrt(2.0)` case checked by actually printing it with
+`F.` and comparing the real screen text against the hand-derived
+`"1.4141"`, not just checking a stack value, since an approximate
+result needs to be checked against its OWN precisely-predicted
+approximation, not an exact match against the mathematically true
+irrational value. Also re-verified end-to-end against
+`rom/forth_boot.asm`'s own full dictionary chain using a REAL typed
+decimal literal (`9.0 FSQRT F.` → `"3.0000"` exactly) — using the
+decimal-literal parser's own independently-computed normalized
+representation of 9.0, not the hand-picked test value, confirming the
+algorithm generalizes correctly rather than only working for the
+specific inputs it was hand-verified against. `core/floatsqrt.asm` is
+wired in right after `core/floatprint.asm` (before `core/compare.asm`,
+which now chains from `H_FSQRT` instead of `H_FDOT`).
+
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
 **Not yet scheduled as a numbered phase — tracked here so it isn't

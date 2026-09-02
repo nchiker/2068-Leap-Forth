@@ -244,6 +244,14 @@ using different words for each, is a deliberate, standard Forth design
 — not a limitation specific to this implementation. See
 [`numeric_model.md`](numeric_model.md) for the fuller reasoning.
 
+`FSQRT` is the decimal counterpart to whole-number `SQRT` (below):
+
+```forth
+9.0 FSQRT F.        \ prints 3.0000
+2.0 FSQRT F.         \ prints 1.4141 -- an approximation, like any
+                      \ computer's square root of an irrational number
+```
+
 ### A few more useful numeric words
 
 A handful of ordinary whole-number words round out the basics:
@@ -919,6 +927,7 @@ the same convention applied to the full ANS Forth standard.
 | `F-` | `( f1 f2 -- f1-f2 )` |
 | `F*` | `( f1 f2 -- f1*f2 )` |
 | `F/` | `( f1 f2 -- f1/f2 )` |
+| `FSQRT` | `( f -- sqrt(f) )` |
 | `F.` | `( f -- )` |
 
 **Memory**

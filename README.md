@@ -377,6 +377,31 @@ inherited, what was deliberately left behind, and the phased build order.
   the assembler (this project's own new `INPUT_BUF` name collided with
   an unrelated, pre-existing sysvar of the same name already defined in
   the inherited `include/sysvars.inc`) fixed by renaming.
+- Phase 29 (`core/floatsqrt.asm` + `rom/forth_smoke_p29.asm`): `FSQRT`
+  — float square root, following up on Phase 25's own note that "float
+  versions of some of these... are a natural later addition." Widens
+  `kernel/math`'s own `MATH_SQRT16` to a 32-bit input, 16-bit output
+  routine (`F_SQRT32`) exactly the way `core/floatmul.asm`'s own
+  `F_UMUL32` and `core/floatdiv.asm`'s own `F_UDIV32BY16` already
+  widened `MATH_UMUL16`/`MATH_UDIV16` — the third time this project has
+  made that exact move. Handles an odd exponent by exactly doubling the
+  mantissa first (lossless, since the mantissa is always small enough
+  to survive it) so the "divide the exponent by 2" step is always exact
+  arithmetic on an even number, then reuses `F_NORMALIZE32`
+  (`core/floatmul.asm`) unchanged to land the raw integer root back in
+  this project's usual normalized mantissa shape. Negative input
+  returns 0, matching `MATH_SQRT16`'s own convention (and, by
+  extension, Phase 25's own integer `SQRT`). Hand-verified against
+  three cases before ever assembling it — an even-exponent exact case
+  (`sqrt(4.0)=2.0`), an odd-exponent exact case (`sqrt(9.0)=3.0`), and
+  an odd-exponent irrational case (`sqrt(2.0)`) — all three confirmed
+  matching exactly under real Fuse, down to `F.`'s own printed digits.
+  Also re-verified against `rom/forth_boot.asm`'s own full dictionary
+  chain using REAL typed decimal literals (`9.0 FSQRT F.` →
+  `"3.0000"`, using the decimal-literal parser's own independently-
+  computed representation of 9.0, not the hand-picked test value —
+  confirming the algorithm generalizes correctly, not just for the
+  specific inputs it was hand-verified against).
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -419,6 +444,7 @@ core/       language-layer code, not hardware-facing:
               array.asm   (Phase 26 — ARRAY/CELLS)
               string.asm  (Phase 27 — S"/TYPE/STRING/PLACE/COUNT/LEN/VAL)
               input.asm   (Phase 28 — ACCEPT/INPUT)
+              floatsqrt.asm (Phase 29 — FSQRT)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
             2068-Forth's own addition, mode64/ (recovered, once-shipped
@@ -455,6 +481,7 @@ rom/        ROM image assembly:
               forth_smoke_p26.asm Phase 26 smoke ROM (ARRAY/CELLS)
               forth_smoke_p27.asm Phase 27 smoke ROM (string handling)
               forth_smoke_p28.asm Phase 28 smoke ROM (ACCEPT/INPUT)
+              forth_smoke_p29.asm Phase 29 smoke ROM (FSQRT)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -501,6 +528,7 @@ make forth-smoke-p25  # Phase 25 smoke ROM: ABS/SGN/MOD/SQRT/RND/RANDOMIZE
 make forth-smoke-p26  # Phase 26 smoke ROM: ARRAY/CELLS
 make forth-smoke-p27  # Phase 27 smoke ROM: string handling
 make forth-smoke-p28  # Phase 28 smoke ROM: ACCEPT/INPUT
+make forth-smoke-p29  # Phase 29 smoke ROM: FSQRT
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
@@ -530,7 +558,8 @@ print `0 2 4 6 8`, `12345 RANDOMIZE 100 RND .` to see a reproducible
 pseudo-random number in `[0, 100)`, `5 ARRAY NUMS 99 3 CELLS NUMS + !
 3 CELLS NUMS + @ .` to see a real array round-trip a value, or
 `S" HELLO WORLD" TYPE` to print a string literal directly, or
-`INPUT .` to type a number and have it printed back.
+`INPUT .` to type a number and have it printed back, or
+`9.0 FSQRT F.` to see a float square root print `3.0000`.
 
 ## License
 
