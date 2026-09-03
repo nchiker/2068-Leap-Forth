@@ -813,6 +813,24 @@ EDITOR_LOOP_LIVE:
     ld   d, 0
     ld   e, a
     call INTERPRET_RUN
+    ; found live by the user: a successfully-run line gave no visible
+    ; confirmation at all -- it just vanished, indistinguishable from
+    ; nothing having happened. An error already prints "?"/"STACK?"
+    ; (INTERP_ERROR_FLAG, set by those same hooks -- core/interp.asm's
+    ; own header on it), so only print "OK" when neither fired.
+    ld   a, (INTERP_ERROR_FLAG)
+    or   a
+    jr   nz, .no_ok
+    ld   hl, "O"
+    call DPUSH_HL
+    call W_EMIT
+    ld   hl, "K"
+    call DPUSH_HL
+    call W_EMIT
+    ld   hl, 13
+    call DPUSH_HL
+    call W_EMIT
+.no_ok:
     jr   EDITOR_LOOP_LIVE
 
     ENDIF

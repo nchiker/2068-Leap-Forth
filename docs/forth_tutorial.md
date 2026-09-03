@@ -1207,15 +1207,22 @@ family of machines historically handled line editing somewhat
 differently.
 
 What happens if you press Enter on a word that doesn't exist? A typo —
-`5 BRODER` instead of `5 BORDER`, say — prints a `?` on its own line
-and drops you right back at a fresh prompt, rather than doing nothing
-visible or crashing:
+`5 BRODER` instead of `5 BORDER`, say — prints the actual word it
+didn't recognize followed by `?`, then drops you right back at a fresh
+prompt:
 
-![A "?" printed after typing an unrecognized word](images/typo_error.png)
+![The word "BRODER ?" printed after typing an unrecognized word](images/typo_error.png)
 
-It's minimal (it doesn't say *which* word wasn't recognized, or why),
-but a real mistake now looks different from nothing having happened at
-all.
+That's the first thing to check whenever `?` appears unexpectedly:
+read exactly what's printed before it. It's often not the word you
+think you typed — a dropped space while typing can silently glue two
+words together (see the space-by-space breakdown in
+[Defining your own words](#2-defining-your-own-words)), and the
+printed word makes that obvious rather than leaving you guessing.
+
+If the line ran successfully instead, `OK` prints on its own line —
+so every line you enter gets *some* visible confirmation one way or
+the other, never silence.
 
 A second kind of mistake — popping from an empty stack, or pushing
 past its own reserved space, the way `DROP` with nothing on the stack

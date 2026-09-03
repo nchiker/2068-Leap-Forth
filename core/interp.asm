@@ -87,6 +87,18 @@ NEW_HEADER_ADDR   EQU $8510   ; 2 bytes: W_COLON's own scratch
 INTERP_IMM_FLAG   EQU $8512   ; 1 byte:  INTERPRET_RUN's own scratch (moved
                               ; up here from the file's tail, alongside
                               ; the rest of this relocated block)
+INTERP_ERROR_FLAG EQU $8513   ; 1 byte: cleared at INTERPRET_RUN's own
+                              ; entry, below; the including ROM's own
+                              ; INTERPRET_UNKNOWN_WORD/RUNTIME_ERROR_HOOK
+                              ; set it to 1 right before their own ret
+                              ; (same "abort to caller" contract those
+                              ; already use) so EDITOR_LOOP_LIVE (or any
+                              ; other caller) can tell a successful line
+                              ; apart from one that errored out, even
+                              ; though both return to the exact same
+                              ; place -- added because a successful line
+                              ; gave no visible confirmation at all,
+                              ; found live by the user
 WORD_BUF          EQU $8520   ; 34 bytes: 1 count byte + up to 32 name bytes
                               ; (header LENFLAGS only has 5 length bits, so
                               ; 32 is already more than a definition name
@@ -572,6 +584,8 @@ INTERPRET_RUN:
     ld   (SRC_PTR), hl
     add  hl, de
     ld   (SRC_END), hl
+    xor  a
+    ld   (INTERP_ERROR_FLAG), a
 
 .loop:
     IFDEF RUNTIME_ERROR_CHECK_ENABLED

@@ -329,6 +329,32 @@ INTERPRET_UNKNOWN_WORD:
     ; before reporting, so this now matches that same abort contract.
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
+    ; print the actual unrecognized word before the "?", not just a
+    ; bare "?" with no clue which token failed -- WORD_BUF (core/
+    ; interp.asm) still holds it untouched: INTERPRET_RUN's own .loop
+    ; already proved it's nonzero-length before ever reaching FIND/
+    ; NUMBER/here, and neither of those touches WORD_BUF itself. W_EMIT
+    ; destroys BC (loads PRINT_ROW/PRINT_COL into it, core/print.asm),
+    ; so both are saved/restored around every call, not trusted to
+    ; survive.
+    ld   a, (WORD_BUF)
+    ld   b, a
+    ld   hl, WORD_BUF+1
+.printword:
+    ld   a, (hl)
+    push hl
+    push bc
+    ld   l, a
+    ld   h, 0
+    call DPUSH_HL
+    call W_EMIT
+    pop  bc
+    pop  hl
+    inc  hl
+    djnz .printword
+    ld   hl, " "
+    call DPUSH_HL
+    call W_EMIT
     ld   hl, "?"
     call DPUSH_HL
     call W_EMIT
@@ -337,6 +363,11 @@ INTERPRET_UNKNOWN_WORD:
     call W_EMIT
     xor  a
     ld   (STATE), a
+    ld   a, 1
+    ld   (INTERP_ERROR_FLAG), a   ; tells EDITOR_LOOP_LIVE not to print
+                                   ; its own OK for this line -- see
+                                   ; INTERP_ERROR_FLAG's own header
+                                   ; (core/interp.asm)
     ret
 
 ; ============================================================================
@@ -373,6 +404,8 @@ RUNTIME_ERROR_HOOK:
                               ; STATE reset above -- an IMMEDIATE word's
                               ; runtime error while compiling could
                               ; otherwise leave STATE stuck too
+    ld   a, 1
+    ld   (INTERP_ERROR_FLAG), a   ; same as INTERPRET_UNKNOWN_WORD's own
     ret
 
 RUNTIME_ERROR_MSG: DB "STACK?", 0
