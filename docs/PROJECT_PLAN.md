@@ -3246,25 +3246,126 @@ the fixes above.
 ROM budget after this phase: `rom/forth_boot.asm` uses 13394 of 16384
 bytes ($3452 of $4000), +347 bytes over Phase 45's 13047.
 
-## Backlog — ULAPlus test fidelity (not yet scheduled)
+## Phase 47: LPRINT, LLIST
 
-**Not yet scheduled as a numbered phase — tracked here so it isn't
-lost.** This is a testing-fidelity concern, not a feature request —
-added when the user asked for it directly.
+**Code done, committed to the working tree; real-printer verification
+IN PROGRESS, not yet confirmed.** The user asked to look at the real
+TS2068 ROM's own `LPRINT`/`LLIST` and consider a 2068-Forth equivalent.
+Real research first, not a guess: the real Sinclair/TS2068 printer
+protocol (ZX Printer/TS2040, port `$FB`) was cross-verified against
+TWO INDEPENDENT sources that agree with each other — the real Fuse
+emulator's own `printer.c` source and skoolkid's Spectrum ROM
+disassembly of the real `COPY-LINE` routine — after a THIRD source
+(the Sinclair community wiki) disagreed with both on which bits
+control the motor and was discarded rather than trusted. See
+`core/printer.asm`'s own header for the full protocol writeup and
+citations.
 
-**`ULAPlus` test-fidelity check** — not a feature to build, a testing
-caveat to resolve. Already noted once, in the 64-column TEXT mode
-stretch goal below: this session's own Fuse binary is patched for
-ULAPlus (an enhanced-palette extension the real TS2068 never had), so
-any visual side effect observed from a port `$FF` write (exactly what
-`kernel/mode64.asm`'s `MODE64_ON` does) may be Fuse's own ULAPlus patch
-reinterpreting that write, not genuine TS2068/SCLD hardware behavior —
-confirmed as an open question, never resolved. The concern isn't
-limited to `64COL`; it applies to ANY future graphics-hardware
-verification done through this specific Fuse binary. The planned fix
-is cross-checking in ZEsarUX (unpatched, with native ULAPlus support
-that can be turned off) before trusting any FURTHER conclusions about
-port-`$FF`-driven visual behavior — not yet done.
+`LPRINT ( addr len -- )` renders text into 256×8-dot raster lines
+(MSB-first, matching the real ROM) using the SAME font
+`GFX_CHAR_TO_FONT_OFFSET` already provides for on-screen text, and
+bit-bangs them out via the documented protocol, wrapping across
+multiple lines for anything longer than 32 characters. A real
+documentation bug in that shared font routine was found and fixed
+along the way: its own header claimed "Destroys: AF, BC, HL" but the
+routine's actual body also destroys `DE` (confirmed by reading the
+code, not the comment) — caught before it could corrupt this file's
+own column-render loop, the same class of mistake Phase 46's `SPACES`
+bug already taught to watch for.
+
+`LLIST ( -- )` prints one name per line for every word in the RAM
+dictionary (`>= FORTH_DICT_RAM`), newest first — deliberately NOT the
+~100 ROM-resident primitives too, matching real BASIC's own `LLIST`
+scope (your program, not the ROM).
+
+**Verification status, honestly**: `rom/forth_smoke_p47.asm` proves the
+code runs to completion without hanging and renders exactly correct
+glyph bytes into the print buffer (checked byte-for-byte against the
+same font lookup, not a hardcoded guess). What it does NOT yet prove
+is that real printed output comes out correctly — this needs an actual
+printer-capable Fuse (`--printer --zxprinter --graphicsfile ...
+--textfile ...`), and testing so far has hit real trouble getting ANY
+printer output file to appear even from the REAL, unmodified 48K
+BASIC ROM's own `LPRINT` in the user's own Fuse setup — meaning
+whatever's blocking this is very likely a Fuse configuration/setup
+question, not a bug in this project's own code, but it isn't resolved
+yet. A `debug.bin` memory-dump snapshot (the same technique from Phase
+9's own live-keyboard bugs) DID confirm the code executes exactly as
+designed: `PRINT_ROW_IDX` reached 8 (all raster rows sent),
+`PRINT_COL_IDX` reached 32 (all columns rendered), `PRINT_REMAINING`
+correctly reached 0 — real evidence the mechanism runs correctly,
+short of the one thing that still needs an actual working printer
+setup to see. To be continued.
+
+## Phase 48: ULAPLUS, PALETTE
+
+**Done, committed, and confirmed working in this session's own
+(patched) Fuse.** Ported from 2068-Leap's own already-working
+implementation (`~/ts2068rom/basic/basic.asm`'s
+`BASIC_ULAPLUS_DISABLE` and its EXROM body) rather than designed from
+scratch — the exact real protocol: write a register number to
+`PORT_ULAPLUS_SELECT`, then a data byte to `PORT_ULAPLUS_DATA` (both
+already declared in `include/hardware.inc`, inherited unchanged).
+Register 64 is the enable/disable switch; registers 0-63 are the
+64-color palette itself, one `GGGRRRBB` byte each. Confirmed via
+2068-Leap's own documentation that ULAPlus REPLACES the meaning of the
+existing attribute color bits rather than adding a separate
+pixel-setting mechanism — every existing color word (`INK`, `PAPER`,
+`PLOT`, `LINE`, `CIRCLE`, `FILL`) needed zero changes for this to work.
+
+**Verification**: `rom/forth_smoke_p48.asm` is a visual test (matching
+Phase 8's own `PALETTE64` precedent — there's no register-level way to
+confirm a palette swap actually changed what's displayed). Draws a
+filled circle with standard `INK 2` (red), then — WITHOUT ever
+redrawing it — reprograms palette register 2 to `252` (yellow, per the
+`GGGRRRBB` encoding) and enables `ULAPLUS`. A real Fuse screenshot
+confirmed the SAME circle changed from red to yellow with no redraw:
+genuine proof of a display-time palette swap, not a coincidence of
+timing. (A striking bonus finding from the same screenshot: the
+border, set to color 6 in the same test, rendered black instead of
+yellow — because ULAPlus reinterprets ALL 8 color slots including the
+border, and register 6 was never explicitly programmed, so it read
+back at its default. Correct, real ULAPlus behavior, not a bug.)
+
+**Test-fidelity caveat carried forward, not resolved**: the real Timex
+Sinclair 2068 almost certainly never had genuine ULAPlus hardware —
+it's a modern extension for later Sinclair-compatible machines, made
+available here only through this session's own Fuse ULAPlus patch.
+What Phase 48 confirms is that this project's own port-level code
+matches the same protocol 2068-Leap's own long-tested BASIC
+implementation uses, and that the patched emulator visibly responds to
+it correctly — NOT that genuine, unpatched TS2068/SCLD silicon would
+behave identically. The originally-tracked backlog item (cross-check
+in ZEsarUX, unpatched) remains exactly as open as before; building
+this capability doesn't resolve that question, it just gives
+2068-Forth the same capability 2068-Leap already has, under the
+identical, still-unresolved caveat.
+
+## Documentation pass: the user manual brought current
+
+**Done.** `docs/forth_tutorial.md` (this project's own user-facing
+manual — a full language tutorial plus a word-reference appendix) had
+drifted significantly behind the real dictionary: a fresh audit (every
+`DB len,"NAME"` header across `core/*.asm`, cross-referenced against
+what the document actually covered) found it stopped at roughly Phase
+32-33's own vocabulary, missing everything from Phase 34 onward — about
+39 of the 113 words that actually exist, roughly a third of the real
+dictionary. Brought fully current: new prose sections for `ROT`/
+`2DUP`/`2DROP`/`?DUP`/`PICK`, bitwise/logical operators, `'`/`EXECUTE`,
+`CR`/`SPACE`/`SPACES`, the Phase 40 string functions, float conversion/
+rounding/`RAD`/`DEG`, `C@`/`C!`/`FREE`, `CLS`/`KEY?`/`STICK`, and three
+new full sections (14: `THROW`/`CATCH`, 15: `LPRINT`/`LLIST` with its
+own honest unverified-status caveat, 16: `ULAPLUS`/`PALETTE` with its
+own confirmed-working-here-but-real-hardware-uncertain caveat). The
+previously-undocumented `STACK?` runtime error message (Phase 38) was
+also added, since `THROW`/`CATCH`'s own new section builds directly on
+it. Appendix A's own word-reference table was rebuilt and checked
+programmatically against the real 113-word dictionary — every word
+confirmed present, nothing missed. Several worked examples were
+verified against real Fuse output (not hand-computed) before being
+trusted, catching two real arithmetic mistakes in early drafts (a
+truncation-vs-rounding error in a `DEG` example, and a nonexistent
+`1+` word used in a `C@` example) before they could mislead a reader.
 
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 

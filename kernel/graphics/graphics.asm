@@ -384,12 +384,22 @@ GFX_SET_BORDER:
 ;      a freshly-generated block-graphics glyph, or UDG_TABLE+offset
 ;      for a UDG); carry set if the character has no glyph at all
 ;      (caller's choice what to do — GFX_PUTCHAR treats it as a space)
-; Destroys: AF, BC, HL — the punctuation-table scan uses B as its loop
-;      counter, so B is NOT preserved. This was documented wrong for a
-;      while (claimed only AF/HL) and caused a real bug in GFX_PUTCHAR,
-;      which read B (its row parameter) after this call without saving
-;      it first — fixed in GFX_PUTCHAR by protecting BC around this
-;      call, not by changing what this routine touches.
+; Destroys: AF, BC, DE, HL — the punctuation-table scan uses B as its
+;      loop counter, so B is NOT preserved; this was documented wrong
+;      for a while (claimed only AF/HL) and caused a real bug in
+;      GFX_PUTCHAR, which read B (its row parameter) after this call
+;      without saving it first — fixed in GFX_PUTCHAR by protecting BC
+;      around this call, not by changing what this routine touches.
+;      DE is ALSO destroyed (E holds the input character internally
+;      throughout the routine's own dispatch, D is used as temporary
+;      storage in the block-graphics/UDG paths) — found while writing
+;      2068-Forth's own Phase 47 printer support, which needed to call
+;      this in a loop and would have silently corrupted its own column
+;      counter had it trusted this comment instead of reading the
+;      routine's actual body first (core/dict.asm's own "no premature
+;      abstraction" convention on comments applies here too: this one
+;      was simply wrong, not stale, and had already caused one real
+;      bug before this second one was caught on paper, not in Fuse).
 ; ============================================================================
 GFX_CHAR_TO_FONT_OFFSET:
     ld   e, a                      ; E = input char, preserved across

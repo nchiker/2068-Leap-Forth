@@ -116,8 +116,8 @@ COLD_START:
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
-    ld   hl, DICT_LATEST_INIT_TICK   ; the full chain's own head — see
-                                    ; this file's own header
+    ld   hl, DICT_LATEST_INIT_ULAPLUS   ; the full chain's own head —
+                                    ; see this file's own header
     ld   (LATEST), hl
     ld   hl, FORTH_DICT_RAM
     ld   (HERE), hl
@@ -443,6 +443,8 @@ DICT_CHAIN_POINT DEFL H_INVERT
     INCLUDE "core/outwords.asm"
 DICT_CHAIN_POINT DEFL H_SPACES
     INCLUDE "core/tick.asm"
+DICT_CHAIN_POINT DEFL H_TICK
+    INCLUDE "core/ulaplus.asm"
     INCLUDE "core/editor.asm"
 
     DS   $4000 - $, $FF

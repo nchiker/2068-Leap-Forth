@@ -772,6 +772,51 @@ inherited, what was deliberately left behind, and the phased build order.
   proof spanning Phases 41/45/46 together (a compiled word found via
   `'` and `EXECUTE`d, and a bad name `CATCH`ing exactly `-13`). +347
   bytes (`rom/forth_boot.asm`: 13047 -> 13394 of 16384).
+- Phase 47 (`core/printer.asm` + `rom/forth_smoke_p47.asm`): `LPRINT`/
+  `LLIST`, prompted by looking at the real TS2068 ROM's own printer
+  support. The real ZX Printer/TS2040 protocol (port `$FB`) was
+  cross-verified against two independent sources (Fuse's own emulator
+  source, skoolkid's ROM disassembly) that agree with each other,
+  after a third (a community wiki) disagreed with both and was
+  discarded. `LPRINT` renders text into 256x8-dot raster lines using
+  the same font `GFX_PUTCHAR` already uses; `LLIST` prints only
+  RAM-dictionary word names (your own definitions), not the ~100
+  ROM-resident primitives, matching real BASIC's own `LLIST` scope. A
+  real documentation bug was found and fixed along the way:
+  `GFX_CHAR_TO_FONT_OFFSET`'s own header undersold what it destroys
+  (missing `DE`), caught by reading its body before trusting the
+  comment. **Verification in progress, not yet confirmed**: the code
+  provably runs to completion and renders exactly correct glyph data
+  (checked via a real Fuse `debug.bin` memory dump), but getting an
+  actual printer-emulation output file to appear — even from the real,
+  unmodified 48K BASIC ROM's own `LPRINT` — hasn't worked yet in
+  testing; likely a Fuse setup issue, not a code bug, but unresolved.
+- Phase 48 (`core/ulaplus.asm` + `rom/forth_smoke_p48.asm`):
+  `ULAPLUS`/`PALETTE`, ported directly from 2068-Leap's own
+  already-working implementation. Confirmed working with a real Fuse
+  screenshot: a circle drawn with standard `INK 2` (red) visibly turned
+  yellow after reprogramming palette register 2 and enabling
+  `ULAPLUS` — with NO redraw — proving a genuine display-time palette
+  swap. (Bonus finding: the border also went black instead of its own
+  set color, since ULAPlus reinterprets all 8 color slots including
+  the border, and that register was never programmed — correct
+  behavior, not a bug.) Real Timex Sinclair 2068 hardware almost
+  certainly never had genuine ULAPlus; this confirms the port-level
+  code matches 2068-Leap's own protocol and works in this session's
+  patched Fuse, not that unpatched real hardware would behave
+  identically — the existing ZEsarUX cross-check backlog item remains
+  open.
+- **Documentation pass**: `docs/forth_tutorial.md` had drifted to
+  roughly Phase 32-33's own vocabulary — about 39 of 113 real words
+  (a third of the dictionary) were undocumented. Brought fully
+  current: new prose for every word added since, three new sections
+  (`THROW`/`CATCH`, `LPRINT`/`LLIST`, `ULAPLUS`/`PALETTE`, each with
+  honest caveats where relevant), and Appendix A's reference table
+  rebuilt and checked programmatically against the real dictionary —
+  every word confirmed present. Examples were verified against real
+  Fuse output before being trusted, catching two real mistakes in
+  early drafts (a truncation-vs-rounding arithmetic error, and a
+  nonexistent `1+` word used in an example).
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -873,6 +918,8 @@ rom/        ROM image assembly:
               forth_smoke_p44.asm Phase 44 smoke ROM (dictionary-ceiling reclaim)
               forth_smoke_p45.asm Phase 45 smoke ROM (THROW/CATCH)
               forth_smoke_p46.asm Phase 46 smoke ROM (ROT/2DUP/2DROP/?DUP/PICK, AND/OR/XOR/INVERT, CR/SPACE/SPACES, ')
+              forth_smoke_p47.asm Phase 47 smoke ROM (LPRINT/LLIST)
+              forth_smoke_p48.asm Phase 48 smoke ROM (ULAPLUS/PALETTE, visual)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -936,6 +983,8 @@ make forth-smoke-p43  # Phase 43 smoke ROM: FREE
 make forth-smoke-p44  # Phase 44 smoke ROM: dictionary-ceiling reclaim
 make forth-smoke-p45  # Phase 45 smoke ROM: THROW/CATCH
 make forth-smoke-p46  # Phase 46 smoke ROM: ROT/2DUP/2DROP/?DUP/PICK, AND/OR/XOR/INVERT, CR/SPACE/SPACES, '
+make forth-smoke-p47  # Phase 47 smoke ROM: LPRINT/LLIST
+make forth-smoke-p48  # Phase 48 smoke ROM: ULAPLUS/PALETTE (visual)
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```

@@ -107,6 +107,42 @@ Or swapping two values to compute both differences of a subtraction:
 SWAP -              \ [3, 10] then [-7]
 ```
 
+A handful more round out the set for when three (or more) values need
+rearranging, or when a value further down needs reaching without
+disturbing what's above it:
+
+| Word | Stack effect | What it does |
+|---|---|---|
+| `ROT` | `( a b c -- b c a )` | Rotate the third value to the top |
+| `2DUP` | `( a b -- a b a b )` | Duplicate the top *pair* |
+| `2DROP` | `( a b -- )` | Discard the top *pair* |
+| `?DUP` | `( n -- 0 \| n n )` | Duplicate, but only if `n` isn't zero |
+| `PICK` | `( ... n -- ... x )` | Copy the `n`th value from the top (0 = same as `DUP`, 1 = same as `OVER`) |
+
+`?DUP` exists for a specific, common pattern: testing a value with `IF`
+while still wanting to *use* it afterward if it wasn't zero, without
+computing it twice:
+
+```forth
+SOME-WORD ?DUP IF . THEN     \ prints the result, but only if nonzero
+```
+
+`PICK` generalizes `DUP`/`OVER` to reach further down without a chain
+of `ROT`s — `2 PICK` reaches the third value from the top, the same
+place `ROT` would bring to the top, but *copies* it instead of moving
+it:
+
+```forth
+10 20 30  2 PICK .    \ [10, 20, 30, 10] then prints 10, leaving [10, 20, 30]
+```
+
+There's no bounds checking on `PICK`'s own argument — asking for a
+value deeper than what's actually on the stack reads whatever memory
+happens to sit past it, not a crash, but not meaningful data either;
+this is the same "trust the caller" posture as most of this project's
+lower-level words (see the honest-limits notes throughout this
+document, e.g. `BEEP`'s in [Drawing and sound](#9-drawing-and-sound)).
+
 ### Words and the dictionary
 
 Everything in Forth — `+`, `DUP`, a word you define yourself — lives in
@@ -204,6 +240,37 @@ later in this document work: they aren't ordinary words that get
 compiled into a definition's body, they're IMMEDIATE words that shape
 *how* the surrounding definition gets compiled.
 
+### Indirect calls: `'` and `EXECUTE`
+
+Every word above got called by *typing its name*. `'` (pronounced
+"tick") and `EXECUTE` let a program call a word it only knows the
+*name* of at some earlier point — useful for passing a word around as
+a value, the way you might pass a function as an argument in other
+languages.
+
+```forth
+: DOUBLE  DUP + ;
+' DOUBLE EXECUTE     \ runs DOUBLE, ( -- xt ) then ( xt -- ) →
+                       \ leaves DOUBLE's own result, just like just
+                       \ typing DOUBLE would have
+```
+
+`' DOUBLE` doesn't run `DOUBLE` — it looks `DOUBLE` up in the
+dictionary and pushes a single number identifying it (an **`xt`**,
+short for "execution token") without calling it. `EXECUTE` takes that
+`xt` off the stack and calls whatever it identifies. Splitting "find"
+and "call" into two separate steps like this is what makes it possible
+to store a word's identity in a variable, pass it to another word as
+an ordinary argument, or decide *at runtime* which of several words to
+call — none of which "just typing the name" can do, since that only
+ever means "call it right now."
+
+`'` looks up its name the same moment it runs, exactly like the
+outer prompt looks up anything else you type — asking for a name that
+doesn't exist is an error (see
+[Error handling: THROW and CATCH](#14-error-handling-throw-and-catch)
+for what that actually does).
+
 ---
 
 ## 3. Numbers
@@ -270,6 +337,39 @@ reliable — the internal range-reduction step gives up silently past
 that point rather than erroring — but ordinary trig usage is
 comfortably within range.
 
+`RAD`/`DEG` convert between the two common angle units, for when
+degrees are more natural than radians (a compass heading, say):
+
+```forth
+90.0 RAD F.       \ prints 1.5707 -- 90 degrees in radians
+PI 2.0 F/ DEG F.   \ prints 89.9960 -- half of PI back to degrees
+                     \ (not exactly 90.0 -- the same small
+                     \ approximation error every decimal calculation
+                     \ here carries)
+```
+
+Moving a value between the whole-number stack and the decimal stack
+needs its own words, since they're two genuinely separate stacks —
+typing a number with or without a `.` decides *where it starts*, but
+`S>F`/`F>S` move an already-computed value across afterward:
+
+| Word | Stack effect | What it does |
+|---|---|---|
+| `S>F` | `( n -- )` `( -- f )` | Whole number to decimal (exact) |
+| `F>S` | `( f -- )` `( -- n )` | Decimal to whole number (see below) |
+| `FROUND` | `( f -- )` `( -- f' )` | Round to the nearest whole decimal value |
+
+```forth
+42 S>F F.          \ prints 42.0000
+3.7 F>S .            \ prints 3 -- truncated toward negative infinity,
+                       \ not rounded and not toward zero: plain F>S on
+                       \ -0.5 gives -1, not 0
+-0.5 FROUND F>S .      \ prints 0 -- FROUND rounds -0.5 to the nearest
+                        \ whole value FIRST (half rounds up, so -0.5
+                        \ becomes 0, not -1), and only THEN does F>S
+                        \ convert it — the order matters
+```
+
 ### A few more useful numeric words
 
 A handful of ordinary whole-number words round out the basics:
@@ -306,6 +406,37 @@ A handful of ordinary whole-number words round out the basics:
 `RND`'s upper bound is exclusive — `100 RND` can produce `0` through
 `99`, never `100` itself, matching the "n possible results" convention
 plenty of other BASICs use for their own `RND(n)`.
+
+### Bitwise and logical operators
+
+These act on all 16 bits of a value at once — real bit manipulation,
+not the boolean `=`/`<`/`>` results covered in
+[Comparisons and true/false](#5-comparisons-and-truefalse):
+
+| Word | Stack effect | What it does |
+|---|---|---|
+| `AND` | `( a b -- a AND b )` | Bitwise AND |
+| `OR` | `( a b -- a OR b )` | Bitwise OR |
+| `XOR` | `( a b -- a XOR b )` | Bitwise exclusive-OR |
+| `INVERT` | `( a -- NOT a )` | Bitwise complement — every bit flipped |
+
+```forth
+15 240 OR .    \ prints 255 -- 15 is 00001111, 240 is 11110000;
+                \ OR-ed together, every one of those 8 bits is set
+10 12 AND .     \ prints 8 -- 10 is 1010, 12 is 1100; AND keeps only
+                 \ the bits both share (1000)
+0 INVERT .       \ prints -1 -- flipping every bit of 0 gives all
+                  \ ones, which prints as -1 (this project's own
+                  \ integers are signed, two's-complement, like most
+                  \ Forths)
+```
+
+`INVERT` is deliberately NOT called `NOT` — this project's `0=`
+(covered in the next section) already does *logical* negation of a
+true/false flag, and a second, differently-behaved word spelled `NOT`
+sitting right next to it would be a trap waiting to happen, not a
+convenience. `INVERT` flips every bit; `0=` only cares whether its
+input was exactly zero.
 
 ---
 
@@ -349,6 +480,39 @@ change it afterward.
 100 CONSTANT MAXHEALTH
 MAXHEALTH .      \ prints 100, every time, forever
 ```
+
+`@`/`!` always work with a full two-byte cell. `C@`/`C!` do the same
+thing one *byte* at a time instead — the natural pair to reach for
+when you're working with text (a string's own bytes) or anything else
+that's naturally byte-sized rather than a whole number:
+
+| Word | Stack effect | What it does |
+|---|---|---|
+| `C@` | `( addr -- byte )` | Read one byte at `addr` |
+| `C!` | `( byte addr -- )` | Write one byte to `addr` |
+
+```forth
+20 STRING NAME
+S" ADA" NAME PLACE
+NAME 1 + C@ .        \ prints 65 -- 'A', the first character of "ADA"
+```
+
+Reach whichever character you want by adding your own offset to a
+buffer's address before `C@` — there's no `CELLS`-style helper for
+single bytes since the offset and the byte count are already the same
+number.
+
+`FREE ( -- n )` reports how much room is left for defining new words —
+useful before a big program, the same spirit as BASIC's own `FREE`:
+
+```forth
+FREE .      \ prints how many bytes are left for new definitions
+```
+
+This measures dictionary space specifically — room for new word
+definitions — not total system memory; the stacks, screen, and
+system's own working storage occupy separate, fixed-size regions that
+don't compete with what `FREE` reports.
 
 ### Arrays
 
@@ -441,6 +605,56 @@ S" NOTANUMBER" VAL .    \ prints 0 -- not a valid number, no error,
 `STRING`'s own buffer has a fixed maximum size, decided when you create
 it (`20 STRING NAME` above never holds more than 20 characters) — the
 same limitation BASIC's own string variables have.
+
+### More string words
+
+A further set covers the everyday BASIC string operations
+(`CHR$`/`STR$`/`UPPER$`/`LOWER$`/`LEFT$`/`RIGHT$`/`INSTR` and friends)
+under Forth-standard names, all still working on the same
+address/length pairs:
+
+| Word | Stack effect | What it does |
+|---|---|---|
+| `CHR` | `( code -- addr len )` | A one-character string from a character code |
+| `STR` | `( n -- addr len )` | A number, as a string |
+| `UPPER` | `( addr len -- addr len )` | Uppercase, in place |
+| `LOWER` | `( addr len -- addr len )` | Lowercase, in place |
+| `LEFT` | `( addr len n -- addr len' )` | The first `n` characters |
+| `RIGHT` | `( addr len n -- addr' len' )` | The last `n` characters |
+| `SEARCH` | `( addr1 len1 addr2 len2 -- addr3 len3 flag )` | Find string 2 inside string 1 |
+| `CODE` | `( addr len -- code )` | The character code of a string's first character |
+
+```forth
+65 CHR TYPE            \ prints A
+42 STR TYPE              \ prints 42
+S" ADA" UPPER TYPE        \ prints ADA (already uppercase, unchanged)
+S" hello" UPPER TYPE       \ prints HELLO
+S" HELLO WORLD" 5 LEFT TYPE \ prints HELLO
+S" HELLO WORLD" 5 RIGHT TYPE \ prints WORLD
+```
+
+`UPPER` and `LOWER` change the text **in place** — unlike every other
+word here, which only reads its `(addr len)` argument, these two write
+back into it. That means the string has to be real, writable memory
+(from `STRING`, not a literal from `S"`): a literal's own characters
+live in the program's permanent, read-only storage, and a write there
+silently does nothing — not a crash, just no visible effect, since
+this hardware has no way to signal "that write didn't take."
+
+`SEARCH` looks for the second string inside the first, and reports
+where:
+
+```forth
+S" HELLO WORLD" S" WORLD" SEARCH .   \ prints -1 (true) -- found
+                                        \ DROP TYPE would show the
+                                        \ match itself: "WORLD"
+```
+
+`flag` is true if the second string was found anywhere inside the
+first; `addr3 len3` then point at the match itself (not the whole
+original string) — an empty search string never matches, and a search
+string longer than the text being searched can't match either, both
+handled without needing special-case code in your own program.
 
 ---
 
@@ -669,6 +883,24 @@ can never collide with the line you're currently entering. `AT-XY`
 printing position directly, if you want output somewhere other than
 wherever the last thing printed left off.
 
+Three small words exist purely for convenience, each a thin wrapper
+around `EMIT` for a specific character you'd otherwise have to look up
+the code for:
+
+| Word | Stack effect | What it does |
+|---|---|---|
+| `CR` | `( -- )` | Move to the start of the next line — `13 EMIT` |
+| `SPACE` | `( -- )` | Print one space — `32 EMIT` |
+| `SPACES` | `( n -- )` | Print `n` spaces |
+
+```forth
+." NAME:" SPACE ." FORTH" CR
+." VERSION:" SPACE ." 1" CR
+```
+
+prints `NAME: FORTH` then `VERSION: 1` on the line below, each lined
+up by hand with `SPACE` rather than needing a column-alignment word.
+
 ---
 
 ## 9. Drawing and sound
@@ -684,6 +916,7 @@ beyond what each word's own arguments say.
 | `LINE` | `( x1 y1 x2 y2 -- )` | Draw a line from `(x1, y1)` to `(x2, y2)` |
 | `CIRCLE` | `( xc yc r -- )` | Draw a circle outline centered at `(xc, yc)` with radius `r` |
 | `FILL` | `( x y -- )` | Flood-fill the enclosed area touching `(x, y)` with the current color |
+| `CLS` | `( -- )` | Clear the whole screen |
 | `BORDER` | `( color -- )` | Set the screen border to `color` (0-7, same numbering as BASIC's `BORDER`) |
 | `INK` | `( color -- )` | Set the foreground color `PLOT`/`LINE`/`CIRCLE`/`FILL` draw with from now on (0-7) |
 | `PAPER` | `( color -- )` | Set the background color the same way |
@@ -712,7 +945,9 @@ number.
 `PLOT`/`LINE`/`CIRCLE` after `2 INK 6 PAPER` draws red-on-yellow, not
 just the next one, until some later call changes it again. Calling
 `INK` never disturbs whatever `PAPER` was last set to, and vice versa —
-each only touches its own half of the color.
+each only touches its own half of the color. `CLS` honors the current
+`PAPER` too — clearing the screen fills it with whatever background
+color is currently set, not always black.
 
 `BEEP` takes real musical units, the same as BASIC's own `BEEP`: an
 INTEGER number of semitones (0 = middle C, positive goes up, negative
@@ -763,7 +998,7 @@ semitone convenience here, on purpose — `SOUND` trades convenience for
 direct access to everything the chip can do (three tones, volume
 envelopes, noise) that `BEEP` was never meant to reach.
 
-### Getting input: `KEY`
+### Getting input: `KEY`, `KEY?`, and `STICK`
 
 `KEY` is `EMIT`'s opposite: instead of printing a character, it waits
 for you to press one key and leaves its code on the stack.
@@ -771,6 +1006,26 @@ for you to press one key and leaves its code on the stack.
 ```forth
 KEY .     \ waits for a keypress, then prints its character code
 ```
+
+`KEY` **waits** — your program stops until you press something. For a
+game loop that needs to keep moving whether or not a key is currently
+down, `KEY? ( -- flag )` checks without waiting, leaving a true/false
+flag instead of a character code:
+
+```forth
+KEY? IF KEY . THEN     \ only reads (and prints) a key if one's ready
+```
+
+Checking `KEY?` never consumes the keypress the way `KEY` does — this
+is the standard idiom for "read a key only if one's waiting," and it
+works because `KEY?` genuinely just peeks; a key you check for with
+`KEY?` is still there for `KEY` to actually read afterward.
+
+`STICK ( device -- value )` reads a joystick — `device` 1 or 2. Device
+1 reports a full 4-bit direction (which way, if any, is pushed);
+device 2 reports a single on/off bit. With nothing connected (true for
+every setup this has actually been tested against so far), both
+always read `0`.
 
 ### Reading a whole line: `ACCEPT` and `INPUT`
 
@@ -943,6 +1198,163 @@ It's minimal (it doesn't say *which* word wasn't recognized, or why),
 but a real mistake now looks different from nothing having happened at
 all.
 
+A second kind of mistake — popping from an empty stack, or pushing
+past its own reserved space, the way `DROP` with nothing on the stack
+would — prints `STACK?` instead and resets both stacks to empty rather
+than leaving them in whatever corrupted state caused the problem.
+Like the unrecognized-word `?`, this is a blunt, whole-line reset, not
+a word-by-word explanation of what went wrong — see
+[Error handling: THROW and CATCH](#14-error-handling-throw-and-catch)
+for a way to intercept an error like this yourself, from inside your
+own program, instead of always falling back to this default reset.
+
+---
+
+## 14. Error handling: THROW and CATCH
+
+The previous section covered what happens by default when something
+goes wrong: `?` for an unrecognized word, `STACK?` for a stack
+mistake, both of which abandon the rest of the current line and drop
+you back at a fresh prompt. That's the right behavior while you're
+typing interactively, but a real *program* often wants to notice a
+problem itself and keep running under its own control — trying
+something risky, and having a planned fallback if it doesn't work out,
+rather than the whole program stopping.
+
+`THROW` and `CATCH` do exactly that:
+
+| Word | Stack effect | What it does |
+|---|---|---|
+| `CATCH` | `( xt -- 0 \| n )` | Run the word `xt` identifies. `0` if it finished normally; the thrown value `n` if it `THROW`ed instead |
+| `THROW` | `( n -- )` | `0` does nothing at all. Any other `n` abandons whatever's currently running and hands `n` to the nearest `CATCH` |
+
+```forth
+: RISKY   42 THROW ;         \ always throws 42
+' RISKY CATCH .                \ prints 42
+```
+
+`' RISKY` gets `RISKY`'s own `xt` (see
+[Indirect calls: ' and EXECUTE](#indirect-calls--and-execute) if that
+part looks unfamiliar), and `CATCH` runs it. Since `RISKY` throws
+instead of finishing normally, `CATCH` doesn't push `0` — it pushes
+the thrown value, `42`, instead. Nothing after the `THROW` inside
+`RISKY` itself ever runs, and neither does anything else that was
+mid-call underneath it — `CATCH` unwinds all of that automatically,
+restoring the stack to exactly how it looked right before `CATCH`
+started, then adds the thrown value on top.
+
+A word that finishes normally, with no `THROW` anywhere inside it,
+makes `CATCH` push a plain `0`:
+
+```forth
+: SAFE   5 3 + ;
+' SAFE CATCH .    \ prints 0 -- SAFE finished normally
+DROP               \ SAFE's own result (8) is still sitting there,
+                    \ underneath the 0 -- CATCH never touches what the
+                    \ word itself pushed, only whether it THREW
+```
+
+This is the pattern for actually using `CATCH`: check whether the top
+of the stack is `0`, and only then trust whatever the risky word left
+underneath it —
+
+```forth
+' RISKY CATCH IF ." SOMETHING WENT WRONG: " . CR
+ELSE DROP ." OK: " . CR
+THEN
+```
+
+`THROW`ing with no `CATCH` anywhere for it to reach falls back to the
+same reset this document already covers — both stacks reset to empty,
+`STACK?` prints, and you're back at a fresh prompt, exactly like an
+actual stack mistake. `CATCH` doesn't replace that default behavior;
+it just gives a program the option to intercept an error *before* it
+reaches that point, for whichever specific problems it knows how to
+recover from — anything it doesn't catch still falls through to the
+usual reset, same as always.
+
+---
+
+## 15. Printing to a real printer: LPRINT and LLIST
+
+BASIC's `LPRINT` and `LLIST` send output to an attached printer instead
+of the screen. 2068-Forth has the same idea, adapted to how this
+Forth's own dictionary works:
+
+| Word | Stack effect | What it does |
+|---|---|---|
+| `LPRINT` | `( addr len -- )` | Print a string to the printer, wrapping across multiple printed lines if it's longer than one line |
+| `LLIST` | `( -- )` | Print the name of every word you've defined since the machine started, newest first |
+
+```forth
+S" HELLO WORLD" LPRINT
+```
+
+`LLIST` deliberately does **not** print the ~100 built-in words this
+Forth ships with — only what you've personally defined, the same way
+BASIC's own `LLIST` only ever showed *your* program, never anything
+built into the ROM. There's also no real equivalent of BASIC's
+line-numbered program listing to reproduce here in the first place —
+once a word is compiled, its original source text isn't kept around,
+so `LLIST` shows *what exists* (a list of names) rather than
+re-displaying the exact lines you originally typed.
+
+**Honest status, stated plainly**: this is real, complete code, built
+against the documented ZX Printer/TS2040 hardware protocol (the same
+device real BASIC's own `LPRINT`/`LLIST` talk to) — but it has not yet
+been confirmed working against an actual printer or a printer-capable
+emulator. Testing this specifically is in progress; treat this section
+as accurate about what the words are *meant* to do, not yet as proof
+that real printed output comes out correctly. See
+[`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the current state of that
+verification.
+
+---
+
+## 16. ULAPlus: a bigger color palette
+
+Every color word covered so far (`INK`, `PAPER`, `BORDER`) picks from
+the same fixed 8 colors the hardware has always had. ULAPlus is an
+extension that replaces those 8 fixed colors with 64 colors *you*
+choose — without changing how `INK`/`PAPER`/`PLOT`/`LINE`/`CIRCLE`/
+`FILL` are used at all.
+
+| Word | Stack effect | What it does |
+|---|---|---|
+| `ULAPLUS` | `( flag -- )` | Nonzero enables the extended palette; zero reverts to the standard 8 colors |
+| `PALETTE` | `( index value -- )` | Program palette register `index` (0-63) with color `value` |
+
+A palette value packs green, red, and blue into one number,
+`GGGRRRBB` — 3 bits of green, 3 of red, 2 of blue:
+
+```forth
+2 252 PALETTE     \ register 2 = 252 (11111100): green=7, red=7,
+                    \ blue=0 -- yellow
+1 ULAPLUS           \ turn the extended palette on
+2 INK               \ INK still just says "color 2" -- ULAPLUS is
+                     \ what decides color 2 now MEANS bright yellow
+                     \ instead of the standard red
+100 100 30 CIRCLE
+100 100 FILL
+```
+
+Registers 0 through 7 replace the same 8 colors `INK`/`PAPER`/`BORDER`
+already use, in the same order — programming register 2 changes what
+color 2 looks like everywhere that number is used, including the
+screen border. This is a genuine, confirmed-working display-time
+palette swap: a shape already drawn with `INK 2` changes color the
+moment `PALETTE 2,...` and `ULAPLUS 1` run, with no need to redraw it.
+
+**Honest limit worth knowing**: the real Timex Sinclair 2068 almost
+certainly never had genuine ULAPlus hardware — it's a modern extension
+designed for later Sinclair-compatible machines, made available here
+through an emulator patch. What's confirmed is that this project's own
+port-level code matches the documented real protocol and visibly works
+in that patched emulator; whether it would behave identically on
+unpatched, genuinely original TS2068 hardware remains an open question,
+the same honest caveat this project's own 64-column mode carries in
+[A wider screen](#12-a-wider-screen).
+
 ---
 
 ## Appendix A: word reference
@@ -960,6 +1372,11 @@ the same convention applied to the full ANS Forth standard.
 | `SWAP` | `( a b -- b a )` |
 | `DROP` | `( n -- )` |
 | `OVER` | `( a b -- a b a )` |
+| `ROT` | `( a b c -- b c a )` |
+| `2DUP` | `( a b -- a b a b )` |
+| `2DROP` | `( a b -- )` |
+| `?DUP` | `( n -- 0 \| n n )` |
+| `PICK` | `( ... n -- ... x )` |
 
 **Arithmetic and comparison**
 
@@ -977,6 +1394,10 @@ the same convention applied to the full ANS Forth standard.
 | `SQRT` | `( n -- isqrt(n) )` |
 | `RND` | `( x -- n )` |
 | `RANDOMIZE` | `( n -- )` |
+| `AND` | `( a b -- a AND b )` |
+| `OR` | `( a b -- a OR b )` |
+| `XOR` | `( a b -- a XOR b )` |
+| `INVERT` | `( a -- NOT a )` |
 
 **Decimal (floating-point) arithmetic** — own stack, see section 3
 
@@ -987,9 +1408,14 @@ the same convention applied to the full ANS Forth standard.
 | `F*` | `( f1 f2 -- f1*f2 )` |
 | `F/` | `( f1 f2 -- f1/f2 )` |
 | `FSQRT` | `( f -- sqrt(f) )` |
+| `FROUND` | `( f -- f' )` |
 | `PI` | `( -- f )` |
 | `SIN` | `( f -- sin(f) )` |
 | `COS` | `( f -- cos(f) )` |
+| `RAD` | `( degrees -- radians )` |
+| `DEG` | `( radians -- degrees )` |
+| `S>F` | `( n -- )` `( -- f )` |
+| `F>S` | `( f -- )` `( -- n )` |
 | `F.` | `( f -- )` |
 
 **Memory**
@@ -998,10 +1424,13 @@ the same convention applied to the full ANS Forth standard.
 |---|---|
 | `@` | `( addr -- n )` |
 | `!` | `( n addr -- )` |
+| `C@` | `( addr -- byte )` |
+| `C!` | `( byte addr -- )` |
 | `VARIABLE` | `( "name" -- )` |
 | `CONSTANT` | `( n "name" -- )` |
 | `ARRAY` | `( n "name" -- )` |
 | `CELLS` | `( n -- n*2 )` |
+| `FREE` | `( -- n )` |
 
 **Strings**
 
@@ -1014,12 +1443,22 @@ the same convention applied to the full ANS Forth standard.
 | `COUNT` | `( caddr -- addr len )` | a buffer's contents as `(addr len)` |
 | `LEN` | `( caddr -- n )` | a buffer's own length |
 | `VAL` | `( addr len -- n )` | parse a string as an integer |
+| `CHR` | `( code -- addr len )` | a one-character string from a code |
+| `STR` | `( n -- addr len )` | a number, as a string |
+| `UPPER` | `( addr len -- addr len )` | uppercase, in place |
+| `LOWER` | `( addr len -- addr len )` | lowercase, in place |
+| `LEFT` | `( addr len n -- addr len' )` | first `n` characters |
+| `RIGHT` | `( addr len n -- addr' len' )` | last `n` characters |
+| `SEARCH` | `( addr1 len1 addr2 len2 -- addr3 len3 flag )` | find string 2 inside string 1 |
+| `CODE` | `( addr len -- code )` | character code of the first character |
 
 **Defining and control flow**
 
 | Word | Stack effect | Notes |
 |---|---|---|
 | `:` ... `;` | — | define a new word |
+| `'` | `( -- xt )` | look up a word by name, without calling it |
+| `EXECUTE` | `( xt -- )` | call the word an `xt` identifies |
 | `IF` ... `ELSE` ... `THEN` | `( flag -- )` | IMMEDIATE, compile-only |
 | `BEGIN` ... `UNTIL` | `( flag -- )` | IMMEDIATE, compile-only |
 | `BEGIN` ... `WHILE` ... `REPEAT` | `( flag -- )` | IMMEDIATE, compile-only |
@@ -1028,6 +1467,13 @@ the same convention applied to the full ANS Forth standard.
 | `LEAVE` | `( -- )` | IMMEDIATE, compile-only; exits the innermost `DO` loop |
 | `I` | `( -- index )` | innermost `DO` loop's index |
 
+**Error handling** — see [section 14](#14-error-handling-throw-and-catch)
+
+| Word | Stack effect |
+|---|---|
+| `CATCH` | `( xt -- 0 \| n )` |
+| `THROW` | `( n -- )` |
+
 **Printing and input**
 
 | Word | Stack effect |
@@ -1035,7 +1481,12 @@ the same convention applied to the full ANS Forth standard.
 | `.` | `( n -- )` |
 | `."` text`"` | `( -- )` — compile-only |
 | `EMIT` | `( char -- )` |
+| `CR` | `( -- )` |
+| `SPACE` | `( -- )` |
+| `SPACES` | `( n -- )` |
 | `KEY` | `( -- char )` |
+| `KEY?` | `( -- flag )` |
+| `STICK` | `( device -- value )` |
 | `ACCEPT` | `( dest maxlen -- len )` |
 | `INPUT` | `( -- n )` |
 | `AT-XY` | `( col row -- )` |
@@ -1048,6 +1499,7 @@ the same convention applied to the full ANS Forth standard.
 | `LINE` | `( x1 y1 x2 y2 -- )` |
 | `CIRCLE` | `( xc yc r -- )` |
 | `FILL` | `( x y -- )` |
+| `CLS` | `( -- )` |
 | `BORDER` | `( color -- )` |
 | `INK` | `( color -- )` |
 | `PAPER` | `( color -- )` |
@@ -1056,6 +1508,8 @@ the same convention applied to the full ANS Forth standard.
 | `64COL` / `32COL` | `( -- )` |
 | `PALETTE64` | `( n -- )` |
 | `PLOT64` | `( x y -- )` |
+| `ULAPLUS` | `( flag -- )` — see [section 16](#16-ulaplus-a-bigger-color-palette) |
+| `PALETTE` | `( index value -- )` — see [section 16](#16-ulaplus-a-bigger-color-palette) |
 
 **Storage**
 
@@ -1063,6 +1517,13 @@ the same convention applied to the full ANS Forth standard.
 |---|---|
 | `SAVE` | `( "name" -- )` |
 | `LOAD` | `( "name" -- )` |
+
+**Printer** — see [section 15](#15-printing-to-a-real-printer-lprint-and-llist)
+
+| Word | Stack effect |
+|---|---|
+| `LPRINT` | `( addr len -- )` |
+| `LLIST` | `( -- )` |
 
 ---
 
