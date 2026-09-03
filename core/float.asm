@@ -114,17 +114,104 @@ F_SHRA:
 ; smaller exponent right until both exponents match, updating that
 ; operand's F_Mn in place, and leaves the common exponent in
 ; F_RESULT_EXP. NOT a dictionary word.
+;
+; REAL BUG FIXED HERE (2026-09-03): the exponent comparison used to be
+; a plain unsigned `CP`/`JR C` on the two raw exponent bytes -- correct
+; only when both exponents share the same sign (the common case for
+; two "normal-sized" normalized floats, which is why this went
+; unnoticed for a long time). It silently breaks whenever one exponent
+; is negative and the other is zero or positive: unsigned comparison
+; reads exponent 0 ($00) as LESS than exponent -12 ($F4), backwards
+; from the true signed relationship (0 > -12). That picks the WRONG
+; branch, shifting the WRONG mantissa by a huge, wrong amount --
+; F_SHRA saturates it to 0, and the caller silently gets back the
+; OTHER operand unchanged instead of a real sum/difference. Previously
+; documented as a known, narrow-impact risk (confirmed harmful for F-
+; in one specific case, BEEP's frequency formula) but left unfixed as
+; "foundational, widely-relied-upon code that deserves its own
+; dedicated phase" -- this is that phase. Independently reproduced via
+; a from-scratch PoC (~/2068-basicforth-poc) translating simple BASIC-
+; looking arithmetic into real Forth text: "5+3*2" (add a plain
+; integer, exponent 0, to F*'s freshly-normalized result, typically a
+; substantially negative exponent) hit this exact bug, returning 6.0
+; instead of 11.0 -- an extremely common shape (multiply then add),
+; not an exotic edge case.
+;
+; THE FIX: XOR $80 into a COPY of each exponent byte before comparing
+; only (D/E, not B/C) -- this is the standard trick for turning a
+; two's-complement signed range into an order-preserving unsigned one
+; (v XOR $80 is equivalent to v+128 mod 256), so a plain unsigned CP
+; on the flipped copies now agrees with true signed comparison. B/C
+; still hold the ORIGINAL, unflipped exponent bytes for the actual
+; `sub` below that computes the shift AMOUNT -- two's-complement
+; subtraction already produces the correct signed difference
+; regardless of sign, so that part was never the bug and doesn't need
+; to change.
+;
+; HAND-VERIFIED against the real failing case before trusting it:
+; e1=0, e2=-12 ($F4). Old code: unsigned $00 < $F4 -> wrong branch,
+; shifts M1 (the exponent-0 operand) into oblivion. New code: $00^$80
+; =$80, $F4^$80=$74; $80 > $74 unsigned -> correctly takes the "e1 >
+; e2" branch, shifting M2 right by (e1-e2)=12 -- for the PoC's own
+; 6.0 (mantissa 24576, exponent -12), 24576>>12 = 6 exactly, correctly
+; aligned to exponent 0, giving 5+6=11 as it should. Confirmed in a
+; real Fuse run afterward (see this project's own commit history):
+; "5 S>F 3 S>F 2 S>F F* F+ 1 S>F F- F." now correctly prints 10.0000.
+;
+; A REAL REGRESSION the signed-comparison fix ALONE introduced, caught
+; by re-running the existing forth_smoke_p30.asm before trusting the
+; fix: SIN(0.0)=0.0 (checkpoint 2) started failing. Root cause: the OLD
+; unsigned-comparison bug happened to give X+0.0 EXACT, lossless
+; behavior as a side effect (it always shifted the ZERO operand's own
+; already-zero mantissa, never the real one) -- an accident this
+; project's own SIN/COS work had come to rely on (see this file's
+; sibling memory, 2068forth_float_align_signed_cmp_quirk, "Case (a) is
+; BENIGN"). The signed-comparison fix alone, applied uniformly, can now
+; correctly identify zero's own exponent (always 0, this project's
+; convention) as "larger" than a real operand's negative exponent --
+; and CORRECTLY-BY-THE-GENERAL-RULE shifts the REAL operand down to
+; align with zero's exponent, which is WRONG for this specific case:
+; adding exact zero should NEVER lose precision, in any sane float
+; implementation, regardless of relative exponents. Real, non-buggy
+; float adders special-case "one operand is exactly zero" for exactly
+; this reason. Fixed below by adding that special case explicitly,
+; ahead of the general (now correctly signed) comparison -- confirmed
+; by re-running BOTH forth_smoke_p30.asm (SIN(0.0)=0.0 passes again)
+; and the original failing case (5+3*2-1=10.0000) together afterward.
 ; ============================================================================
 F_ALIGN:
+    ld   hl, (F_M1)               ; special case: M1 exactly zero ->
+    ld   a, h                      ; adopt E2 unchanged, no shifting at
+    or   l                          ; all (0 contributes nothing to the
+    jr   nz, .m1_nonzero             ; sum regardless of exponent)
+    ld   a, (F_E2)
+    ld   (F_RESULT_EXP), a
+    ret
+.m1_nonzero:
+    ld   hl, (F_M2)               ; special case: M2 exactly zero ->
+    ld   a, h                      ; adopt E1 unchanged, symmetric to
+    or   l                          ; the M1 case above
+    jr   nz, .both_nonzero
+    ld   a, (F_E1)
+    ld   (F_RESULT_EXP), a
+    ret
+.both_nonzero:
     ld   a, (F_E1)
     ld   b, a
     ld   a, (F_E2)
     ld   c, a
     ld   a, b
-    cp   c
+    xor  $80
+    ld   d, a
+    ld   a, c
+    xor  $80
+    ld   e, a
+    ld   a, d
+    cp   e
     jr   z, .same_exp
     jr   c, .e1_less
-    ; e1 > e2: shift F_M2 right by (e1 - e2); result exponent = e1
+    ; e1 > e2 (true signed comparison): shift F_M2 right by (e1 - e2);
+    ; result exponent = e1
     ld   a, b
     sub  c
     ld   b, a
@@ -135,7 +222,8 @@ F_ALIGN:
     ld   (F_RESULT_EXP), a
     ret
 .e1_less:
-    ; e2 > e1: shift F_M1 right by (e2 - e1); result exponent = e2
+    ; e2 > e1 (true signed comparison): shift F_M1 right by (e2 - e1);
+    ; result exponent = e2
     ld   a, c
     sub  b
     ld   b, a
