@@ -749,6 +749,29 @@ inherited, what was deliberately left behind, and the phased build order.
   genuinely returns afterward. +223 bytes (`rom/forth_boot.asm`: 12824
   -> 13047 of 16384). Closes out the user's own 3-step error-handling
   plan.
+- Phase 46 (`core/stackops.asm` + `core/logic.asm` + `core/outwords.asm`
+  + `core/tick.asm` + `rom/forth_smoke_p46.asm`): `ROT`, `2DUP`,
+  `2DROP`, `?DUP`, `PICK`, `AND`, `OR`, `XOR`, `INVERT`, `CR`, `SPACE`,
+  `SPACES`, and `'` (TICK) — prompted by the user asking what this
+  project would benefit from next; a quick inventory of the real
+  dictionary (96 words) found only Phase 2's original 4 stack-shuffle
+  words, no bitwise/logical operators at all, and no `CR`/`SPACE`. `'`
+  closes a real gap `EXECUTE` (Phase 41) left open (no Forth-visible
+  way to get an xt by name) and throws exactly `-13` (ANS Forth's own
+  "undefined word" code) on an undefined word — the first real use of
+  `THROW`/`CATCH` (Phase 45) outside its own test stubs. Two real bugs
+  caught before shipping, same mistake both times: assuming a register
+  survives a call into shared graphics code against that code's own
+  documented contract (`GFX_READ_PIXEL` destroys `DE`, `W_EMIT` loads
+  `BC` as row/column) — one caught on paper, one shipped and was
+  root-caused from a real Fuse run showing the wrong checkpoint fail.
+  A third bug (checkpoint numbers 1-9 aliasing on `PORT_ULA`'s 3-bit
+  border, the exact hazard Phase 40 already documented) was caught by
+  re-reading that lesson before trusting the numbering. Verified with
+  9 assertions grouped into 6 checkpoints, including a real integration
+  proof spanning Phases 41/45/46 together (a compiled word found via
+  `'` and `EXECUTE`d, and a bad name `CATCH`ing exactly `-13`). +347
+  bytes (`rom/forth_boot.asm`: 13047 -> 13394 of 16384).
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -849,6 +872,7 @@ rom/        ROM image assembly:
               forth_smoke_p43.asm Phase 43 smoke ROM (FREE)
               forth_smoke_p44.asm Phase 44 smoke ROM (dictionary-ceiling reclaim)
               forth_smoke_p45.asm Phase 45 smoke ROM (THROW/CATCH)
+              forth_smoke_p46.asm Phase 46 smoke ROM (ROT/2DUP/2DROP/?DUP/PICK, AND/OR/XOR/INVERT, CR/SPACE/SPACES, ')
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -911,6 +935,7 @@ make forth-smoke-p42  # Phase 42 smoke ROM: RAD/DEG
 make forth-smoke-p43  # Phase 43 smoke ROM: FREE
 make forth-smoke-p44  # Phase 44 smoke ROM: dictionary-ceiling reclaim
 make forth-smoke-p45  # Phase 45 smoke ROM: THROW/CATCH
+make forth-smoke-p46  # Phase 46 smoke ROM: ROT/2DUP/2DROP/?DUP/PICK, AND/OR/XOR/INVERT, CR/SPACE/SPACES, '
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```

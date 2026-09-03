@@ -3175,6 +3175,77 @@ bytes ($32F7 of $4000), +223 bytes over Phase 44's 12824.
 With this, the user's own 3-step error-handling plan from Phase 38 is
 now fully complete.
 
+## Phase 46: ROT, 2DUP, 2DROP, ?DUP, PICK, AND, OR, XOR, INVERT, CR,
+## SPACE, SPACES, and ' (TICK)
+
+**Done and committed.** Prompted directly by the user asking "are
+there any other keywords or features this project would benefit
+from?" — answered with a quick inventory of the real dictionary (96
+words at the time) rather than a guess, which turned up a genuine gap:
+only the original Phase 2 `DUP`/`SWAP`/`OVER`/`DROP` existed for stack
+shuffling (no `ROT`, `2DUP`, `2DROP`, `?DUP`, `PICK`), no bitwise/
+logical operators at all, and no `CR`/`SPACE` (only raw `EMIT` of 13/
+32). All cheap, all real friction for writing idiomatic Forth code,
+unlike the bigger sprite/hi-res bucket — the user agreed to do it as
+the next phase.
+
+Four small files, each independent: `core/stackops.asm` (`ROT`,
+`2DUP`, `2DROP`, `?DUP`, `PICK`), `core/logic.asm` (`AND`, `OR`, `XOR`,
+`INVERT` — deliberately NOT named `NOT`, since this project's own `0=`
+already does boolean negation of a flag and a second, differently
+behaved word spelled `NOT` next to it would be a real footgun, not a
+helpful synonym), `core/outwords.asm` (`CR`, `SPACE`, `SPACES`), and
+`core/tick.asm` (`'`, closing a real gap `EXECUTE` (Phase 41) left
+open — there was no Forth-visible way to actually obtain an `xt` by
+name before this). `'` on an undefined word `THROW`s exactly `-13`,
+the real ANS Forth "undefined word" code — the first user-facing use
+of Phase 45's own `THROW`/`CATCH` for something other than its own
+smoke-test stubs.
+
+**Two real bugs found and fixed before shipping, both the same class
+of mistake** — assuming a register pair survives a call into shared
+graphics code when its own header says otherwise:
+- `rom/forth_smoke_p46.asm`'s own `ANY_PIXEL_SET_IN_CELL` test helper
+  used `D`/`E` as loop counters across calls to `GFX_READ_PIXEL`,
+  whose own documented contract is "Destroys: AF, BC, DE, HL" — caught
+  by re-reading that contract before trusting the helper, not by a
+  failed run.
+- `core/outwords.asm`'s own first draft of `SPACES` kept its count in
+  `BC` across calls to `SPACE`/`EMIT` — `W_EMIT` (`core/print.asm`)
+  explicitly loads `B`=row and `C`=column before calling
+  `GFX_PUTCHAR`, silently corrupting the loop count. This one WASN'T
+  caught on paper — it shipped, ran green-adjacent (a real Fuse run
+  showed the wrong checkpoint failing, cyan/5, with the "Y" character
+  landing one column short of where it should), was root-caused by
+  checking `W_EMIT`'s own actual register usage, and fixed by moving
+  the counter into memory (`SPACES_COUNT`) instead of any register —
+  immune to whatever the callee touches, by construction.
+
+**A third, unrelated bug also caught before the final green run**: the
+smoke ROM's own first draft numbered its 9 assertions as checkpoints
+1-9 directly — but this project already has a documented lesson about
+exactly this (Phase 40): `PORT_ULA`'s border only decodes 3 bits, so
+checkpoints 8 and 9 would have aliased to colors 0 and 1, and 4/7 are
+already this project's own reserved PASS/"bug in test source" colors.
+Caught by re-reading that lesson before trusting the numbering, not
+after a confusing failure — regrouped into 6 checkpoint numbers
+(0,1,2,3,5,6), the same fix Phase 40 used.
+
+**Verification**: `rom/forth_smoke_p46.asm`, 9 assertions under 6
+checkpoint numbers — exact stack traces for `ROT`/`2DUP`/`2DROP`/
+`?DUP`/`PICK`, exact bit patterns (not just truthy/falsy) for `AND`/
+`OR`/`XOR`/`INVERT`, real `GFX_READ_PIXEL` readback proving `CR`/
+`SPACE`/`SPACES` land glyphs at the exact expected screen cells
+(matching Phase 10's own established EMIT verification strategy), and
+`'` exercised both ways — a real compiled word found and `EXECUTE`d
+correctly, and a deliberately undefined word `CATCH`ing exactly `-13`
+— a genuine integration proof spanning Phases 41, 45, and 46 together,
+not three isolated checks. All checkpoints green in real Fuse after
+the fixes above.
+
+ROM budget after this phase: `rom/forth_boot.asm` uses 13394 of 16384
+bytes ($3452 of $4000), +347 bytes over Phase 45's 13047.
+
 ## Backlog — ULAPlus test fidelity (not yet scheduled)
 
 **Not yet scheduled as a numbered phase — tracked here so it isn't
