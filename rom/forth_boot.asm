@@ -116,7 +116,7 @@ COLD_START:
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
-    ld   hl, DICT_LATEST_INIT_ULAPLUS   ; the full chain's own head —
+    ld   hl, DICT_LATEST_INIT_VLIST   ; the full chain's own head —
                                     ; see this file's own header
     ld   (LATEST), hl
     ld   hl, FORTH_DICT_RAM
@@ -465,12 +465,16 @@ DICT_CHAIN_POINT DEFL H_REPEAT
 DICT_CHAIN_POINT DEFL H_PAPER
     INCLUDE "core/doloop.asm"
 DICT_CHAIN_POINT DEFL H_I
+    INCLUDE "core/loopext.asm"
+DICT_CHAIN_POINT DEFL H_J
     INCLUDE "core/moregfx.asm"
 DICT_CHAIN_POINT DEFL H_ATXY
     INCLUDE "core/key.asm"
 DICT_CHAIN_POINT DEFL H_KEYQ
     INCLUDE "core/mathfn.asm"
 DICT_CHAIN_POINT DEFL H_RANDOMIZE
+    INCLUDE "core/arith.asm"
+DICT_CHAIN_POINT DEFL H_MIN
     INCLUDE "core/array.asm"
 DICT_CHAIN_POINT DEFL H_CELLS
     INCLUDE "core/string.asm"
@@ -500,6 +504,8 @@ DICT_CHAIN_POINT DEFL H_TICK
     INCLUDE "core/printer.asm"
 DICT_CHAIN_POINT DEFL H_LLIST
     INCLUDE "core/ulaplus.asm"
+DICT_CHAIN_POINT DEFL H_PALETTE
+    INCLUDE "core/vlist.asm"
     INCLUDE "core/editor.asm"
 
     DS   $4000 - $, $FF
