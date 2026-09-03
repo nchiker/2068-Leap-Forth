@@ -25,14 +25,14 @@
 ; INK/PAPER, DO/LOOP/LEAVE/+LOOP/I, FILL/AT-XY, KEY/KEY?,
 ; ABS/SGN/MOD/SQRT/RND/RANDOMIZE, ARRAY/CELLS,
 ; S"/TYPE/STRING/PLACE/COUNT/LEN/VAL, C@/C!, STICK, ACCEPT/INPUT,
-; CHR/STR/UPPER/LOWER/LEFT/RIGHT/SEARCH/CODE — 90 words total,
-; cross-checked directly against every H_*/DB header in this file's own
-; INCLUDE chain during a code-consolidation pass rather than trusted
-; from an earlier draft of this same comment, which had quietly
-; drifted 34 words stale — missing everything from the original Phase
-; 2 primitives (DROP/DUP/SWAP/OVER/+/-/@/!) it should have listed from
-; the very start, through most of Phases 24-32), chained into one
-; LATEST list via the same DICT_CHAIN_POINT splices
+; CHR/STR/UPPER/LOWER/LEFT/RIGHT/SEARCH/CODE, EXECUTE — 91 words total
+; (cross-checked directly against every H_*/DB header in this file's
+; own INCLUDE chain during a code-consolidation pass rather than
+; trusted from an earlier draft of this same comment, which had
+; quietly drifted 34 words stale — missing everything from the
+; original Phase 2 primitives (DROP/DUP/SWAP/OVER/+/-/@/!) it should
+; have listed from the very start, through most of Phases 24-32),
+; chained into one LATEST list via the same DICT_CHAIN_POINT splices
 ; rom/forth_smoke_p9.asm introduced and proved.
 ; DECIMAL_NUMBER_ENABLED is also DEFINEd here (core/decimal.asm,
 ; Phase 23) — not a dictionary word, a NUMBER/INTERPRET_RUN parsing
@@ -421,6 +421,8 @@ DICT_CHAIN_POINT DEFL H_CELLS
 DICT_CHAIN_POINT DEFL H_VAL
     INCLUDE "core/stringext.asm"
 DICT_CHAIN_POINT DEFL H_CODE
+    INCLUDE "core/execute.asm"
+DICT_CHAIN_POINT DEFL H_EXECUTE
     INCLUDE "core/bytemem.asm"
 DICT_CHAIN_POINT DEFL H_CSTORE
     INCLUDE "core/stick.asm"

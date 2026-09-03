@@ -657,6 +657,22 @@ inherited, what was deliberately left behind, and the phased build order.
   border port only decodes 3 bits, so 12 truncates to color 4) —
   fixed by grouping into 6 checkpoint numbers instead. +451 bytes
   (`rom/forth_boot.asm`: 12323 -> 12774 of 16384).
+- Phase 41 (`core/execute.asm` + `rom/forth_boot.asm` +
+  `rom/forth_smoke_p41.asm`): `EXECUTE ( xt -- )` — standard Forth's
+  own counterpart to BASIC's `USR(addr)`. Trivial in this project's own
+  subroutine-threaded model: a colon definition compiles directly to
+  real `CALL`s ending in `RET`, so there's no indirection layer between
+  an execution token and directly-jumpable machine code for either a
+  primitive or a user-defined word — the whole word is `call DPOP_HL`
+  then `jp (hl)`, a plain jump so the target's own `RET` naturally
+  returns to whoever called `EXECUTE`. Confirmed via
+  `rom/forth_smoke_p41.asm`'s two checkpoints, the second one real
+  end-to-end proof, not just assertion: compiles `: DOUBLE DUP + ;`
+  through the actual colon-compiler at runtime, looks its own code
+  address up through the real `FIND` (it has no compile-time label),
+  then `EXECUTE`s that xt — proving the mechanism works identically on
+  a primitive and a freshly-compiled word. +14 bytes (`rom/forth_boot.asm`:
+  12774 -> 12788 of 16384).
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -752,6 +768,7 @@ rom/        ROM image assembly:
               forth_smoke_p37.asm Phase 37 smoke ROM (STICK)
               forth_smoke_p38.asm Phase 38 smoke ROM (runtime stack-error detection)
               forth_smoke_p40.asm Phase 40 smoke ROM (string functions)
+              forth_smoke_p41.asm Phase 41 smoke ROM (EXECUTE)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -809,6 +826,7 @@ make forth-smoke-p36  # Phase 36 smoke ROM: CLS/C@/C!/KEY?
 make forth-smoke-p37  # Phase 37 smoke ROM: STICK
 make forth-smoke-p38  # Phase 38 smoke ROM: runtime stack-error detection
 make forth-smoke-p40  # Phase 40 smoke ROM: string functions
+make forth-smoke-p41  # Phase 41 smoke ROM: EXECUTE
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```

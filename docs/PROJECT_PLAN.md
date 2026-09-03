@@ -2902,24 +2902,72 @@ bytes ($31E6 of $4000), 3610 bytes free — +451 bytes over Phase 39
 Phase 33, matching this being the largest single word-count addition,
 8 words, since Phase 27's own original 6).
 
-## Backlog — EXECUTE, RAD/DEG, FREE, THROW/CATCH review (not yet scheduled)
+## Phase 41 — EXECUTE
+
+**Status: done, confirmed under real Fuse.** The next backlog pick,
+following string functions. Standard ANS Forth `EXECUTE ( xt -- )` —
+the audit's own framing was BASIC's `USR(addr)`: jump into arbitrary
+code from an address already on the data stack, something nothing in
+2068-Forth did before now.
+
+**Trivial in this project's own threading model, and worth saying why
+rather than leaving it looking accidentally simple**: this is a
+SUBROUTINE-threaded Forth (`core/dict.asm`'s own header) — a colon
+definition compiles directly to a sequence of real Z80 `CALL`
+instructions ending in `RET`, and a primitive's own code IS the
+routine `FIND` already returns as its "code address." There's no
+separate indirection layer (no token table, no `DOCOL`-style inner
+interpreter) between an execution token and directly-jumpable machine
+code, for either kind of word — so `EXECUTE` doesn't need to know or
+care which kind it's given. The entire word is two instructions:
+`call DPOP_HL` then `jp (hl)` — a plain jump, not a call, so the
+target's own eventual `RET` naturally returns to whoever called
+`EXECUTE` in the first place, exactly matching real `EXECUTE`
+semantics. No address validation, matching BASIC's own `USR(addr)`
+(also just jumps to whatever it's given) and this project's
+established no-error-mechanism convention.
+
+**Scope note**: this project still has no `'` (tick) word to look up
+an existing dictionary word's own execution token by name from typed
+source — `EXECUTE` here serves the `USR(addr)`-shaped use case the
+audit named (a numeric address already known or computed, e.g. from a
+`VARIABLE` or `CREATE`'d buffer holding raw machine code), not "call
+any word in the dictionary by name from a running program." A lookup
+word is a separate, not-yet-requested feature.
+
+**Confirmed under real Fuse**: `rom/forth_smoke_p41.asm`'s two
+checkpoints prove the SAME central claim the header above makes, not
+just assert it — `EXECUTE` on `+`'s own primitive code address (taken
+directly at assembly time) with `(5 3)` gives `8`; and, more
+substantially, compiling `: DOUBLE DUP + ;` for REAL through the
+actual `INTERPRET_RUN`/colon-compiler pipeline (not faked), looking
+its own code address up through the REAL `FIND` (it has no
+compile-time label — it's compiled into the RAM dictionary at
+runtime), then `EXECUTE`ing THAT xt with `21` gives `42` — proving
+`EXECUTE` genuinely works identically on a primitive and on a
+freshly-compiled user-defined word, the whole point of the execution-
+token abstraction, not just on the one case that's easy to set up.
+
+ROM budget after this phase: `rom/forth_boot.asm` uses 12788 of 16384
+bytes ($31F4 of $4000), 3596 bytes free — +14 bytes over Phase 40 (a
+two-instruction word, the smallest addition since Phase 39's own
+zero-byte consolidation fixes).
+
+## Backlog — RAD/DEG, FREE, THROW/CATCH review, ULAPlus test fidelity (not yet scheduled)
 
 **Not yet scheduled as numbered phases — tracked here so they aren't
-lost.** All four came out of the fresh three-way audit against
+lost.** `RAD`/`DEG` came out of the fresh three-way audit against
 2068-Leap and the real TS2068 ROM's own command set (the same audit
 Phase 36 picked its own "highest value, least cost" group from, and
-Phase 37's own `STICK` came from too) — `EXECUTE` and `RAD`/`DEG` were
-two real findings from that SAME audit that
-never actually made it onto this list the first time around (caught
-when the user asked "is there anything that got left out?"), not new
-discoveries — string functions, the third such finding, is now done
-(Phase 40, above). `THROW`/`CATCH` is the last of the three steps the
-user laid out when Phase 38 was scoped — deliberately saved for AFTER
-a code-consolidation pass, not designed yet.
-
-**`EXECUTE`** — standard Forth's own counterpart to BASIC's
-`USR(addr)`: jump into arbitrary code from an address already on the
-data stack. Nothing in 2068-Forth does this today at all.
+Phase 37's own `STICK` and Phase 41's own `EXECUTE` came from too) —
+one of two real findings from that SAME audit that never actually made
+it onto this list the first time around (caught when the user asked
+"is there anything that got left out?"), not a new discovery —
+`EXECUTE`, the other one, is now done (Phase 41, above). `THROW`/
+`CATCH` is the last of the three steps the user laid out when Phase 38
+was scoped — deliberately saved for AFTER a code-consolidation pass,
+not designed yet. `ULAPlus` is a testing-fidelity concern, not a
+feature request — added when the user asked for it directly.
 
 **`RAD`/`DEG`** — degree-to-radian and radian-to-degree conversion.
 2068-Leap has both; `core/floattrig.asm`'s `SIN`/`COS` currently only
@@ -2961,6 +3009,20 @@ this project wants a full exception mechanism on top of what Phase 38
 already does, and if so, designing it from scratch. Deliberately saved
 for last, after a code-consolidation pass, per the user's own explicit
 sequencing.
+
+**`ULAPlus` test-fidelity check** — not a feature to build, a testing
+caveat to resolve. Already noted once, in the 64-column TEXT mode
+stretch goal below: this session's own Fuse binary is patched for
+ULAPlus (an enhanced-palette extension the real TS2068 never had), so
+any visual side effect observed from a port `$FF` write (exactly what
+`kernel/mode64.asm`'s `MODE64_ON` does) may be Fuse's own ULAPlus patch
+reinterpreting that write, not genuine TS2068/SCLD hardware behavior —
+confirmed as an open question, never resolved. The concern isn't
+limited to `64COL`; it applies to ANY future graphics-hardware
+verification done through this specific Fuse binary. The planned fix
+is cross-checking in ZEsarUX (unpatched, with native ULAPlus support
+that can be turned off) before trusting any FURTHER conclusions about
+port-`$FF`-driven visual behavior — not yet done.
 
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
