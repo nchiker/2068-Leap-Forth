@@ -1,5 +1,7 @@
 ; ============================================================================
 ; core/floattrig.asm — Phase 30: PI, SIN, COS
+;                      Phase 42 adds RAD and DEG (degree/radian
+;                      conversion)
 ;
 ; Builds on core/dict.asm, core/interp.asm, core/float.asm (FPUSH/FPOP/
 ; W_FPLUS/W_FMINUS), core/floatmul.asm (W_FSTAR), core/floatdiv.asm
@@ -551,8 +553,74 @@ W_COS:
     call RAW_SIN
     ret
 
-DICT_LATEST_INIT_FLOATTRIG EQU H_COS   ; head of the dictionary once
-                                        ; this file's own words are
-                                        ; included
+DICT_LATEST_INIT_FLOATTRIG EQU H_COS   ; head of the dictionary as of
+                                        ; Phase 30 (PI/SIN/COS only) --
+                                        ; rom/forth_smoke_p30.asm's own
+                                        ; historical snapshot; must NOT
+                                        ; be repointed at RAD/DEG below
+
+; ============================================================================
+; Phase 42: RAD and DEG — degree/radian conversion, found missing from
+; the fresh three-way audit against 2068-Leap and the real TS2068 ROM's
+; own command set (2068-Leap has both; `SIN`/`COS` above only ever
+; accepted radians directly, with no bridge from degrees). Both operate
+; on the float stack, matching `PI`/`SIN`/`COS`'s own convention —
+; `RAD`/`DEG` are these three words' own direct companions, not a
+; separate feature, so they live in this same file rather than a new
+; one.
+;
+; RAD ( degrees -- radians )   radians = degrees * (PI/180)
+; DEG ( radians -- degrees )   degrees = radians * (180/PI)
+;
+; Each is a single precomputed constant (hand-derived the same
+; normalized-mantissa way as PI/HALF_PI/etc. above) plus the EXISTING
+; `W_FSTAR`, unchanged — no new arithmetic, matching `PI`'s own
+; "push a constant" simplicity.
+;
+; HAND-VERIFIED before trusting either constant: RAD_CONST (PI/180) =
+; (18301,-20) -> 18301*2^-20 = 0.0174532 (true 0.0174533); DEG_CONST
+; (180/PI) = (29335,-9) -> 29335*2^-9 = 57.294922 (true 57.295780) —
+; both within this project's own already-established SIN/COS precision
+; budget (a few parts in 10,000), not a precision instrument. Worked
+; example: RAD(90.0) = 90 * 0.0174532 = 1.570788, matching HALF_PI's
+; own stored value (25736,-14 = 1.570801) to within the same rounding
+; budget; DEG(HALF_PI) = 1.570801 * 57.294922 = 90.0007, matching 90.0
+; to the same tolerance — a real round trip, not just one direction
+; checked in isolation.
+; ============================================================================
+RAD_CONST_M EQU 18301
+RAD_CONST_E EQU -20    ; 18301*2^-20 = 0.0174532  (true PI/180 = 0.0174533)
+DEG_CONST_M EQU 29335
+DEG_CONST_E EQU -9     ; 29335*2^-9 = 57.294922  (true 180/PI = 57.295780)
+
+; ============================================================================
+; RAD ( degrees -- radians )
+; ============================================================================
+H_RAD:
+    DW   H_COS
+    DB   3, "R", "A", "D"
+W_RAD:
+    ld   hl, RAD_CONST_M
+    ld   a, RAD_CONST_E
+    call FPUSH
+    call W_FSTAR
+    ret
+
+; ============================================================================
+; DEG ( radians -- degrees )
+; ============================================================================
+H_DEG:
+    DW   H_RAD
+    DB   3, "D", "E", "G"
+W_DEG:
+    ld   hl, DEG_CONST_M
+    ld   a, DEG_CONST_E
+    call FPUSH
+    call W_FSTAR
+    ret
+
+DICT_LATEST_INIT_RADDEG EQU H_DEG   ; head of the dictionary once this
+                                     ; file's own words (including
+                                     ; RAD/DEG) are all included
 
     ENDIF

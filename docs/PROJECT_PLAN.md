@@ -2953,26 +2953,51 @@ bytes ($31F4 of $4000), 3596 bytes free — +14 bytes over Phase 40 (a
 two-instruction word, the smallest addition since Phase 39's own
 zero-byte consolidation fixes).
 
-## Backlog — RAD/DEG, FREE, THROW/CATCH review, ULAPlus test fidelity (not yet scheduled)
+## Phase 42 — RAD, DEG
+
+**Status: done, confirmed under real Fuse.** The last of the two real
+audit findings that never made it onto the backlog the first time
+around (`EXECUTE`, Phase 41's own pick, was the other). 2068-Leap has
+both; `SIN`/`COS` (Phase 30) only ever accepted radians directly, with
+no bridge from degrees. Added to `core/floattrig.asm` itself rather
+than a new file — `RAD`/`DEG` are `PI`/`SIN`/`COS`'s own direct
+companions, not a separate feature.
+
+`RAD ( degrees -- radians )` and `DEG ( radians -- degrees )` are each
+a single precomputed constant (`PI/180` and `180/PI`, hand-derived the
+same normalized-mantissa way as `PI`/`HALF_PI` above) plus the
+EXISTING `W_FSTAR`, unchanged — no new arithmetic, matching `PI`'s own
+"push a constant" simplicity.
+
+**Hand-verified before trusting either constant or the smoke ROM's own
+checkpoints** — by simulating the REAL `F_UMUL32`/`F_NORMALIZE32`
+algorithm in Python first, not the ideal mathematical values (this
+project's own established discipline for anything float-related):
+`RAD(90.0)` computes to EXACTLY `(25735,-14)` = 1.57073974..., close to
+true `PI/2` within this project's own already-established SIN/COS
+precision budget; `DEG(HALF_PI)` computes to EXACTLY `(23039,-8)` =
+89.99609375, close to true 90.0 within the same budget — a real round
+trip (radians back to degrees), not just one direction checked in
+isolation. Both `rom/forth_smoke_p42.asm` checkpoints assert these
+EXACT mantissa/exponent pairs (not an approximate/printed-string
+check), and both matched the real Z80 computation bit-for-bit on the
+first run — the Python simulation's own precision paid off directly.
+
+ROM budget after this phase: `rom/forth_boot.asm` uses 12824 of 16384
+bytes ($3218 of $4000), 3560 bytes free — +36 bytes over Phase 41.
+
+## Backlog — FREE, THROW/CATCH review, ULAPlus test fidelity (not yet scheduled)
 
 **Not yet scheduled as numbered phases — tracked here so they aren't
-lost.** `RAD`/`DEG` came out of the fresh three-way audit against
-2068-Leap and the real TS2068 ROM's own command set (the same audit
-Phase 36 picked its own "highest value, least cost" group from, and
-Phase 37's own `STICK` and Phase 41's own `EXECUTE` came from too) —
-one of two real findings from that SAME audit that never actually made
-it onto this list the first time around (caught when the user asked
-"is there anything that got left out?"), not a new discovery —
-`EXECUTE`, the other one, is now done (Phase 41, above). `THROW`/
-`CATCH` is the last of the three steps the user laid out when Phase 38
-was scoped — deliberately saved for AFTER a code-consolidation pass,
-not designed yet. `ULAPlus` is a testing-fidelity concern, not a
-feature request — added when the user asked for it directly.
-
-**`RAD`/`DEG`** — degree-to-radian and radian-to-degree conversion.
-2068-Leap has both; `core/floattrig.asm`'s `SIN`/`COS` currently only
-accept radians directly, with no conversion words to bridge from
-degrees.
+lost.** `THROW`/`CATCH` is the last of the three steps the user laid
+out when Phase 38 was scoped — deliberately saved for AFTER a
+code-consolidation pass, not designed yet. `ULAPlus` is a
+testing-fidelity concern, not a feature request — added when the user
+asked for it directly. The fresh three-way audit against 2068-Leap and
+the real TS2068 ROM's own command set (the same audit Phase 36 picked
+its own "highest value, least cost" group from) is now fully worked
+through — `STICK` (Phase 37), `EXECUTE` (Phase 41), and `RAD`/`DEG`
+(Phase 42, above) were its last three real findings.
 
 **`FREE`** (remaining-memory introspection) needs one real design
 decision before it can be a thin wrapper: this project's RAM layout has

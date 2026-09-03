@@ -25,9 +25,9 @@
 ; INK/PAPER, DO/LOOP/LEAVE/+LOOP/I, FILL/AT-XY, KEY/KEY?,
 ; ABS/SGN/MOD/SQRT/RND/RANDOMIZE, ARRAY/CELLS,
 ; S"/TYPE/STRING/PLACE/COUNT/LEN/VAL, C@/C!, STICK, ACCEPT/INPUT,
-; CHR/STR/UPPER/LOWER/LEFT/RIGHT/SEARCH/CODE, EXECUTE — 91 words total
-; (cross-checked directly against every H_*/DB header in this file's
-; own INCLUDE chain during a code-consolidation pass rather than
+; CHR/STR/UPPER/LOWER/LEFT/RIGHT/SEARCH/CODE, EXECUTE, RAD/DEG — 93
+; words total (cross-checked directly against every H_*/DB header in
+; this file's own INCLUDE chain during a code-consolidation pass rather than
 ; trusted from an earlier draft of this same comment, which had
 ; quietly drifted 34 words stale — missing everything from the
 ; original Phase 2 primitives (DROP/DUP/SWAP/OVER/+/-/@/!) it should
@@ -392,7 +392,7 @@ DICT_CHAIN_POINT DEFL H_FSQRT
     INCLUDE "core/floatconv.asm"
 DICT_CHAIN_POINT DEFL H_FROUND
     INCLUDE "core/floattrig.asm"
-DICT_CHAIN_POINT DEFL H_COS
+DICT_CHAIN_POINT DEFL H_DEG
     INCLUDE "core/beep.asm"
 DICT_CHAIN_POINT DEFL H_BEEP
     INCLUDE "core/sound.asm"

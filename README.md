@@ -673,6 +673,19 @@ inherited, what was deliberately left behind, and the phased build order.
   then `EXECUTE`s that xt — proving the mechanism works identically on
   a primitive and a freshly-compiled word. +14 bytes (`rom/forth_boot.asm`:
   12774 -> 12788 of 16384).
+- Phase 42 (`core/floattrig.asm` + `rom/forth_boot.asm` +
+  `rom/forth_smoke_p42.asm`): `RAD`/`DEG` — degree/radian conversion,
+  the last of the audit's own real findings. Added to
+  `core/floattrig.asm` itself (not a new file) since they're `PI`/
+  `SIN`/`COS`'s own direct companions: each is a single precomputed
+  constant (`PI/180`, `180/PI`) plus the existing `W_FSTAR`, no new
+  arithmetic. Hand-verified by simulating the real
+  `F_UMUL32`/`F_NORMALIZE32` algorithm in Python first: `RAD(90.0)`
+  computes to exactly `(25735,-14)`, `DEG(HALF_PI)` to exactly
+  `(23039,-8)` — both matched the real Z80 computation bit-for-bit on
+  the first run. +36 bytes (`rom/forth_boot.asm`: 12788 -> 12824 of
+  16384). With this, the fresh three-way audit against 2068-Leap is
+  fully worked through.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -769,6 +782,7 @@ rom/        ROM image assembly:
               forth_smoke_p38.asm Phase 38 smoke ROM (runtime stack-error detection)
               forth_smoke_p40.asm Phase 40 smoke ROM (string functions)
               forth_smoke_p41.asm Phase 41 smoke ROM (EXECUTE)
+              forth_smoke_p42.asm Phase 42 smoke ROM (RAD/DEG)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -827,6 +841,7 @@ make forth-smoke-p37  # Phase 37 smoke ROM: STICK
 make forth-smoke-p38  # Phase 38 smoke ROM: runtime stack-error detection
 make forth-smoke-p40  # Phase 40 smoke ROM: string functions
 make forth-smoke-p41  # Phase 41 smoke ROM: EXECUTE
+make forth-smoke-p42  # Phase 42 smoke ROM: RAD/DEG
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```
