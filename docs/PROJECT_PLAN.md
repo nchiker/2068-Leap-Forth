@@ -2772,6 +2772,73 @@ afterward), not merely "didn't crash this one time."
 ROM budget after this phase: `rom/forth_boot.asm` uses 12323 of 16384
 bytes ($3023 of $4000), 4061 bytes free — +110 bytes over Phase 37.
 
+## Phase 39 — code consolidation pass
+
+**Status: done, confirmed under real Fuse.** Step 2 of the user's own
+three-step plan (runtime error detection, then this, then a
+`THROW`/`CATCH` review). Scoped by a fresh read-only survey of every
+`core/*.asm`/`kernel/*/*.asm` file, product code only — explicitly
+excluding the 38 `rom/forth_smoke_p*.asm` files, which this project has
+repeatedly, deliberately kept frozen once passing, even though they
+share a large amount of boilerplate (RST vectors, `COLD_START`,
+`PASS_TEST`/`FAIL_TEST`, `CHECK_TOP`-style helpers) — touching those to
+share code would work against this project's own established practice,
+not with it. Two real, concrete findings, both fixed; several other
+candidates (a handful of near-identical 3-6-line "pop, call kernel
+routine, push result" word bodies; three unreferenced
+`DICT_LATEST_INIT_*` cosmetic constants; this file's own 2,800+ line
+length) were surveyed and deliberately left alone — already minimal,
+zero runtime cost, or not an actual problem, respectively, matching
+this project's own stated aversion to touching working code without a
+real reason.
+
+**A real, if dormant, RAM collision** (`kernel/mode64/mode64.asm`'s own
+`GFX_PALETTE64`/`GFX_PIXEL64_MASK`/`GFX_PIXEL64_WHICH_FILE`/
+`GFX_PIXEL64_BYTECOL`/`GFX_PIXEL64_OVER`, at $87B0-$87B4, byte-for-byte
+overlapping `core/floatmul.asm`'s own `F_PROD_HI`/`F_MUL_CNT`/
+`F_MSIGN`/`F_NORM_SHIFT` and `core/floatdiv.asm`'s own `F_DIVID_LO`) —
+found by re-running the exact "grep every EQU across the whole tree"
+discipline every earlier phase's own scratch placement already used,
+just never re-run against everything ADDED since Phase 8. Confirmed
+real: both `kernel/mode64/mode64.asm` and `core/floatmul.asm`/
+`core/floatdiv.asm` are INCLUDEd together in the actual shipped
+`rom/forth_boot.asm`, not just theoretically nearby in the source tree.
+Confirmed DORMANT, not an active bug, by checking whether
+`MODE64_WRITE_PIXEL`/`PLOT64` ever call the float multiply/divide
+routines internally — they don't, and Z80 execution is single-threaded
+with no interrupt-handler involvement in either region, so the two
+scratch blocks were never actually live at the same moment. Still a
+real, latent trap for a future word that combines the two, and a
+genuine violation of this project's own address-map invariant
+regardless of whether anything had tripped over it yet. Moved to
+$87BF-$87C3, a freshly-reverified 9-byte gap between
+`core/decimal.asm`'s own `DIVISOR10` and `core/print.asm`'s own
+`PRINT_ROW` — re-verified free by the same whole-tree grep before
+picking it, not assumed. A pure address renumbering, no logic change;
+confirmed via the three ROMs that actually exercise these two regions
+together (`rom/forth_smoke_p8b.asm` for `64COL`/`PLOT64`,
+`rom/forth_smoke_p18.asm`/`rom/forth_smoke_p19.asm` for `F*`/`F/`, plus
+`rom/forth_smoke_p9.asm`, which also includes the changed kernel file)
+all still passing, and a full `make clean && make all` across every ROM
+in the project (all 38 smoke ROMs plus `rom/forth_boot.asm`) building
+with zero errors.
+
+**A stale dictionary word-list comment** in `rom/forth_boot.asm`'s own
+header, claiming to list "every word from every phase" — verified
+against a fresh extraction of every real `DB` header string across the
+actual INCLUDE chain, in order (82 words total), the stale comment was
+missing 34 of them: every original Phase 2 primitive
+(`DROP`/`DUP`/`SWAP`/`OVER`/`+`/`-`/`@`/`!`) it should have listed from
+the very start, `:`/`;`, and most of Phases 24-32
+(`LEAVE`/`+LOOP`/`ABS`/`SGN`/`MOD`/`SQRT`/`RND`/`RANDOMIZE`/`ARRAY`/
+`CELLS`/`S"`/`TYPE`/`STRING`/`PLACE`/`COUNT`/`LEN`/`VAL`/`FSQRT`/
+`PI`/`SIN`/`COS`/`SOUND`/`ACCEPT`/`INPUT`). Rewritten to the complete,
+verified list — a pure comment fix, zero bytes, zero behavior change.
+
+ROM budget after this phase: unchanged from Phase 38 (12323 of 16384
+bytes) — both fixes were a RAM-address renumbering and a comment
+rewrite, neither adds or removes any code.
+
 ## Backlog — FREE, THROW/CATCH review (not yet scheduled)
 
 **Not yet scheduled as numbered phases — tracked here so they aren't

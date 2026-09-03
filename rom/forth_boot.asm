@@ -18,12 +18,22 @@
 ; against 2068-Leap's own working ROM files, not guessed.
 ;
 ; The full dictionary is assembled here: every word from every phase
-; (0=/IF/ELSE/THEN/BEGIN/UNTIL, PLOT/LINE/CIRCLE/BEEP/BORDER,
-; SAVE/LOAD, F+/F-/F*/F/, 64COL/32COL/PALETTE64/PLOT64, EMIT/., =/</>,
-; VARIABLE/CONSTANT, .", WHILE/REPEAT, INK/PAPER, DO/LOOP/I,
-; FILL/AT-XY, KEY/KEY?, F., S>F/F>S/FROUND, CLS, C@/C!, STICK), chained into one LATEST list via the same
-; DICT_CHAIN_POINT splices rom/forth_smoke_p9.asm introduced and
-; proved. DECIMAL_NUMBER_ENABLED is also DEFINEd here (core/decimal.asm,
+; (DROP/DUP/SWAP/OVER/+/-/@/!, :/;, 0=/IF/ELSE/THEN/BEGIN/UNTIL,
+; PLOT/LINE/CIRCLE/BORDER/CLS, SAVE/LOAD, F+/F-, 64COL/32COL/
+; PALETTE64/PLOT64, F*, F/, EMIT/., F., FSQRT, S>F/F>S/FROUND,
+; PI/SIN/COS, BEEP, SOUND, =/</>, VARIABLE/CONSTANT, ." , WHILE/REPEAT,
+; INK/PAPER, DO/LOOP/LEAVE/+LOOP/I, FILL/AT-XY, KEY/KEY?,
+; ABS/SGN/MOD/SQRT/RND/RANDOMIZE, ARRAY/CELLS,
+; S"/TYPE/STRING/PLACE/COUNT/LEN/VAL, C@/C!, STICK, ACCEPT/INPUT — 82
+; words total, cross-checked directly against every H_*/DB header in
+; this file's own INCLUDE chain during a code-consolidation pass rather
+; than trusted from an earlier draft of this same comment, which had
+; quietly drifted 34 words stale — missing everything from the
+; original Phase 2 primitives (DROP/DUP/SWAP/OVER/+/-/@/!) it should
+; have listed from the very start, through most of Phases 24-32),
+; chained into one LATEST list via the same DICT_CHAIN_POINT splices
+; rom/forth_smoke_p9.asm introduced and proved.
+; DECIMAL_NUMBER_ENABLED is also DEFINEd here (core/decimal.asm,
 ; Phase 23) — not a dictionary word, a NUMBER/INTERPRET_RUN parsing
 ; capability: typing a literal like `3.5` now pushes a real float
 ; directly, in both interpret and compile contexts.

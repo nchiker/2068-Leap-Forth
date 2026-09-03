@@ -615,6 +615,24 @@ inherited, what was deliberately left behind, and the phased build order.
   the user laid out (runtime detection, then a code-consolidation pass,
   then a `THROW`/`CATCH` review). +110 bytes (`rom/forth_boot.asm`:
   12213 -> 12323 of 16384).
+- Phase 39 (`kernel/mode64/mode64.asm` + `rom/forth_boot.asm`): code
+  consolidation pass — step 2 of the user's three-step plan. Scoped by
+  a fresh read-only survey of every `core/`/`kernel/` file (explicitly
+  excluding the 38 frozen `rom/forth_smoke_p*.asm` fixtures, which stay
+  untouched once passing). Found and fixed a real, if dormant, RAM
+  collision: `kernel/mode64/mode64.asm`'s own 64-column pixel scratch
+  ($87B0-$87B4) byte-for-byte overlapped `core/floatmul.asm`/
+  `core/floatdiv.asm`'s own scratch, both INCLUDEd together in the real
+  `rom/forth_boot.asm` — confirmed dormant (the two code paths are
+  never nested) but a real violation of this project's own address-map
+  discipline, moved to a freshly-reverified free 9-byte gap. Also fixed
+  a stale dictionary word-list comment in `rom/forth_boot.asm`'s own
+  header, missing 34 real, shipped words (verified against a full
+  extraction of the actual dictionary chain). Both fixes are pure
+  renumbering/comment changes — confirmed via the specific ROMs
+  exercising the affected code (`p8b`, `p18`, `p19`, `p9`) plus a full
+  `make clean && make all` across every ROM in the project, zero
+  errors, ROM size unchanged.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's

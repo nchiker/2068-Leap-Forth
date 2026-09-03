@@ -72,12 +72,32 @@ SECOND_DISPLAY_DELTA_M64 EQU $2000   ; SECOND_DISPLAY_ADDR - SCREEN_ADDR;
 ; ---- Phase 8 RAM state — same probe-verified $8426-$8FFF gap as every
 ; other core/ or kernel-addition file's own scratch (docs/PROJECT_PLAN.md
 ; Phase 5). The old backup's own addresses ($84AF+) belonged to a
-; memory layout this project doesn't have and were not reused. ----
-GFX_PALETTE64          EQU $87B0   ; 1 byte: 0-7, persists across mode switches
-GFX_PIXEL64_MASK       EQU $87B1   ; 1 byte: GFX_PIXEL64_ADDR_SETUP's own scratch
-GFX_PIXEL64_WHICH_FILE EQU $87B2   ; 1 byte: 0 = Primary Display File, 1 = Second
-GFX_PIXEL64_BYTECOL    EQU $87B3   ; 1 byte: real byte-column within the row
-GFX_PIXEL64_OVER       EQU $87B4   ; 1 byte: MODE64_WRITE_PIXEL's own scratch
+; memory layout this project doesn't have and were not reused.
+;
+; RENUMBERED (code-consolidation pass, post-Phase-38): the original
+; $87B0-$87B4 here byte-for-byte overlapped core/floatmul.asm's own
+; F_PROD_HI/F_MUL_CNT/F_MSIGN/F_NORM_SHIFT and core/floatdiv.asm's own
+; F_DIVID_LO — a real collision in the actual shipped rom/forth_boot.asm
+; (both files are INCLUDEd there), found by a fresh grep-every-EQU pass
+; across the whole tree, the same discipline every earlier phase's own
+; scratch placement already used, just never re-run against everything
+; ADDED since. Confirmed dormant, not an active bug: MODE64_WRITE_PIXEL
+; and F_UMUL32/F_NORMALIZE32/F_UDIV32BY16 are never nested (neither
+; PLOT64 nor MODE64_WRITE_PIXEL does any float arithmetic internally,
+; confirmed by grepping this file and core/mode64.asm for any call to
+; either float routine — none), and this is single-threaded Z80 code
+; with no interrupt-handler involvement in either region — but a real,
+; latent trap for a future word that combines the two, and a genuine
+; violation of this project's own address-map invariant regardless of
+; whether anything has tripped over it yet. Moved to $87BF-$87C3, a
+; verified-free 9-byte gap between core/decimal.asm's own DIVISOR10
+; ($87BD-$87BE) and core/print.asm's own PRINT_ROW ($87C8) — reverified
+; by the same whole-tree grep before picking it, not assumed free. ----
+GFX_PALETTE64          EQU $87BF   ; 1 byte: 0-7, persists across mode switches
+GFX_PIXEL64_MASK       EQU $87C0   ; 1 byte: GFX_PIXEL64_ADDR_SETUP's own scratch
+GFX_PIXEL64_WHICH_FILE EQU $87C1   ; 1 byte: 0 = Primary Display File, 1 = Second
+GFX_PIXEL64_BYTECOL    EQU $87C2   ; 1 byte: real byte-column within the row
+GFX_PIXEL64_OVER       EQU $87C3   ; 1 byte: MODE64_WRITE_PIXEL's own scratch
 
 ; ============================================================================
 ; MODE64_ON ( -- )
