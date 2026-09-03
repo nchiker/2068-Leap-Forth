@@ -2,25 +2,33 @@
 
 This document teaches Forth from scratch. It assumes you're comfortable
 with BASIC — line numbers, `LET`/`PRINT`/`IF`, variables — but *not*
-with Forth. That's a deliberate distinction: the two languages think
-about programs so differently that BASIC experience mostly doesn't
-transfer, and nothing here relies on it. No assembly language is
-assumed either, and nothing about how this project is built; that's a
-separate audience, served by [`PROJECT_PLAN.md`](PROJECT_PLAN.md) and
-the source itself.
+with Forth.
 
 The sections run in the order you'd want to *learn* the language — the
 stack first, then defining your own words, then control flow, data,
-and finally the screen and keyboard — rather than the order any of it
-happened to get built. Every example is something you can type at a
-real, live 2068-Forth prompt today, not a preview of something still
-under construction. A short appendix at the end lists the handful of
-things that genuinely aren't here yet, so that gap doesn't have to be
-repeated throughout the main text.
+and finally the screen and keyboard. Examples are provided that you can type at a
+real 2068-Forth prompt.
 
 And the prompt really is live: turn the machine on and you get a
 banner, a short startup sound, and a keyboard-driven prompt waiting for
 you.
+
+### How to read the examples
+
+Two small conventions, so nothing later surprises you.
+
+Anything after a `\` in an example is a note **from this document to
+you**, explaining what just happened. It is not part of the Forth.
+2068-Forth has no comment word at all — not `\`, not the `(` that
+larger Forths use — so if you type one of those notes in, the
+interpreter will try to look up `\` as a word, fail to find it, and
+complain. Type only what comes before the `\`.
+
+And each section genuinely builds on the one before it. Where a later
+section leans on something earlier, it says so and reminds you of the
+part that matters, so you shouldn't need to keep flipping back — but
+the sections are in learning order for a reason, and reading them out
+of order will cost you more than it saves.
 
 ![2068-Forth boot screen, showing the banner and `5 3 + .` printing `8`](images/boot_and_arithmetic.png)
 
@@ -36,110 +44,6 @@ Forth has no grammar at all. A Forth program is a sequence of **words**
 separated by spaces, and the whole language runs on a single rule:
 *read the next word, then either run it or compile it.* That rule,
 repeated, is everything.
-
-### The stack, and why `5 3 +` means "5 + 3"
-
-BASIC writes arithmetic *infix* — the operator sits between its
-operands, `5 + 3`. Forth writes it **postfix**: operands first,
-operator last, `5 3 +`. That isn't a stylistic quirk. It's precisely
-what lets "read a word, run it" work with no grammar to lean on.
-
-The mechanism is a **stack**: a pile of numbers, like a stack of
-plates, where you can only ever see or remove the top one. Every word
-does one of two things to it.
-
-- A **number** gets *pushed* onto the top.
-- An **operator** *pops* however many numbers it needs off the top,
-  computes something, and pushes the result back.
-
-Trace `5 3 +` one word at a time:
-
-```
-you type   stack after (top is rightmost)
---------   ----------------------------
-5          [5]           -- push 5
-3          [5, 3]        -- push 3
-+          [8]           -- pop 3 and 5, push their sum
-```
-
-No parentheses, no operator precedence, no parsing whatsoever — the
-stack *is* the grammar. `+` never needs to know whether `5` and `3`
-came from literals, from variables, or from other words; it takes the
-top two numbers, whatever put them there.
-
-This is also why Forth reads differently. A BASIC expression like
-`(5+3)*2` nests outward from its innermost operation, while the Forth
-equivalent, `5 3 + 2 *`, reads left to right in the exact order the
-machine does the work: push 5, push 3, add, push 2, multiply. Once that
-clicks, you stop translating BASIC expressions in your head and start
-thinking in the order operations actually happen.
-
-### Rearranging the stack
-
-With no variable names anywhere, getting a value into the right
-position *is* frequently the whole problem — so a handful of words
-exist purely to shuffle the stack:
-
-| Word | Stack effect | What it does |
-|---|---|---|
-| `DUP` | `( n -- n n )` | Duplicate the top value |
-| `SWAP` | `( a b -- b a )` | Swap the top two values |
-| `DROP` | `( n -- )` | Discard the top value |
-| `OVER` | `( a b -- a b a )` | Copy the second value to the top |
-
-That `( n -- n n )` notation is standard Forth shorthand: the stack
-just before the word runs, an arrow, then the stack just after, with
-the top of stack always rightmost in each group. It turns up
-everywhere in Forth documentation — including this project's source
-code and the reference table at the end of this document — so it's
-worth getting comfortable reading now.
-
-Doubling a number with no variable to hold it in, for instance, is
-`5 DUP +`: push 5, duplicate it (`[5, 5]`), add (`[10]`).
-
-Or, computing both differences of a subtraction by swapping the
-operands:
-
-```forth
-10 3 OVER OVER -    \ [10, 3, 10, 3] then [10, 3, 7]
-SWAP -              \ [3, 10] then [-7]
-```
-
-A few more round out the set, for when three or more values need
-rearranging, or when something further down needs reaching without
-disturbing what sits above it:
-
-| Word | Stack effect | What it does |
-|---|---|---|
-| `ROT` | `( a b c -- b c a )` | Rotate the third value to the top |
-| `2DUP` | `( a b -- a b a b )` | Duplicate the top *pair* |
-| `2DROP` | `( a b -- )` | Discard the top *pair* |
-| `?DUP` | `( n -- 0 \| n n )` | Duplicate, but only if `n` isn't zero |
-| `PICK` | `( ... n -- ... x )` | Copy the `n`th value from the top (0 = same as `DUP`, 1 = same as `OVER`) |
-
-`?DUP` exists for one specific, common pattern: testing a value with
-`IF` while still wanting to *use* it afterward if it turned out
-nonzero, without computing it twice.
-
-```forth
-SOME-WORD ?DUP IF . THEN     \ prints the result, but only if nonzero
-```
-
-`PICK` generalizes `DUP` and `OVER` to reach deeper without a chain of
-`ROT`s. `2 PICK` reaches the third value from the top — the same place
-`ROT` would bring up — but *copies* it rather than moving it:
-
-```forth
-10 20 30  2 PICK .    \ [10, 20, 30, 10] then prints 10, leaving [10, 20, 30]
-```
-
-`PICK` does no bounds checking on its own argument. Asking for a value
-deeper than the stack actually holds reads whatever memory happens to
-sit past it — not a crash, but not meaningful data either. That's the
-same "trust the caller" posture most of this project's lower-level
-words take; the honest-limits notes throughout this document flag the
-others, `BEEP`'s among them (see
-[Drawing and sound](#9-drawing-and-sound)).
 
 ### Words and the dictionary
 
@@ -161,6 +65,308 @@ dictionary, so anything that already used it keeps working unchanged
 occasionally useful (redefining a word to fix a mistake without
 restarting) and occasionally confusing (forgetting you shadowed
 something), which makes it worth knowing either way.
+
+That single idea — read a word, look it up, run whatever it names —
+is the whole of "read the next word" from above. The next question is
+what running a word actually *does*, and that's where the stack comes
+in.
+
+### The stack, and why `5 3 +` means "5 + 3"
+
+BASIC writes arithmetic *infix* — the operator sits between its
+operands, `5 + 3`. Forth writes it **postfix**: operands first,
+operator last, `5 3 +`. That isn't a stylistic quirk. It's precisely
+what lets "read a word, run it" work with no grammar to lean on.
+
+The mechanism is a **stack**: a pile of numbers, where you can only
+ever see or remove the top one. The picture worth holding in your head
+is a pile of index cards. To remember a number, the machine writes it
+on a fresh card and drops that card on top of the pile. To *use* a
+number, it takes the top card off, reads it, and throws it away.
+
+Every word does one of two things to that pile.
+
+- A **number** gets *pushed*: a new card on top.
+- An **operator** *pops* however many cards it needs off the top,
+  computes something, and pushes one card back with the answer on it.
+
+Which gives Forth's whole working rule, and it's the same rule a recipe
+uses: **first gather the ingredients, then say what to do with them.**
+The numbers go on the stack first; the word that acts on them comes
+last.
+
+Trace `5 3 +` one word at a time:
+
+```
+you type   stack after (top is rightmost)
+--------   ----------------------------
+5          [5]           -- push 5
+3          [5, 3]        -- push 3
++          [8]           -- pop 3 and 5, push their sum
+```
+
+No parentheses, no operator precedence, no parsing whatsoever — the
+stack *is* the grammar. `+` never needs to know whether `5` and `3`
+came from literals, from variables, or from other words; it takes the
+top two numbers, whatever put them there.
+
+### Seeing the answer: `.`
+
+That `8` is sitting on the stack, and the stack is invisible. Nothing
+appears on screen unless you ask, so before going further you need one
+more word — `.`, pronounced "dot". `.` takes the top number off the
+stack and prints it.
+
+```forth
+5 3 + .        \ prints 8
+```
+
+`.` is a word like any other. It follows the same "ingredients first"
+rule: it wants a number already sitting on the stack, and it takes it
+away when it prints it. That last part matters and catches people out
+— after `5 3 + .` the stack is empty again, because printing consumed
+the `8`. (There's more to say about `.` and its relatives, but it waits
+until [Printing](#8-printing), by which point you'll have used it
+dozens of times.)
+
+### A longer trace
+
+One three-word example is thin evidence. Here's a slightly bigger one,
+adding three numbers together, traced the same way. Notice that the
+intermediate answer never needs printing or storing anywhere — it just
+stays on the stack, ready for the next `+`:
+
+```forth
+10 11 + 12 + .        \ prints 33
+```
+
+```
+you type   stack after
+--------   -----------
+10         [10]         -- push 10
+11         [10, 11]     -- push 11
++          [21]         -- pop both, push 21
+12         [21, 12]     -- push 12
++          [33]         -- pop both, push 33
+.          []           -- pop 33, print it
+```
+
+One way of looking at that: `11 +` means "add 11 to whatever's on
+top", `12 +` means "add 12 to whatever's on top", and the `10` at the
+front is simply what starts the pile off. Read that way, a Forth line
+is a series of small adjustments to the top of the stack, applied left
+to right.
+
+This is also why Forth reads differently. A BASIC expression like
+`(5+3)*2` nests outward from its innermost operation, while the Forth
+equivalent, `5 3 + 2 *`, reads left to right in the exact order the
+machine does the work: push 5, push 3, add, push 2, multiply. Once that
+clicks, you stop translating BASIC expressions in your head and start
+thinking in the order operations actually happen.
+
+### Order matters — even when you'd swear it didn't
+
+`+` doesn't care which of its two numbers came first; `5 3 +` and
+`3 5 +` both give 8. `-` very much does. It subtracts the **top** of
+the stack from the one **underneath** it:
+
+```forth
+10 3 - .      \ prints 7
+3 10 - .      \ prints -7
+```
+
+You might expect the second one to be an error, or to quietly give 7
+as well. It isn't and it doesn't — it's a perfectly valid subtraction
+that happens to run the other way round, and Forth has no way to know
+you meant the first. Read `10 3 -` out loud as "ten, three, subtract",
+in the same order you'd write it on paper as `10 - 3`, and the pattern
+sticks: the operands stay in the order you'd say them, only the
+operator moves to the end.
+
+Before moving on, a small thing worth doing at the keyboard rather
+than in your head: type `5 3 + .` and then, on the next line, type just
+`.` again. There's nothing left on the stack for it to print, so `.`
+prints whatever nonsense number happens to be sitting just past the
+bottom of the stack — and *then* Forth notices what you did and answers
+`STACK?`. The check happens once the word has finished, not before it
+starts, which is why you see the nonsense number at all. It's not a
+crash, and it doesn't lose any words you've defined; it just empties
+the stack and hands you a fresh prompt. Seeing that once now,
+deliberately, is much nicer than meeting it by accident later.
+([Typing and editing at the
+prompt](#13-typing-and-editing-at-the-prompt) covers the error messages
+properly.)
+
+### Rearranging the stack
+
+With no variable names anywhere, getting a value into the right
+position *is* frequently the whole problem. Take something as simple
+as doubling a number: `5 5 +` works, but only because `5` was typed
+twice by hand. A word that doubles *whatever's already on the stack*
+has to make that second copy itself — it can't "read" a value without
+also consuming it, and it has no variable to stash a copy in either.
+
+That's exactly what a handful of words exist to do: not compute
+anything, just shuffle what's already on the stack so the next word
+finds what it needs on top.
+
+| Word | Stack effect | What it does |
+|---|---|---|
+| `DUP` | `( n -- n n )` | Duplicate the top value |
+| `SWAP` | `( a b -- b a )` | Swap the top two values |
+| `DROP` | `( n -- )` | Discard the top value |
+| `OVER` | `( a b -- a b a )` | Copy the second value to the top |
+
+Doubling, then, is `5 DUP +`. Traced out, exactly as before:
+
+```
+you type   stack after
+--------   -----------
+5          [5]          -- push 5
+DUP        [5, 5]       -- copy the top card
++          [10]         -- pop both, push their sum
+```
+
+### Reading the `( n -- n n )` shorthand
+
+That notation in the table's middle column is standard Forth shorthand,
+and it's worth stopping on for a moment, because it's the vocabulary
+the rest of this document (and every Forth manual you'll ever read)
+uses to describe what a word does.
+
+Writing out a card-by-card trace every time gets tedious fast. So
+instead of a trace, a word gets one line: **the stack just before it
+runs, an arrow, then the stack just after**, with the top of the stack
+always rightmost in each group. `DUP`'s `( n -- n n )` says: there was
+one value on top; afterwards there are two copies of it.
+
+The useful thing about the notation is that it applies just as well to
+words you've *already* met. Re-read the last few pages through it:
+
+- A **number** you type is `( -- n )`. It takes nothing and leaves one
+  value.
+- `+` is `( a b -- a+b )`. Two values in, one out.
+- `-` is `( a b -- a-b )` — and now the ordering rule from earlier has
+  a compact home: `a` is the deeper one, `b` is on top, and the result
+  is `a` minus `b`, not the other way round.
+- `.` is `( n -- )`. One value in, *nothing* left. That's the notation
+  saying, in three characters, the thing that trips people up: `.`
+  consumes what it prints.
+
+Notice that the two sides needn't list the same number of values.
+`DROP`'s `( n -- )` takes one and leaves none; `DUP`'s `( n -- n n )`
+takes one and leaves two; a bare number's `( -- n )` takes none and
+leaves one. A word's number of inputs and its number of outputs are
+completely independent, and nothing anywhere requires them to match.
+This is a real freedom rather than an accident, and later words lean on
+it heavily.
+
+One caution: the letters in a stack effect are just placeholders,
+picked to be readable. `( a b -- b a )` and `( n1 n2 -- n2 n1 )` say
+exactly the same thing about `SWAP`. Don't read meaning into the
+choice of letter — read the *positions*.
+
+Back to the shuffling words themselves. Here's `OVER` and `SWAP`
+earning their keep, computing both differences of a subtraction from a
+single pair of numbers:
+
+```forth
+10 3 OVER OVER SWAP - .    \ prints -7
+- .                        \ prints 7
+```
+
+That's dense enough to deserve a full trace. The trick is that
+`OVER OVER` makes a spare copy of *both* numbers, so the first
+subtraction can eat the copies and leave the originals untouched
+underneath:
+
+```
+you type   stack after
+--------   -----------
+10         [10]
+3          [10, 3]
+OVER       [10, 3, 10]        -- copy the second value up
+OVER       [10, 3, 10, 3]     -- and again: a full spare pair
+SWAP       [10, 3, 3, 10]     -- flip just the spare pair round
+-          [10, 3, -7]        -- 3 - 10, using up the spares
+.          [10, 3]            -- prints -7; originals still there
+-          [7]                -- 10 - 3, using the originals
+.          []                 -- prints 7
+```
+
+Notice what the `SWAP` is for. Without it, the first `-` would have
+computed `10 - 3` and you'd have had no way to get at `3 - 10`
+afterward, because the numbers it needed would already be gone. Making
+a spare copy *before* consuming anything is the single most common
+reason any of these words get used at all.
+
+A few more round out the set, for when three or more values need
+rearranging, or when something further down needs reaching without
+disturbing what sits above it:
+
+| Word | Stack effect | What it does |
+|---|---|---|
+| `ROT` | `( a b c -- b c a )` | Rotate the third value to the top |
+| `2DUP` | `( a b -- a b a b )` | Duplicate the top *pair* |
+| `2DROP` | `( a b -- )` | Discard the top *pair* |
+| `?DUP` | `( n -- 0 \| n n )` | Duplicate, but only if `n` isn't zero |
+| `PICK` | `( ... n -- ... x )` | Copy the `n`th value from the top (0 = same as `DUP`, 1 = same as `OVER`) |
+
+`?DUP` looks like an odd thing to want, and it's the one word in that
+table you can't guess the point of. It exists for a single pattern that
+turns out to be extremely common: testing a value while still wanting
+to *use* it afterward if the test passed. Making a decision consumes
+the value being tested, so without `?DUP` you'd have to make a copy,
+test the copy, and then remember to throw the spare away again on the
+branch where you didn't need it. `?DUP` copies only when there'll be a
+use for the copy, which makes that cleanup unnecessary.
+
+```forth
+SOME-WORD ?DUP IF . THEN     \ prints the result, but only if nonzero
+```
+
+That won't fully make sense until you've met `IF`, which is
+[section 6](#6-making-decisions-if-else-then) — and section 6 comes
+back to `?DUP` and shows the same example written both ways, with and
+without it, so you can see exactly what it saved. For now just note
+that the word exists and that its strange-looking `( n -- 0 | n n )`
+stack effect is honest: it really does leave a different number of
+values depending on what it found.
+
+`PICK` generalizes `DUP` and `OVER` to reach deeper without a chain of
+`ROT`s. `2 PICK` reaches the third value from the top — the same place
+`ROT` would bring up — but *copies* it rather than moving it:
+
+```forth
+10 20 30  2 PICK .    \ [10, 20, 30, 10] then prints 10, leaving [10, 20, 30]
+```
+
+`PICK` does no bounds checking on its own argument. Asking for a value
+deeper than the stack actually holds reads whatever memory happens to
+sit past it — not a crash, but not meaningful data either. That's the
+same "trust the caller" posture most of this project's lower-level
+words take; the honest-limits notes throughout this document flag the
+others, `BEEP`'s among them (see
+[Drawing and sound](#9-drawing-and-sound)).
+
+### Where you are now
+
+That's the entire foundation, and it's worth stating compactly before
+building anything on top of it:
+
+1. A Forth program is words separated by spaces, and the rule is *read
+   the next word, look it up in the dictionary, run it.*
+2. Words pass values to each other through one shared pile — the stack.
+   Numbers push; other words pop what they need and push results.
+3. Ingredients first, action last: `5 3 +`, not `5 + 3`.
+4. Nothing prints unless you ask, and `.` is how you ask.
+5. `( before -- after )` is how a word's effect on the stack gets
+   written down, top of stack rightmost.
+
+Everything in the rest of this document is those five things applied to
+progressively more interesting problems. If any of them still feels
+shaky, it's worth a few minutes at the keyboard now rather than later —
+push some numbers, print them back, and watch the pile go up and down.
 
 ---
 
@@ -202,15 +408,49 @@ slowly, one character at a time, confirming a space lands between
 every pair of words before you press Enter.
 
 Nothing has *run* yet, incidentally — you've only taught Forth a new
-word. Now use it:
+word. `DUP` did not duplicate anything and `+` did not add anything;
+both were merely written down as part of what `DOUBLE` means. That
+distinction is the whole of what `:` does, and it's why you can safely
+put a word inside a definition that would be a disaster to type at the
+prompt right then.
+
+You can see that for yourself with a word that would be obvious if it
+ran. `.` prints and consumes the top of the stack, so typing `5 .` at
+the prompt prints `5` immediately. But:
 
 ```forth
-4 DOUBLE   \ leaves 8
+: SHOW  . ;
+```
+
+prints nothing when you type it. The `.` in there was recorded, not
+performed. It only prints when you later run `SHOW` yourself:
+
+```forth
+7 SHOW      \ prints 7
+```
+
+Keep whole definitions on one line, by the way. Everything from `:` to
+`;` is best typed and entered together — that's how every example in
+this document is written, and it avoids any question about what the
+machine is doing between the two halves.
+
+Now use `DOUBLE`:
+
+```forth
+4 DOUBLE .   \ prints 8
 ```
 
 `4` is pushed (`[4]`). `DOUBLE` is looked up, found, and run — and
 running it means running what's inside it, in order: `DUP` (`[4, 4]`),
-then `+` (`[8]`). The result, `8`, sits on top of the stack.
+then `+` (`[8]`). `.` then prints the `8` and clears it away.
+
+Notice that `DOUBLE`'s own stack effect works out to `( n -- n*2 )`.
+Nowhere did you declare that. It simply falls out of what `DUP` and `+`
+do: `DUP` was `( n -- n n )`, `+` was `( a b -- a+b )`, and stacking
+those end to end gives one value in and one value out. Working out a
+word's stack effect by following its parts in order is a habit worth
+starting now, because it's how you check a definition is right without
+running it.
 
 This is worth sitting with. `DOUBLE` isn't a macro, and it isn't a
 subroutine call in some special sense. Once defined it is a word, full
@@ -219,6 +459,16 @@ Forth program is mostly a sequence of small definitions like this,
 each built from the ones before it, until the last few read almost
 like plain English describing what the program does.
 
+So, collected in one place — to define a word you need, in this order:
+
+1. `:` — the word that starts a definition;
+2. immediately after it, and separated by a space, **the name** of the
+   new word;
+3. the body: the sequence of already-existing words the new one is
+   made of;
+4. `;` — which ends the definition and hands you back the ordinary
+   prompt.
+
 A slightly bigger example puts that habit to work — a word that
 quadruples a number, built out of a word that doubles one:
 
@@ -226,7 +476,7 @@ quadruples a number, built out of a word that doubles one:
 : DOUBLE     DUP + ;
 : QUADRUPLE  DOUBLE DOUBLE ;
 
-3 QUADRUPLE   \ leaves 12
+3 QUADRUPLE .   \ prints 12
 ```
 
 - `QUADRUPLE` is defined *using* `DOUBLE`, which is completely
@@ -240,24 +490,58 @@ Notice that `QUADRUPLE` never mentions the stack, arithmetic, or how
 That's the normal shape of Forth programming: small words, each
 trivially checkable by hand, combined into larger ones.
 
+The order of those two lines is not negotiable, and this is the one
+place beginners reliably get stuck. `QUADRUPLE`'s definition mentions
+`DOUBLE`, and `:` compiles a definition by looking each word up in the
+dictionary **as it reads it**. If `DOUBLE` doesn't exist yet, the
+lookup fails at that moment and you get `DOUBLE ?` — not later, when
+you try to run `QUADRUPLE`, but right there while you're still typing
+its definition. Define the small pieces first, always, and build
+upward.
+
+The reverse is comfortably safe, though. Once `QUADRUPLE` is compiled,
+it holds onto the `DOUBLE` that existed when it was defined. Redefining
+`DOUBLE` afterward — that newest-first dictionary search from
+[section 1](#1-what-forth-actually-is) — changes what *you* get when
+you type `DOUBLE`, but leaves `QUADRUPLE` running the original. Useful
+to know, occasionally surprising, and worth remembering as the reason a
+"fixed" word sometimes seems not to have taken effect.
+
 ### Interpreting vs. compiling — why `;` is special
 
-Forth keeps an internal flag, conventionally called **STATE**. It's
-either "interpreting" — run each word as you type it, everything in
-section 1 — or "compiling", meaning remember each word as part of a
-definition instead, which is what happens between `:` and `;`.
+You've now seen Forth behave two different ways with the same input.
+Type `DUP +` at the prompt and both words run. Type `: DOUBLE DUP + ;`
+and neither does; they get written down instead. Something must be
+keeping track of which mode it's in, and something is: an internal
+flag, conventionally called **STATE**. It's either "interpreting" —
+run each word as you read it, everything in section 1 — or
+"compiling" — remember each word as part of a definition instead. `:`
+switches it to compiling. `;` switches it back.
 
-`;` has to flip that flag back to "interpreting" the *instant* it's
-read, or compiling would never stop. So `;` can't follow the usual
-rule of getting remembered as part of the definition; it has to act
-immediately, even while compiling is otherwise in effect. A word that
-always runs immediately like this, mid-definition or not, is called
-**IMMEDIATE**. Ordinary Forth programming won't have you defining your
-own IMMEDIATE words, but the concept is worth knowing, because it's
-also how `IF`, `ELSE`, and the loop words later in this document work.
-Those aren't ordinary words compiled into a definition's body — they
-are IMMEDIATE words that shape *how* the surrounding definition gets
-compiled.
+Which raises a question worth actually asking, because the answer
+explains a whole family of words later in this document: **if
+everything between `:` and `;` gets remembered rather than run, how
+does `;` ever run?**
+
+It can't, by the ordinary rule. If `;` were remembered like everything
+else, the definition would never close and you'd be compiling forever.
+So `;` is exempt. It runs the instant it's read, even though compiling
+is otherwise in effect, and flips STATE back before the interpreter
+reads another word. A word carrying that exemption is called
+**IMMEDIATE**.
+
+You almost certainly won't write your own IMMEDIATE words. The reason
+to know the idea is that `;` isn't the only one: `IF`, `ELSE`, `THEN`,
+`DO`, `LOOP`, `BEGIN`, `UNTIL`, `WHILE`, `REPEAT`, `LEAVE`, `."` and
+`S"` are all IMMEDIATE too. When you reach [making
+decisions](#6-making-decisions-if-else-then) and
+[loops](#7-repeating-yourself), that's the piece of background that
+makes them make sense: `IF` is not a word that gets compiled into your
+definition and runs later. `IF` runs *while you are typing the
+definition*, and what it does is shape the code being built around it.
+That's also why several of those words only work inside a definition
+and complain if you type them at the prompt — there is no definition
+under construction for them to shape.
 
 ### Indirect calls: `'` and `EXECUTE`
 
@@ -305,17 +589,57 @@ negatives included, via a leading `-`.
 1.0 4.0 F/ F.       \ prints 0.2500
 ```
 
-The moment a typed number contains a `.`, it's treated as a decimal
-value rather than a whole one and pushed onto its *own*, separate
-stack. Decimal arithmetic then uses its own words — `F+ F- F* F/`,
+Structurally these are exactly the same shape as `5 3 + .` from
+section 1 — ingredients first, action last, then a word to print the
+result. Only the spellings changed.
+
+### Two stacks, and why
+
+There's one genuinely new idea here, and it's easy to skim past: a
+number with a `.` in it does **not** go on the stack you've been using.
+It goes on a second, entirely separate stack of its own.
+
+So a decimal number and a whole number can never be sitting on top of
+"the stack" at the same time, because they aren't on the same stack.
+That's why decimal arithmetic needs its own words — `F+ F- F* F/`,
 where the `F` prefix is the standard Forth convention for
-"floating-point" — not the plain `+`/`-` from section 1. There is no
-plain integer `*` or `/` in 2068-Forth at all yet; only these decimal
-versions exist. `F.` prints a decimal result, always with exactly 4
-digits after the point (`6.0` prints as `"6.0000"`, not `"6"`), and
-rounds toward zero rather than to the nearest digit — so very small
-differences near the 4th digit can look slightly off from what a
-calculator would show for the same expression.
+"floating-point" — rather than reusing the plain `+`/`-` from
+section 1. `+` looks at the whole-number stack; `F+` looks at the
+decimal one. They will never see each other's values.
+
+Traced out, so the separation is visible:
+
+```
+you type   whole-number stack   decimal stack
+--------   ------------------   -------------
+5          [5]                  []
+3.5        [5]                  [3.5]
+2.5        [5]                  [3.5, 2.5]
+F+         [5]                  [6.0]
+F.         [5]                  []              -- prints 6.0000
+.          []                   []              -- prints 5
+```
+
+Notice the `5` sat there patiently through all of it, untouched. `F+`
+and `F.` had no way to reach it even in principle, and the `.` at the
+end found it exactly where it was left.
+
+One consequence worth internalizing early, because the symptom is
+confusing: **using the wrong stack's word is usually not an error you
+see reported.** Typing `3.5 2.5 +` doesn't add anything — the two
+decimals are over on the float stack, and `+` reaches for two
+whole numbers that were never put there. What you'll get is `STACK?`
+if the whole-number stack was empty, or a silently wrong answer
+computed from whatever *was* on it. So when a calculation comes out
+inexplicably wrong, checking that every word in it has the right `F`
+or lack of one is a good first move.
+
+There is no plain integer `*` or `/` in 2068-Forth at all yet; only
+these decimal versions exist. `F.` prints a decimal result, always with
+exactly 4 digits after the point (`6.0` prints as `"6.0000"`, not
+`"6"`), and rounds toward zero rather than to the nearest digit — so
+very small differences near the 4th digit can look slightly off from
+what a calculator would show for the same expression.
 
 Decimal literals work inside colon definitions too, compiled in
 exactly the way a whole-number literal would be:
@@ -368,16 +692,30 @@ PI 2.0 F/ DEG F.  \ prints 89.9960 -- half of PI back to degrees
                   \ here carries)
 ```
 
-Moving a value between the whole-number stack and the decimal stack
-takes its own words, since the two really are separate. Typing a
-number with or without a `.` decides *where it starts*; `S>F` and
-`F>S` move an already-computed value across afterward:
+### Crossing between the two stacks
 
-| Word | Stack effect | What it does |
-|---|---|---|
-| `S>F` | `( n -- )` `( -- f )` | Whole number to decimal (exact) |
-| `F>S` | `( f -- )` `( -- n )` | Decimal to whole number (see below) |
-| `FROUND` | `( f -- )` `( -- f' )` | Round to the nearest whole decimal value |
+Now back to the two-stacks idea from the start of this section, because
+sooner or later you'll have a value on the wrong one. Typing a number
+with or without a `.` decides *where it starts*. `S>F` and `F>S` move
+an already-computed value across afterward.
+
+Their stack effects need a moment's explanation, since they're the
+first words in this document that touch both stacks at once, and the
+usual one-line notation can't express that. Two groups are written
+instead — the first for the whole-number stack, the second for the
+decimal one:
+
+| Word | Whole-number stack | Decimal stack | What it does |
+|---|---|---|---|
+| `S>F` | `( n -- )` | `( -- f )` | Whole number to decimal (exact) |
+| `F>S` | `( -- n )` | `( f -- )` | Decimal to whole number (see below) |
+| `FROUND` | — | `( f -- f' )` | Round to the nearest whole decimal value |
+
+Read `S>F` as: takes a value off the whole-number stack, leaves one on
+the decimal stack. The name says the same thing — `S` for the standard
+Forth name for the ordinary stack, `>` for "to", `F` for float. `F>S`
+runs the other way. `FROUND` never leaves the decimal stack at all,
+which is why it has an ordinary single-group effect.
 
 ```forth
 42 S>F F.          \ prints 42.0000
@@ -389,6 +727,22 @@ number with or without a `.` decides *where it starts*; `S>F` and
                    \ becomes 0, not -1), and only THEN does F>S
                    \ convert it — the order matters
 ```
+
+Those last two lines deserve a second look, because they're the sort of
+thing that produces a bug you'd stare at for an hour. You might
+reasonably expect `F>S` to just chop the fractional part off and hand
+back the whole-number part — that's what "convert to an integer"
+usually means. It doesn't. It always rounds *downward*, toward negative
+infinity. For positive values those are the same thing, so `3.7 F>S`
+gives `3` either way and nothing looks wrong. For negative values they
+part company: `-0.5 F>S` gives `-1`, not `0`, because `-1` is the whole
+number below `-0.5`.
+
+If what you wanted was ordinary rounding, `FROUND` first and `F>S`
+second gets it, as the third line shows. The order genuinely matters,
+and the two words are doing quite different jobs: `FROUND` decides
+which whole value is *nearest*, and `F>S` merely moves the result to
+the other stack.
 
 ### A few more useful numeric words
 
@@ -461,7 +815,19 @@ bit; `0=` cares only whether its input was exactly zero.
 
 ## 4. Reading and writing memory directly
 
-Forth hands you direct access to memory through two words:
+Everything so far has lived on the stack, which is a fine place for a
+value you're about to use and a poor one for a value you want to keep.
+The stack is a queue of things in flight; it isn't storage. For storage
+you need memory, and Forth gives you it directly.
+
+The picture to hold: the machine's memory is one very long street of
+numbered slots — 65,536 of them, numbered 0 to 65535. That number is a
+slot's **address**, exactly like a house number. Each slot holds one
+byte. Two neighbouring slots together hold one of the whole numbers
+you've been putting on the stack, since one byte on its own can only
+count from 0 to 255 and that isn't enough.
+
+Two words reach into that street:
 
 | Word | Stack effect | What it does |
 |---|---|---|
@@ -472,7 +838,9 @@ Watch the order for `!`: the *value* goes on the stack first, then the
 *address*. Read it as "store `n` at `addr`," which matches the order
 the words appear when you write `n addr !`. This trips up nearly
 everyone the first time, and there's no trick to it beyond the
-mnemonic.
+mnemonic — though one image does help: you're posting a parcel. The
+parcel is the value, and you write the address on top of it. Contents
+first, address last, then hand it over.
 
 That's a much lower-level tool than BASIC's variables — no `DIM`, no
 named storage, just addresses. `VARIABLE` builds named storage out of
@@ -501,26 +869,57 @@ afterward.
 MAXHEALTH .      \ prints 100, every time, forever
 ```
 
-`@` and `!` always work on a full two-byte cell. `C@` and `C!` do the
-same job one *byte* at a time — the natural pair to reach for with
-text (a string's own bytes) or anything else that's naturally
-byte-sized rather than a whole number:
+The difference between them is worth stating plainly, because the two
+look so similar when you define them and behave quite differently when
+you use them. `VARIABLE SCORE` gives you a word that pushes an
+**address** — the value itself is one `@` away. `100 CONSTANT
+MAXHEALTH` gives you a word that pushes the **value** directly, so
+there's no `@` involved and no cell to fetch from:
+
+```forth
+SCORE @ .        \ the @ is required -- SCORE gave you an address
+MAXHEALTH .      \ no @ -- MAXHEALTH gave you the number itself
+```
+
+A stray or missing `@` between these two is a common early mistake, and
+it doesn't announce itself: `SCORE .` will happily print a number, just
+not the one you wanted — it prints where the cell *is*, not what's in
+it.
+
+### Bytes: `C@` and `C!`
+
+`@` and `!` always work on a full two-byte cell, which matches the size
+of the numbers you've been pushing. `C@` and `C!` do the same job one
+*byte* at a time — the natural pair for anything that's genuinely
+byte-sized, text especially:
 
 | Word | Stack effect | What it does |
 |---|---|---|
 | `C@` | `( addr -- byte )` | Read one byte at `addr` |
 | `C!` | `( byte addr -- )` | Write one byte to `addr` |
 
+To see the two-slots-per-number arrangement for real, store a number
+whose two halves are easy to tell apart. 258 is 256 + 2, so its two
+bytes are 1 and 2:
+
 ```forth
-20 STRING NAME
-S" ADA" NAME PLACE
-NAME 1 + C@ .        \ prints 65 -- 'A', the first character of "ADA"
+VARIABLE V
+258 V !
+V @ .           \ prints 258 -- the whole two-byte value
+V C@ .          \ prints 2   -- just the first byte
+V 1 + C@ .      \ prints 1   -- just the second byte
 ```
 
-Reach whichever character you want by adding your own offset to a
-buffer's address before `C@`. There's no `CELLS`-style helper for
-single bytes, because for bytes the offset and the count are already
-the same number.
+Two things to take from that. First, `V 1 +` is how you reach the next
+slot along: an address is an ordinary number, so ordinary `+` moves you
+around memory. That idiom comes back constantly. Second, the low half
+of the number is stored *first*, in the lower-numbered slot — which is
+this processor's convention, and occasionally surprising if you expected
+the halves the other way round.
+
+There's no `CELLS`-style helper for single bytes (you'll meet `CELLS`
+under [Arrays](#arrays) shortly), because for bytes the offset and the
+count are already the same number.
 
 `FREE ( -- n )` reports how much room is left for defining new words,
 which is handy before starting a big program — the same spirit as
@@ -557,12 +956,32 @@ does that multiplication for you:
 
 There's no special array-indexing word; `index CELLS name +` is the
 whole idiom, exactly as real Forth systems handle it. Read it as one
-phrase — "the address `CELLS` past `name`." Dropping `CELLS` and
-writing plain `3 SCORES +` is a real mistake rather than a shortcut:
-`SCORES` gives you a plain BYTE address and each cell here is 2 bytes
-wide, so `3 SCORES +` doesn't land on element 3 at all — it lands one
-byte INTO element 1. `CELLS` is exactly the `index * 2` conversion
-that gets you to the right place.
+phrase — "the address `CELLS` past `name`."
+
+`CELLS` is just `( n -- n*2 )`, and it is easy to talk yourself out of
+bothering with it. Don't. This is the memory street from the start of
+this section again: `SCORES` gives you a plain **byte** address, and
+each element occupies **two** of those byte slots. Writing `3 SCORES +`
+walks three bytes along, not three elements, which lands you halfway
+into element 1 — reading and writing one byte from each of two
+different elements at once. Nothing complains. You just get numbers
+that make no sense.
+
+Element 0 lives in byte offsets 0 and 1, element 1 in offsets 2 and 3,
+element 2 in 4 and 5, element 3 in 6 and 7. So:
+
+```
+SCORES             ->  byte offset 0  ->  element 0            (correct)
+3 CELLS SCORES +   ->  byte offset 6  ->  element 3            (correct)
+3 SCORES +         ->  byte offset 3  ->  the second half of
+                                          element 1            (WRONG)
+```
+
+That last one is the trap. An `@` there reads one byte from element 1
+and one from element 2 and combines them into a single number that
+corresponds to nothing at all. `CELLS` is exactly the `index * 2`
+conversion that turns "element 3" into "six bytes along", and writing
+it every time costs you nothing.
 
 ### Strings
 
@@ -580,10 +999,23 @@ that many characters. Every other string word in this document works
 on the same address/length pair, so once `S"` has handed you one,
 anything here can consume it.
 
-A literal from `S"` is read-only and disappears once you move on —
-fine for a one-off piece of text, useless for something you want to
-build up or change. `STRING` reserves a real, mutable slot for text,
-just as `VARIABLE` does for a single number:
+That "two ordinary numbers" claim is worth taking literally rather than
+as a figure of speech, because it explains most of what follows. After
+`S" HELLO WORLD"` the stack holds exactly two values — an address, and
+the number 11 — and nothing anywhere marks them as being a string. If
+you typed `. .` at that point you'd get 11 and then some address
+printed back at you, in ordinary decimal, as the plain numbers they
+are. Nothing about the pair is special except that certain words agree
+to interpret it that way.
+
+This is also why `TYPE` takes *two* arguments and why nearly every
+string word in this section does too. There's no length hidden anywhere
+for them to look up. You carry it.
+
+A literal from `S"` is a one-off: it's fine for a piece of text you're
+about to print or measure, and no use at all for something you want to
+keep or change later. `STRING` reserves a real, named, mutable slot for
+text, just as `VARIABLE` does for a single number:
 
 ```forth
 20 STRING NAME
@@ -604,8 +1036,37 @@ address/length pair, for `TYPE` or anything else, use `COUNT`:
 NAME COUNT TYPE      \ prints ADA
 ```
 
+`COUNT` is the one word here whose necessity isn't obvious, so it's
+worth seeing why it exists. A `STRING` buffer doesn't store a bare
+address/length pair — it stores its length in a single **count byte**
+at the very front, followed by the characters themselves. `NAME`
+pushes the address of that count byte, not of the text. So the buffer
+made by `20 STRING NAME`, holding `"ADA"`, looks like this in the
+memory street from earlier in this section:
+
+```
+offset:   0    1    2    3    4  ...  20
+        [ 3 ][ A ][ D ][ A ][ ? ] ... [ ? ]
+          ^     ^
+          |     `-- the characters start here (NAME 1 +)
+          `-- the count byte: how many characters (NAME)
+```
+
+`COUNT ( caddr -- addr len )` is exactly the conversion between the two
+representations: give it the buffer's address, and it hands back "the
+address one byte further along" and "the number it found in the count
+byte" — which is precisely the pair `TYPE` wants. Two representations,
+one bridge between them.
+
+That also explains a line you'll see later in this document:
+`NAME 1 +` appears in the [`ACCEPT`](#reading-a-whole-line-accept-and-input)
+example and means "skip the count byte, give me the text area". It's
+the same `+` on the same kind of byte address you used to walk from one
+slot to the next earlier.
+
 If all you want is the length of the stored text, `LEN` skips straight
-to it without producing the full pair `COUNT` gives you:
+to it without producing the full pair `COUNT` gives you — it just reads
+that count byte:
 
 ```forth
 NAME LEN .            \ prints 3
@@ -652,37 +1113,93 @@ S" HELLO WORLD" 5 LEFT TYPE  \ prints HELLO
 S" HELLO WORLD" 5 RIGHT TYPE \ prints WORLD
 ```
 
-`UPPER` and `LOWER` change text **in place**. Unlike every other word
-here, which only reads its `(addr len)` argument, these two write back
-into it — so the string has to be real, writable memory, from
-`STRING`, not a literal from `S"`. A literal's characters live in the
-program's permanent, read-only storage, and a write there silently
-does nothing: not a crash, just no visible effect, since this hardware
-has no way to signal "that write didn't take."
+Look closely at `LEFT` and `RIGHT` in that table and you'll notice
+something: neither of them copies anything. `LEFT`'s result keeps the
+same `addr` and merely reports a shorter `len`; `RIGHT`'s keeps the
+same `len` and reports a later `addr`. That falls straight out of the
+"a string is just an address and a length" idea from the start of this
+section — a substring is simply a different *view* of memory you
+already had, so there's nothing to copy. If `n` is bigger than the
+string, both clamp to the whole string rather than reading past its
+end.
+
+`UPPER` and `LOWER` are the exception in the other direction: they
+change text **in place**. Every other word here only reads its
+`(addr len)`; these two write back into it. Type them at the prompt and
+they work exactly as the examples above show, because a string you type
+in lives in ordinary writable memory. The caveat that matters is for
+text that lives in the machine's permanent, unchangeable storage — text
+built into the ROM itself. A write there is simply discarded: not a
+crash, not an error, just no visible effect, since this hardware has no
+way to signal "that write didn't take." If `UPPER` ever appears to do
+nothing, that's the reason to check first.
 
 `SEARCH` looks for the second string inside the first and reports
-where it found it:
+whether, and where, it found it. It needs two string literals at once,
+which calls for a small precaution — see the note just below — so put
+it in a definition:
 
 ```forth
-S" HELLO WORLD" S" WORLD" SEARCH .   \ prints -1 (true) -- found
-                                     \ DROP TYPE would show the
-                                     \ match itself: "WORLD"
+: FOUND?  S" HELLO WORLD" S" WORLD" SEARCH ;
+FOUND? .          \ prints -1 (true) -- found
 ```
 
-`flag` is true if the second string turned up anywhere inside the
-first, and `addr3 len3` then point at the match itself rather than the
-whole original string. An empty search string never matches, and a
-search string longer than the text being searched can't match either
-— both handled without special-case code in your own program.
+**The precaution.** Two `S"` literals typed on the *same line at the
+prompt* share one piece of scratch memory, so the second one's text
+lands on top of the first one's and you get a result computed from
+something you didn't type. Inside a colon definition each literal gets
+its own permanent copy, and the problem doesn't arise. So: one `S"` per
+line is fine to type directly; two or more, put them in a definition.
+This is the only place in this document where that matters, but it
+matters silently, which is why it's worth knowing.
+
+`SEARCH`'s three results are worth reading carefully, because it returns
+more than a yes/no. `flag` is true if the second string turned up
+anywhere inside the first. When it did, `addr3 len3` is the **rest of
+the text starting at the match** — not just the matched part, and not
+the original string. For `"HELLO WORLD"` searched for `"WORLD"`, the
+match is at the end, so "the rest from the match onward" happens to be
+exactly `"WORLD"`; had you searched for `"LO"` instead, you'd get back
+`"LO WORLD"`. When the flag is false, `addr3 len3` is the original
+string, unchanged.
+
+So the flag is what you branch on, and the pair underneath it is what
+you carry on searching or printing from:
+
+```forth
+: SHOWREST  S" HELLO WORLD" S" WORLD" SEARCH DROP TYPE ;
+SHOWREST          \ prints WORLD
+```
+
+That `DROP` throws away the flag, leaving the `(addr len)` pair for
+`TYPE` — a small illustration of why `DROP` from section 1 turns up so
+often in real code. Two more behaviours, both chosen so you don't have
+to special-case them yourself: an empty search string never matches,
+and a search string longer than the text being searched can't match
+either.
 
 ---
 
 ## 5. Comparisons and true/false
 
-Before `IF`, it helps to know how Forth represents "true" and "false".
-They're just numbers, like everything else on the stack: **zero means
-false; anything else means true.** `0=`, `=`, `<`, and `>` each turn
-an ordinary comparison into one of these flags.
+The next section is about making decisions, and before you can write
+one you need to know what Forth thinks a decision *is*.
+
+In BASIC, a condition is part of the `IF` statement: `IF X > 3 THEN`
+puts the test and the branch in one piece of grammar. Forth doesn't
+have grammar, so it can't do that. The test has to be an ordinary word
+that runs on its own, leaves an ordinary value on the stack, and
+finishes. Whatever branches later reads that value.
+
+So a comparison isn't special. `>` is a word `( a b -- flag )`, just
+like `+` is a word `( a b -- a+b )`. It takes two numbers off the stack
+and leaves one behind. The only difference is what that one number
+means.
+
+And what it means is deliberately simple: **zero means false; anything
+else at all means true.** No separate true/false type, no third kind of
+value — just a number on the same stack as all the others. A value used
+this way is called a **flag**.
 
 | Word | Stack effect | What it does |
 |---|---|---|
@@ -691,59 +1208,149 @@ an ordinary comparison into one of these flags.
 | `<`  | `( a b -- flag )` | `flag` is true if `a` is less than `b` |
 | `>`  | `( a b -- flag )` | `flag` is true if `a` is greater than `b` |
 
+Try them and print the flags, since a flag is a printable number like
+any other:
+
 ```forth
 5 3 > .    \ prints -1
 5 3 = .    \ prints 0
+3 5 > .    \ prints 0
+0 0= .     \ prints -1
+7 0= .     \ prints 0
 ```
 
-A true flag prints as `-1`, not `1`. That's the standard Forth
-convention — every bit set — rather than a bug. It simply looks
-unfamiliar coming from BASIC or most other languages, where true is
-usually `1`.
+Two things in that output want explaining.
+
+**A true flag prints as `-1`, not `1`.** You'd be forgiven for
+expecting `1`; that's what BASIC and most other languages use. Forth's
+convention is that true means *every bit set*, and a whole number with
+all sixteen bits set reads, in signed two's-complement, as `-1`. It's
+the same `-1` you got from `0 INVERT` back in
+[Bitwise and logical operators](#bitwise-and-logical-operators), and
+for exactly the same reason. It is not a bug, and the number's actual
+value almost never matters — what matters is that it isn't zero.
+
+**Watch the operand order on `<` and `>`,** which is the same trap `-`
+sprang in section 1 and for the same reason. `5 3 >` asks "is 5 greater
+than 3?" — the deeper value first, the top value second, exactly the
+order you'd say it aloud. `3 5 >` asks the opposite question and quite
+correctly answers `0`.
+
+`0=` is the odd one out, and it earns its keep twice over. Read
+literally it tests "is this exactly zero?". But since zero is false and
+everything else is true, testing for zero is *also* the way you invert
+a flag — feed it a true flag and you get false, feed it false and you
+get true. One word, two uses, and both of them come up constantly.
+
+```forth
+5 3 > 0= .    \ prints 0 -- "5 > 3" was true, so "NOT (5 > 3)" is false
+```
+
+That's also why `0=` is not spelled `NOT`, and why the bitwise
+`INVERT` from the previous section isn't either. They do genuinely
+different jobs: `INVERT` flips all sixteen bits of whatever it's given,
+while `0=` only ever asks one question and answers with a flag. On a
+proper `-1`/`0` flag they happen to agree; on any other number they
+don't. Giving them one shared name would hide that.
+
+Finally, a limit worth knowing before you go looking for them: there is
+no `<=` or `>=` in 2068-Forth, and no `<>`. Build what you need from
+what's here — `<=` is `>` followed by `0=`, for instance, since "not
+greater than" and "less than or equal" are the same question.
 
 ---
 
 ## 6. Making decisions: `IF` `ELSE` `THEN`
 
+Every word you've defined so far has been a plain list: run the first
+thing, then the next, then the next, then stop. Useful, but it means
+every one of them does the same thing every time. Real programs need
+words that behave differently in different circumstances.
+
 `IF`/`ELSE`/`THEN` is Forth's answer to BASIC's `IF...THEN...ELSE`,
 with one difference worth stating up front: the condition comes from
 the stack, computed *before* you reach `IF`, rather than being written
-as part of the `IF` itself.
+as part of the `IF` itself. That's the section 5 point restated — a
+test is an ordinary word that leaves a flag; `IF` is a separate
+ordinary word that reads one.
+
+Start with the smallest possible example, where the condition is
+literally handed in:
 
 ```forth
 : SIGNTEST  IF 111 ELSE 222 THEN ;
 
-5 SIGNTEST     \ pushes 5 (true-ish), runs SIGNTEST: leaves 111
-0 SIGNTEST     \ pushes 0 (false), runs SIGNTEST: leaves 222
+5 SIGNTEST .     \ prints 111 -- 5 is nonzero, so: true
+0 SIGNTEST .     \ prints 222 -- 0 is false
 ```
 
 Reading `SIGNTEST`: when it runs, whatever's already on top of the
-stack is the condition. `IF` pops it and checks it exactly the way
-section 5's comparisons produce it — zero false, anything else true.
-If true, everything up to the matching `ELSE` runs (or up to `THEN`,
-if there's no `ELSE`); if false, the `ELSE` part runs instead, or
-nothing at all when there's no `ELSE`. `THEN` does *not* mean "then do
-this" the way BASIC's does; it only marks where the `IF`/`ELSE`
-branching ends and normal execution resumes. That naming is a common
-early stumbling block for BASIC programmers precisely because the word
-looks so familiar and means something else.
+stack is the condition. `IF` pops it — note that word, **pops**; the
+flag is consumed and gone — and checks it exactly the way section 5's
+comparisons produce it: zero false, anything else true. If true,
+everything up to the matching `ELSE` runs; if false, the part between
+`ELSE` and `THEN` runs instead. Either way, execution carries on after
+`THEN`.
 
-Combined with section 5's comparisons:
+Set out as a table, since there are only two paths and it's worth
+seeing both:
+
+```
+top of stack is 5  ->  nonzero  ->  IF takes the true path   ->  111
+top of stack is 0  ->  zero     ->  IF takes the false path  ->  222
+```
+
+**`THEN` is the word that catches everyone**, so it's worth being blunt
+about it. In BASIC, `THEN` introduces the thing to do. In Forth it does
+nothing of the kind: it marks the *end* of the branching, the point
+where the two paths join back up and normal execution resumes. If it
+helps, mentally read it as "and then carry on here". The BASIC habit is
+strong and this is the single most common early confusion, so expect to
+trip on it once or twice before it sticks.
+
+The `ELSE` is optional. Leave it out when there's nothing to do in the
+false case, and the shape becomes `IF ... THEN` — run this part or
+don't, then carry on either way.
+
+```forth
+: BONUS  IF 100 + THEN ;
+
+50 -1 BONUS .   \ prints 150 -- flag was true, so 100 got added
+50  0 BONUS .   \ prints 50  -- flag was false, nothing happened
+```
+
+Now the useful version, where the condition is *computed* rather than
+handed in — which is what you'll actually write:
 
 ```forth
 : BIGGER  > IF 111 ELSE 222 THEN ;
 
-5 3 BIGGER   \ 5 3 > sees 5>3 -> true -> 111
-3 5 BIGGER   \ 3 5 > sees 3>5 -> false -> 222
+5 3 BIGGER .   \ prints 111 -- 5 3 > is true
+3 5 BIGGER .   \ prints 222 -- 3 5 > is false
 ```
 
-A branch can also print text directly, using `."` ("dot-quote"), which
-prints a literal piece of text — a different feature from `.`'s
-printing of a *computed* number, covered fully in
-[Printing](#8-printing). `."` only works inside a colon definition,
-the same restriction `IF`/`ELSE`/`THEN` themselves carry. Exactly one
-space is required right after `."`, and the text runs up to (but not
-including) the next `"`:
+Nothing new happened there. `BIGGER` simply starts with the `>` from
+section 5, which turns the two numbers already on the stack into one
+flag, and from `IF` onward it's `SIGNTEST` again. Building a word by
+gluing a test onto a decision like this is the everyday shape of Forth
+code.
+
+### Printing from a branch: `."`
+
+A branch that leaves a number on the stack is fine, but usually you
+want to *say* something. `."` ("dot-quote") prints a fixed piece of
+text. It's a different thing from `.`, which prints a computed number
+— `.` reads the stack, `."` doesn't touch the stack at all, it just
+emits the characters written into it. ([Printing](#8-printing) covers
+both properly.)
+
+Two rules, both easy to break: exactly one space is required right
+after `."`, and the text runs up to but not including the next `"`.
+And `."` only works inside a colon definition, the same restriction
+`IF`/`ELSE`/`THEN` themselves carry — which is the IMMEDIATE business
+from [section 2](#interpreting-vs-compiling--why--is-special) showing
+up in practice, since there has to be a definition under construction
+for these words to build into.
 
 ```forth
 : DESCRIBE  IF ." positive-ish" ELSE ." zero or negative" THEN ;
@@ -752,12 +1359,66 @@ including) the next `"`:
 0 DESCRIBE     \ prints "zero or negative"
 ```
 
+### Back to `?DUP`
+
+[Section 1](#rearranging-the-stack) promised that `?DUP` would make
+sense once you'd met `IF`, so here's the payoff. The problem `?DUP`
+solves is this: `IF` consumes the flag it tests, but often the value
+you tested *is* the value you wanted to use.
+
+Say you want a word that prints the top of the stack, but only if it
+isn't zero. Written with the tools from this section alone, you'd need
+to make a copy to test, and then clean up the copy on the branch where
+you didn't use it:
+
+```forth
+: ?PRINT  DUP IF . ELSE DROP THEN ;
+
+7 ?PRINT      \ prints 7
+0 ?PRINT      \ prints nothing
+```
+
+Follow the two paths. `DUP` makes `[7, 7]`; `IF` eats one, leaving
+`[7]` for `.` to print. Good. But with `0`: `DUP` makes `[0, 0]`, `IF`
+eats one and takes the false path, and the *other* `0` is still sitting
+there — hence the `DROP`, whose only job is tidying up a copy that
+turned out to be unwanted.
+
+`?DUP` exists to make that whole dance unnecessary. It copies the value
+**only if it's nonzero**, which is exactly the case where the copy will
+be needed:
+
+```forth
+: ?PRINT  ?DUP IF . THEN ;
+
+7 ?PRINT      \ prints 7
+0 ?PRINT      \ prints nothing
+```
+
+With `7`, `?DUP` gives `[7, 7]` and it behaves as before. With `0`,
+`?DUP` leaves `[0]` untouched, `IF` consumes that single zero, takes
+the false path, and there is nothing left over to clean up. The `ELSE
+DROP` disappears. That strange-looking `( n -- 0 | n n )` stack effect
+was describing precisely this, and now it should read as a promise
+rather than a puzzle.
+
 ---
 
 ## 7. Repeating yourself
 
-Forth has three loop shapes, covering between them the ground BASIC's
-`FOR`/`NEXT` and `WHILE`/`WEND` cover.
+Here's a question worth answering before reading on: with everything
+covered so far, can any part of a word's definition run more than once?
+
+The answer is no. A definition runs strictly forwards, start to finish
+— `IF` and `ELSE` can make it *skip* a stretch, but nothing so far
+sends it backwards. Which means anything you want done ten times, you'd
+have to write out ten times.
+
+This section fixes that. Forth has three loop shapes, covering between
+them the ground BASIC's `FOR`/`NEXT` and `WHILE`/`WEND` cover. All
+three are, like `IF`, IMMEDIATE words that build the loop while you're
+typing the definition, which is why all of them only work inside `:`
+and `;`.
 
 ### `BEGIN` `UNTIL` — the simplest loop
 
@@ -767,10 +1428,15 @@ just before `UNTIL` becomes true. Because the check happens at the
 `REPEAT...UNTIL`, if you've used a dialect with one, or `DO...LOOP
 UNTIL` in some others.
 
+Everything you need for it is already familiar. `UNTIL` reads a flag
+off the stack exactly the way `IF` did in the last section, and the
+flag gets computed exactly the same way too. The only new idea is the
+jump backwards.
+
 ```forth
 : COUNTDOWN  BEGIN 1 - DUP 0= UNTIL ;
 
-5 COUNTDOWN     \ leaves 0
+5 COUNTDOWN .    \ prints 0
 ```
 
 Trace `COUNTDOWN` with `5` on the stack. `1 -` makes it `4`; `DUP 0=`
@@ -780,24 +1446,52 @@ duplicates it and asks "is the duplicate zero?" — no, so false; and
 answers true, `UNTIL` stops looping, and the loop's last computed
 value (`0`) is left on the stack.
 
-One habit worth noticing early: **Forth loops have no built-in counter
-variable the way BASIC's `FOR I = 1 TO 5` does.** If you need to know
-how many times you've looped, or to count up rather than down, you
-build that yourself out of ordinary stack values — the way
-`COUNTDOWN`'s own value pulls double duty as both the thing being
-counted down *and* the loop's exit test.
+Pass by pass:
+
+```
+pass   stack at BEGIN   after 1 -   after DUP 0=   UNTIL sees
+----   --------------   ---------   ------------   ---------
+1      [5]              [4]         [4, 0]         false -> loop
+2      [4]              [3]         [3, 0]         false -> loop
+3      [3]              [2]         [2, 0]         false -> loop
+4      [2]              [1]         [1, 0]         false -> loop
+5      [1]              [0]         [0, -1]        true  -> stop
+```
+
+Notice the `DUP`. Without it, `0=` would have consumed the very number
+being counted down, and the second pass would have had nothing to
+subtract from. That's section 1's "make a spare copy before consuming
+anything" rule again, and in loops it comes up on nearly every line:
+the value you test is almost always the value you still need.
+
+Notice too that `UNTIL` consumes the flag but leaves everything
+underneath it alone, which is how the running value survives from one
+pass to the next. In a Forth loop, the stack *is* your loop variable.
+
+One habit worth noticing early: **`BEGIN`-style Forth loops have no
+built-in counter variable the way BASIC's `FOR I = 1 TO 5` does.** If
+you need to know how many times you've looped, or to count up rather
+than down, you build that yourself out of ordinary stack values — the
+way `COUNTDOWN`'s own value pulls double duty as both the thing being
+counted down *and* the loop's exit test. (`DO`/`LOOP`, further down,
+does keep a counter for you.)
 
 ### `BEGIN` `WHILE` `REPEAT` — check first, not last
 
-Since `BEGIN`/`UNTIL` checks at the end, its body always runs at least
-once. `BEGIN ... WHILE ... REPEAT` checks *before* each pass instead,
-so the body can run zero times:
+`BEGIN`/`UNTIL` has one real weakness, and it's structural rather than
+stylistic: the test sits at the *bottom*, so the body has already run
+by the time anything gets checked. Usually harmless. Occasionally
+wrong — if the answer is "don't do this at all", `BEGIN`/`UNTIL` has no
+way to express it.
+
+`BEGIN ... WHILE ... REPEAT` puts the test in the middle instead, so
+the body can run zero times:
 
 ```forth
 : COUNTDOWN2  BEGIN DUP 0 > WHILE 1 - REPEAT ;
 
-5 COUNTDOWN2    \ leaves 0, same as COUNTDOWN above
-0 COUNTDOWN2    \ leaves 0 too -- but the body never ran at all this
+5 COUNTDOWN2 .  \ prints 0, same as COUNTDOWN above
+0 COUNTDOWN2 .  \ prints 0 too -- but the body never ran at all this
                 \ time, since DUP 0 > was already false on the very
                 \ first check
 ```
@@ -805,16 +1499,33 @@ so the body can run zero times:
 `WHILE` pops a flag, computed the same way `IF`'s condition is. False
 exits the loop immediately, skipping everything up to `REPEAT`; true
 falls through into the body, which runs and then jumps back to `BEGIN`
-via `REPEAT`. This is BASIC's `WHILE`/`WEND` shape, not its
-`REPEAT`/`UNTIL` one — despite Forth's own `UNTIL` keyword suggesting
-the opposite pairing, which is why it's worth checking against the
-examples above rather than guessing from the keyword names.
+via `REPEAT`.
+
+The two shapes differ in exactly two ways, and both are easy to get
+backwards:
+
+1. **They react to opposite answers.** `UNTIL` stops when it finds
+   *true*; `WHILE` stops when it finds *false*. Same flag, opposite
+   meaning. Compare the two definitions above: `COUNTDOWN` tests
+   `DUP 0=` ("have we reached zero yet?") while `COUNTDOWN2` tests
+   `DUP 0 >` ("is there still something left?") — deliberately opposite
+   tests, to get the same behaviour out of the two shapes.
+2. **`WHILE`'s body can be skipped entirely; `UNTIL`'s cannot.** There
+   is no test at `BEGIN` for `UNTIL` to consult, so its body has
+   already run before any decision gets made.
+
+One naming warning. This is BASIC's `WHILE`/`WEND` shape, and Forth's
+`UNTIL` is the `REPEAT...UNTIL` shape — but Forth spells the *end* of
+the `WHILE` loop `REPEAT`, which is exactly the keyword some BASICs use
+for the other kind. The names cross over. Check against the examples
+rather than reasoning from the keywords.
 
 ### `DO` `LOOP` `I` — a real counter
 
-Neither loop above counts for you. `DO`/`LOOP` is Forth's answer to
-BASIC's `FOR`/`NEXT`, keeping the count itself instead of making you
-track it on the stack:
+Both loops above make you keep the count yourself, on the stack, mixed
+in with whatever else you were working with. That gets old fast.
+`DO`/`LOOP` is Forth's answer to BASIC's `FOR`/`NEXT`: it keeps the
+count for you, off to one side, and hands it back whenever you ask.
 
 ```forth
 : FIVE  5 0 DO I . LOOP ;
@@ -822,20 +1533,72 @@ track it on the stack:
 FIVE     \ prints 0 1 2 3 4
 ```
 
-`limit start DO` starts a loop counting up from `start` and stopping
-just *before* it would reach `limit` — so `5 0 DO` runs for index
-values `0` through `4`, five passes, not six. `I` pushes the current
-index. `LOOP` adds one to it and jumps back to `DO` unless it has just
-reached `limit`, in which case the loop ends and execution continues
-after `LOOP`.
+Three pieces, taken one at a time.
 
-One real trap, worth knowing before it bites: **`DO` doesn't check
-whether `start` already equals `limit` before running the body the
-first time.** `3 3 DO ... LOOP` runs the body once regardless, and
-`LOOP`'s counter, having just gone from `3` to `4`, won't match
-`limit` (`3`) again until it wraps all the way around through 65536
-values — an accidental near-infinite loop, in practice. Never write a
-`DO` where `start` and `limit` might already be equal.
+`limit start DO` starts a loop counting up from `start`, stopping just
+*before* it would reach `limit`. So `5 0 DO` runs for index values `0`
+through `4` — five passes, not six. The limit is where it stops, not
+where it ends up, which is the same "up to but not including"
+convention BASIC's `FOR I = 0 TO 4` writes the other way round.
+
+`I` pushes the current index onto the stack. It's an ordinary word with
+an ordinary stack effect, `( -- index )`, and nothing obliges you to
+use it: a loop that just repeats something five times identically never
+mentions `I` at all.
+
+`LOOP` adds one to the index and jumps back to just after `DO`, unless
+the index has reached `limit`, in which case the loop ends.
+
+Note the argument order carefully, because it reads backwards from how
+you'd say it: **limit first, start second**. `5 0 DO` means "from 0 up
+to 5", not "from 5 down to 0". This is worth double-checking every time
+you write one; it's the single most common `DO` mistake.
+
+Something to actually watch happen, built the same way section 2 built
+`QUADRUPLE` — a small word, then a word that uses it:
+
+```forth
+: STAR    42 EMIT ;
+: STARS   0 DO STAR LOOP CR ;
+
+5 STARS       \ prints *****
+20 STARS      \ prints ********************
+```
+
+`STAR` prints a single asterisk (42 is `*`'s character code, and `EMIT`
+prints one character — [Printing](#8-printing) has the details).
+`STARS` supplies the `0` start itself and takes the limit from whatever
+you pushed before calling it, so `5 STARS` reaches `DO` with `[5, 0]`
+on the stack: limit 5, start 0. Then it loops, and `CR` at the end
+moves to a fresh line. `STARS` never mentions `I`, because it doesn't
+care which pass it's on.
+
+**One real trap, worth knowing before it bites**, and `STARS` is
+already standing on it: `DO` does not check whether `start` already
+equals `limit` before running the body the first time. So `0 STARS`
+does not print nothing. It reaches `0 0 DO`, runs the body anyway, and
+then `LOOP` — having just moved the index from `0` to `1` — compares
+against a limit of `0` and doesn't match. It won't match again until
+the index has wrapped all the way around through 65536 values. In
+practice that is an accidental near-infinite loop, and it will look
+like the machine has hung.
+
+So: **never write a `DO` where `start` and `limit` might already be
+equal.** If a count could legitimately be zero, guard it first, using
+the previous section's `IF`:
+
+```forth
+: STARS   ?DUP IF 0 DO STAR LOOP CR THEN ;
+
+5 STARS       \ prints *****
+0 STARS       \ prints nothing, and returns safely
+```
+
+`?DUP` again — and for exactly the reason section 6 gave. The count has
+to be tested, and it's also the value `DO` needs, so copying it only
+when it's nonzero is precisely right. When it *is* zero, `?DUP` leaves
+the single `0`, `IF` eats it, the loop is skipped entirely, and the
+stack is left clean.
 
 ### `LEAVE` — exiting a loop early
 
@@ -855,6 +1618,57 @@ FINDTHREE     \ prints 0 1 2 3, then stops -- the remaining six
 nested in another, `LEAVE` exits the inner one and the outer loop
 keeps counting normally.
 
+### Loops inside loops
+
+Nesting `DO` loops works, and needs no special ceremony — the inner
+loop's counter simply sits on top of the outer one's and is gone again
+by the time the outer `LOOP` looks at anything.
+
+There is one limitation to know about, though, and it's better learned
+here than discovered in a debugging session: **`I` always gives you the
+index of the innermost loop, and there is no word for reaching an outer
+one.** Larger Forths provide `J` for the next loop out; 2068-Forth
+doesn't have it.
+
+So a nested loop can use its own index freely, and simply cannot see
+the enclosing loop's. If you need the outer count inside an inner loop
+— to print a multiplication table, say — save it somewhere first. A
+`VARIABLE` from [section 4](#4-reading-and-writing-memory-directly) is
+the straightforward way:
+
+```forth
+: STAR   42 EMIT ;
+VARIABLE ROW
+
+: TRIANGLE
+  5 0 DO
+    I ROW !               \ remember the outer index
+    ROW @ 1 + 0 DO
+      STAR
+    LOOP
+    CR
+  LOOP ;
+
+TRIANGLE
+```
+
+which prints
+
+```
+*
+**
+***
+****
+*****
+```
+
+Read the inner `DO` line carefully, since it's the part doing the work:
+`ROW @ 1 +` fetches the saved outer index and adds one, giving the
+inner loop a limit of 1 on the first row, 2 on the second, and so on.
+The `+ 1` is there because `DO` stops *before* the limit — without it,
+row 0 would ask for `0 0 DO` and hit the near-infinite-loop trap
+described above.
+
 ### `+LOOP` — stepping by something other than 1
 
 `LOOP` always counts up by exactly 1. `+LOOP` takes a number off the
@@ -867,11 +1681,32 @@ to count downward:
 EVENS     \ prints 0 2 4 6 8
 ```
 
-`+LOOP` ends the loop once a step would carry the index at or past
-`limit`, even if it jumps clean over it: `10 0 DO ... 3 +LOOP` stops
-after index `9`, since the next step would land on `12`, past `10`,
-without ever landing on `10` exactly. That's why `+LOOP` can't simply
-check for an exact match the way plain `LOOP` does.
+Look at where the `2` sits: *inside* the loop body, just before
+`+LOOP`. That's not a formatting choice. `+LOOP` takes its step off the
+stack the same way every other word takes its arguments, which means
+the step has to be pushed on each pass, from inside the loop. Writing
+it outside would push it once and then leave `+LOOP` reaching for a
+value that isn't there on the second pass.
+
+A consequence you might not expect: since the step is an ordinary value
+read fresh each time, it doesn't have to be the same value every pass.
+A computed step is perfectly legal, though rarely what you want.
+
+`+LOOP` also has to end the loop differently from `LOOP`, and the
+reason is worth a moment. Plain `LOOP` steps by exactly 1, so it can
+simply ask "did the index land on `limit`?" — with a step of 1 it can
+never skip past. `+LOOP` can. So it ends the loop once a step carries
+the index *at or past* `limit`, even if it jumps clean over it:
+
+```forth
+: BY3  10 0 DO I . 3 +LOOP ;
+
+BY3     \ prints 0 3 6 9
+```
+
+After printing `9`, the next step would land on `12` — past `10`,
+without ever equalling it — so the loop stops there. An "exact match"
+test would have sailed straight past and kept going.
 
 ---
 
@@ -922,6 +1757,38 @@ for:
 prints `NAME: FORTH`, then `VERSION: 1` on the line below — each lined
 up by hand with `SPACE`, no column-alignment word required.
 
+### Putting `.`, `."`, and `SPACE` together
+
+None of this is new, only combined. Here's the same "label, `SPACE`,
+value, `CR`" shape as the `NAME:`/`VERSION:` example above, just with
+a computed number where a fixed word was:
+
+```forth
+." SCORE:" SPACE 42 . CR
+." LEVEL:" SPACE 3 . CR
+```
+
+prints `SCORE: 42` then `LEVEL: 3` underneath it. `."` and `.` are
+doing exactly what section 1 and this section already said — `."`
+prints fixed text and never touches the stack, `.` prints and consumes
+a number — the only thing new is seeing them share a line.
+
+`SPACES` takes any whole number at all, including one bigger than the
+screen is wide, which makes it an easy way to watch the column-32 wrap
+mentioned above actually happen, rather than just read about it.
+Section 7's `STARS` already prints one character per pass with no idea
+where on the screen it's landing:
+
+```forth
+40 STARS
+```
+
+prints 32 stars, wraps to a fresh line exactly where the paragraph
+above said it would, then the remaining 8 stars on the second line,
+then the `CR` already built into `STARS` moves past even those.
+Nothing about `STARS` changed to make that happen — the wrap is
+`EMIT`'s own behavior, underneath every word that eventually calls it.
+
 ---
 
 ## 9. Drawing and sound
@@ -968,6 +1835,28 @@ just the next one, until some later call changes it again. Calling
 each touches only its own half of the color. `CLS` honors the current
 `PAPER` as well — clearing the screen fills it with whatever
 background color is set, not always black.
+
+### Drawing many things at once
+
+Nothing here is a new word — it's [section 7](#7-repeating-yourself)'s
+`DO`/`LOOP` counting across `CIRCLE` instead of across `EMIT`. Five
+evenly-spaced dots in a row:
+
+```forth
+: DOTS  5 0 DO I 40 * 20 + 96 8 CIRCLE LOOP ;
+
+DOTS
+```
+
+Read the body the way section 7 read `STARS`: `I` is this pass's
+index, `0` through `4`. `I 40 * 20 +` turns that index into an x
+coordinate 40 pixels apart, starting at 20; `96` and `8` are a fixed y
+and radius, the same on every pass. `CIRCLE` then draws — `xc yc r`,
+in that order, exactly as the table above lists it — and `LOOP` moves
+to the next index. `CIRCLE` itself hasn't changed at all between this
+example and the one just above it; it's the loop wrapped around it
+that's new, and it's the identical loop `STARS` used, just feeding a
+different word each pass.
 
 `BEEP` takes real musical units, exactly as BASIC's own `BEEP` does:
 an INTEGER number of semitones (0 = middle C, positive up, negative
@@ -1041,6 +1930,24 @@ That's what makes this the standard idiom for "read a key only if
 one's waiting" — `KEY?` genuinely just peeks, so a key you check for
 is still there for `KEY` to read afterward.
 
+Combine plain `KEY` with [section 7](#7-repeating-yourself)'s
+`BEGIN`/`UNTIL` and you get the standard "wait for a specific key"
+idiom — the keyboard equivalent of `COUNTDOWN`'s loop-until-zero:
+
+```forth
+: WAIT-FOR-Q  BEGIN KEY 81 = UNTIL ;
+
+WAIT-FOR-Q     \ nothing else happens until you press Q
+```
+
+`KEY` blocks and hands back one character code each pass; `81` is
+`Q`'s character code (the same code-number idea `65 CHR` used for `A`
+back in [Strings](#4-reading-and-writing-memory-directly)); `=` turns
+that into a flag; and `UNTIL` loops for as long as the flag is false,
+exactly the way it did in `COUNTDOWN`. Only what's driving the loop
+has changed — a keypress instead of arithmetic — the loop machinery
+itself is identical.
+
 `STICK ( device -- value )` reads a joystick, with `device` being 1 or
 2. Device 1 reports a full 4-bit direction (which way, if any, is
 pushed); device 2 reports a single on/off bit. With nothing connected
@@ -1081,6 +1988,27 @@ INPUT .    \ waits for you to type a number, then prints it back
 result on the stack — exactly BASIC's `INPUT A` for a single numeric
 variable, spelled as a word instead of a statement.
 
+Put both together and you have the standard small-program shape:
+gather some text, gather a number, use both.
+
+```forth
+10 STRING NAME
+
+." WHAT IS YOUR NAME? "
+NAME 1 + 10 ACCEPT NAME !
+." HELLO, " NAME COUNT TYPE ." !" CR
+
+." HOW OLD ARE YOU? "
+INPUT 1 + .          \ next year's age
+```
+
+Nothing in there is new — `STRING`/`ACCEPT`/`COUNT`/`TYPE` are exactly
+the pattern shown just above, and `INPUT` behaves exactly as just
+described. What's new is only the shape: a real program almost always
+alternates asking for something and using what came back, rather than
+gathering all its input up front the way a first, isolated example
+tends to suggest.
+
 ---
 
 ## 10. Variables, constants, and comparisons in combination
@@ -1105,6 +2033,44 @@ DONE? .          \ prints -1 (true) -- now ticked 6 times, past 5
 Nothing here is a new word. It's the same `VARIABLE`, `@`, `!`, `+`,
 `>`, and `.` from earlier sections, combined the way a real program
 would combine them.
+
+Trace `TICK` once, since it does two things in one line that are easy
+to gloss over: `COUNT @ 1 +` reads the stored count and adds one — an
+ordinary `VARIABLE` read, exactly like `SCORE @` in section 4 — and
+then `DUP COUNT !` makes a spare copy *before* storing, the same
+"copy before you consume it" habit as section 1's `OVER OVER` example,
+because `!` would otherwise eat the very value `TICK` is supposed to
+leave behind for whoever called it.
+
+```
+you type   stack after   COUNT afterward
+--------   -----------   ---------------
+TICK       [1]           1     -- COUNT @ was 0, +1, DUP'd, then stored
+TICK       [2]           2
+TICK       [3]           3
+```
+
+A second example puts the same pieces to slightly more realistic
+use — remembering the best of several scores, rather than just
+counting:
+
+```forth
+VARIABLE HIGH
+0 HIGH !
+
+: MAYBE-RECORD  ( score -- )  DUP HIGH @ > IF HIGH ! ELSE DROP THEN ;
+
+50 MAYBE-RECORD   HIGH @ .    \ prints 50 -- beat the starting 0
+30 MAYBE-RECORD   HIGH @ .    \ prints 50 still -- 30 didn't beat it
+75 MAYBE-RECORD   HIGH @ .    \ prints 75 -- a new high score
+```
+
+This is the `?PRINT` shape from [section
+6](#6-making-decisions-if-else-then) again: `DUP` makes a spare copy
+of the score before `HIGH @ >` consumes one of them to test it, so if
+the test passes, the *original* score is still there for `HIGH !` to
+store. Skip the `DUP` and `MAYBE-RECORD` would have nothing left to
+record with by the time it decided the score was worth keeping.
 
 ---
 
@@ -1135,10 +2101,30 @@ typed it in again. `LOAD` with no name at all loads whatever was saved
 most recently, so you don't have to remember or retype the name.
 
 There's no partial saving or loading of a single definition — `SAVE`
-always writes everything defined up to that point, in one piece. If
-you want your work checkpointed at meaningful moments, that's a matter
-of when you choose to run `SAVE`, not something 2068-Forth tracks for
-you.
+always writes everything defined up to that point, in one piece.
+
+That "up to that point" is worth seeing fail once, since it's obvious
+in hindsight and easy to get bitten by in practice:
+
+```forth
+: DOUBLE  DUP + ;
+: QUADRUPLE  DOUBLE DOUBLE ;
+SAVE MYWORDS
+
+: TRIPLE  DUP DUP + + ;      \ defined AFTER the SAVE above
+3 TRIPLE .                   \ prints 9 -- works fine, right now
+```
+
+`TRIPLE` works perfectly well for the rest of this session — nothing
+about defining it after a `SAVE` stops it running right now. But
+`SAVE` had already finished by the time you typed it, so `TRIPLE` was
+never written to tape. Switch the machine off, back on, and `LOAD
+MYWORDS` back, and you'd get `DOUBLE` and `QUADRUPLE` again exactly as
+saved — and no `TRIPLE` at all, because as far as that particular tape
+is concerned, it doesn't exist. If you want your work checkpointed at
+meaningful moments, that's a matter of when you choose to run `SAVE`
+again — here, after defining `TRIPLE` too — not something 2068-Forth
+tracks for you.
 
 One honest gap: what's proven so far is 2068-Forth's own bookkeeping —
 what gets saved, how it's found again, and restoring your definitions
@@ -1167,6 +2153,24 @@ coordinate range. All four are real, working words:
 This is a **pixel graphics mode**, not a wider *text* display: typed
 text and `EMIT`/`.`/`."` output are unaffected either way, still
 always 32 columns wide.
+
+Because `PLOT64` is an ordinary word once `64COL` has switched modes,
+[section 7](#7-repeating-yourself)'s `DO`/`LOOP` works on it exactly
+as it did on `CIRCLE` in the previous section — a row of ten points,
+spaced out across the wider coordinate range this mode gives you:
+
+```forth
+64COL
+3 PALETTE64
+10 0 DO I 40 * 20 + 96 PLOT64 LOOP
+32COL
+```
+
+`I 40 * 20 +` is the same "index times spacing, plus a starting
+offset" arithmetic [Drawing and sound](#9-drawing-and-sound)'s `DOTS`
+used, just reaching further along the row — up to `9 40 * 20 + = 380`,
+comfortably inside `PLOT64`'s wider 0-511 range and well past what the
+normal screen's own coordinates could reach.
 
 What isn't yet resolved is `64COL`'s own visual behavior on real
 hardware, which hasn't been fully characterized — testing showed the
@@ -1206,6 +2210,13 @@ then keep typing or press Enter. None of this is specific to Forth —
 it's the editing model of practically any text field — but it's worth
 stating plainly, since BASIC on this same family of machines
 historically handled line editing rather differently.
+
+Notice, too, that none of this changes what actually gets read once
+you press Enter. However many times you've inserted, deleted, or moved
+the cursor around first, what Forth sees is simply the finished line,
+split on spaces exactly the way [section
+1](#1-what-forth-actually-is) described from the very start — editing
+happens *before* reading, never during it.
 
 So what happens if you press Enter on a word that doesn't exist? A
 typo like `5 BRODER` instead of `5 BORDER` prints the actual word it
@@ -1291,6 +2302,43 @@ ELSE DROP ." OK: " . CR
 THEN
 ```
 
+### A more realistic example: choosing to reject bad input
+
+`RISKY` above always throws, which makes the mechanism easy to see but
+isn't how `THROW` gets used in practice. More often, a word throws
+only *sometimes*, guarding against one specific bad case while working
+normally otherwise — the same `IF`-guarded shape [section
+6](#6-making-decisions-if-else-then) built `?PRINT` out of.
+
+Section 3's `SQRT` never complains about a negative input on its own —
+its negative case just silently returns `0`, the same safe-default
+convention `VAL` uses for unparseable text. Suppose your own program
+wants that treated as a real mistake instead of quietly swept under
+the rug. `THROW` lets you build exactly that policy on top of a word
+that doesn't have it built in, without touching `SQRT` itself:
+
+```forth
+: STRICT-SQRT  ( n -- root )  DUP 0 < IF -1 THROW THEN  SQRT ;
+
+: TRY-SQRT  ( n -- )
+  ' STRICT-SQRT CATCH
+  IF ." NEGATIVE -- REFUSING" CR DROP
+  ELSE . THEN ;
+
+16 TRY-SQRT      \ prints 4
+-9 TRY-SQRT      \ prints NEGATIVE -- REFUSING -- plain SQRT would
+                 \ have just handed back 0 here instead, no complaint
+```
+
+`STRICT-SQRT` is the `?PRINT` pattern again: `DUP` makes a spare copy
+of `n` before testing it, so if the test finds nothing wrong, the
+*original* is still sitting there for `SQRT` to use afterward. Only
+when the test fails does anything unusual happen — a `THROW` that
+unwinds straight past the rest of `STRICT-SQRT`, past `SQRT` itself
+(which never runs at all in that case), and lands in `TRY-SQRT`'s
+`CATCH`, exactly the way `CATCH`'s own description above said it
+would.
+
 `THROW`ing with no `CATCH` anywhere to reach falls back to the reset
 this document already described: both stacks emptied, `STACK?`
 printed, and you're back at a fresh prompt, exactly as with an actual
@@ -1325,6 +2373,20 @@ line-numbered program listing to reproduce in the first place: once a
 word is compiled, its original source text isn't kept around, so
 `LLIST` shows *what exists*, a list of names, rather than
 re-displaying the exact lines you typed.
+
+That "newest first" is worth seeing rather than just taking on faith,
+and it's the identical order [section 1](#1-what-forth-actually-is)
+already described for how a plain word lookup searches the dictionary
+— `LLIST` isn't inventing a new ordering, it's just walking the same
+chain out loud:
+
+```forth
+: DOUBLE  DUP + ;
+: TRIPLE  DUP DUP + + ;
+LLIST          \ prints TRIPLE, then DOUBLE -- most recently defined
+               \ first, exactly the order a plain lookup of either
+               \ name would find them in
+```
 
 **Status**: confirmed working against a real printer-capable Fuse
 (`--printer --zxprinter`). `LPRINT` of a short string, and `LLIST`
@@ -1374,6 +2436,23 @@ color 2 looks like everywhere that number is used — the screen border
 included. This is a genuine, confirmed-working display-time palette
 swap: a shape already drawn with `INK 2` changes color the moment
 `PALETTE 2,...` and `ULAPLUS 1` run, with no need to redraw it.
+
+`ULAPLUS` and `PALETTE` are also independent of each other in a way
+worth noticing — the same separation [Drawing and
+sound](#9-drawing-and-sound) pointed out for `INK` and `PAPER`, where
+each touches only its own half of the state. `ULAPLUS` writes only the
+enable bit; the 64 palette registers `PALETTE` programs are a
+completely separate part of the chip, and switching the enable bit off
+and back on never touches them:
+
+```forth
+0 ULAPLUS         \ back to the standard 8 colors -- color 2 is
+                  \ ordinary red again
+1 ULAPLUS         \ switch the extended palette back on -- color 2 is
+                  \ bright yellow again too, with no PALETTE call in
+                  \ between: register 2 was never touched, only
+                  \ whether the hardware is currently reading it
+```
 
 **Honest limit worth knowing**: a stock, unmodified Timex Sinclair 2068
 does not natively support ULAplus. ULAplus is a specification, not a
@@ -1562,6 +2641,15 @@ the same convention applied to the full ANS Forth standard.
 ---
 
 ## Appendix B: what's not here yet
+
+None of this is a promise any of it is coming, and none of it should
+stop you writing real programs with what's already here — sections 1
+through 16 cover a genuinely complete language: `IF`/`ELSE`/`THEN`,
+three kinds of loop, memory, strings, arrays, error handling, sound,
+and graphics all included. This is just an honest inventory of the
+gaps, in the same spirit as the caveats already scattered through this
+document, so you don't go looking for something that plainly isn't
+there yet and conclude you missed it.
 
 A few things a Forth veteran would expect, and a BASIC programmer
 would ask about, aren't part of 2068-Forth yet:
