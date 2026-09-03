@@ -1375,15 +1375,19 @@ included. This is a genuine, confirmed-working display-time palette
 swap: a shape already drawn with `INK 2` changes color the moment
 `PALETTE 2,...` and `ULAPLUS 1` run, with no need to redraw it.
 
-**Honest limit worth knowing**: the real Timex Sinclair 2068 almost
-certainly never had genuine ULAPlus hardware. It's a modern extension
-designed for later Sinclair-compatible machines, made available here
-through an emulator patch. What's confirmed is that this project's own
-port-level code matches the documented real protocol and visibly works
-in that patched emulator; whether it would behave identically on
-unpatched, genuinely original TS2068 hardware remains an open
-question — the same honest caveat this project's 64-column mode
-carries in [A wider screen](#12-a-wider-screen).
+**Honest limit worth knowing**: a stock, unmodified Timex Sinclair 2068
+does not natively support ULAplus. ULAplus is a specification, not a
+machine — it can be implemented as a physical replacement chip for an
+existing ULA, inside an emulator, or in modern FPGA-based hardware like
+the ZX Spectrum Next, and real add-on hardware for the TS2068
+specifically (like the PicoVideo project) exists precisely because the
+stock machine doesn't have it. This project's own support for it has
+only ever been tested against a patched emulator. What's confirmed is
+that this project's own port-level code matches the documented real
+protocol and visibly works there; whether it would behave identically
+on real, unmodified TS2068 hardware remains
+an open question — the same honest caveat this project's 64-column
+mode carries in [A wider screen](#12-a-wider-screen).
 
 ---
 
