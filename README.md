@@ -774,23 +774,35 @@ inherited, what was deliberately left behind, and the phased build order.
   bytes (`rom/forth_boot.asm`: 13047 -> 13394 of 16384).
 - Phase 47 (`core/printer.asm` + `rom/forth_smoke_p47.asm`): `LPRINT`/
   `LLIST`, prompted by looking at the real TS2068 ROM's own printer
-  support. The real ZX Printer/TS2040 protocol (port `$FB`) was
-  cross-verified against two independent sources (Fuse's own emulator
-  source, skoolkid's ROM disassembly) that agree with each other,
-  after a third (a community wiki) disagreed with both and was
-  discarded. `LPRINT` renders text into 256x8-dot raster lines using
-  the same font `GFX_PUTCHAR` already uses; `LLIST` prints only
-  RAM-dictionary word names (your own definitions), not the ~100
-  ROM-resident primitives, matching real BASIC's own `LLIST` scope. A
-  real documentation bug was found and fixed along the way:
+  support, and **confirmed working end-to-end against a real
+  printer-capable Fuse**. The real ZX Printer/TS2040 protocol (port
+  `$FB`) needed the actual verbatim ROM disassembly to get right — two
+  secondhand sources (Fuse's own emulator source, skoolkid's ROM
+  disassembly) agreed with each other but both missed a per-row setup
+  write and a "wait for start of paper" gate that only the real,
+  verbatim `COPY-LINE` disassembly revealed. `LPRINT` renders text
+  into 256x8-dot raster lines using the same font `GFX_PUTCHAR`
+  already uses; `LLIST` prints only RAM-dictionary word names (your
+  own definitions), not the ~100 ROM-resident primitives, matching
+  real BASIC's own `LLIST` scope — confirmed via a real printout
+  showing newest-first order after defining two words. A real
+  documentation bug was found and fixed along the way:
   `GFX_CHAR_TO_FONT_OFFSET`'s own header undersold what it destroys
   (missing `DE`), caught by reading its body before trusting the
-  comment. **Verification in progress, not yet confirmed**: the code
-  provably runs to completion and renders exactly correct glyph data
-  (checked via a real Fuse `debug.bin` memory dump), but getting an
-  actual printer-emulation output file to appear — even from the real,
-  unmodified 48K BASIC ROM's own `LPRINT` — hasn't worked yet in
-  testing; likely a Fuse setup issue, not a code bug, but unresolved.
+  comment. Two Fuse-specific quirks were found and triaged: the
+  companion `.txt` OCR convenience file needed the real ZX system
+  variable `CHARS` set (fixed) but still mislabels characters because
+  our font table isn't densely ASCII-ordered (left alone — no
+  real-hardware counterpart, not worth the ROM cost); a small amount
+  of pixel drift in the `.pbm` output traces to a genuine Fuse
+  printer-emulation timing quirk that the real, unmodified 48K BASIC
+  ROM reproduces too (not a bug in this project, not chased further
+  per the user). Also found and fixed, discovered through live printer
+  testing: `rom/forth_boot.asm`'s unknown-word error handler never
+  reset `STATE` or the stacks, so one unknown word mid-compile left the
+  interpreter permanently stuck compiling — fixed to match
+  `STACK_CHECK`'s own abort contract, verified via diagnostic and
+  confirmed live.
 - Phase 48 (`core/ulaplus.asm` + `rom/forth_smoke_p48.asm`):
   `ULAPLUS`/`PALETTE`, ported directly from 2068-Leap's own
   already-working implementation. Confirmed working with a real Fuse

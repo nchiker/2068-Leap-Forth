@@ -3248,18 +3248,21 @@ bytes ($3452 of $4000), +347 bytes over Phase 45's 13047.
 
 ## Phase 47: LPRINT, LLIST
 
-**Code done, committed to the working tree; real-printer verification
-IN PROGRESS, not yet confirmed.** The user asked to look at the real
-TS2068 ROM's own `LPRINT`/`LLIST` and consider a 2068-Forth equivalent.
-Real research first, not a guess: the real Sinclair/TS2068 printer
-protocol (ZX Printer/TS2040, port `$FB`) was cross-verified against
-TWO INDEPENDENT sources that agree with each other — the real Fuse
-emulator's own `printer.c` source and skoolkid's Spectrum ROM
-disassembly of the real `COPY-LINE` routine — after a THIRD source
-(the Sinclair community wiki) disagreed with both on which bits
-control the motor and was discarded rather than trusted. See
-`core/printer.asm`'s own header for the full protocol writeup and
-citations.
+**Done, committed, and confirmed working end-to-end against a real
+printer-capable Fuse.** The user asked to look at the real TS2068
+ROM's own `LPRINT`/`LLIST` and consider a 2068-Forth equivalent. Real
+research first, not a guess: the real Sinclair/TS2068 printer protocol
+(ZX Printer/TS2040, port `$FB`) went through three escalating levels of
+source quality before landing on the real, complete algorithm — two
+secondhand sources (the real Fuse emulator's own `printer.c` and
+skoolkid's Spectrum ROM disassembly) agreed on the three WRITE bits and
+the "ready" READ bit, but both missed a per-row setup write and a
+"wait for start of paper" gate that only turned up once the actual,
+verbatim ROM disassembly (`~/Downloads/Timex Sinclair 2068 ROM
+Disassembly.pdf`, `COPY-LINE` at M0A4A) was found and read directly.
+See `core/printer.asm`'s own header for the full protocol writeup,
+citations, and the two refuted fix attempts that came before the real
+one.
 
 `LPRINT ( addr len -- )` renders text into 256×8-dot raster lines
 (MSB-first, matching the real ROM) using the SAME font
@@ -3276,26 +3279,41 @@ bug already taught to watch for.
 `LLIST ( -- )` prints one name per line for every word in the RAM
 dictionary (`>= FORTH_DICT_RAM`), newest first — deliberately NOT the
 ~100 ROM-resident primitives too, matching real BASIC's own `LLIST`
-scope (your program, not the ROM).
+scope (your program, not the ROM). Confirmed via a real Fuse printout:
+after defining `FOO` then `BAR`, `LLIST` printed "BAR" then "FOO", the
+correct newest-first order, both names legible against the real font.
 
-**Verification status, honestly**: `rom/forth_smoke_p47.asm` proves the
-code runs to completion without hanging and renders exactly correct
-glyph bytes into the print buffer (checked byte-for-byte against the
-same font lookup, not a hardcoded guess). What it does NOT yet prove
-is that real printed output comes out correctly — this needs an actual
-printer-capable Fuse (`--printer --zxprinter --graphicsfile ...
---textfile ...`), and testing so far has hit real trouble getting ANY
-printer output file to appear even from the REAL, unmodified 48K
-BASIC ROM's own `LPRINT` in the user's own Fuse setup — meaning
-whatever's blocking this is very likely a Fuse configuration/setup
-question, not a bug in this project's own code, but it isn't resolved
-yet. A `debug.bin` memory-dump snapshot (the same technique from Phase
-9's own live-keyboard bugs) DID confirm the code executes exactly as
-designed: `PRINT_ROW_IDX` reached 8 (all raster rows sent),
-`PRINT_COL_IDX` reached 32 (all columns rendered), `PRINT_REMAINING`
-correctly reached 0 — real evidence the mechanism runs correctly,
-short of the one thing that still needs an actual working printer
-setup to see. To be continued.
+**Two more real things were found and fixed getting here**, both
+documented in full in `core/printer.asm`'s own header:
+1. The companion `.txt` OCR file (a Fuse-only convenience — the real
+   printer output is the `.pbm` graphics file) came out empty because
+   this project never set the real ZX system variable `CHARS`
+   ($5C36/$5C37), which Fuse's OCR reads to find a reference font.
+   Fixed (`LPRINT_SEND_LINE` now sets it). The OCR still mislabels
+   characters after this fix (e.g. "HI" reads as "23") because our own
+   `FONT_TABLE` is packed in definition order, not the dense
+   ASCII-code order Fuse's OCR assumes — deliberately left alone
+   (would cost ~768 bytes of ROM to fix a debug convenience with no
+   real-hardware counterpart).
+2. A small amount of pixel-level drift appears in the `.pbm` output,
+   traced (with help from an external review) to a genuine Fuse
+   printer-emulation quirk — its virtual print-head position doesn't
+   reset between the 8 raster-row calls of one character line, only
+   when the motor fully stops. Confirmed NOT a bug in this project:
+   the real, unmodified 48K BASIC ROM's own `LPRINT`, run through the
+   identical Fuse setup, drifts the same way. Per the user: not a
+   priority, not chased further.
+
+Also found and fixed, independent of printing itself but discovered
+*because of* live printer testing: `INTERPRET_UNKNOWN_WORD`
+(`rom/forth_boot.asm`) never reset `STATE` or the data/float stacks
+after an unknown word, so hitting one mid-compile (e.g. a dropped
+keystroke merging two words together while live-typing) left the
+interpreter permanently stuck compiling into an abandoned definition —
+every subsequent line typed silently got swallowed instead of running.
+Fixed to match `STACK_CHECK`'s own existing abort contract (reset
+`STATE`, `IX`, and `IY`); verified via a 3-checkpoint diagnostic and
+then confirmed live by the user.
 
 ## Phase 48: ULAPLUS, PALETTE
 

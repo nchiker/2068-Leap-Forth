@@ -1299,15 +1299,17 @@ once a word is compiled, its original source text isn't kept around,
 so `LLIST` shows *what exists* (a list of names) rather than
 re-displaying the exact lines you originally typed.
 
-**Honest status, stated plainly**: this is real, complete code, built
-against the documented ZX Printer/TS2040 hardware protocol (the same
-device real BASIC's own `LPRINT`/`LLIST` talk to) — but it has not yet
-been confirmed working against an actual printer or a printer-capable
-emulator. Testing this specifically is in progress; treat this section
-as accurate about what the words are *meant* to do, not yet as proof
-that real printed output comes out correctly. See
-[`PROJECT_PLAN.md`](PROJECT_PLAN.md) for the current state of that
-verification.
+**Status**: confirmed working against a real printer-capable Fuse
+(`--printer --zxprinter`). `LPRINT` of a short string, and `LLIST`
+after defining two words, both produced correct, legible printouts —
+`LLIST` in the documented newest-first order. A small amount of pixel
+drift can appear in the raw printed dots; this traces to a Fuse
+printer-emulation timing quirk (its virtual print head doesn't reset
+position between the 8 raster rows of one character line) that the
+real, unmodified 48K BASIC ROM reproduces too under the same setup —
+not a bug in this project's own code, and not something real hardware
+would necessarily exhibit. See [`PROJECT_PLAN.md`](PROJECT_PLAN.md)'s
+Phase 47 section for the full verification history.
 
 ---
 

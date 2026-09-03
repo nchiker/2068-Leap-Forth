@@ -68,4 +68,30 @@ SECOND_DISPLAY_ADDR EQU $6000     ; The Second Display File, confirmed
 SCREEN_WIDTH_CHARS  EQU 32
 SCREEN_HEIGHT_CHARS EQU 24
 
+; ZX Printer / TS2040 printer port. Bit meanings cross-verified against
+; two independent sources before trusting either alone (see
+; core/printer.asm's own header for the full writeup and citations) —
+; a third source (the Sinclair community wiki) disagreed on which bits
+; controlled the motor and was NOT used, since it contradicted both
+; the real Fuse emulator's own source code and the ROM disassembly.
+PORT_PRINTER        EQU $FB
+
+; Real ZX system variable CHARS ($5C36/$5C37), NOT one of this project's
+; own sysvars and never read by our own code — kept solely so external
+; tooling that expects it works. Confirmed load-bearing for one such
+; consumer: Fuse's own ZX Printer text-OCR output (printer.c's
+; printer_zxp_output_as_text) reads THIS address to find the "current"
+; font table and byte-compares printed dots against it; with CHARS left
+; unset, that OCR read garbage/ROM code as its reference font and never
+; matched a single character, silently producing an empty text-printout
+; file. Real convention: CHARS = (glyph table base for code 32) - 256 —
+; core/printer.asm's LPRINT_SEND_LINE sets this to FONT_TABLE-256, since
+; FONT_TABLE's own first entry is the space (code 32) glyph. This address
+; lands inside GFX_FILL_VISITED ($5B00-$72FF, include/sysvars.inc) — safe
+; because that buffer is fully cleared at the start of every GFX_FILL
+; call and never read between calls, so writing CHARS here between
+; prints does not corrupt any FILL state, and LPRINT_SEND_LINE re-sets it
+; fresh before every printed line regardless of any FILL calls in between.
+ZX_SYSVAR_CHARS     EQU $5C36
+
     ENDIF

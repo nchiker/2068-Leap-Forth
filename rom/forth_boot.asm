@@ -316,12 +316,27 @@ BANNER: DB "2068-FORTH", 0
 ; specifically wasn't understood.
 ; ============================================================================
 INTERPRET_UNKNOWN_WORD:
+    ; real bugs, found live (2026-09-03): (1) STATE was left stuck at 1
+    ; forever after an unknown word hit mid-compile (e.g. a dropped
+    ; keystroke merging two intended words into one during live typing),
+    ; silently compiling every subsequent line typed instead of running
+    ; it; (2) NUMBER's own .fail path (core/interp.asm) pushes a
+    ; placeholder n=0 ahead of its flag, and .badword jumps here without
+    ; ever popping it, leaving one stray value behind on the data stack.
+    ; Both are this hook's own job to clean up -- core/interp.asm's own
+    ; .badword comment says so, and STACK_CHECK's sibling error path
+    ; (RUNTIME_ERROR_HOOK below) already resets both stacks the same way
+    ; before reporting, so this now matches that same abort contract.
+    ld   ix, DSTACK_TOP
+    ld   iy, FSTACK_TOP
     ld   hl, "?"
     call DPUSH_HL
     call W_EMIT
     ld   hl, 13
     call DPUSH_HL
     call W_EMIT
+    xor  a
+    ld   (STATE), a
     ret
 
 ; ============================================================================
@@ -353,6 +368,11 @@ RUNTIME_ERROR_HOOK:
     ld   hl, 13
     call DPUSH_HL
     call W_EMIT
+    xor  a
+    ld   (STATE), a          ; same fix as INTERPRET_UNKNOWN_WORD's own
+                              ; STATE reset above -- an IMMEDIATE word's
+                              ; runtime error while compiling could
+                              ; otherwise leave STATE stuck too
     ret
 
 RUNTIME_ERROR_MSG: DB "STACK?", 0
@@ -444,6 +464,8 @@ DICT_CHAIN_POINT DEFL H_INVERT
 DICT_CHAIN_POINT DEFL H_SPACES
     INCLUDE "core/tick.asm"
 DICT_CHAIN_POINT DEFL H_TICK
+    INCLUDE "core/printer.asm"
+DICT_CHAIN_POINT DEFL H_LLIST
     INCLUDE "core/ulaplus.asm"
     INCLUDE "core/editor.asm"
 
