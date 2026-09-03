@@ -182,6 +182,25 @@ Reading this left to right: `:` says "define a new word, named
 definition — here, `DUP` and `+` — gets remembered as part of what
 `DOUBLE` does, rather than run immediately. `;` ends the definition.
 
+**Every space here is required syntax, not just tidy formatting** —
+Forth splits everything on whitespace (see [section 1](#1-what-forth-actually-is)),
+so a missing space silently glues two words into one that doesn't
+exist, and the ROM has no way to tell that from a genuine typo. On a
+real screen's fixed-width font, a single missing space is easy to miss
+by eye. `: DOUBLE DUP + ;` needs a space in **every** one of these 4
+places (marked here with `·` just to make them visible — don't type
+the dots):
+```
+:·DOUBLE·DUP·+·;
+```
+Typing `:DOUBLE` (no space after `:`) means the interpreter reads
+`:DOUBLE` as one single word — not found, not defined, just an
+unrecognized token. Typing `DUP+` (no space before `+`) does the same
+to `DUP+`. If you ever see a `?` right after defining a word, this —
+not a "wrong" definition — is the first thing to check: retype it
+slowly, one character at a time, confirming a space lands between
+every pair of words before pressing Enter.
+
 Nothing has actually *run* yet at this point — you've just taught Forth
 a new word. Now use it:
 
