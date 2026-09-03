@@ -33,7 +33,18 @@
 ; original Phase 2 primitives (DROP/DUP/SWAP/OVER/+/-/@/!) it should
 ; have listed from the very start, through most of Phases 24-32),
 ; chained into one LATEST list via the same DICT_CHAIN_POINT splices
-; rom/forth_smoke_p9.asm introduced and proved.
+; rom/forth_smoke_p9.asm introduced and proved. NOTE: the "93 words"
+; count above already went stale after Phase 49 (1+/1-/NEGATE/MAX/MIN/
+; VLIST/EXIT/J) and is now further out of date after Phase 50's own
+; architectural-tier additions (HERE, `,`, C,, ALLOT, CREATE, DOES>,
+; IMMEDIATE, ABORT, QUIT, IN, OUT, FORGET) — recounting it correctly is
+; left to whichever future pass actually re-derives it from the real
+; INCLUDE chain, per this same comment's own stated method, rather than
+; hand-incrementing a number this comment has already shown can drift.
+; Phase 50's own new files are core/dictspace.asm, core/create.asm,
+; core/does.asm, core/immediate.asm, core/abortquit.asm,
+; core/portio.asm, and core/forget.asm — see each file's own header for
+; what it adds and why.
 ; DECIMAL_NUMBER_ENABLED is also DEFINEd here (core/decimal.asm,
 ; Phase 23) — not a dictionary word, a NUMBER/INTERPRET_RUN parsing
 ; capability: typing a literal like `3.5` now pushes a real float
@@ -116,7 +127,7 @@ COLD_START:
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
-    ld   hl, DICT_LATEST_INIT_VLIST   ; the full chain's own head —
+    ld   hl, DICT_LATEST_INIT_FORGET   ; the full chain's own head —
                                     ; see this file's own header
     ld   (LATEST), hl
     ld   hl, FORTH_DICT_RAM
@@ -506,6 +517,20 @@ DICT_CHAIN_POINT DEFL H_LLIST
     INCLUDE "core/ulaplus.asm"
 DICT_CHAIN_POINT DEFL H_PALETTE
     INCLUDE "core/vlist.asm"
+DICT_CHAIN_POINT DEFL H_VLIST
+    INCLUDE "core/dictspace.asm"
+DICT_CHAIN_POINT DEFL H_ALLOT
+    INCLUDE "core/create.asm"
+DICT_CHAIN_POINT DEFL H_CREATE
+    INCLUDE "core/does.asm"
+DICT_CHAIN_POINT DEFL H_DOES
+    INCLUDE "core/immediate.asm"
+DICT_CHAIN_POINT DEFL H_IMMEDIATE
+    INCLUDE "core/abortquit.asm"
+DICT_CHAIN_POINT DEFL H_QUIT
+    INCLUDE "core/portio.asm"
+DICT_CHAIN_POINT DEFL H_OUT
+    INCLUDE "core/forget.asm"
     INCLUDE "core/editor.asm"
 
     DS   $4000 - $, $FF
