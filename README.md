@@ -592,6 +592,29 @@ inherited, what was deliberately left behind, and the phased build order.
   checkpoints), and leaves a sentinel value below the device number
   completely untouched. +18 bytes (`rom/forth_boot.asm`: 12195 ->
   12213 of 16384).
+- Phase 38 (`core/interp.asm` + `rom/forth_boot.asm` +
+  `rom/forth_smoke_p38.asm`): runtime stack-error detection — asked for
+  directly, comparing to 2068-Leap's own line-entry + runtime error
+  handling; 2068-Forth already had the line-entry half
+  (`INTERPRET_UNKNOWN_WORD`, prints `?` and recovers), nothing for
+  runtime conditions like a stack underflow silently reading past the
+  stack's own boundary. A single `STACK_CHECK` call added to
+  `core/interp.asm`'s own `INTERPRET_RUN.loop` — the ONE place every
+  dispatched word's own result already passes through, whether that
+  word touches the stack via `DPOP_HL`/`DPUSH_HL` or (like many words)
+  manipulates `(ix+0)`/`(ix+1)` directly — catches all four violation
+  shapes (data/float stack underflow/overflow) without touching any
+  individual word's own code. Gated behind `DEFINE
+  RUNTIME_ERROR_CHECK_ENABLED` exactly like Phase 23's own
+  `DECIMAL_NUMBER_ENABLED`, confirmed byte-for-byte identical for every
+  ROM that doesn't opt in. Confirmed via `rom/forth_smoke_p38.asm`'s
+  five checkpoints AND live in the real product ROM: a throwaway
+  diagnostic typed `DROP` on a genuinely empty stack (printed
+  `STACK?`), then `1 2 + .` right after — correctly printed `3`,
+  proving real recovery, not just "didn't crash." First of three steps
+  the user laid out (runtime detection, then a code-consolidation pass,
+  then a `THROW`/`CATCH` review). +110 bytes (`rom/forth_boot.asm`:
+  12213 -> 12323 of 16384).
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -685,6 +708,7 @@ rom/        ROM image assembly:
               forth_smoke_p35.asm Phase 35 smoke ROM (FROUND)
               forth_smoke_p36.asm Phase 36 smoke ROM (CLS/C@/C!/KEY?)
               forth_smoke_p37.asm Phase 37 smoke ROM (STICK)
+              forth_smoke_p38.asm Phase 38 smoke ROM (runtime stack-error detection)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -740,6 +764,7 @@ make forth-smoke-p34  # Phase 34 smoke ROM: S>F/F>S
 make forth-smoke-p35  # Phase 35 smoke ROM: FROUND
 make forth-smoke-p36  # Phase 36 smoke ROM: CLS/C@/C!/KEY?
 make forth-smoke-p37  # Phase 37 smoke ROM: STICK
+make forth-smoke-p38  # Phase 38 smoke ROM: runtime stack-error detection
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```

@@ -311,6 +311,39 @@ INTERPRET_UNKNOWN_WORD:
     call W_EMIT
     ret
 
+; ============================================================================
+; RUNTIME_ERROR_HOOK — Phase 38's own required hook for
+; core/interp.asm's STACK_CHECK (see that routine's own header): called
+; the same proven way INTERPRET_UNKNOWN_WORD already is (a bare `jp`,
+; stack depth already restored to "INTERPRET_RUN's own caller, one
+; entry" before this is reached), so a plain `ret` here correctly
+; unwinds straight back to EDITOR_LOOP_LIVE, abandoning the rest of
+; the current line exactly like an unknown word already does. Both
+; data stacks are already reset to empty by the time this runs — this
+; hook's only job is reporting.
+; ============================================================================
+RUNTIME_ERROR_HOOK:
+    ld   hl, RUNTIME_ERROR_MSG
+.msgloop:
+    ld   a, (hl)
+    or   a
+    jr   z, .msgdone
+    push hl
+    ld   l, a
+    ld   h, 0
+    call DPUSH_HL
+    call W_EMIT
+    pop  hl
+    inc  hl
+    jr   .msgloop
+.msgdone:
+    ld   hl, 13
+    call DPUSH_HL
+    call W_EMIT
+    ret
+
+RUNTIME_ERROR_MSG: DB "STACK?", 0
+
 ; ---- kernel + dictionary: included here, after the vector table and
 ; the boot code above, not before ORG $0000. DICT_CHAIN_POINT splices
 ; match rom/forth_smoke_p9.asm's own, already proven under Fuse. ----
@@ -323,6 +356,7 @@ INTERPRET_UNKNOWN_WORD:
     INCLUDE "kernel/mode64/mode64.asm"
     INCLUDE "core/dict.asm"
     DEFINE DECIMAL_NUMBER_ENABLED
+    DEFINE RUNTIME_ERROR_CHECK_ENABLED
     INCLUDE "core/interp.asm"
 DICT_CHAIN_POINT DEFL H_SEMICOLON
     INCLUDE "core/control.asm"

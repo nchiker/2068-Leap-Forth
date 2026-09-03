@@ -547,6 +547,16 @@ INTERPRET_RUN:
     ld   (SRC_END), hl
 
 .loop:
+    IFDEF RUNTIME_ERROR_CHECK_ENABLED
+    call STACK_CHECK    ; Phase 38 -- see this file's own header on why
+                         ; this specific spot: every word this loop
+                         ; dispatches returns control back to .loop
+                         ; (either by falling through, or via the
+                         ; pushed-return-address trick in .execute
+                         ; below), so checking here catches the result
+                         ; of EVERY word's own stack use without
+                         ; touching any individual word's own code
+    ENDIF
     call W_WORD
     call DPOP_HL
     ld   a, (hl)
@@ -619,6 +629,100 @@ INTERPRET_RUN:
 
 .done:
     ret
+
+    IFDEF RUNTIME_ERROR_CHECK_ENABLED
+; ============================================================================
+; STACK_CHECK (Phase 38, internal, not a dictionary word) — confirms IX
+; (the integer stack) and IY (the float stack, core/float.asm) both
+; still sit within their own defined ranges (core/dict.asm's own
+; DSTACK_TOP/DSTACK_LIMIT; core/float.asm's own FSTACK_TOP/
+; FSTACK_LIMIT), called once per word from INTERPRET_RUN's own .loop —
+; see that routine's own comment on why that ONE spot catches every
+; word's own stack misuse without touching any individual word's code.
+;
+; GATED behind DEFINE RUNTIME_ERROR_CHECK_ENABLED, the including ROM's
+; own opt-in (exactly like core/decimal.asm's own
+; DECIMAL_NUMBER_ENABLED) — every existing ROM that doesn't define it
+; gets this file's own compiled bytes byte-for-byte unchanged. A ROM
+; that DOES define it MUST also INCLUDE core/float.asm before
+; INCLUDEing this file (for FSTACK_TOP/FSTACK_LIMIT to already be
+; resolvable) and must itself define RUNTIME_ERROR_HOOK (exactly like
+; INTERPRET_UNKNOWN_WORD, below) — reached the same proven way: a bare
+; `jp`, with the stack depth first restored to exactly "INTERPRET_RUN's
+; own caller, one entry" by discarding this routine's own return
+; address first, so RUNTIME_ERROR_HOOK's own implementation can simply
+; `ret` when it's done, exactly like INTERPRET_UNKNOWN_WORD already
+; does.
+;
+; SCOPE, stated honestly: this catches a word that pops more than the
+; stack currently holds, or pushes past the stack's own reserved
+; region — the common, concrete failure (typing `+` or `DROP` with
+; nothing on the stack) that would otherwise silently read/corrupt
+; whatever memory happens to sit just past the stack's own boundary
+; (DSTACK_LIMIT and FSTACK_TOP are adjacent, not coincidentally — see
+; core/float.asm's own header). It does NOT catch a word that pops
+; garbage and then pushes something back, netting to an
+; IN-RANGE-but-wrong stack depth — a real, narrower limitation, the
+; same category of "can't verify what it can't observe" this project's
+; own SOUND/STICK smoke-test headers already state plainly elsewhere.
+;
+; RECOVERY: both stacks are unconditionally reset to empty (IX=
+; DSTACK_TOP, IY=FSTACK_TOP) before handing off to RUNTIME_ERROR_HOOK —
+; there is no way to know how much of a corrupted expression's own
+; state is still trustworthy, so this doesn't try to preserve any of
+; it, matching INTERPRET_UNKNOWN_WORD's own "abandon the rest of this
+; line" posture.
+; Destroys: AF, BC, DE, HL (only on the error path -- a clean check
+; destroys AF, DE, HL only, matching CHECK-style routines elsewhere)
+; ============================================================================
+STACK_CHECK:
+    push ix
+    pop  hl
+    ld   de, DSTACK_TOP
+    or   a
+    sbc  hl, de              ; hl = ix - DSTACK_TOP
+    jr   c, .dstack_top_ok    ; ix < DSTACK_TOP -- fine, has items
+    ld   a, h
+    or   l
+    jr   z, .dstack_top_ok    ; ix == DSTACK_TOP -- fine, empty
+    jr   .violation            ; ix > DSTACK_TOP -- underflow
+.dstack_top_ok:
+    push ix
+    pop  hl
+    ld   de, DSTACK_LIMIT
+    or   a
+    sbc  hl, de               ; hl = ix - DSTACK_LIMIT
+    jr   c, .violation          ; ix < DSTACK_LIMIT -- overflow
+    push iy
+    pop  hl
+    ld   de, FSTACK_TOP
+    or   a
+    sbc  hl, de
+    jr   c, .fstack_top_ok
+    ld   a, h
+    or   l
+    jr   z, .fstack_top_ok
+    jr   .violation
+.fstack_top_ok:
+    push iy
+    pop  hl
+    ld   de, FSTACK_LIMIT
+    or   a
+    sbc  hl, de
+    jr   c, .violation
+    ret                        ; both stacks in range
+.violation:
+    ld   ix, DSTACK_TOP
+    ld   iy, FSTACK_TOP
+    pop  hl                    ; discard the return address into .loop
+                               ; -- restores the "exactly one entry:
+                               ; INTERPRET_RUN's own caller" depth
+                               ; RUNTIME_ERROR_HOOK's own contract
+                               ; expects (same contract
+                               ; INTERPRET_UNKNOWN_WORD already relies
+                               ; on, for the same reason)
+    jp   RUNTIME_ERROR_HOOK
+    ENDIF
 
 ; ============================================================================
 ; COMPILE_WORD ( HL = value -- )  added for Phase 4. Compiles 2 raw bytes

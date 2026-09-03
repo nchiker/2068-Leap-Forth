@@ -2696,13 +2696,91 @@ survives the call completely untouched).
 ROM budget after this phase: `rom/forth_boot.asm` uses 12213 of 16384
 bytes ($2FB5 of $4000), 4171 bytes free — +18 bytes over Phase 36.
 
-## Backlog — FREE, error handling (not yet scheduled)
+## Phase 38 — runtime stack-error detection
+
+**Status: done, confirmed under real Fuse AND live in the real boot
+ROM.** Follow-up to a direct question the user asked about error
+handling: 2068-Leap has error reporting at both line-entry and runtime;
+2068-Forth already had the line-entry equivalent (`INTERPRET_UNKNOWN_
+WORD`, since the live editor's own Phase 9/10 work — an unrecognized
+word prints `?` and cleanly returns to a fresh prompt), but nothing for
+runtime conditions: a stack underflow (`DROP`/`+` on an empty stack)
+would silently read whatever garbage sits past the stack's own
+boundary and keep going, not report anything or recover. Explicitly
+scoped as step one of three the user laid out — basic runtime
+detection now, a code-consolidation pass next, `THROW`/`CATCH` review
+last (see the Backlog section, below, for that last piece).
+
+**Why the check lives in exactly one place, not scattered across every
+word**: many words access the data stack directly via `(ix+0)`/
+`(ix+1)` rather than going through `core/dict.asm`'s own `DPOP_HL`/
+`DPUSH_HL` helpers (a deliberate, existing performance choice, not
+something this phase should undo) — so there's no single low-level
+choke point every stack access already funnels through. There IS one
+place every dispatched word's own result already passes through
+unconditionally, though: `core/interp.asm`'s own `INTERPRET_RUN.loop`,
+which every word returns control to (either by falling through, or via
+the pushed-return-address trick its own `.execute` label uses) before
+scanning for the next token. A single `STACK_CHECK` call at the top of
+that loop catches the AFTER-EFFECT of any word's own stack misuse —
+without touching a single individual word's own code.
+
+**Gated behind `DEFINE RUNTIME_ERROR_CHECK_ENABLED`**, exactly
+mirroring Phase 23's own `DECIMAL_NUMBER_ENABLED` pattern for touching
+this same heavily-shared file safely: every existing ROM that doesn't
+opt in gets `core/interp.asm`'s own compiled bytes byte-for-byte
+identical to before (confirmed directly, not just reasoned about, by
+diffing `rom/forth_smoke_p9.asm`'s own build output before and after
+this change — identical). A ROM that DOES opt in must also `INCLUDE
+core/float.asm` (for `FSTACK_TOP`/`FSTACK_LIMIT`, needed by the
+float-stack half of the check) and must itself define
+`RUNTIME_ERROR_HOOK` — reached the exact same proven way
+`INTERPRET_UNKNOWN_WORD` already is: a bare `jp`, with the stack depth
+first restored to "`INTERPRET_RUN`'s own caller, one entry" (by
+discarding `STACK_CHECK`'s own return address first), so the hook's own
+implementation can simply `ret` when done.
+
+**Scope, stated honestly**: this catches a word that pops more than
+the stack currently holds, or pushes past the stack's own reserved
+region — confirmed not an abstract worry: `DSTACK_LIMIT` and
+`FSTACK_TOP` sit at the EXACT same address ($9000, this project's own
+established "stacks stacked back-to-back" convention), so an
+undetected data-stack underflow reading past its own boundary would be
+reading directly into float-stack territory. It does NOT catch a word
+that pops garbage and pushes something back, netting to an
+in-range-but-wrong depth — the same "can't verify what it can't
+observe" honesty this project's own `SOUND`/`STICK` smoke-test headers
+already state for hardware effects. Recovery unconditionally resets
+BOTH stacks to empty (not just the one that violated), since there's
+no way to know how much of a corrupted expression's own state is still
+trustworthy — matching `INTERPRET_UNKNOWN_WORD`'s own "abandon the rest
+of this line" posture exactly.
+
+**Confirmed two ways**: `rom/forth_smoke_p38.asm`'s five checkpoints
+(a legitimate push doesn't false-trigger; each of the four violation
+shapes — data-stack underflow, data-stack overflow, float-stack
+underflow, float-stack overflow — is individually detected and both
+stacks correctly reset) all pass. **And live, in the real product ROM,
+not just an isolated test**: a throwaway diagnostic built from
+`rom/forth_boot.asm` itself fed the line `DROP` (on the genuinely empty
+stack a fresh boot starts with) through the real `EDITOR_PROCESS_KEY`/
+`INTERPRET_RUN` pipeline — printed `STACK?` as expected, THEN a
+follow-up line, `1 2 + .`, correctly computed and printed `3` —
+confirming genuine recovery (the interpreter still works normally
+afterward), not merely "didn't crash this one time."
+
+ROM budget after this phase: `rom/forth_boot.asm` uses 12323 of 16384
+bytes ($3023 of $4000), 4061 bytes free — +110 bytes over Phase 37.
+
+## Backlog — FREE, THROW/CATCH review (not yet scheduled)
 
 **Not yet scheduled as numbered phases — tracked here so they aren't
-lost.** Both came out of the fresh three-way audit against 2068-Leap
+lost.** `FREE` came out of the fresh three-way audit against 2068-Leap
 and the real TS2068 ROM's own command set (the same audit Phase 36
 picked its own "highest value, least cost" group from, and Phase 37's
-own `STICK` came from too).
+own `STICK` came from too). `THROW`/`CATCH` is the last of the three
+steps the user laid out when Phase 38 was scoped — deliberately saved
+for AFTER a code-consolidation pass, not designed yet.
 
 **`FREE`** (remaining-memory introspection) needs one real design
 decision before it can be a thin wrapper: this project's RAM layout has
@@ -2720,17 +2798,25 @@ cites the specific probe-verified gap this all sits in) — a real
 question to answer before writing any code, not an oversight to fix
 in passing.
 
-**Error handling** (`THROW`/`CATCH` or an equivalent recovery
-mechanism) is the biggest of the three by far — genuinely new
-control-flow machinery, not a wrapper. Every existing word with
-out-of-range input already has an established, consistent answer
-(silently ignore/no-op — `SOUND`'s own header states this convention
-explicitly, and every other word since has matched it), so this isn't
-fixing a scattered inconsistency; it's deciding whether this project
-wants a real exception mechanism at all, and if so, designing it from
-scratch (this project's own from-scratch Forth has no inherited
-2068-Leap or real-ROM error-handling code to port, unlike almost
-everything else built so far).
+**`THROW`/`CATCH` (or an equivalent PROGRAMMABLE recovery mechanism)**
+is the genuinely open piece of "error handling" — Phase 38 already
+built the more basic half (the system itself detecting a runtime stack
+error and recovering to a fresh prompt, unconditionally). What's still
+missing is letting a PROGRAM intercept an error and keep running under
+its own control, rather than the system always aborting to the prompt
+— real, new control-flow machinery, not a wrapper, and this project's
+own from-scratch Forth has no inherited 2068-Leap or real-ROM
+error-handling code to port for it, unlike almost everything else
+built so far (2068-Leap's own equivalent, `WHEN ERROR`, is design-only
+there too — never actually built). Every existing word's out-of-range
+INPUT (not a stack-depth violation, which Phase 38 now covers) still
+has its own separate, already-established answer — silently ignore/
+no-op (`SOUND`'s own header states this convention explicitly) — so
+this isn't fixing a scattered inconsistency; it's deciding whether
+this project wants a full exception mechanism on top of what Phase 38
+already does, and if so, designing it from scratch. Deliberately saved
+for last, after a code-consolidation pass, per the user's own explicit
+sequencing.
 
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
