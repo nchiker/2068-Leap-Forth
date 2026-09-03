@@ -2986,54 +2986,200 @@ first run — the Python simulation's own precision paid off directly.
 ROM budget after this phase: `rom/forth_boot.asm` uses 12824 of 16384
 bytes ($3218 of $4000), 3560 bytes free — +36 bytes over Phase 41.
 
-## Backlog — FREE, THROW/CATCH review, ULAPlus test fidelity (not yet scheduled)
+## Phase 43: FREE
 
-**Not yet scheduled as numbered phases — tracked here so they aren't
-lost.** `THROW`/`CATCH` is the last of the three steps the user laid
-out when Phase 38 was scoped — deliberately saved for AFTER a
-code-consolidation pass, not designed yet. `ULAPlus` is a
-testing-fidelity concern, not a feature request — added when the user
-asked for it directly. The fresh three-way audit against 2068-Leap and
-the real TS2068 ROM's own command set (the same audit Phase 36 picked
-its own "highest value, least cost" group from) is now fully worked
-through — `STICK` (Phase 37), `EXECUTE` (Phase 41), and `RAD`/`DEG`
-(Phase 42, above) were its last three real findings.
+**Done and committed.** `FREE ( -- n )`, the last of the fresh
+three-way audit's own remaining findings, needed one real design
+decision before it could be a thin wrapper — this project's RAM layout
+has the dictionary (`HERE`) growing UPWARD from `FORTH_DICT_RAM`, with
+no upper ceiling ever established (unlike the well-probed *low* end).
 
-**`FREE`** (remaining-memory introspection) needs one real design
-decision before it can be a thin wrapper: this project's RAM layout has
-the dictionary (`HERE`, starting at `FORTH_DICT_RAM = $A000`) growing
-UPWARD, while the integer stack (`DSTACK_TOP = $9800` down to
-`DSTACK_LIMIT = $9000`) and the float stack (`FSTACK_TOP = $9000` down
-to `FSTACK_LIMIT = $8C00`) both grow DOWNWARD — and `DSTACK_LIMIT`
-and `FSTACK_TOP` already sit at the exact same address ($9000),
-confirmed not a coincidence but this project's own established
-"stacks stacked back-to-back" convention. `FREE` reporting
-"dictionary space remaining" therefore means `(some ceiling) - HERE`,
-but this project has never yet established what that ceiling actually
-is (unlike the well-probed *low* end — `FSTACK_LIMIT`'s own header
-cites the specific probe-verified gap this all sits in) — a real
-question to answer before writing any code, not an oversight to fix
-in passing.
+**The ceiling, confirmed not guessed: `$C000`.** `core/moregfx.asm`'s
+own `FILL` word calls the shared `kernel/graphics.asm`'s `GFX_FILL`,
+which unconditionally uses `GFX_FILL_VISITED`/`GFX_FILL_STACK`
+($C000-$E7FF, 10,240 bytes) as scratch on every call. Unlike the
+sibling 2068-Leap project (where that range is genuinely transient,
+used only during an EXROM-mapped `FILL` call), 2068-Forth's dictionary
+is PERMANENT RAM state living in the same physical address space — if
+`HERE` ever grew past `$C000`, the next `FILL` call would silently
+clobber live dictionary entries. `core/free.asm`'s own header has the
+full writeup, including the grep-across-the-whole-tree confirmation
+that nothing else claims any address in the dictionary's own range.
 
-**`THROW`/`CATCH` (or an equivalent PROGRAMMABLE recovery mechanism)**
-is the genuinely open piece of "error handling" — Phase 38 already
-built the more basic half (the system itself detecting a runtime stack
-error and recovering to a fresh prompt, unconditionally). What's still
-missing is letting a PROGRAM intercept an error and keep running under
-its own control, rather than the system always aborting to the prompt
-— real, new control-flow machinery, not a wrapper, and this project's
-own from-scratch Forth has no inherited 2068-Leap or real-ROM
-error-handling code to port for it, unlike almost everything else
-built so far (2068-Leap's own equivalent, `WHEN ERROR`, is design-only
-there too — never actually built). Every existing word's out-of-range
-INPUT (not a stack-depth violation, which Phase 38 now covers) still
-has its own separate, already-established answer — silently ignore/
-no-op (`SOUND`'s own header states this convention explicitly) — so
-this isn't fixing a scattered inconsistency; it's deciding whether
-this project wants a full exception mechanism on top of what Phase 38
-already does, and if so, designing it from scratch. Deliberately saved
-for last, after a code-consolidation pass, per the user's own explicit
-sequencing.
+**The floor moved too, after a user question caught a real gap.**
+Shipped first with `FORTH_DICT_RAM = $A000` (reporting 8192 bytes
+free) — the user asked "that seems low for a 48K system, what am I
+missing?", which prompted checking rather than just re-asserting the
+number. Found: `$9800-$9FFF` (2048 bytes) sat completely idle between
+`DSTACK_TOP` (a sentinel value for empty `IX`, not a byte the stack
+ever occupies) and the old `FORTH_DICT_RAM` — confirmed via the real
+build's own `.sym` table (no other symbol lands there) before
+reclaiming it. Moved `FORTH_DICT_RAM` down to `$9800`; `FREE` now
+reports 10,240 bytes at cold start. See `core/dict.asm`'s own header
+for the move.
+
+**What's still deliberately NOT reclaimed, and why it isn't simple:**
+most of `$E800-$F5FF` (sprite capture buffers, and BASIC-only state —
+label table, UDGs, `DEF FN`, the loadable-extension registry) is
+confirmed dead weight for 2068-Forth specifically (no `core/*.asm` file
+calls any `GFX_SPRITE_*` routine; this project's own `EDIT_BUF` at
+`$8860` is separate from the shared sysvars' `EDIT_LINE_BUF`). It isn't
+reclaimed because `GFX_FILL`'s own scratch sits directly between the
+dictionary and that dead zone, AND at least one more live transient
+cell (`GFX_LINE_X0-Y1`, 4 bytes at `$F3C4-$F3C7`, used by this
+project's own `LINE`) sits inside that upper range too — raising the
+ceiling further needs `FILL`'s scratch relocated out of the way first,
+plus a full per-routine audit of the rest of `$C000-$FEFF`, not a
+one-line change. Tracked as a real, larger follow-on below, not
+attempted here.
+
+ROM budget after this phase: `rom/forth_boot.asm` uses 12824 of 16384
+bytes ($3218 of $4000) still — `FREE` and the dictionary-floor move add
+no bytes to the resident image (both are compile-time constants and a
+handful of instructions).
+
+## Phase 44: dictionary-ceiling reclaim (FREE, continued)
+
+**Done and committed.** Direct follow-on to Phase 43, done the same
+session after the user set an explicit target: match or beat the
+sibling 2068-Leap project's own 15,322 bytes free. Phase 43's own
+`$C000` ceiling was a real hazard, not a preference, so raising it
+meant removing the hazard at its source rather than picking a bigger
+number.
+
+**Relocated `GFX_FILL_VISITED`/`GFX_FILL_STACK`** (`include/sysvars.inc`
+— 2068-Forth's own independent copy of the sibling's file, confirmed
+not a symlink, so this divergence is safe) out of `$C000-$E7FF`
+entirely, into the idle "second display file" video-RAM pool at
+`$5B00-$7FFF` (9,472 bytes — see `docs/memory_map.md`'s own writeup on
+why Standard video mode never touches that range). That pool is 768
+bytes smaller than the original span, so `GFX_FILL_STACK` shrinks from
+2048 to 1664 (x,y) entries to fit exactly, ending precisely at `$8000`
+with nothing wasted — a real capacity cut, but one the routine's own
+header already treated as graceful-degradation territory (2048 already
+fell short of a measured ~2069-entry peak for a radius-50 circle;
+1664 just starts degrading a bit earlier).
+
+**New hazard this move creates, and the user's own explicit choice for
+handling it**: that same video-RAM pool is where 64-column mode's
+second display file lives (`$6000-$77FF`, hardware-fixed). Presented
+the tradeoff directly — document-only (matching this project's
+established SOUND/STICK convention) vs. a runtime guard — and the user
+picked the guard. `core/moregfx.asm`'s `FILL` now checks `GFX_MODE`
+(2 = 64-column, set by `kernel/mode64/mode64.asm`'s `MODE64_ON`) before
+calling `GFX_FILL`; if active, it still consumes its `(x y)` arguments
+but silently does nothing, rather than risk corrupting whichever of
+FILL's scratch or the live second screen runs second.
+
+**Verification, in order**: re-audited every symbol landing in
+`$C000-$FEFF` against what 2068-Forth's own included kernel code
+actually calls (not just what's declared) — confirmed sprite buffers
+and all BASIC-only state (label table, UDGs, `DEF FN`, extension
+registry) are dead for this project, and found exactly one other live
+cell, `GFX_LINE_X0-Y1` (4 bytes at `$F3C4`, this project's own `LINE`).
+Set `DICT_RAM_CEILING` to `$F000` — comfortable margin below it, not
+pushed to the exact byte. Rebuilt and re-ran `rom/forth_smoke_p17.asm`
+(Phase 17's own FILL/AT-XY smoke ROM, unchanged, just rebuilt against
+the new addresses) in real Fuse as a regression check — all three of
+its checkpoints still passed, and the filled circle rendered correctly.
+Added `rom/forth_smoke_p44.asm`, three NEW checkpoints specifically for
+what changed this phase: FILL still fills correctly at the new
+addresses (baseline), FILL refuses and leaves the target pixel clear
+while `GFX_MODE=2` is simulated, and FILL works again once `GFX_MODE`
+is restored — all via exact `GFX_READ_PIXEL` readback, not a visual
+guess. Full `make clean && make all` (45 ROMs) and `make check` both
+stayed clean, including the pre-existing, unrelated JR-range warnings
+in `core/interp.asm`/`kernel/graphics/graphics.asm` confirmed present
+before this phase's own changes too.
+
+**Result: `FREE` now reports 22,528 bytes** (`$F000 - $9800`) —
+comfortably past the sibling project's 15,322, with ~964 bytes of
+`$F000-$F3C3` left deliberately unclaimed as margin below the one
+remaining live cell, not squeezed to the exact byte.
+
+ROM budget after this phase: `rom/forth_boot.asm` uses 12824 of 16384
+bytes ($3218 of $4000) still — the relocation and the guard are both
+address-only changes plus a handful of instructions in `FILL` itself.
+
+## Phase 45: THROW and CATCH
+
+**Done and committed.** The third and last of the user's own explicit
+3-step plan from when Phase 38 was scoped: (1) runtime error detection
+[Phase 38], (2) code consolidation [Phase 39], (3) this — a
+PROGRAMMABLE recovery mechanism, letting a program intercept an error
+and keep running under its own control instead of the system always
+aborting to a fresh prompt. This project's own from-scratch Forth had
+no inherited 2068-Leap or real-ROM error-handling code to port for
+this (2068-Leap's own equivalent, `WHEN ERROR`, is design-only there
+too — never actually built), so the design and implementation are both
+original to this project.
+
+**The real design problem**: this is a subroutine-threaded Forth
+(Phase 1) — there is no separate software return stack to unwind, the
+real Z80 SP register IS the return stack. `THROW` can fire arbitrarily
+deep inside nested word calls, so recovering means unwinding SP itself
+directly, the same technique as a C `setjmp`/`longjmp` pair. `CATCH`
+snapshots `SP`/`IX`/`IY` (both data stacks) into a small bounded stack
+of frames (`CATCH_MAX_DEPTH` = 8, matching Phase 24's own
+`LEAVE_HEAD_TABLE` bound) before calling its `xt`; `THROW` with a
+nonzero `n` restores the innermost active frame's `SP`/`IX`/`IY`
+directly (discarding every nested call pushed since that `CATCH`'s own
+entry in one step), pushes `n`, and does a plain `ret` — which lands
+back at `CATCH`'s own caller exactly as if `CATCH`'s own call to `xt`
+had itself just returned, only with `n` instead of `0`.
+
+**A real implementation constraint found while designing this, not
+guessed**: `LD (nn),SP`/`LD (nn),IX`/`LD (nn),IY` (and their inverses)
+only take a fixed, assembly-time address — never a computed one like
+`(HL)`. Since a catch frame's own address depends on the runtime
+`CATCH_DEPTH`, every save/restore has to go through a small fixed
+staging area first (`CATCH_TMP_SP`/`IX`/`IY`) rather than touching the
+computed frame slot directly.
+
+**A second real correctness issue, more subtle, found and fixed before
+committing**: an UNCAUGHT throw (no active `CATCH`) still needs to
+unwind to somewhere sane — reusing Phase 38's own `RUNTIME_ERROR_HOOK`
+made sense (same recovery-to-fresh-prompt behavior), but that hook's
+own documented contract requires the stack already restored to
+"exactly one entry: `INTERPRET_RUN`'s own caller" before it's reached.
+Phase 38's own `STACK_CHECK` gets this for free (it only ever runs one
+level down from `INTERPRET_RUN`'s own `.loop`), but an uncaught
+`THROW` can be arbitrarily deep — a naive single `pop` wouldn't unwind
+far enough and would corrupt the return address. Fixed by giving
+`INTERPRET_RUN` itself an implicit "root" catch frame: it snapshots its
+own `SP` once, at its very entry (`THROW_ROOT_SP`, `core/interp.asm`,
+gated behind a new `THROW_CATCH_ENABLED` define matching Phase 38's own
+`RUNTIME_ERROR_CHECK_ENABLED` precedent exactly, including verifying
+byte-identical output for a ROM that doesn't opt in). An uncaught
+`THROW` restores from that instead of a user frame, then resets both
+stacks and jumps to `RUNTIME_ERROR_HOOK` exactly like a stack-depth
+violation already does.
+
+**Verification**: `rom/forth_smoke_p45.asm`, 5 checkpoints — a normal
+completing `CATCH` (0 pushed, the `xt`'s own result survives
+underneath), a `CATCH` around a throwing `xt` (the thrown value comes
+back, and whatever the `xt` pushed before throwing does NOT survive),
+a NESTED `CATCH` (inner absorbs the throw, the outer `xt` keeps running
+afterward, the outer `CATCH` still reports success since the throw
+never reached it), `THROW 0` as a strict no-op, and — the one case that
+genuinely needed the real interpreter, not a hand-built test stub — an
+UNCAUGHT throw from 3 real, freshly-COMPILED nested word calls deep
+(`: DEEP3 42 THROW ; : DEEP2 DEEP3 ; : DEEP1 DEEP2 ;` then `DEEP1`),
+proving `THROW_ROOT_SP` correctly unwinds a real multi-level call chain
+and control genuinely returns to the caller afterward, not a hang or a
+crash. All 5 passed in real Fuse on the first run.
+
+ROM budget after this phase: `rom/forth_boot.asm` uses 13047 of 16384
+bytes ($32F7 of $4000), +223 bytes over Phase 44's 12824.
+
+With this, the user's own 3-step error-handling plan from Phase 38 is
+now fully complete.
+
+## Backlog — ULAPlus test fidelity (not yet scheduled)
+
+**Not yet scheduled as a numbered phase — tracked here so it isn't
+lost.** This is a testing-fidelity concern, not a feature request —
+added when the user asked for it directly.
 
 **`ULAPlus` test-fidelity check** — not a feature to build, a testing
 caveat to resolve. Already noted once, in the 64-column TEXT mode

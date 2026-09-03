@@ -686,6 +686,69 @@ inherited, what was deliberately left behind, and the phased build order.
   the first run. +36 bytes (`rom/forth_boot.asm`: 12788 -> 12824 of
   16384). With this, the fresh three-way audit against 2068-Leap is
   fully worked through.
+- Phase 43 (`core/free.asm` + `core/dict.asm` + `rom/forth_boot.asm` +
+  `rom/forth_smoke_p43.asm`): `FREE ( -- n )` — dictionary space
+  remaining. Needed a real design decision: `HERE` grows upward with no
+  established ceiling. The ceiling is `$C000`, not arbitrary — this
+  project's own `FILL` word calls the shared kernel's `GFX_FILL`, which
+  unconditionally uses `$C000-$E7FF` as scratch on every call, and
+  unlike the sibling 2068-Leap project that range isn't transient here
+  — it's permanent dictionary state. Shipped first with the floor at
+  the original `FORTH_DICT_RAM = $A000` (8192 bytes free); a user
+  question ("that seems low for 48K, what am I missing?") prompted
+  re-checking rather than re-asserting the number, which found
+  `$9800-$9FFF` sitting completely idle above the data stack — moved
+  `FORTH_DICT_RAM` down to `$9800` to reclaim it, `FREE` now reports
+  10,240 bytes.
+- Phase 44 (`include/sysvars.inc` + `core/moregfx.asm` + `core/free.asm`
+  + `rom/forth_smoke_p44.asm`): dictionary-ceiling reclaim, done the
+  same session after the user set a target — match or beat the sibling
+  2068-Leap project's own 15,322 bytes free. Relocated `GFX_FILL_
+  VISITED`/`GFX_FILL_STACK` out of `$C000-$E7FF` entirely, into the
+  idle "second display file" video-RAM pool at `$5B00-$7FFF` (9,472
+  bytes — 768 smaller than the original span, so `GFX_FILL_STACK`
+  shrinks from 2048 to 1664 entries to fit exactly, ending precisely at
+  `$8000`). That pool is also where 64-column mode's own second display
+  file lives (`$6000-$77FF`) — presented the tradeoff directly to the
+  user (document-only vs. a runtime guard), who chose the guard:
+  `FILL` now checks `GFX_MODE` and silently refuses while 64-column
+  mode is active, rather than risk corrupting whichever runs second.
+  Re-audited `$C000-$FEFF` and found only one other live cell
+  (`GFX_LINE_X0-Y1`, this project's own `LINE`); raised
+  `DICT_RAM_CEILING` to `$F000`, comfortable margin below it. Verified
+  by rebuilding and re-running Phase 17's own FILL smoke ROM in real
+  Fuse (still passes, circle still fills correctly) plus three new
+  checkpoints in `rom/forth_smoke_p44.asm` proving the guard itself
+  (works normally, refuses under simulated 64-column mode, works again
+  once restored) via exact `GFX_READ_PIXEL` readback. `FREE` now
+  reports 22,528 bytes. No ROM-byte change (`rom/forth_boot.asm` stays
+  at 12824 of 16384) — the relocation and guard are address changes
+  plus a handful of instructions.
+- Phase 45 (`core/throwcatch.asm` + `core/interp.asm` +
+  `rom/forth_boot.asm` + `rom/forth_smoke_p45.asm`): `THROW`/`CATCH` —
+  the third and last of the user's own explicit 3-step plan from Phase
+  38 (detection → consolidation → this: a PROGRAMMABLE recovery
+  mechanism). Since this is subroutine-threaded (Phase 1), the real Z80
+  SP register IS the return stack, so `CATCH` snapshots `SP`/`IX`/`IY`
+  into a small bounded stack of frames (8 deep, matching Phase 24's own
+  `LEAVE_HEAD_TABLE`) before calling its `xt`; `THROW` restores the
+  innermost frame directly and pushes the thrown value — a
+  `setjmp`/`longjmp`-style unwind, not a wrapper. Two real
+  implementation issues found while designing it: `LD (nn),SP`/`IX`/`IY`
+  only take a fixed address, never a computed one, so every save/
+  restore stages through fixed cells first; and an UNCAUGHT throw
+  (reusing Phase 38's own `RUNTIME_ERROR_HOOK`) needed
+  `INTERPRET_RUN` to snapshot its own entry `SP` (`THROW_ROOT_SP`,
+  gated behind a new `THROW_CATCH_ENABLED` define, byte-identity
+  verified for ROMs that don't opt in) — that hook's contract requires
+  the stack already unwound to exactly one entry, and an uncaught throw
+  can be arbitrarily deep, not just one level like Phase 38's own
+  `STACK_CHECK`. Verified with 5 checkpoints including the one that
+  needed the real interpreter: an uncaught throw from 3 real, freshly
+  compiled nested word calls deep, proving the unwind works and control
+  genuinely returns afterward. +223 bytes (`rom/forth_boot.asm`: 12824
+  -> 13047 of 16384). Closes out the user's own 3-step error-handling
+  plan.
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -783,6 +846,9 @@ rom/        ROM image assembly:
               forth_smoke_p40.asm Phase 40 smoke ROM (string functions)
               forth_smoke_p41.asm Phase 41 smoke ROM (EXECUTE)
               forth_smoke_p42.asm Phase 42 smoke ROM (RAD/DEG)
+              forth_smoke_p43.asm Phase 43 smoke ROM (FREE)
+              forth_smoke_p44.asm Phase 44 smoke ROM (dictionary-ceiling reclaim)
+              forth_smoke_p45.asm Phase 45 smoke ROM (THROW/CATCH)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -842,6 +908,9 @@ make forth-smoke-p38  # Phase 38 smoke ROM: runtime stack-error detection
 make forth-smoke-p40  # Phase 40 smoke ROM: string functions
 make forth-smoke-p41  # Phase 41 smoke ROM: EXECUTE
 make forth-smoke-p42  # Phase 42 smoke ROM: RAD/DEG
+make forth-smoke-p43  # Phase 43 smoke ROM: FREE
+make forth-smoke-p44  # Phase 44 smoke ROM: dictionary-ceiling reclaim
+make forth-smoke-p45  # Phase 45 smoke ROM: THROW/CATCH
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```

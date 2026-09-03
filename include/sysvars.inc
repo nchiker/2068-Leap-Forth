@@ -1409,13 +1409,13 @@ CURRENT_BRIGHT:      DEFS 1          ; 1 byte, 0/1, default 0
 ; Deliberately NOT recursive and NOT unbounded — real hardware has no
 ; call-stack depth to spare, and even an iterative approach needs an
 ; explicit limit since a large enough enclosed region could otherwise
-; grow the stack without bound. 2048 entries (x,y per entry) sized
-; from real peak-stack measurements in Python before any Z80 was
-; written: a "mark on push" 4-connected fill (using the bitmap itself
-; as the already-claimed tracker, via GFX_READ_PIXEL/GFX_WRITE_PIXEL —
-; no separate visited-set needed) peaks at ~2069 stack entries for a
-; filled circle of radius 50 on this screen, ~768 for radius 30 — a
-; genuinely naive "mark on pop" version was measured needing MORE
+; grow the stack without bound. Originally 2048 entries (x,y per
+; entry), sized from real peak-stack measurements in Python before any
+; Z80 was written: a "mark on push" 4-connected fill (using the bitmap
+; itself as the already-claimed tracker, via GFX_READ_PIXEL/GFX_WRITE_
+; PIXEL — no separate visited-set needed) peaks at ~2069 stack entries
+; for a filled circle of radius 50 on this screen, ~768 for radius 30
+; — a genuinely naive "mark on pop" version was measured needing MORE
 ; stack entries than there are pixels in the fill for a large open
 ; area, which is why this project didn't ship that simpler-looking
 ; version. If GFX_FILL_STACK does fill up (a very large enclosed
@@ -1424,13 +1424,17 @@ CURRENT_BRIGHT:      DEFS 1          ; 1 byte, 0/1, default 0
 ; genuinely huge fill may not reach its full extent. No crash, no
 ; memory corruption — a documented, deliberate limitation.
 ;
-; The stack is transient, so it lives above the persistent BASIC ceiling
-; instead of consuming 4K below PROG_AREA_START. Together with the visited
-; bitmap at $C000 it occupies $C000-$E7FF only while FILL is executing.
-; FILL is HOME-ROM code and makes no EXROM calls, so EXROM temporarily
-; hiding $C000-$DFFF can never overlap a live fill operation.
-GFX_FILL_STACK       EQU $D800         ; 4096 bytes (2048 x/y entries)
-GFX_FILL_STACK_END     EQU GFX_FILL_STACK + 4096
+; RESIZED to 1664 entries for 2068-Forth specifically (Phase 44 — see
+; GFX_FILL_VISITED's own header just above for the full relocation
+; writeup): the idle video-RAM pool this now shares with
+; GFX_FILL_VISITED is 768 bytes smaller than the original $C000-$E7FF
+; span, so this shrinks to fit exactly, ending precisely at $8000 with
+; nothing wasted. This was ALREADY a graceful-degradation, not a hard
+; guarantee, at 2048 entries (the measured radius-50 peak of ~2069
+; already exceeded it) — 1664 starts degrading somewhat earlier for
+; extreme fills, not a new category of risk.
+GFX_FILL_STACK       EQU $7300         ; 3328 bytes (1664 x/y entries)
+GFX_FILL_STACK_END     EQU GFX_FILL_STACK + 3328
 GFX_FILL_SP:         DEFS 2           ; 2 bytes — pointer into GFX_FILL_
                                    ; STACK; == GFX_FILL_STACK means
                                    ; empty, == GFX_FILL_STACK_END means
@@ -1921,14 +1925,52 @@ SPRITE_ARG_H:        DEFS 1           ; 1 byte
 ; buffer rather than folded into the bitmap write. Plain linear
 ; row*32+col layout (NOT the real screen's interleaved-thirds
 ; addressing — this buffer has no display hardware to match), cleared
-; at the start of every FILL call. This is transient scratch in the reserved
-; HOME-RAM EXROM window, not persistent storage: $C000-$D7FF is available
-; whenever HOME is mapped, and no EXROM call occurs while the bitmap is live.
-GFX_FILL_VISITED     EQU $C000         ; 6144 bytes, through $D7FF
+; at the start of every FILL call.
+;
+; RELOCATED for 2068-Forth specifically (2068-Forth Phase 44 — see
+; docs/PROJECT_PLAN.md): this file is 2068-Forth's own independent
+; copy of the sibling 2068-Leap project's sysvars.inc, not a shared or
+; symlinked file, so this divergence is safe and doesn't touch that
+; project. The original placement ($C000-$E7FF) sat directly between
+; 2068-Forth's own dictionary (`HERE`, growing upward from
+; `FORTH_DICT_RAM`) and ~6K of otherwise-reclaimable dead RAM above it
+; (confirmed via core/free.asm's own Phase 43/44 audit) — the
+; sibling project's own EXROM-transient reasoning for that address
+; ("no EXROM call occurs while the bitmap is live") doesn't even apply
+; to 2068-Forth, which has no EXROM banking at all (forth_boot.asm
+; never includes kernel/bank).
+;
+; Moved instead into the idle "second display file" video-RAM pool
+; ($5B00-$7FFF, 9472 bytes — see docs/memory_map.md's own writeup on
+; why this range sits unused in Standard video mode): this is smaller
+; than the original $C000-$E7FF span (10,240 bytes), so GFX_FILL_STACK
+; below is SHRUNK from 2048 to 1664 (x,y) entries to fit exactly, with
+; zero bytes wasted (GFX_FILL_STACK_END lands exactly on $8000, the
+; sysvars block's own ORG). This is a real, deliberate capacity cut,
+; not free: GFX_FILL_STACK's own header already documents graceful,
+; no-crash degradation for very large fills (measured ~2069 peak
+; entries for a radius-50 circle, already exceeding the ORIGINAL
+; 2048-entry capacity) — 1664 entries starts degrading somewhat
+; earlier than before, not a new category of risk.
+;
+; HAZARD THIS CREATES, and how it's handled: $6000-$77FF of this same
+; idle pool is where 64-column mode's own second display file lives
+; (hardware-fixed, not relocatable — see docs/memory_map.md). Both of
+; 2068-Forth's own core/moregfx.asm's FILL and the 64COL word can only
+; run one at a time (single-threaded, no interrupt-driven redraw), so
+; the real hazard is FILL corrupting a currently-ACTIVE 64-column
+; screen (or vice versa) if called while the other's data is live —
+; core/moregfx.asm's own FILL wrapper checks GFX_MODE and refuses to
+; run while 64-column mode is active, rather than relying on the
+; caller to know not to mix them (see that file's own header).
+GFX_FILL_VISITED     EQU $5B00         ; 6144 bytes, through $72FF
 
     ASSERT GFX_FILL_VISITED + 6144 == GFX_FILL_STACK
-    ASSERT GFX_FILL_STACK_END == $E800
-    ASSERT GFX_FILL_STACK_END <= $FF00 ; keep clear of machine stack
+    ASSERT GFX_FILL_STACK_END == $8000  ; exactly fills the idle video-RAM
+                                         ; pool with zero bytes wasted —
+                                         ; see this block's own header
+    ASSERT GFX_FILL_VISITED >= $5B00    ; never touch the live screen/
+                                         ; attribute file below it
 
 ; Calculator engine (RST $28) working storage — RPN stack, calculator
 ; "memory" cells, and recursive-entry counter, matching the real

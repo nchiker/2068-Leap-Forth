@@ -99,8 +99,18 @@ DSTACK_LIMIT EQU $9000   ; lowest legal stack address — 1024 bytes of stack
 ; ============================================================================
 LATEST       EQU $9002   ; 2 bytes: RAM cell holding the head-of-dictionary address
 HERE         EQU $9004   ; 2 bytes: RAM cell holding the next free RAM-dictionary byte
-FORTH_DICT_RAM EQU $A000 ; first free byte of the RAM dictionary area Phase 3's
-                         ; CREATE will compile into; well clear of DSTACK_TOP
+FORTH_DICT_RAM EQU $9800 ; first free byte of the RAM dictionary area Phase 3's
+                         ; CREATE will compile into. Was $A000 until Phase 43's
+                         ; own FREE audit (see core/free.asm's header) found
+                         ; $9800-$9FFF sitting completely idle: DSTACK_TOP is
+                         ; only a sentinel value for empty IX, not a byte the
+                         ; stack ever occupies (real cells live BELOW it, down
+                         ; to DSTACK_LIMIT) -- confirmed via the real build's
+                         ; own .sym table (no other symbol lands in that
+                         ; range) before reclaiming it, not guessed. Moving
+                         ; this down 2048 bytes recovers that gap for FREE
+                         ; with zero risk (nothing else ever referenced the
+                         ; literal $A000).
 
 ; ============================================================================
 ; DROP ( n -- )

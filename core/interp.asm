@@ -92,6 +92,16 @@ WORD_BUF          EQU $8520   ; 34 bytes: 1 count byte + up to 32 name bytes
                               ; 32 is already more than a definition name
                               ; can ever use — generous on purpose)
 
+    IFDEF THROW_CATCH_ENABLED
+THROW_ROOT_SP     EQU $8542   ; 2 bytes: SP snapshotted at INTERPRET_RUN's
+                              ; own entry -- see that routine's own
+                              ; comment for why an uncaught THROW needs
+                              ; this. Gated the same way STACK_CHECK is:
+                              ; a ROM that doesn't define
+                              ; THROW_CATCH_ENABLED gets no new symbol
+                              ; and no new instruction here at all.
+    ENDIF
+
 ; ============================================================================
 ; W_WORD ( -- addr )
 ; Skips leading spaces from SRC_PTR, copies the next run of non-space
@@ -542,6 +552,23 @@ DICT_LATEST_INIT_P3 EQU H_SEMICOLON   ; head of the dictionary as of Phase 3;
 ; batch entry point, not a live REPL — see this file's own header.
 ; ============================================================================
 INTERPRET_RUN:
+    IFDEF THROW_CATCH_ENABLED
+    ld   (THROW_ROOT_SP), sp    ; Phase 45 -- core/throwcatch.asm's own
+                                 ; THROW needs this to correctly unwind
+                                 ; an UNCAUGHT throw from arbitrarily
+                                 ; deep nested word calls back to
+                                 ; exactly this same "one entry"
+                                 ; invariant RUNTIME_ERROR_HOOK already
+                                 ; requires (see that routine's own
+                                 ; header, and STACK_CHECK's own
+                                 ; violation path just below for the
+                                 ; existing precedent this mirrors).
+                                 ; Captured once, at INTERPRET_RUN's own
+                                 ; entry, not per-word: SP here is fixed
+                                 ; for this entire call, since .loop's
+                                 ; own dispatch always fully unwinds
+                                 ; back to it between words.
+    ENDIF
     ld   (SRC_PTR), hl
     add  hl, de
     ld   (SRC_END), hl

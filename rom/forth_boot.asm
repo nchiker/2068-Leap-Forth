@@ -116,14 +116,16 @@ COLD_START:
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
-    ld   hl, DICT_LATEST_INIT_INPUT   ; the full chain's own head — see
-                                    ; this file's own header
+    ld   hl, DICT_LATEST_INIT_THROWCATCH   ; the full chain's own head —
+                                    ; see this file's own header
     ld   (LATEST), hl
     ld   hl, FORTH_DICT_RAM
     ld   (HERE), hl
     xor  a
     ld   (STATE), a
     ld   (LEAVE_DEPTH), a         ; core/doloop.asm's own LEAVE
+                                   ; bookkeeping -- must start at 0
+    ld   (CATCH_DEPTH), a         ; core/throwcatch.asm's own CATCH
                                    ; bookkeeping -- must start at 0
     ld   a, DEFAULT_ATTR          ; required since Phase 15 -- see
     ld   (CURRENT_ATTR), a        ; core/ts2068.asm's own header
@@ -368,6 +370,7 @@ RUNTIME_ERROR_MSG: DB "STACK?", 0
     INCLUDE "core/dict.asm"
     DEFINE DECIMAL_NUMBER_ENABLED
     DEFINE RUNTIME_ERROR_CHECK_ENABLED
+    DEFINE THROW_CATCH_ENABLED
     INCLUDE "core/interp.asm"
 DICT_CHAIN_POINT DEFL H_SEMICOLON
     INCLUDE "core/control.asm"
@@ -428,6 +431,10 @@ DICT_CHAIN_POINT DEFL H_CSTORE
     INCLUDE "core/stick.asm"
 DICT_CHAIN_POINT DEFL H_STICK
     INCLUDE "core/input.asm"
+DICT_CHAIN_POINT DEFL H_INPUT
+    INCLUDE "core/free.asm"
+DICT_CHAIN_POINT DEFL H_FREE
+    INCLUDE "core/throwcatch.asm"
     INCLUDE "core/editor.asm"
 
     DS   $4000 - $, $FF
