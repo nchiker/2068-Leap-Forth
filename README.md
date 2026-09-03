@@ -633,6 +633,30 @@ inherited, what was deliberately left behind, and the phased build order.
   exercising the affected code (`p8b`, `p18`, `p19`, `p9`) plus a full
   `make clean && make all` across every ROM in the project, zero
   errors, ROM size unchanged.
+- Phase 40 (`core/stringext.asm` + `rom/forth_boot.asm` +
+  `rom/forth_smoke_p40.asm`): `CHR`, `STR`, `UPPER`, `LOWER`, `LEFT`,
+  `RIGHT`, `SEARCH`, `CODE` — closes `core/string.asm`'s own Phase 27
+  scope cut. `INSTR` becomes `SEARCH` (ANS Forth's own STRING word-set
+  name for the same job, real semantics: on a match, returns the
+  REMAINDER of the haystack, not just the matched substring).
+  `LEFT`/`RIGHT` are substring BY REFERENCE (Forth strings are already
+  just an (addr len) view into memory, so nothing ever copies).
+  `CODE` is directly composable as `DROP C@` (Phase 36), added anyway
+  for the real ROM's own direct name. A real bug caught by this
+  phase's own smoke ROM, not a design flaw: `UPPER`/`LOWER` mutate IN
+  PLACE (genuinely necessary for their signature), and the first smoke
+  ROM draft ran them against a ROM-embedded string literal — a silent,
+  un-crashing no-op, since writes to ROM simply don't take effect on
+  this hardware. Root-caused with a diagnostic dumping the actual
+  resulting bytes (the code itself was already correct); fixed on the
+  TEST side (copy into a real RAM buffer first) and documented as a
+  stated requirement in `core/stringext.asm`'s own header. Also caught
+  a second methodology bug before it shipped: numbering all 14
+  hand-verified cases as checkpoints 1-14 directly would have made
+  checkpoint 12 show the exact same green as `PASS_TEST` (the ULA
+  border port only decodes 3 bits, so 12 truncates to color 4) —
+  fixed by grouping into 6 checkpoint numbers instead. +451 bytes
+  (`rom/forth_boot.asm`: 12323 -> 12774 of 16384).
 - **`docs/forth_tutorial.md`** teaches the Forth
   *language* to a reader who doesn't already know it — from the
   standpoint of someone using the finished product, not this project's
@@ -727,6 +751,7 @@ rom/        ROM image assembly:
               forth_smoke_p36.asm Phase 36 smoke ROM (CLS/C@/C!/KEY?)
               forth_smoke_p37.asm Phase 37 smoke ROM (STICK)
               forth_smoke_p38.asm Phase 38 smoke ROM (runtime stack-error detection)
+              forth_smoke_p40.asm Phase 40 smoke ROM (string functions)
               forth_boot.asm      the real, live, bootable product ROM
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
@@ -783,6 +808,7 @@ make forth-smoke-p35  # Phase 35 smoke ROM: FROUND
 make forth-smoke-p36  # Phase 36 smoke ROM: CLS/C@/C!/KEY?
 make forth-smoke-p37  # Phase 37 smoke ROM: STICK
 make forth-smoke-p38  # Phase 38 smoke ROM: runtime stack-error detection
+make forth-smoke-p40  # Phase 40 smoke ROM: string functions
 make forth-boot       # the real, live, bootable product ROM
 make check            # static asm checks over core/, kernel/, and rom/
 ```

@@ -2839,15 +2839,92 @@ ROM budget after this phase: unchanged from Phase 38 (12323 of 16384
 bytes) — both fixes were a RAM-address renumbering and a comment
 rewrite, neither adds or removes any code.
 
-## Backlog — FREE, THROW/CATCH review (not yet scheduled)
+## Phase 40 — string functions (CHR, STR, UPPER, LOWER, LEFT, RIGHT, SEARCH, CODE)
+
+**Status: done, confirmed under real Fuse.** The backlog's own first
+pick, closing `core/string.asm`'s own Phase 27 scope cut ("DELIBERATELY
+NOT INCLUDED THIS PHASE... a real, stated scope cut, not an
+oversight"). Eight words (`UPPER$`/`LOWER$` and `LEFT$`/`RIGHT$` each
+split into two), named the way this project always drops BASIC's own
+`$` sigil, and — where a real ANS Forth standard word already exists
+for the exact same job — using ITS name instead of inventing one:
+`INSTR` becomes `SEARCH`, the real STRING word-set name for "find one
+string inside another," same semantics (on a match, returns the
+REMAINDER of the haystack starting at the match, not just the matched
+substring — real ANS behavior, not simplified).
+
+`LEFT`/`RIGHT` are substring BY REFERENCE, not copy — Forth strings are
+already just an (addr len) VIEW into memory, so no bytes ever move; a
+particularly clean case of "the data structure already gives you this
+for free" once the (addr len) convention is taken seriously. `CODE` is
+directly composable from existing words as `DROP C@` (Phase 36) — added
+anyway for the real ROM's own direct name, adding no new capability.
+
+**A real bug caught by this phase's own smoke ROM, not a design flaw**:
+`UPPER`/`LOWER` mutate their target IN PLACE — genuinely necessary,
+since keeping the same (addr len) signature both directions is the
+whole point. The first version of `rom/forth_smoke_p40.asm` ran them
+directly against a ROM-embedded `DB` string literal (this project's own
+usual smoke-ROM test-data convention) and got a silent, un-crashing
+NO-OP: a write to ROM on this hardware simply doesn't take effect, and
+nothing anywhere — not `UPPER`, not the calling convention, not the
+test's own checks — has any way to detect that from the caller's side.
+Root-caused with a purpose-built diagnostic dumping the actual
+resulting bytes (not guessed from re-reading the code, which looked
+completely correct — and was): confirmed the address and length
+`UPPER` received were exactly right, and the bytes it walked over were
+exactly right, but they read back byte-for-byte UNCHANGED after the
+call. Fixed on the TEST side (copy the literal into a genuine RAM
+buffer, `CASE_BUF`, before mutating it) — `UPPER`/`LOWER` themselves
+needed no change at all — and documented as a real, stated requirement
+in `core/stringext.asm`'s own header: these two specifically need
+writable RAM (a `STRING` buffer, `PLACE`'s own destination, or similar)
+as their target, unlike every other word in this file, which only
+reads the given (addr len).
+
+**A second, smaller methodology bug caught before it could ship**: an
+early draft numbered all fourteen individual hand-verified cases as
+checkpoints 1-14 directly. The ULA's border port only decodes 3 bits,
+so checkpoint 12 would have displayed the exact same green as
+`PASS_TEST` itself (12 truncates to color 4) — a genuine false-pass
+trap, caught by re-deriving the real hardware constraint (at most 8
+distinguishable outcomes ever exist) rather than assuming more
+headroom than the hardware actually has. Fixed by grouping related
+cases under 6 checkpoint numbers instead (0,1,2,3,5,6 — skipping 4,
+`PASS_TEST`'s own color, matching `rom/forth_smoke_p27.asm`'s own
+established precedent for the identical problem, and reusing 0 as an
+ordinary checkpoint color, matching `rom/forth_smoke_p30.asm`'s own
+precedent for that).
+
+ROM budget after this phase: `rom/forth_boot.asm` uses 12774 of 16384
+bytes ($31E6 of $4000), 3610 bytes free — +451 bytes over Phase 39
+(the largest single-phase addition since the multi-row word wrap of
+Phase 33, matching this being the largest single word-count addition,
+8 words, since Phase 27's own original 6).
+
+## Backlog — EXECUTE, RAD/DEG, FREE, THROW/CATCH review (not yet scheduled)
 
 **Not yet scheduled as numbered phases — tracked here so they aren't
-lost.** `FREE` came out of the fresh three-way audit against 2068-Leap
-and the real TS2068 ROM's own command set (the same audit Phase 36
-picked its own "highest value, least cost" group from, and Phase 37's
-own `STICK` came from too). `THROW`/`CATCH` is the last of the three
-steps the user laid out when Phase 38 was scoped — deliberately saved
-for AFTER a code-consolidation pass, not designed yet.
+lost.** All four came out of the fresh three-way audit against
+2068-Leap and the real TS2068 ROM's own command set (the same audit
+Phase 36 picked its own "highest value, least cost" group from, and
+Phase 37's own `STICK` came from too) — `EXECUTE` and `RAD`/`DEG` were
+two real findings from that SAME audit that
+never actually made it onto this list the first time around (caught
+when the user asked "is there anything that got left out?"), not new
+discoveries — string functions, the third such finding, is now done
+(Phase 40, above). `THROW`/`CATCH` is the last of the three steps the
+user laid out when Phase 38 was scoped — deliberately saved for AFTER
+a code-consolidation pass, not designed yet.
+
+**`EXECUTE`** — standard Forth's own counterpart to BASIC's
+`USR(addr)`: jump into arbitrary code from an address already on the
+data stack. Nothing in 2068-Forth does this today at all.
+
+**`RAD`/`DEG`** — degree-to-radian and radian-to-degree conversion.
+2068-Leap has both; `core/floattrig.asm`'s `SIN`/`COS` currently only
+accept radians directly, with no conversion words to bridge from
+degrees.
 
 **`FREE`** (remaining-memory introspection) needs one real design
 decision before it can be a thin wrapper: this project's RAM layout has
