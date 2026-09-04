@@ -39,8 +39,19 @@
 ;   this file's own bring-up, even though this ROM never pages EXROM in
 ;   at all -- root cause not yet isolated (see docs/PROJECT_PLAN.md
 ;   Phase 0 for where TS2068 memory-map surprises like this belong).
-;   Use a real EXROM image if one is available; don't trust a blank
-;   placeholder's behavior as meaningful yet.
+;
+;   UPDATE 2026-09-04: investigated further by reading Fuse 1.9.1's own
+;   real source (machines/ts2068.c, machine.c, peripherals/scld.c) and
+;   ZEsarUX's own (machines/timex.c, cpu.c) -- neither does anything
+;   content-dependent with the EXROM buffer; both do a plain length-
+;   checked byte copy. Root cause of the original $FF misbehavior still
+;   not confirmed (most likely something other than byte content, e.g.
+;   a file-size mismatch during that historical bring-up), but a real,
+;   non-degenerate placeholder is cheap insurance either way:
+;   tools/make_exrom_placeholder.sh generates build/stock_shaped_exrom.bin
+;   (8192 bytes, all $00/NOP rather than $FF/RST $38), visually confirmed
+;   passing rom/forth_smoke_p50.asm in real Fuse. Use that instead of an
+;   ad hoc all-$FF file.
 ; ============================================================================
 
     INCLUDE "include/hardware.inc"     ; constants only, no code emitted --

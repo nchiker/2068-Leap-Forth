@@ -1004,12 +1004,15 @@ make check            # static asm checks over core/, kernel/, and rom/
 ## Try it
 
 `make forth-boot` builds the real, live product — not a smoke test.
-Run it in Fuse with a real EXROM image (see `rom/forth_smoke.asm`'s own
-header on why a real image, not a blank placeholder, matters here):
+Run it in Fuse with a real EXROM image, or `tools/make_exrom_placeholder.sh`'s
+generated placeholder if you don't have one (see `rom/forth_smoke.asm`'s
+own header for why a content-free all-`$FF` placeholder was once found
+unsafe here, and why this generated one is a safer stand-in):
 
 ```sh
+tools/make_exrom_placeholder.sh   # writes build/stock_shaped_exrom.bin
 fuse --machine ts2068 --rom-ts2068-0 build/forth_boot_rom0.bin \
-     --rom-ts2068-1 <a real EXROM image>
+     --rom-ts2068-1 build/stock_shaped_exrom.bin
 ```
 
 It boots to a banner, plays a short startup sound, and drops you at a
