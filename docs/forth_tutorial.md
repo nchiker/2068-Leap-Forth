@@ -158,9 +158,9 @@ is a series of small adjustments to the top of the stack, applied left
 to right.
 
 This is also why Forth reads differently. A BASIC expression like
-`(5+3)*2` nests outward from its innermost operation, while the Forth
-equivalent, `5 3 + 2 *`, reads left to right in the exact order the
-machine does the work: push 5, push 3, add, push 2, multiply. Once that
+`(5+3)-2` nests outward from its innermost operation, while the Forth
+equivalent, `5 3 + 2 -`, reads left to right in the exact order the
+machine does the work: push 5, push 3, add, push 2, subtract. Once that
 clicks, you stop translating BASIC expressions in your head and start
 thinking in the order operations actually happen.
 
@@ -530,10 +530,9 @@ is otherwise in effect, and flips STATE back before the interpreter
 reads another word. A word carrying that exemption is called
 **IMMEDIATE**.
 
-You almost certainly won't write your own IMMEDIATE words. The reason
-to know the idea is that `;` isn't the only one: `IF`, `ELSE`, `THEN`,
-`DO`, `LOOP`, `BEGIN`, `UNTIL`, `WHILE`, `REPEAT`, `LEAVE`, `."` and
-`S"` are all IMMEDIATE too. When you reach [making
+`;` isn't the only one carrying that exemption: `IF`, `ELSE`, `THEN`,
+`DO`, `LOOP`, `BEGIN`, `UNTIL`, `WHILE`, `REPEAT`, `LEAVE`, `EXIT`,
+`."` and `S"` are all IMMEDIATE too. When you reach [making
 decisions](#6-making-decisions-if-else-then) and
 [loops](#7-repeating-yourself), that's the piece of background that
 makes them make sense: `IF` is not a word that gets compiled into your
@@ -542,6 +541,51 @@ definition*, and what it does is shape the code being built around it.
 That's also why several of those words only work inside a definition
 and complain if you type them at the prompt — there is no definition
 under construction for them to shape.
+
+### Marking a word of your own IMMEDIATE
+
+None of that has to stay a built-in privilege. `IMMEDIATE ( -- )` marks
+the word you defined most recently — the one whose `;` you just typed —
+as immediate, so from then on it behaves like `;` and `IF` do: it *runs*
+when the compiler meets it, instead of being compiled into whatever
+definition is under construction.
+
+The whole of the idiom is putting `IMMEDIATE` after the `;`:
+
+```forth
+: FOO  42 ; IMMEDIATE
+```
+
+`FOO` is an ordinary word right up until that last token; `IMMEDIATE`
+then reaches back and flips the flag on it. Now watch what changes:
+
+```forth
+: BAR  FOO ;      \ prints nothing, but pushes 42 -- FOO RAN, here, now
+BAR               \ does nothing at all: BAR's body is empty
+```
+
+Read that carefully, because it's the same "nothing has *run* yet" point
+from the top of this section, deliberately turned inside out. Ordinarily
+`: BAR FOO ;` would record a call to `FOO` and run it later — that's
+exactly what `: QUADRUPLE DOUBLE DOUBLE ;` did earlier. Because `FOO` is
+immediate, it doesn't get recorded at all. It runs on the spot, while
+`BAR` is still being built, and leaves its `42` on the stack there and
+then. `BAR` itself ends up containing nothing, which is why running it
+afterward does nothing and pushes nothing.
+
+That is genuinely all `IMMEDIATE` does, and it's the whole difference
+between `IF` and `+`. Getting real use out of it means writing a word
+whose job is to *shape the definition being compiled* rather than to
+compute something — which is the same territory
+[section 17](#17-growing-the-dictionary-yourself) covers with `CREATE`
+and `DOES>`. Until then it's worth knowing mostly because it explains
+the words you've already been handed.
+
+One caution follows straight from "the word you defined most recently":
+`IMMEDIATE` has no name of its own to aim at. It always marks whatever
+is currently newest in the dictionary, so it belongs on the same line as
+the `;` it applies to. Define something else in between and you'll have
+marked the wrong word, with nothing to tell you so.
 
 ### Indirect calls: `'` and `EXECUTE`
 
@@ -750,10 +794,15 @@ A handful of ordinary whole-number words round out the basics:
 
 | Word | Stack effect | What it does |
 |---|---|---|
+| `1+` | `( n -- n+1 )` | Add one |
+| `1-` | `( n -- n-1 )` | Subtract one |
+| `NEGATE` | `( n -- -n )` | Change the sign |
 | `ABS` | `( n -- \|n\| )` | Absolute value |
 | `SGN` | `( n -- -1\|0\|1 )` | Sign of `n` |
 | `MOD` | `( a b -- a-mod-b )` | Remainder of `a / b` |
 | `SQRT` | `( n -- isqrt(n) )` | Integer square root, truncating |
+| `MAX` | `( a b -- max )` | The larger of two values |
+| `MIN` | `( a b -- min )` | The smaller of two values |
 
 ```forth
 -5 ABS .        \ prints 5
@@ -764,6 +813,66 @@ A handful of ordinary whole-number words round out the basics:
                 \ perfect square, so this is the largest whole number
                 \ whose square doesn't exceed it
 ```
+
+`1+` and `1-` are shorthand and nothing more. `5 1+` does exactly what
+`5 1 +` does, in one word instead of two:
+
+```forth
+5 1+ .          \ prints 6
+5 1- .          \ prints 4
+```
+
+Adding or subtracting one turns out to be far and away the commonest
+arithmetic in real Forth code — stepping to the next memory slot,
+nudging a counter, adjusting an off-by-one — so it gets its own word
+purely to keep those lines short. `V 1 + C@` from
+[the next section](#4-reading-and-writing-memory-directly) is equally
+happy written `V 1+ C@`, and both spellings appear in real Forth
+programs. Nothing about them differs but the number of spaces.
+
+`NEGATE` flips a value's sign, which section 1's `-` can already do the
+long way round:
+
+```forth
+3 NEGATE .      \ prints -3
+-3 NEGATE .     \ prints 3
+0 NEGATE .      \ prints 0
+```
+
+It's worth setting `NEGATE` beside `INVERT` from just above, since the
+two look superficially similar and are not remotely the same operation.
+`0 NEGATE` is `0`; `0 INVERT` is `-1`. `NEGATE` asks "what's the same
+distance from zero the other way?" and `INVERT` asks "what if every
+single bit were flipped?" — questions that happen to have neighbouring
+answers (`INVERT` gives exactly one less than `NEGATE` for any input)
+and completely different meanings.
+
+`MAX` and `MIN` each take two values and keep one:
+
+```forth
+5 3 MAX .       \ prints 5
+5 3 MIN .       \ prints 3
+-1 3 MAX .      \ prints 3
+-5 -1 MIN .     \ prints -5
+```
+
+The important word in their description is **signed**. They compare the
+way you'd compare on paper, with negative numbers genuinely smaller than
+positive ones, which is the same convention `<` and `>` use in
+[the next-but-one section](#5-comparisons-and-truefalse) and the same
+one that makes `0 INVERT` print as `-1`. That's worth stating explicitly
+because a comparison that ignored sign would put `-32768` *above*
+`32767` — those two have the largest and second-largest bit patterns
+respectively — and it does not:
+
+```forth
+32767 -32768 MAX .   \ prints 32767 -- the positive one, correctly
+```
+
+Unlike `-` and `<`, neither `MAX` nor `MIN` cares which order you hand
+them their two values: `5 3 MAX` and `3 5 MAX` both give `5`. They're in
+the same relaxed category as `+`, which is a small relief after
+section 1's warnings about operand order.
 
 `RND` and `RANDOMIZE` give you a pseudo-random whole number:
 
@@ -1618,33 +1727,95 @@ FINDTHREE     \ prints 0 1 2 3, then stops -- the remaining six
 nested in another, `LEAVE` exits the inner one and the outer loop
 keeps counting normally.
 
+### `EXIT` — returning from the whole word
+
+`LEAVE` ends a loop. `EXIT ( -- )` ends the **definition**: it returns
+immediately to whoever called the word, skipping everything after it.
+It's the same relationship BASIC's `RETURN` has to the rest of a
+subroutine, except that here it can appear anywhere in the body rather
+than only at the end.
+
+At its simplest, with no loop involved at all:
+
+```forth
+: TEXIT1  1 EXIT 2 ;
+
+TEXIT1 .      \ prints 1 -- the 2 was compiled, and never runs
+```
+
+The `2` really is part of the definition; `;` compiled it like anything
+else. It is simply unreachable, because `EXIT` returned before execution
+ever got that far. Like `IF` and `LEAVE`, `EXIT` is one of the IMMEDIATE
+words from [section 2](#interpreting-vs-compiling--why--is-special) and
+only makes sense inside a `:` definition — there's nothing to return
+from at the prompt.
+
+That makes `EXIT` the natural partner of `IF` for an early bail-out,
+which is nearly always how it gets written:
+
+```forth
+: ?PRINT-POS  DUP 0 < IF DROP EXIT THEN . ;
+
+5 ?PRINT-POS      \ prints 5
+-5 ?PRINT-POS     \ prints nothing, and leaves the stack clean
+```
+
+That's [section 6](#6-making-decisions-if-else-then)'s `?PRINT` shape
+with the guard turned around: `DUP` copies the value so the test can
+consume one, and when the test finds a negative the word tidies up its
+own copy with `DROP` and gets out. Written without `EXIT` you'd need an
+`ELSE` and the printing would have to move inside it; `EXIT` lets the
+unusual case be dealt with first and forgotten about, leaving the
+normal path unindented at the end.
+
+`EXIT` also works from inside an open `DO` loop, and this is the part
+worth stating plainly because it would be reasonable to assume
+otherwise. A loop keeps bookkeeping of its own while it runs — the
+counter `I` reads has to live somewhere — and leaving the word from
+inside the loop has to clean that up. `EXIT` does, at every level of
+nesting it happens to be inside:
+
+```forth
+: TEXIT2  0 5 0 DO I 3 = IF EXIT THEN 1+ LOOP 999 ;
+
+TEXIT2 .      \ prints 3
+```
+
+Trace it: `0` starts an accumulator on the stack, then the loop runs
+with `I` counting `0, 1, 2, ...`. Each pass that isn't the one we're
+looking for adds one to the accumulator, so after `I` has been `0`, `1`
+and `2` the accumulator holds `3`. On the pass where `I` is `3`, the
+`IF` fires and `EXIT` returns straight out of `TEXIT2` — before that
+pass's own `1+`, past every remaining pass, and past the trailing `999`,
+which never reaches the stack at all.
+
+Compare that with `LEAVE` from just above, since the two are easy to
+confuse and the difference is exactly one word's worth of scope:
+`LEAVE` stops the loop and carries on with the rest of the definition
+after it, so the `999` in `TEXIT2` *would* have been pushed. `EXIT`
+abandons the definition entirely.
+
 ### Loops inside loops
 
 Nesting `DO` loops works, and needs no special ceremony — the inner
 loop's counter simply sits on top of the outer one's and is gone again
 by the time the outer `LOOP` looks at anything.
 
-There is one limitation to know about, though, and it's better learned
-here than discovered in a debugging session: **`I` always gives you the
-index of the innermost loop, and there is no word for reaching an outer
-one.** Larger Forths provide `J` for the next loop out; 2068-Forth
-doesn't have it.
+The one thing to be careful of is which index `I` means: **`I` always
+gives you the index of the innermost loop you're currently inside.** In
+the outer loop's own body, before the inner `DO` has started, that's the
+outer index; from the moment the inner `DO` runs, it's the inner one.
 
-So a nested loop can use its own index freely, and simply cannot see
-the enclosing loop's. If you need the outer count inside an inner loop
-— to print a multiplication table, say — save it somewhere first. A
-`VARIABLE` from [section 4](#4-reading-and-writing-memory-directly) is
-the straightforward way:
+That's usually all you need, because the inner loop's *limit* gets
+computed out in the outer body, where `I` is still the outer index:
 
 ```forth
 : STAR   42 EMIT ;
-VARIABLE ROW
 
 : TRIANGLE
   5 0 DO
-    I ROW !               \ remember the outer index
-    ROW @ 1 + 0 DO
-      STAR
+    I 1+ 0 DO             \ I here is the OUTER index -- the inner
+      STAR                \ loop hasn't started yet
     LOOP
     CR
   LOOP ;
@@ -1663,11 +1834,58 @@ which prints
 ```
 
 Read the inner `DO` line carefully, since it's the part doing the work:
-`ROW @ 1 +` fetches the saved outer index and adds one, giving the
-inner loop a limit of 1 on the first row, 2 on the second, and so on.
-The `+ 1` is there because `DO` stops *before* the limit — without it,
-row 0 would ask for `0 0 DO` and hit the near-infinite-loop trap
+`I 1+` takes the outer index and adds one, giving the inner loop a limit
+of 1 on the first row, 2 on the second, and so on. (`1+` is
+[section 3](#3-numbers)'s shorthand for `1 +`; either spelling works.)
+The added one is there because `DO` stops *before* the limit — without
+it, row 0 would ask for `0 0 DO` and hit the near-infinite-loop trap
 described above.
+
+### `J` — the enclosing loop's index
+
+`TRIANGLE` never needed the outer index once the inner loop was actually
+running. Plenty of things do — a multiplication table, or anything where
+each inner pass has to know which row it's on — and inside the inner
+body `I` has stopped being any help. `J ( -- n )` is the word for that:
+same idea as `I`, one loop further out.
+
+```forth
+: DIGITS
+  5 0 DO
+    I 1+ 0 DO
+      J 48 + EMIT         \ J is the OUTER index, even in here
+    LOOP
+    CR
+  LOOP ;
+
+DIGITS
+```
+
+which prints
+
+```
+0
+11
+222
+3333
+44444
+```
+
+`48 + EMIT` is the only unfamiliar part, and it's [section
+8](#8-printing)'s `EMIT` doing exactly what `STAR` did — 48 is the
+character code of `0`, so adding the row number to it gives the code of
+that row's digit, the same code-arithmetic idea `65 EMIT` printing `A`
+already showed. Everything else is `TRIANGLE` unchanged. Swap `J` for
+`I` in there and you'd print `0`, `01`, `012`, ... instead: the inner
+count, not the row.
+
+If you've read an earlier version of this document, you may remember
+this example needing a whole extra `VARIABLE` to stash the outer index
+in before the inner loop started. It doesn't any more — `J` reaches it
+directly. One loop out is as far as it goes, though: there's no `K` for
+a third level, so a three-deep nest that needs its outermost index is
+back to saving it in a `VARIABLE` from
+[section 4](#4-reading-and-writing-memory-directly) by hand.
 
 ### `+LOOP` — stepping by something other than 1
 
@@ -1843,18 +2061,21 @@ Nothing here is a new word — it's [section 7](#7-repeating-yourself)'s
 evenly-spaced dots in a row:
 
 ```forth
-: DOTS  5 0 DO I 40 * 20 + 96 8 CIRCLE LOOP ;
+: DOTS  200 20 DO I 96 8 CIRCLE 40 +LOOP ;
 
 DOTS
 ```
 
-Read the body the way section 7 read `STARS`: `I` is this pass's
-index, `0` through `4`. `I 40 * 20 +` turns that index into an x
-coordinate 40 pixels apart, starting at 20; `96` and `8` are a fixed y
+Read the body the way section 7 read `STARS`: this uses section 7's
+own `+LOOP` to step the index by 40 instead of 1, so `I` counts the x
+coordinates directly — 20, 60, 100, 140, 180 — with no arithmetic
+needed to turn it into one (this Forth has no plain integer `*` to do
+that with anyway; only `F*`, back in [Numbers](#3-numbers)). `I` feeds
+straight into `CIRCLE` as the x coordinate; `96` and `8` are a fixed y
 and radius, the same on every pass. `CIRCLE` then draws — `xc yc r`,
-in that order, exactly as the table above lists it — and `LOOP` moves
-to the next index. `CIRCLE` itself hasn't changed at all between this
-example and the one just above it; it's the loop wrapped around it
+in that order, exactly as the table above lists it. `CIRCLE` itself
+hasn't changed at all between this example and the one just above it;
+it's the loop wrapped around it
 that's new, and it's the identical loop `STARS` used, just feeding a
 different word each pass.
 
@@ -1906,6 +2127,62 @@ different pitch means recomputing that period yourself. There's no
 semitone convenience here on purpose: `SOUND` trades convenience for
 direct access to everything the chip can do — three tones, volume
 envelopes, noise — that `BEEP` was never meant to reach.
+
+### Talking to the hardware directly: `IN` and `OUT`
+
+There's one more level down, and `SOUND` is the perfect way in to it.
+The machine's chips aren't reached through memory addresses like
+[section 4](#4-reading-and-writing-memory-directly)'s `@` and `!`. They
+sit on a separate set of numbered **ports**, and two words reach them:
+
+| Word | Stack effect | What it does |
+|---|---|---|
+| `IN` | `( port -- value )` | Read one byte from `port` |
+| `OUT` | `( value port -- )` | Write one byte to `port` |
+
+Note `OUT`'s order — value first, then port — which is deliberately the
+same shape as `!`'s `( n addr -- )` from section 4, and remembered the
+same way: the parcel first, the address you're sending it to last.
+
+Every word in the table at the top of this section is ultimately built
+out of these. `SOUND` is barely more than two `OUT`s: the sound chip
+listens on port 245 for "which register am I about to talk about" and
+port 246 for the value itself, so
+
+```forth
+2 251 SOUND
+```
+
+and
+
+```forth
+2 245 OUT  251 246 OUT
+```
+
+do exactly the same thing to exactly the same chip. `IN` then reads
+back what a register currently holds, which `SOUND` has no way to do at
+all:
+
+```forth
+8 245 OUT      \ select the sound chip's register 8
+12 246 OUT     \ write 12 into it
+8 245 OUT      \ select register 8 again, ready to read
+246 IN .       \ prints 12 -- the value really is in the chip
+```
+
+That round trip is worth typing once, because it's the first thing in
+this document where you can *observe* a piece of hardware outside the
+processor remembering something for you.
+
+**These two are the sharpest tools here, and they have no guard rails
+whatsoever.** There's no check on the port number, no list of ports
+that are off limits, and no way to undo a write: whatever the hardware
+does when it sees that byte is what happens. Writing to a port you
+haven't looked up can lock the machine up hard enough to need switching
+off. That's the same deal `@` and `!` already offer for memory, and the
+same one real BASIC's own `IN`/`OUT` offer on this machine — a
+deliberate choice to leave the hardware reachable rather than fenced
+off, on the understanding that you know which port you're poking.
 
 ### Getting input: `KEY`, `KEY?`, and `STICK`
 
@@ -2072,6 +2349,22 @@ the test passes, the *original* score is still there for `HIGH !` to
 store. Skip the `DUP` and `MAYBE-RECORD` would have nothing left to
 record with by the time it decided the score was worth keeping.
 
+Worth writing out longhand once, because that combination of copying,
+testing, branching and tidying up is the pattern half this document has
+been building toward. But "keep the larger of two numbers" is common
+enough to have its own word, and [section 3](#3-numbers)'s `MAX` does
+the entire job in one:
+
+```forth
+: MAYBE-RECORD  ( score -- )  HIGH @ MAX HIGH ! ;
+```
+
+`HIGH @` puts the current record on top of the incoming score, `MAX`
+throws away whichever of the two is smaller, and `HIGH !` stores what's
+left. No `DUP`, no `IF`, no `DROP`, and nothing to get wrong on the
+branch you weren't thinking about. Both versions behave identically on
+the three lines above; the second is what you'd actually write.
+
 ---
 
 ## 11. Saving and loading your work
@@ -2162,13 +2455,13 @@ spaced out across the wider coordinate range this mode gives you:
 ```forth
 64COL
 3 PALETTE64
-10 0 DO I 40 * 20 + 96 PLOT64 LOOP
+420 20 DO I 96 PLOT64 40 +LOOP
 32COL
 ```
 
-`I 40 * 20 +` is the same "index times spacing, plus a starting
-offset" arithmetic [Drawing and sound](#9-drawing-and-sound)'s `DOTS`
-used, just reaching further along the row — up to `9 40 * 20 + = 380`,
+This is the same `+LOOP`-steps-the-index trick [Drawing and
+sound](#9-drawing-and-sound)'s `DOTS` used, just reaching further along
+the row — ten points, `I` running 20, 60, 100, ... up to 380,
 comfortably inside `PLOT64`'s wider 0-511 range and well past what the
 normal screen's own coordinates could reach.
 
@@ -2245,6 +2538,40 @@ word-by-word explanation of what went wrong. See
 [Error handling: THROW and CATCH](#14-error-handling-throw-and-catch)
 for a way to intercept an error like this yourself, from inside your
 own program, instead of always falling back to this default reset.
+
+### Seeing what words exist: `VLIST`
+
+The other half of "was that word really a typo?" is being able to look.
+`VLIST ( -- )` prints the name of every word the dictionary currently
+holds:
+
+```forth
+: DOUBLE  DUP + ;
+: TRIPLE  DUP DUP + + ;
+VLIST
+```
+
+prints `TRIPLE`, then `DOUBLE`, and then keeps going — through every
+one of the built-in words this Forth ships with, all the way back to
+the oldest. Names are separated by single spaces and wrap across the
+screen exactly the way any other printed output does, since `VLIST` is
+using the same `EMIT` underneath that [section 8](#8-printing)
+described. Expect several screens of it.
+
+That order is the same one [section 1](#1-what-forth-actually-is)
+described for how a lookup searches: newest first. `VLIST` isn't
+inventing an ordering — it's walking the identical chain a plain word
+lookup walks, out loud, which is what makes it a straight answer to
+"what would Forth find if I typed this name?" Your own definitions, being
+newest, always come first; a name you've redefined appears twice, the
+live one before the shadowed one.
+
+Two related words are worth keeping apart. `LLIST` (see
+[section 15](#15-printing-to-a-real-printer-lprint-and-llist)) walks
+the same chain but stops at the built-ins and sends its output to a
+printer — it's for listing *your program*. `VLIST` prints everything to
+the screen and is for answering a question at the prompt, usually
+"does that word exist, and did I spell it the way I think I did?"
 
 ---
 
@@ -2348,6 +2675,68 @@ point, for whichever specific problems the program knows how to
 recover from. Anything it doesn't catch still falls through to the
 usual reset, same as always.
 
+### Giving up on purpose: `ABORT` and `QUIT`
+
+That fallback — abandon everything, come back to a fresh prompt — is
+useful enough that you can ask for it deliberately, without an error
+having happened at all.
+
+| Word | Stack effect | What it does |
+|---|---|---|
+| `ABORT` | `( -- )` | Abandon everything and return to the prompt, **clearing both stacks** |
+| `QUIT` | `( -- )` | Abandon everything and return to the prompt, **leaving the stacks alone** |
+
+Both stop the current line dead. Nothing after them runs, and nothing
+that called them gets resumed — however many definitions deep you were,
+you come straight back out to the prompt:
+
+```forth
+42 ABORT 99 .     \ the 99 is never pushed and the . never runs
+```
+
+The single difference between them is what happens to what you'd
+already collected. `ABORT` empties both the ordinary stack and
+[section 3](#3-numbers)'s separate decimal stack, so you're back to
+genuinely nothing:
+
+```forth
+42 ABORT      \ afterwards the stack is empty -- the 42 is gone too
+```
+
+`QUIT` abandons the same amount of *execution* and none of the *data*:
+
+```forth
+42 QUIT       \ afterwards the stack still holds 42
+42 QUIT .     \ the . never runs, so nothing prints -- but type . on
+              \ the next line and you'll get your 42 back
+```
+
+Which one you want depends on why you're giving up. `ABORT` is the
+bigger hammer, for "this went wrong enough that I don't trust anything I
+was holding" — it's what the automatic reset behind `STACK?` amounts to,
+available as a word. `QUIT` is for stopping cleanly when the data is
+fine and only the *doing* needs to stop.
+
+Neither prints anything, which is worth knowing so you're not left
+waiting for a message. What you'll notice instead is the absence of the
+usual `OK` from [section 13](#13-typing-and-editing-at-the-prompt): a
+line that ended in `ABORT` or `QUIT` didn't finish, so it doesn't get
+told it did. If you want your program to say why it gave up, print
+something yourself just before:
+
+```forth
+: CHECK-AGE  ( n -- n )
+  DUP 0 < IF ." AGE CANNOT BE NEGATIVE" CR ABORT THEN ;
+```
+
+Set that beside `THROW` from earlier in this section, because they
+answer two genuinely different questions. `THROW` gives the *caller* a
+chance to deal with the problem — some `CATCH` further out may know
+exactly what to do and carry on. `ABORT` and `QUIT` don't offer that
+choice to anyone: they go all the way out, past every `CATCH`, and end
+the line. Reach for `THROW` when a problem might be someone else's to
+handle, and for these two when it plainly isn't.
+
 ---
 
 ## 15. Printing to a real printer: LPRINT and LLIST
@@ -2387,6 +2776,11 @@ LLIST          \ prints TRIPLE, then DOUBLE -- most recently defined
                \ first, exactly the order a plain lookup of either
                \ name would find them in
 ```
+
+`VLIST` from [section 13](#13-typing-and-editing-at-the-prompt) is the
+same walk sent to the screen instead, and without the stop at the
+built-ins — `LLIST` for a paper record of your program, `VLIST` for a
+look at the whole dictionary while you're working.
 
 **Status**: confirmed working against a real printer-capable Fuse
 (`--printer --zxprinter`). `LPRINT` of a short string, and `LLIST`
@@ -2470,6 +2864,286 @@ mode carries in [A wider screen](#12-a-wider-screen).
 
 ---
 
+## 17. Growing the dictionary yourself
+
+[Section 2](#2-defining-your-own-words) made a claim worth revisiting
+now that you've used the whole language: defining a word *extends the
+language*, and your words are no different in kind from the ones Forth
+shipped with. Everything since has taken that at face value. This
+section makes it literally true, and it's the most genuinely
+Forth-shaped idea in this document.
+
+Start from something you've been using since section 4 without
+questioning it. `VARIABLE SCORE` creates a word. So does `100 CONSTANT
+MAXHEALTH`, and `5 ARRAY SCORES`, and `20 STRING NAME`. Each of them
+takes the name that follows it and produces a brand-new word that
+behaves in some particular way when you run it — an address for
+`VARIABLE`, a value for `CONSTANT`. A word whose job is to make other
+words is called a **defining word**, and up to now every one of them
+has been built in and fixed.
+
+The question this section answers is: what if the four you were given
+aren't the four you want? Say your program is full of pairs of
+coordinates, or of counters that always start at 1 rather than 0, or of
+lookup tables. In most languages the answer is "write it out longhand
+every time." In Forth the answer is to define your own defining word,
+and it needs three things: somewhere to put the new word's data, a way
+to make the word itself, and a way to say what it does when run.
+
+### Where new words go: `HERE`, `,`, `C,`, and `ALLOT`
+
+`FREE` back in [section 4](#4-reading-and-writing-memory-directly)
+reported how much room was left for new definitions, which quietly
+implies something this document hasn't said outright: the dictionary is
+just a region of memory, and it grows upward, one definition after
+another, into the free space above.
+
+`HERE ( -- addr )` is the address of the first *unused* byte in that
+region — the frontier, one past everything defined so far. It's an
+ordinary address like any other from section 4, and it moves every time
+you define anything.
+
+| Word | Stack effect | What it does |
+|---|---|---|
+| `HERE` | `( -- addr )` | The address of the first unused dictionary byte |
+| `,` | `( n -- )` | Write a two-byte cell at `HERE`, and advance `HERE` by 2 |
+| `C,` | `( n -- )` | Write one byte at `HERE`, and advance `HERE` by 1 |
+| `ALLOT` | `( n -- )` | Advance `HERE` by `n` bytes without writing anything |
+
+`,` is pronounced "comma", and it is a real word — a lone comma, with
+spaces around it like everything else. `C,` is "C-comma", the
+byte-sized version, matching the `C@`/`C!` naming from section 4 for
+exactly the same reason.
+
+They're easiest to see all at once:
+
+```forth
+HERE            \ remember the frontier -- an address, on the stack
+1234 ,          \ write 1234 there; HERE has now moved 2 bytes along
+@ .             \ prints 1234 -- read back from the address we saved
+```
+
+Nothing there is new except the words. `HERE` pushed an address, `,`
+wrote a cell at it, and `@` from section 4 read the cell back — the
+same fetch you've used on every `VARIABLE` in this document. The only
+difference is that nothing gave this cell a name.
+
+`ALLOT` reserves space without filling it, which is what you want for a
+buffer you're about to write into:
+
+```forth
+HERE            \ the address of what we're about to reserve
+20 ALLOT        \ reserve 20 bytes -- HERE jumps 20 further along
+```
+
+A negative count legitimately runs the other way and gives space back:
+
+```forth
+-4 ALLOT        \ HERE moves back 4 bytes -- the dictionary shrinks
+```
+
+which is occasionally handy and worth using carefully, since anything
+already defined in the space you just gave back is now in the path of
+whatever gets defined next.
+
+Two honest warnings. None of these four check that there's any room
+left — `FREE` exists so a program can check for itself before a large
+`ALLOT`, and nothing checks on your behalf, the same "trust the caller"
+posture `PICK` and `!` already take. And `,` writing at `HERE` only
+lands where you expect when nothing else has moved `HERE` in between;
+these words are for a definition being built *right now*, not for
+stashing something and coming back to it later.
+
+### Making a word by hand: `CREATE`
+
+`CREATE ( "name" -- )` takes the name that follows it, exactly as `:`
+and `VARIABLE` do, and builds a dictionary entry for it. The word it
+makes is the simplest one possible: run it, and it pushes the address
+of its own data — the memory immediately after it, which is to say
+whatever `HERE` was pointing at the moment `CREATE` finished.
+
+`CREATE` reserves none of that data for you. It hands you the frontier
+and leaves the filling to `,`, `C,` and `ALLOT`:
+
+```forth
+CREATE POINT  0 , 0 ,     \ a word with two cells of its own
+5 POINT !                 \ store 5 in the first
+7 POINT 2 + !             \ and 7 in the second
+POINT @ .                 \ prints 5
+POINT 2 + @ .             \ prints 7
+```
+
+Look at what that actually is: a two-cell `VARIABLE`, built by hand out
+of pieces. `VARIABLE SCORE` and `CREATE SCORE 0 ,` produce words that
+behave the same way — push an address, fetch with `@`, store with `!`.
+(2068-Forth's own `VARIABLE` is written directly in machine code rather
+than in terms of `CREATE`, for reasons of size; the point is that it
+*could* be, and that in most Forths it is.)
+
+Now put `CREATE` inside a colon definition and you have a defining word
+of your own:
+
+```forth
+: T1  CREATE 1234 , ;
+
+T1 T1FOO         \ makes a new word, T1FOO
+T1FOO @ .        \ prints 1234
+```
+
+Read `T1` carefully, because two different times are involved and
+keeping them apart is the whole skill here. `T1` is defined once. It
+*runs* when you type `T1 T1FOO` — and while running, it creates
+`T1FOO` and stores 1234 in it. `T1FOO` is what runs later, when you type
+`T1FOO`, and all it does is push its own address.
+
+### `DOES>` — saying what the new word should *do*
+
+`T1FOO` pushes an address, and so does every other word `CREATE` makes.
+That's the limitation. `CONSTANT` doesn't behave that way: `MAXHEALTH`
+gives you the value itself, no `@` required, which was the whole
+distinction section 4 drew between it and `VARIABLE`. With `CREATE`
+alone you can't build that, because the `@` is left for the caller to
+remember every single time.
+
+`DOES>` ("does") removes exactly that limitation. Written inside a
+defining word, it separates the part that builds the new word from the
+part that says what the new word *does when it runs*:
+
+```forth
+: CONST  CREATE , DOES> @ ;
+
+5 CONST FIVE
+7 CONST SEVEN
+
+FIVE .        \ prints 5
+SEVEN .       \ prints 7
+```
+
+That is a working `CONSTANT`, in eleven characters of definition. Take
+it apart in the two times again, because everything about `DOES>`
+depends on them:
+
+- **When `5 CONST FIVE` runs**: `CREATE` makes a word called `FIVE`;
+  `,` writes the `5` that was on the stack into `FIVE`'s data; and
+  `DOES>` attaches everything after it — the `@` — to `FIVE` as its
+  behavior, then ends `CONST` on the spot.
+- **When `FIVE` runs, later**: it pushes its own data address, exactly
+  as any `CREATE`d word does, and then runs the `@`. What's left on the
+  stack is `5`.
+
+The part after `DOES>` never runs as part of `CONST` itself. It is
+`FIVE`'s body, written in the middle of `CONST`'s. And it always starts
+with the new word's own data address already on the stack, which is why
+`@` on its own is a complete behavior — there's nothing for it to be
+handed but that address.
+
+Everything before `DOES>` runs once per new word. Everything after it
+runs every time one of those new words is used. `CONST` was invoked
+twice above and `FIVE` and `SEVEN` are genuinely separate words with
+separate data; nothing is shared but the recipe.
+
+The behavior can be as long as you like, and it doesn't have to ignore
+the stack it's given. Here's an array-style defining word — the second
+verified example this section is built from — that takes an index and
+returns an element:
+
+```forth
+: ARR3  CREATE 10 , 20 , 30 , DOES> SWAP CELLS + @ ;
+
+ARR3 NUMS
+
+0 NUMS .      \ prints 10
+1 NUMS .      \ prints 20
+2 NUMS .      \ prints 30
+```
+
+`ARR3 NUMS` runs the three `,`s, so `NUMS` is born holding 10, 20 and
+30 in consecutive cells. Then `1 NUMS` runs the behavior with two things
+on the stack — the `1` you pushed, and `NUMS`'s own address underneath
+it, pushed automatically:
+
+```
+you type   stack after
+--------   -----------
+1          [1]
+NUMS       [1, addr]        -- the data address, pushed automatically
+SWAP       [addr, 1]        -- put the index on top
+CELLS      [addr, 2]        -- index 1 means 2 bytes along
++          [addr+2]         -- the address of element 1
+@          [20]             -- and fetch it
+```
+
+`SWAP CELLS + @` is section 4's `index CELLS name +` idiom, in a
+different order because of where the address arrives, doing precisely
+what that section spelled out at length — including the `CELLS`, for
+exactly the reason given there: elements are two bytes apart, so index 1
+is byte 2. The difference is that here it's written **once**, inside the
+defining word, instead of at every use. That's the practical payoff of
+this entire section: `1 NUMS` where you'd otherwise write
+`1 CELLS NUMS +  @`, and no chance of forgetting the `CELLS`.
+
+### Taking words back: `FORGET`
+
+`FORGET ( "name" -- )` is the eraser. It takes the name that follows
+it, and removes that word **and everything defined after it**,
+rewinding both the dictionary and `HERE` to exactly where they stood
+before that word existed:
+
+```forth
+: ZZZ  111 ;
+FORGET ZZZ
+: ZZZ  222 ;
+ZZZ .           \ prints 222
+```
+
+The space really is reclaimed, not merely hidden: the second `ZZZ`
+lands on exactly the same bytes the first one occupied, and `FREE` from
+section 4 reports the room back. That makes `FORGET` the tidy way to
+retract a definition you're still iterating on, rather than piling
+redefinitions up in memory the way [section
+1](#1-what-forth-actually-is)'s newest-first shadowing does.
+
+"And everything defined after it" is not a footnote — it's the main
+thing to understand. The dictionary is a stack of definitions, and
+`FORGET` pops back to a point, so anything you defined later goes too,
+whether or not it had anything to do with the word you named:
+
+```forth
+: A  1 ;
+: B  2 ;
+: C  3 ;
+FORGET B        \ B and C are both gone now; A survives
+```
+
+There is no way to remove `B` alone. If that matters, `VLIST` from
+[section 13](#13-typing-and-editing-at-the-prompt) is the way to see
+what you've actually got left afterward.
+
+One real safety behavior, which you'll meet the moment you aim `FORGET`
+at the wrong thing. Naming one of this Forth's own built-in words gets
+you a refusal rather than an obedient disaster:
+
+```forth
+FORGET DUP      \ prints FORGET: BUILT-IN, REFUSED, and changes nothing
+5 DUP . .       \ prints 5 5 -- DUP is exactly as it was
+```
+
+The reason is worth a sentence, because it's a genuine hazard rather
+than a fussy restriction. Built-in words live in ROM, which is
+physically unchangeable, so forgetting one could not reclaim a single
+byte. Worse, "everything defined after it" would then mean *every word
+you have ever defined in this session* — a `FORGET DUP` typed by
+mistake would silently wipe your entire program to no purpose at all.
+Refusing costs nothing anybody legitimately wants and closes that trap
+completely.
+
+A name the dictionary doesn't have at all gets a different message —
+`FORGET: NOT FOUND` — and likewise changes nothing. Both are ordinary
+printed messages, not errors: the rest of your line carries on running
+normally afterward, unlike the resets in section 14.
+
+---
+
 ## Appendix A: word reference
 
 A quick-lookup table of every word covered in this document, grouped
@@ -2497,6 +3171,11 @@ the same convention applied to the full ANS Forth standard.
 |---|---|
 | `+` | `( a b -- a+b )` |
 | `-` | `( a b -- a-b )` |
+| `1+` | `( n -- n+1 )` |
+| `1-` | `( n -- n-1 )` |
+| `NEGATE` | `( n -- -n )` |
+| `MAX` | `( a b -- max )` |
+| `MIN` | `( a b -- min )` |
 | `0=` | `( n -- flag )` |
 | `=` | `( a b -- flag )` |
 | `<` | `( a b -- flag )` |
@@ -2578,14 +3257,33 @@ the same convention applied to the full ANS Forth standard.
 | `DO` ... `LOOP` | `( limit start -- )` | IMMEDIATE, compile-only |
 | `DO` ... `+LOOP` | `( limit start -- )` / `( step -- )` | IMMEDIATE, compile-only |
 | `LEAVE` | `( -- )` | IMMEDIATE, compile-only; exits the innermost `DO` loop |
+| `EXIT` | `( -- )` | IMMEDIATE, compile-only; returns from the whole definition, unwinding any open `DO` loops |
 | `I` | `( -- index )` | innermost `DO` loop's index |
+| `J` | `( -- n )` | the *enclosing* `DO` loop's index, one level out |
+| `IMMEDIATE` | `( -- )` | mark the most recently defined word immediate |
+
+**Dictionary space and defining words** — see
+[section 17](#17-growing-the-dictionary-yourself)
+
+| Word | Stack effect | Notes |
+|---|---|---|
+| `HERE` | `( -- addr )` | the first unused dictionary byte |
+| `,` | `( n -- )` | write a cell at `HERE`, advance it by 2 |
+| `C,` | `( n -- )` | write a byte at `HERE`, advance it by 1 |
+| `ALLOT` | `( n -- )` | advance `HERE` by `n` bytes (negative shrinks) |
+| `CREATE` | `( "name" -- )` | make a word that pushes its own data address |
+| `DOES>` | `( -- )` | give a `CREATE`d word its behavior; the code after it runs with that address on the stack |
+| `FORGET` | `( "name" -- )` | remove a word and everything defined after it; refuses built-ins |
+| `VLIST` | `( -- )` | print every word in the dictionary, newest first — see [section 13](#13-typing-and-editing-at-the-prompt) |
 
 **Error handling** — see [section 14](#14-error-handling-throw-and-catch)
 
-| Word | Stack effect |
-|---|---|
-| `CATCH` | `( xt -- 0 \| n )` |
-| `THROW` | `( n -- )` |
+| Word | Stack effect | Notes |
+|---|---|---|
+| `CATCH` | `( xt -- 0 \| n )` | |
+| `THROW` | `( n -- )` | |
+| `ABORT` | `( -- )` | back to the prompt, clearing both stacks |
+| `QUIT` | `( -- )` | back to the prompt, leaving the stacks alone |
 
 **Printing and input**
 
@@ -2624,6 +3322,13 @@ the same convention applied to the full ANS Forth standard.
 | `ULAPLUS` | `( flag -- )` — see [section 16](#16-ulaplus-a-bigger-color-palette) |
 | `PALETTE` | `( index value -- )` — see [section 16](#16-ulaplus-a-bigger-color-palette) |
 
+**Hardware ports** — see [section 9](#9-drawing-and-sound)
+
+| Word | Stack effect |
+|---|---|
+| `IN` | `( port -- value )` |
+| `OUT` | `( value port -- )` |
+
 **Storage**
 
 | Word | Stack effect |
@@ -2644,9 +3349,9 @@ the same convention applied to the full ANS Forth standard.
 
 None of this is a promise any of it is coming, and none of it should
 stop you writing real programs with what's already here — sections 1
-through 16 cover a genuinely complete language: `IF`/`ELSE`/`THEN`,
+through 17 cover a genuinely complete language: `IF`/`ELSE`/`THEN`,
 three kinds of loop, memory, strings, arrays, error handling, sound,
-and graphics all included. This is just an honest inventory of the
+graphics, and defining words of your own all included. This is just an honest inventory of the
 gaps, in the same spirit as the caveats already scattered through this
 document, so you don't go looking for something that plainly isn't
 there yet and conclude you missed it.
