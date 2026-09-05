@@ -35,12 +35,12 @@
 ;      permanently disabled; this is the first one that doesn't.
 ;
 ; SELF-TEST:
-;   1. FIND (not execute — SAVE/LOAD would attempt a real, slow tape
-;      operation this automated test has no reason to trigger; Phase
-;      7's own smoke ROM already proved that wiring against a fake
-;      transport) locates SAVE, LOAD, F+, F-, 64COL, 32COL, PALETTE64,
-;      and PLOT64 — one word from each of the phases that only reach
-;      LATEST through a DICT_CHAIN_POINT splice.
+;   1. FIND (not execute — SAVE-LIB/LOAD-LIB would attempt a real, slow
+;      tape operation this automated test has no reason to trigger;
+;      Phase 7's own smoke ROM already proved that wiring against a
+;      fake transport) locates SAVE-LIB, LOAD-LIB, F+, F-, 64COL,
+;      32COL, PALETTE64, and PLOT64 — one word from each of the phases
+;      that only reach LATEST through a DICT_CHAIN_POINT splice.
 ;   2. Interprets a real source string exercising DUP/+ (Phase 2),
 ;      : ; IF ELSE THEN (Phases 3/4), and PLOT/BORDER (Phase 5)
 ;      together, checking the final stack value.
@@ -135,9 +135,9 @@ COLD_START:
 ; ---- checkpoint 1: FIND every chain-spliced phase's own word ----
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
-    ld   hl, NAME_SAVE
+    ld   hl, NAME_SAVELIB
     call CHECK_FIND
-    ld   hl, NAME_LOAD
+    ld   hl, NAME_LOADLIB
     call CHECK_FIND
     ld   hl, NAME_FPLUS
     call CHECK_FIND
@@ -239,10 +239,24 @@ INTERPRET_UNKNOWN_WORD:
 .hang:
     jr   .hang
 
+; ============================================================================
+; RUNTIME_ERROR_HOOK -- required now that core/throwcatch.asm is
+; INCLUDEd (see the DEFINE THROW_CATCH_ENABLED comment above). Nothing
+; in this file's own checkpoints ever THROWs (checkpoint 1 only FINDs
+; SAVE-LIB/LOAD-LIB, never executes them) -- reaching this at all means
+; something unexpected happened, so it uses the same white "something's
+; wrong" signal INTERPRET_UNKNOWN_WORD does, not a numbered checkpoint.
+; ============================================================================
+RUNTIME_ERROR_HOOK:
+    ld   a, 7
+    out  (PORT_ULA), a
+.hang:
+    jr   .hang
+
 CHECKPOINT_NUM EQU $87C0
 
-NAME_SAVE:      DB 4, "S", "A", "V", "E"
-NAME_LOAD:      DB 4, "L", "O", "A", "D"
+NAME_SAVELIB:   DB 8, "S", "A", "V", "E", "-", "L", "I", "B"
+NAME_LOADLIB:   DB 8, "L", "O", "A", "D", "-", "L", "I", "B"
 NAME_FPLUS:     DB 2, "F", "+"
 NAME_FMINUS:    DB 2, "F", "-"
 NAME_64COL:     DB 5, "6", "4", "C", "O", "L"
@@ -265,13 +279,20 @@ SRC_COMBO_LEN   EQU $ - SRC_COMBO
     INCLUDE "kernel/storage/storage.asm"
     INCLUDE "kernel/mode64/mode64.asm"
     INCLUDE "core/dict.asm"
+    DEFINE THROW_CATCH_ENABLED   ; core/storage.asm's own SAVE-LIB now
+                                  ; THROWs -8 on overflow (see that
+                                  ; file's own header) -- a real, new
+                                  ; dependency on core/throwcatch.asm
+                                  ; below, which needs this defined
+                                  ; before core/interp.asm for
+                                  ; THROW_ROOT_SP to exist
     INCLUDE "core/interp.asm"
 DICT_CHAIN_POINT DEFL H_SEMICOLON
     INCLUDE "core/control.asm"
     INCLUDE "core/ts2068.asm"
 DICT_CHAIN_POINT DEFL H_BORDER
     INCLUDE "core/storage.asm"
-DICT_CHAIN_POINT DEFL H_LOAD
+DICT_CHAIN_POINT DEFL H_LOADLIB
     INCLUDE "core/float.asm"
     INCLUDE "core/mode64.asm"
 DICT_CHAIN_POINT DEFL DICT_LATEST_INIT_P8B   ; satisfies core/print.asm's
@@ -284,6 +305,15 @@ DICT_CHAIN_POINT DEFL DICT_LATEST_INIT_P8B   ; satisfies core/print.asm's
                                               ; ROM's own checkpoint 1
                                               ; FINDs
     INCLUDE "core/print.asm"
+DICT_CHAIN_POINT DEFL H_DOT   ; core/throwcatch.asm below is needed
+                               ; only for core/storage.asm's own
+                               ; W_THROW call to resolve -- chained on
+                               ; after core/print.asm's own tail, same
+                               ; "doesn't change what checkpoint 1
+                               ; FINDs" reasoning as above (LATEST is
+                               ; still seeded to DICT_LATEST_INIT_P8B,
+                               ; well before this point in the chain)
+    INCLUDE "core/throwcatch.asm"
     INCLUDE "core/editor.asm"
 
     DS   $4000 - $, $FF

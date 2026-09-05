@@ -442,6 +442,16 @@ whole-dictionary-image blobs, Jupiter-Ace-style: `SAVE "name"` and
 a categorically simpler contract than BASIC's, matching the original
 plan for this phase.
 
+**Later update:** `SAVE`/`LOAD` were renamed `SAVE-LIB`/`LOAD-LIB` once
+Phase 52 introduced `SAVE-TEXT`/`LOAD-TEXT`, to keep the two mechanisms
+identifiable by name. That same pass also found and fixed a real,
+unguarded buffer-overflow bug (`SAVE-LIB` used to `LDIR` the whole
+compiled dictionary into a fixed 512-byte scratch buffer with no bounds
+check at all) and replaced the old 512-byte provisional ceiling with a
+researched 8190-byte one, backed by a real `THROW -8` refusal instead
+of silent corruption — see `core/storage.asm`'s own header for the full
+RAM-budget accounting.
+
 **Design constraint that shaped everything here, from an explicit user
 warning before any code was written:** 2068-Leap's own hard-won
 experience is that the tape/storage wire format is fragile — deviate

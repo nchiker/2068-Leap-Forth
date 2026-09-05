@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-smoke-p31 forth-smoke-p32 forth-smoke-p33 forth-smoke-p34 forth-smoke-p35 forth-smoke-p36 forth-smoke-p37 forth-smoke-p38 forth-smoke-p40 forth-smoke-p41 forth-smoke-p42 forth-smoke-p43 forth-smoke-p44 forth-smoke-p45 forth-smoke-p46 forth-smoke-p47 forth-smoke-p48 forth-smoke-p49 forth-smoke-p50 forth-boot check clean
+.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-smoke-p31 forth-smoke-p32 forth-smoke-p33 forth-smoke-p34 forth-smoke-p35 forth-smoke-p36 forth-smoke-p37 forth-smoke-p38 forth-smoke-p40 forth-smoke-p41 forth-smoke-p42 forth-smoke-p43 forth-smoke-p44 forth-smoke-p45 forth-smoke-p46 forth-smoke-p47 forth-smoke-p48 forth-smoke-p49 forth-smoke-p50 forth-smoke-p51 forth-boot forth-demo-blackjack forth-smoke-p52 check clean
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-smoke-p31 forth-smoke-p32 forth-smoke-p33 forth-smoke-p34 forth-smoke-p35 forth-smoke-p36 forth-smoke-p37 forth-smoke-p38 forth-smoke-p40 forth-smoke-p41 forth-smoke-p42 forth-smoke-p43 forth-smoke-p44 forth-smoke-p45 forth-smoke-p46 forth-smoke-p47 forth-smoke-p48 forth-smoke-p49 forth-smoke-p50 forth-boot
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-smoke-p31 forth-smoke-p32 forth-smoke-p33 forth-smoke-p34 forth-smoke-p35 forth-smoke-p36 forth-smoke-p37 forth-smoke-p38 forth-smoke-p40 forth-smoke-p41 forth-smoke-p42 forth-smoke-p43 forth-smoke-p44 forth-smoke-p45 forth-smoke-p46 forth-smoke-p47 forth-smoke-p48 forth-smoke-p49 forth-smoke-p50 forth-smoke-p51 forth-boot forth-demo-blackjack forth-smoke-p52
 
 # Milestone 0: boot stub only.
 boot:
@@ -59,7 +59,7 @@ forth-smoke-p6:
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p6.sym --lst=build/forth_smoke_p6.lst rom/forth_smoke_p6.asm
 	mv forth_smoke_p6_rom0.bin build/forth_smoke_p6_rom0.bin
 
-# Phase 7: storage (SAVE, LOAD) smoke ROM. Verified against
+# Phase 7: storage (SAVE-LIB, LOAD-LIB) smoke ROM. Verified against
 # kernel/storage's own STORAGE_TEST_FAKE_SEND/RECEIVE hooks (an
 # in-memory fake tape, not real cassette timing) -- proves this
 # project's own wiring, NOT that the real tape wire format round-trips
@@ -400,6 +400,38 @@ forth-smoke-p50:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p50.sym --lst=build/forth_smoke_p50.lst rom/forth_smoke_p50.asm
 	mv forth_smoke_p50_rom0.bin build/forth_smoke_p50_rom0.bin
+
+# Phase 51: UDG (core/udg.asm) smoke ROM. Three checkpoints: address
+# arithmetic (0/1/20 UDG), a real Forth C!/C@ round trip writing an
+# 8-byte "spade" bitmap into slot 0, and a real EMIT + GFX_READ_PIXEL
+# rendering round trip proving the rendered glyph matches those exact
+# bytes — see rom/forth_smoke_p51.asm's own header.
+forth-smoke-p51:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p51.sym --lst=build/forth_smoke_p51.lst rom/forth_smoke_p51.asm
+	mv forth_smoke_p51_rom0.bin build/forth_smoke_p51_rom0.bin
+
+# Blackjack demo ROM: boots directly into a real, playable single-deck
+# Blackjack game showcasing UDG (four hand-drawn suit glyphs), color
+# (INK/PAPER/BORDER), and sound (BEEP/SOUND) together. See
+# rom/forth_demo_blackjack.asm's own header for rules scope, screen
+# layout, and how to play it in Fuse.
+forth-demo-blackjack:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_demo_blackjack.sym --lst=build/forth_demo_blackjack.lst rom/forth_demo_blackjack.asm
+	mv forth_demo_blackjack_rom0.bin build/forth_demo_blackjack_rom0.bin
+
+# Phase 52: SAVE-TEXT/LOAD-TEXT (core/loadtext.asm) smoke ROM. Two
+# checkpoints: a small DOUBLER round trip, then the Blackjack demo's own
+# extracted ~6KB Forth source (rom/forth_smoke_p52_blackjack_test.fs)
+# SAVE-TEXT'd, a simulated fresh boot, LOAD-TEXT'd back, and played
+# through all four scripted rounds -- checked against ground truth
+# independently captured from rom/forth_demo_blackjack.asm's own
+# BLACKJACK_TEST_MODE build. See rom/forth_smoke_p52.asm's own header.
+forth-smoke-p52:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p52.sym --lst=build/forth_smoke_p52.lst rom/forth_smoke_p52.asm
+	mv forth_smoke_p52_rom0.bin build/forth_smoke_p52_rom0.bin
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm

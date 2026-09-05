@@ -52,19 +52,27 @@ inherited, what was deliberately left behind, and the phased build order.
   `IO_READ_KEY` needs a live interrupt wired up first, which no ROM in
   this project sets up yet).
 - Phase 7 (`core/storage.asm` + `rom/forth_smoke_p7.asm`): storage —
-  `SAVE`/`LOAD` as whole-dictionary-image blobs on `STORAGE_SAVE`/
-  `STORAGE_LOAD`, Jupiter-Ace-style. Calls only the documented public
-  contract, never `kernel/storage`'s own internals — a deliberate
-  design constraint from a real compatibility warning (the tape format
-  is fragile; deviating from it breaks real emulator LOAD). Found and
-  fixed two real integration bugs along the way (`IX` gets destroyed by
-  the storage calls; `STORAGE_LOAD`'s filename match needs a real
+  `SAVE-LIB`/`LOAD-LIB` (renamed from `SAVE`/`LOAD` to distinguish them
+  from the later `SAVE-TEXT`/`LOAD-TEXT`, Phase 52) as
+  whole-dictionary-image blobs on `STORAGE_SAVE`/`STORAGE_LOAD`,
+  Jupiter-Ace-style. Calls only the documented public contract, never
+  `kernel/storage`'s own internals — a deliberate design constraint
+  from a real compatibility warning (the tape format is fragile;
+  deviating from it breaks real emulator LOAD). Found and fixed two
+  real integration bugs along the way (`IX` gets destroyed by the
+  storage calls; `STORAGE_LOAD`'s filename match needs a real
   space-padded 10-byte buffer, not a raw shorter one) — see
   `docs/PROJECT_PLAN.md` Phase 7 for both. Confirmed passing against an
   in-memory fake tape transport (kernel/storage's own
   `STORAGE_TEST_FAKE_SEND`/`RECEIVE` hooks); a **real Fuse tape
   round-trip is still open, deliberately deferred** — this proves the
-  wiring, not real wire-format compatibility in an actual emulator.
+  wiring, not real wire-format compatibility in an actual emulator. A
+  later pass also found and fixed a real, live buffer-overflow bug in
+  `SAVE-LIB` (any dictionary bigger than the original 512-byte
+  provisional ceiling silently corrupted adjacent RAM) — the ceiling is
+  now a researched 8190 bytes, backed by a real bounds check that
+  THROWs -8 instead of corrupting memory; see `core/storage.asm`'s own
+  header for the full RAM-budget reasoning.
 - Phase 8, stretch goals (`core/float.asm` + `rom/forth_smoke_p8.asm`;
   `kernel/mode64/mode64.asm` + `core/mode64.asm` + `rom/forth_smoke_p8b.asm`):
   - **Floating point** — `F+`/`F-`, a small native Forth float
@@ -851,7 +859,7 @@ core/       language-layer code, not hardware-facing:
               control.asm (Phase 4 — IF/ELSE/THEN, BEGIN/UNTIL)
               ts2068.asm  (Phase 5 — PLOT/LINE/CIRCLE/BORDER)
               editor.asm  (Phase 6 — line editing)
-              storage.asm (Phase 7 — SAVE/LOAD)
+              storage.asm (Phase 7 — SAVE-LIB/LOAD-LIB)
               float.asm   (Phase 8 stretch — F+/F-)
               mode64.asm  (Phase 8 stretch — 64COL/32COL/PALETTE64/PLOT64)
               print.asm   (Phase 10 — EMIT/.)
@@ -955,7 +963,7 @@ make forth-smoke-p3   # Phase 3 outer interpreter/colon compiler smoke ROM
 make forth-smoke-p4   # Phase 4 control-flow smoke ROM
 make forth-smoke-p5   # Phase 5 TS2068 vocabulary smoke ROM
 make forth-smoke-p6   # Phase 6 line-editing smoke ROM
-make forth-smoke-p7   # Phase 7 storage (SAVE/LOAD) smoke ROM
+make forth-smoke-p7   # Phase 7 storage (SAVE-LIB/LOAD-LIB) smoke ROM
 make forth-smoke-p8   # Phase 8 stretch: floating point smoke ROM
 make forth-smoke-p8b  # Phase 8 stretch: 64-column display smoke ROM
 make forth-smoke-p9   # Phase 9 smoke ROM: full dictionary + real interrupts

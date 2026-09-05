@@ -19,7 +19,7 @@
 ;
 ; The full dictionary is assembled here: every word from every phase
 ; (DROP/DUP/SWAP/OVER/+/-/@/!, :/;, 0=/IF/ELSE/THEN/BEGIN/UNTIL,
-; PLOT/LINE/CIRCLE/BORDER/CLS, SAVE/LOAD, F+/F-, 64COL/32COL/
+; PLOT/LINE/CIRCLE/BORDER/CLS, SAVE-LIB/LOAD-LIB, F+/F-, 64COL/32COL/
 ; PALETTE64/PLOT64, F*, F/, EMIT/., F., FSQRT, S>F/F>S/FROUND,
 ; PI/SIN/COS, BEEP, SOUND, =/</>, VARIABLE/CONSTANT, ." , WHILE/REPEAT,
 ; INK/PAPER, DO/LOOP/LEAVE/+LOOP/I, FILL/AT-XY, KEY/KEY?,
@@ -44,7 +44,10 @@
 ; Phase 50's own new files are core/dictspace.asm, core/create.asm,
 ; core/does.asm, core/immediate.asm, core/abortquit.asm,
 ; core/portio.asm, and core/forget.asm — see each file's own header for
-; what it adds and why.
+; what it adds and why. Phase 51 adds one more: core/udg.asm (UDG,
+; n -- addr), spliced in after core/forget.asm/before core/editor.asm,
+; with COLD_START's own LATEST seed updated to
+; DICT_LATEST_INIT_UDG — see that file's own header.
 ; DECIMAL_NUMBER_ENABLED is also DEFINEd here (core/decimal.asm,
 ; Phase 23) — not a dictionary word, a NUMBER/INTERPRET_RUN parsing
 ; capability: typing a literal like `3.5` now pushes a real float
@@ -127,8 +130,11 @@ COLD_START:
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
-    ld   hl, DICT_LATEST_INIT_FORGET   ; the full chain's own head —
-                                    ; see this file's own header
+    ld   hl, DICT_LATEST_INIT_LOADTEXT   ; the full chain's own head —
+                                    ; see this file's own header (Phase
+                                    ; 52 -- core/loadtext.asm's SAVE-TEXT/
+                                    ; LOAD-TEXT -- spliced on after
+                                    ; core/udg.asm's own tail)
     ld   (LATEST), hl
     ld   hl, FORTH_DICT_RAM
     ld   (HERE), hl
@@ -441,7 +447,7 @@ DICT_CHAIN_POINT DEFL H_SEMICOLON
     INCLUDE "core/ts2068.asm"
 DICT_CHAIN_POINT DEFL H_CLS
     INCLUDE "core/storage.asm"
-DICT_CHAIN_POINT DEFL H_LOAD
+DICT_CHAIN_POINT DEFL H_LOADLIB
     INCLUDE "core/float.asm"
     INCLUDE "core/mode64.asm"
 DICT_CHAIN_POINT DEFL H_PLOT64
@@ -531,6 +537,22 @@ DICT_CHAIN_POINT DEFL H_QUIT
     INCLUDE "core/portio.asm"
 DICT_CHAIN_POINT DEFL H_OUT
     INCLUDE "core/forget.asm"
+DICT_CHAIN_POINT DEFL H_FORGET
+    INCLUDE "core/udg.asm"
+DICT_CHAIN_POINT DEFL H_UDG
+    INCLUDE "core/loadtext.asm"
+    ; core/storage.asm's own SAVE_LOAD_TEMP_BUF/SAVE_LOAD_MAX_DICT are
+    ; literals that deliberately TIME-SHARE this exact same physical RAM
+    ; (LOADTEXT_BUF/LOADTEXT_MAX_LEN) rather than referencing these
+    ; symbols directly -- core/storage.asm must still assemble standalone
+    ; in rom/forth_smoke_p7.asm, where neither of these exists (see that
+    ; file's own header for why it can't be a live expression). This is
+    ; the one place in the real product ROM where both sides of that
+    ; literal duplication actually exist together -- if either ever
+    ; drifts, this fires at assembly time instead of silently corrupting
+    ; RAM the two mechanisms were supposed to be safely sharing.
+    ASSERT SAVE_LOAD_TEMP_BUF == LOADTEXT_BUF
+    ASSERT SAVE_LOAD_MAX_DICT == LOADTEXT_MAX_LEN - 2
     INCLUDE "core/editor.asm"
 
     DS   $4000 - $, $FF
