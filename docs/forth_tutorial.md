@@ -2627,9 +2627,31 @@ coordinate range. All four are real, working words:
 32COL
 ```
 
-This is a **pixel graphics mode**, not a wider *text* display: typed
-text and `EMIT`/`.`/`."` output are unaffected either way, still
-always 32 columns wide.
+`64COL` is also a genuinely wider **text** display now: `EMIT`, `.`,
+`."`, and typing at the prompt itself all automatically wrap at column
+64 instead of 32 while `64COL` is active, no separate word needed —
+the same 8-pixel font, just drawn across twice the width:
+
+```forth
+64COL
+." THIS LINE NOW WRAPS AT 64 COLUMNS INSTEAD OF 32, TWICE AS MUCH ROOM "
+32COL
+." BACK TO THE NORMAL 32-COLUMN WIDTH"
+```
+
+Typing at the prompt works the same way — a line you're typing wraps
+at 64 columns instead of 32 while `64COL` is active, cursor included.
+One real difference from the normal-width cursor: the 64-column
+cursor is a solid block that stays **on** rather than blinking. Mode 6
+(the hardware mode `64COL` switches to) has no per-cell color memory
+at all — the normal cursor's blink comes from the real ULA hardware's
+own FLASH bit, which lives in that per-cell color byte, so there's
+nothing for a 64-column cursor to hook into. You'll always be able to
+see where it is; it just won't flash.
+
+`INK`/`PAPER` don't apply per-character in `64COL` mode either, for
+the same reason — `PALETTE64` (above) is how `64COL` picks its one
+shared color pair instead.
 
 Because `PLOT64` is an ordinary word once `64COL` has switched modes,
 [section 7](#7-repeating-yourself)'s `DO`/`LOOP` works on it exactly
@@ -3622,8 +3644,7 @@ an obvious place to be recorded, in the same spirit as the caveats
 already scattered through this document.
 
 See [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for this project's own build
-history and phased development order — including the real 64-column
-*text* mode and ULAPlus visual-fidelity items still tracked there,
-which are more involved, ongoing design questions rather than a
-missing word — if you're curious how 2068-Forth was actually put
-together rather than just how to use it.
+history and phased development order — including the ULAPlus visual-
+fidelity item still tracked there (an ongoing cross-emulator question,
+not a missing word) — if you're curious how 2068-Forth was actually
+put together rather than just how to use it.

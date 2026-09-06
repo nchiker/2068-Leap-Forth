@@ -3420,8 +3420,29 @@ truncation-vs-rounding error in a `DEG` example, and a nonexistent
 
 ## Future stretch goal — a real 64-column TEXT mode in the editor
 
-**Not yet scheduled as a numbered phase — tracked here so it isn't
-lost, to pick up whenever convenient.** User request, 2026-09-01,
+**DONE 2026-09-06 (Phases 56/57/58) — kept below for the real research
+history that shaped the design, not as an open item any more.** The
+actual implementation took a different, cheaper path than anything
+scoped below: rather than a new narrower font, `kernel/mode64/
+mode64.asm`'s existing two-display-file split (already used for pixel
+graphics) turned out to give exactly 64 real text columns using the
+EXISTING 8x8 font unchanged, once a character drawer aware of that
+split existed (`MODE64_PUTCHAR`, Phase 56) — no new glyph data, no ROM
+font-budget cost. `core/print.asm`'s `EMIT` became mode-aware (Phase
+57, mirroring how `HIRES`/`NORMAL` had just made `PLOT`/`LINE`/`CIRCLE`
+mode-aware), and `core/editor.asm` got a full `EDITOR_REDRAW64`/
+`WRAP_CALC64` sibling pair for live typing (Phase 58) — planned with
+the user beforehand specifically because this file's own two
+documented incidents below made a shared, branch-threaded body too
+risky to attempt. The 64-column cursor is a static (non-blinking)
+`MODE64_PUTCHAR_XOR` block, not a real blink — Mode 6 has no per-cell
+attribute byte to drive the existing hardware-FLASH trick, and a real
+blink would need new ISR timing plus a live-loop rewrite, deliberately
+deferred as a separate, riskier follow-up rather than folded in here.
+See `docs/forth_tutorial.md` section 12 for the user-facing result.
+
+**Original scoping notes follow, unedited, for the historical record.**
+User request, 2026-09-01,
 after a live investigation (prompted by a genuine question — "can the
 editor switch between 64-column and 32-column mode?") turned up an
 important distinction worth recording:

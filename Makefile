@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-smoke-p31 forth-smoke-p32 forth-smoke-p33 forth-smoke-p34 forth-smoke-p35 forth-smoke-p36 forth-smoke-p37 forth-smoke-p38 forth-smoke-p40 forth-smoke-p41 forth-smoke-p42 forth-smoke-p43 forth-smoke-p44 forth-smoke-p45 forth-smoke-p46 forth-smoke-p47 forth-smoke-p48 forth-smoke-p49 forth-smoke-p50 forth-smoke-p51 forth-boot forth-demo-blackjack forth-smoke-p52 forth-smoke-p53-realtape forth-smoke-p54 forth-smoke-p55 forth-smoke-p56 forth-smoke-p57 check clean
+.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-smoke-p31 forth-smoke-p32 forth-smoke-p33 forth-smoke-p34 forth-smoke-p35 forth-smoke-p36 forth-smoke-p37 forth-smoke-p38 forth-smoke-p40 forth-smoke-p41 forth-smoke-p42 forth-smoke-p43 forth-smoke-p44 forth-smoke-p45 forth-smoke-p46 forth-smoke-p47 forth-smoke-p48 forth-smoke-p49 forth-smoke-p50 forth-smoke-p51 forth-boot forth-demo-blackjack forth-smoke-p52 forth-smoke-p53-realtape forth-smoke-p54 forth-smoke-p55 forth-smoke-p56 forth-smoke-p57 forth-smoke-p58 check clean
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-smoke-p31 forth-smoke-p32 forth-smoke-p33 forth-smoke-p34 forth-smoke-p35 forth-smoke-p36 forth-smoke-p37 forth-smoke-p38 forth-smoke-p40 forth-smoke-p41 forth-smoke-p42 forth-smoke-p43 forth-smoke-p44 forth-smoke-p45 forth-smoke-p46 forth-smoke-p47 forth-smoke-p48 forth-smoke-p49 forth-smoke-p50 forth-smoke-p51 forth-boot forth-demo-blackjack forth-smoke-p52 forth-smoke-p53-realtape forth-smoke-p54 forth-smoke-p55 forth-smoke-p56 forth-smoke-p57
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-smoke-p31 forth-smoke-p32 forth-smoke-p33 forth-smoke-p34 forth-smoke-p35 forth-smoke-p36 forth-smoke-p37 forth-smoke-p38 forth-smoke-p40 forth-smoke-p41 forth-smoke-p42 forth-smoke-p43 forth-smoke-p44 forth-smoke-p45 forth-smoke-p46 forth-smoke-p47 forth-smoke-p48 forth-smoke-p49 forth-smoke-p50 forth-smoke-p51 forth-boot forth-demo-blackjack forth-smoke-p52 forth-smoke-p53-realtape forth-smoke-p54 forth-smoke-p55 forth-smoke-p56 forth-smoke-p57 forth-smoke-p58
 
 # Milestone 0: boot stub only.
 boot:
@@ -479,6 +479,15 @@ forth-smoke-p57:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p57.sym --lst=build/forth_smoke_p57.lst rom/forth_smoke_p57.asm
 	mv forth_smoke_p57_rom0.bin build/forth_smoke_p57_rom0.bin
+
+# Phase 58: EDITOR_REDRAW64/WRAP_CALC64 (core/editor.asm) -- step 3/3
+# of the real 64-column TEXT stretch goal (Phase F of the plan),
+# closing it out. See rom/forth_smoke_p58.asm's own header for the
+# four-checkpoint pass/fail contract.
+forth-smoke-p58:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p58.sym --lst=build/forth_smoke_p58.lst rom/forth_smoke_p58.asm
+	mv forth_smoke_p58_rom0.bin build/forth_smoke_p58_rom0.bin
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm

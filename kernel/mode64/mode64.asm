@@ -546,4 +546,25 @@ MODE64_CLEAR_ROW:
     jr   c, .loop
     ret
 
+; ============================================================================
+; MODE64_SCROLL_OUTPUT_UP
+; Mirrors GFX_SCROLL_OUTPUT_UP exactly (scroll all 24 rows, not just
+; the 23-row program-listing window MODE64_SCROLL_TEXT_UP protects) --
+; needed by core/editor.asm's own EDITOR_REDRAW when a wrapped input
+; line grows onto a screen row that still holds recent output. No
+; attribute LDIR step (Mode 6 has none).
+; In:  none
+; Out: none
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+MODE64_SCROLL_OUTPUT_UP:
+    call MODE64_SCROLL_TEXT_UP
+    ld   a, 22
+    ld   (GFX_SCROLL_DST_ROW), a
+    ld   a, 23
+    ld   (GFX_SCROLL_SRC_ROW), a
+    call MODE64_COPY_ROW_BITMAP
+    ld   b, 23
+    jp   MODE64_CLEAR_ROW
+
     ENDIF
