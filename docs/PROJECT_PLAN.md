@@ -3482,9 +3482,12 @@ designed in detail):**
 
 This is real, multi-file design work — not a quick wrapper the way
 `INK`/`PAPER` was. Sequence it whenever convenient relative to the
-other open items (hi-res mode, AY-3-8912 `SOUND`); nothing currently
-planned depends on it, and it doesn't block anything currently planned
-either.
+other open items (hi-res mode; the ULAPlus visual-fidelity check
+against unpatched ZEsarUX noted above); nothing currently planned
+depends on it, and it doesn't block anything currently planned either.
+(AY-3-8912 `SOUND` was itself an open item when this section was first
+written — Phase 32 closed it with real register-level access; see that
+phase's own section above.)
 
 ## Testing discipline
 
