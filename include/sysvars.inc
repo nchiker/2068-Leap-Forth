@@ -1954,15 +1954,18 @@ SPRITE_ARG_H:        DEFS 1           ; 1 byte
 ; earlier than before, not a new category of risk.
 ;
 ; HAZARD THIS CREATES, and how it's handled: $6000-$77FF of this same
-; idle pool is where 64-column mode's own second display file lives
-; (hardware-fixed, not relocatable — see docs/memory_map.md). Both of
-; 2068-Forth's own core/moregfx.asm's FILL and the 64COL word can only
-; run one at a time (single-threaded, no interrupt-driven redraw), so
-; the real hazard is FILL corrupting a currently-ACTIVE 64-column
-; screen (or vice versa) if called while the other's data is live —
-; core/moregfx.asm's own FILL wrapper checks GFX_MODE and refuses to
-; run while 64-column mode is active, rather than relying on the
-; caller to know not to mix them (see that file's own header).
+; idle pool is where the Second Display File lives (hardware-fixed, not
+; relocatable — see docs/memory_map.md) — used by BOTH 64-column mode
+; (kernel/mode64's own second bitmap plane, GFX_MODE=2) AND High
+; Resolution Graphics mode (core/hires.asm's HIRES, GFX_MODE=1; real
+; per-scanline attribute data, kernel/graphics's GFX_SET_ATTR_EXT).
+; FILL and either video mode can only run one at a time (single-
+; threaded, no interrupt-driven redraw), so the real hazard is FILL
+; corrupting a currently-ACTIVE non-Normal screen (or vice versa) if
+; called while that mode's data is live — core/moregfx.asm's own FILL
+; wrapper checks GFX_MODE and refuses to run whenever it's nonzero (any
+; non-Normal mode), rather than relying on the caller to know not to
+; mix them (see that file's own header).
 GFX_FILL_VISITED     EQU $5B00         ; 6144 bytes, through $72FF
 
     ASSERT GFX_FILL_VISITED + 6144 == GFX_FILL_STACK

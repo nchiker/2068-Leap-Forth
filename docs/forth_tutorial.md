@@ -2057,6 +2057,8 @@ beyond what each word's own arguments say.
 | `INK` | `( color -- )` | Set the foreground color `PLOT`/`LINE`/`CIRCLE`/`FILL` draw with, and printed text (`EMIT`/`.`/`."`/`TYPE`) prints in, from now on (0-7) |
 | `PAPER` | `( color -- )` | Set the background color the same way |
 | `AT-XY` | `( col row -- )` | Move where the next `EMIT`/`.`/`."` prints to (column 0-31, row 0-22) |
+| `HIRES` | `( -- )` | Switch to High Resolution Graphics mode |
+| `NORMAL` | `( -- )` | Switch back to Normal mode |
 | `BEEP` | `( n-semitones fduration -- )` | Produce a tone |
 | `SOUND` | `( register data -- )` | Write directly to an AY-3-8912 sound-chip register |
 
@@ -2115,8 +2117,9 @@ DOTS
 Read the body the way section 7 read `STARS`: this uses section 7's
 own `+LOOP` to step the index by 40 instead of 1, so `I` counts the x
 coordinates directly — 20, 60, 100, 140, 180 — with no arithmetic
-needed to turn it into one (this Forth has no plain integer `*` to do
-that with anyway; only `F*`, back in [Numbers](#3-numbers)). `I` feeds
+needed to turn it into one (2068-Forth does have plain integer `*` —
+see [Numbers](#3-numbers) — but `+LOOP`'s own step argument already
+does this particular job more directly). `I` feeds
 straight into `CIRCLE` as the x coordinate; `96` and `8` are a fixed y
 and radius, the same on every pass. `CIRCLE` then draws — `xc yc r`,
 in that order, exactly as the table above lists it. `CIRCLE` itself
@@ -2173,6 +2176,52 @@ different pitch means recomputing that period yourself. There's no
 semitone convenience here on purpose: `SOUND` trades convenience for
 direct access to everything the chip can do — three tones, volume
 envelopes, noise — that `BEEP` was never meant to reach.
+
+### High Resolution Graphics: `HIRES` and `NORMAL`
+
+Every example so far draws on **Normal** mode's screen, which colors
+in blocks: one `INK`/`PAPER` pair per 8x8-pixel cell, the classic
+Sinclair "color clash" you may already know from real Spectrum
+software — two shapes that pass through the same cell are stuck
+sharing its one color, whether you wanted that or not.
+
+`HIRES` switches to a genuinely different color mechanism: the same
+256x192 pixels, but one color pair per pixel *row* within a column,
+not per 8x8 block. Two pixels one row apart, in the same column, can
+now hold completely different colors with no clash at all:
+
+```forth
+HIRES
+1 INK  10 20 PLOT
+6 INK  10 21 PLOT
+```
+
+In Normal mode those two `PLOT`s would fight over one shared cell
+attribute — whichever `INK` ran last would silently win, and BOTH
+pixels would end up that color. In `HIRES`, they don't: pixel (10, 20)
+stays ink 1, pixel (10, 21) stays ink 6, because each pixel row now
+carries its own color memory.
+
+`PLOT`, `LINE`, and `CIRCLE` all work exactly as before once `HIRES`
+is active — nothing about calling them changes. `NORMAL` switches back:
+
+```forth
+NORMAL
+```
+
+Two things behave a little differently while `HIRES` is active, both
+worth knowing before you hit them by surprise:
+
+- **`FILL` refuses to run.** `HIRES`'s own per-row color memory lives
+  in the same physical memory `FILL` borrows as scratch space while it
+  works, so running both at once would let one corrupt the other's
+  data. Rather than risk that, `FILL` simply does nothing — no crash,
+  no error printed, just a silent no-op — for as long as `HIRES` is
+  active. Switch back to `NORMAL` first if you need `FILL`.
+- **`CLS` still clears the screen, colors included** — it resets every
+  pixel row's color back to whatever `PAPER`/`INK` are currently set
+  to, exactly like Normal mode's `CLS` already does for its own 8x8
+  cells.
 
 ### Talking to the hardware directly: `IN` and `OUT`
 
@@ -3522,6 +3571,8 @@ the same convention applied to the full ANS Forth standard.
 | `BORDER` | `( color -- )` |
 | `INK` | `( color -- )` |
 | `PAPER` | `( color -- )` |
+| `HIRES` | `( -- )` |
+| `NORMAL` | `( -- )` |
 | `BEEP` | `( n-semitones fduration -- )` |
 | `SOUND` | `( register data -- )` |
 | `UDG` | `( n -- addr )` |
@@ -3558,21 +3609,21 @@ the same convention applied to the full ANS Forth standard.
 
 ## Appendix B: what's not here yet
 
-None of this is a promise any of it is coming, and none of it should
-stop you writing real programs with what's already here — sections 1
-through 18 cover a genuinely complete language: `IF`/`ELSE`/`THEN`,
-three kinds of loop, memory, strings, arrays, error handling, sound,
-graphics, and defining words of your own all included. This is just an honest inventory of the
-gaps, in the same spirit as the caveats already scattered through this
-document, so you don't go looking for something that plainly isn't
-there yet and conclude you missed it.
-
-One thing a Forth veteran would expect, and a BASIC programmer would
-ask about, isn't part of 2068-Forth yet:
-
-- **Hi-res graphics mode** — beyond the normal-resolution words in
-  section 9 and the experimental 64-column pixel mode in section 12.
+Sections 1 through 18 cover a genuinely complete language:
+`IF`/`ELSE`/`THEN`, three kinds of loop, memory, strings, arrays, error
+handling, sound, and graphics — including, as of the most recent work,
+Hi-res graphics mode (`HIRES`/`NORMAL`, [section 9](#9-drawing-and-sound))
+and plain integer `*`/`/` ([Numbers](#3-numbers)), the last two items
+that used to sit on this list. There is nothing left in the "a Forth
+veteran would expect it, a BASIC programmer would ask about it" bucket
+this appendix exists to track — this is an honest, currently-empty
+inventory, kept here so a future gap (if one ever opens up again) has
+an obvious place to be recorded, in the same spirit as the caveats
+already scattered through this document.
 
 See [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for this project's own build
-history and phased development order, if you're curious how 2068-Forth
-was actually put together rather than just how to use it.
+history and phased development order — including the real 64-column
+*text* mode and ULAPlus visual-fidelity items still tracked there,
+which are more involved, ongoing design questions rather than a
+missing word — if you're curious how 2068-Forth was actually put
+together rather than just how to use it.

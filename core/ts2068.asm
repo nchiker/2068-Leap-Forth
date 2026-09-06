@@ -182,6 +182,28 @@ W_CLS:
     ld   a, (CURRENT_ATTR)
     call GFX_PAINT_ATTR
 
+    ; High Resolution Graphics mode (core/hires.asm's HIRES, Phase 55)
+    ; keeps its own real per-scanline attribute data in the Second
+    ; Display File instead of the normal attribute area GFX_PAINT_ATTR
+    ; just repainted above. GFX_SET_MODE's own mode-ENTRY transition
+    ; already clears that area once, but CLS called *while already in
+    ; HIRES* is an ordinary thing a program does mid-run to clear the
+    ; screen for a fresh drawing, and left every stale attribute byte
+    ; in place until this fix -- real gap, not a hypothetical one (see
+    ; core/hires.asm's own header). GFX_MODE only ever reaches 1 in a
+    ; ROM that wires HIRES in at all, so this is a harmless no-op read
+    ; everywhere else.
+    ld   a, (GFX_MODE)
+    cp   1
+    jr   nz, .not_hires
+    ld   hl, SECOND_DISPLAY_ADDR
+    ld   de, SECOND_DISPLAY_ADDR + 1
+    ld   bc, 6144 - 1
+    ld   a, (CURRENT_ATTR)
+    ld   (hl), a
+    ldir
+.not_hires:
+
     IFDEF CORE_PRINT_ASM        ; PRINT_ROW/PRINT_COL only exist once
                                 ; core/print.asm is included (a few
                                 ; smoke ROMs use CLS without it)

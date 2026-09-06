@@ -8,8 +8,8 @@
 ; every phase since core/control.asm.
 ;
 ; WHAT THIS ADDS — the rest of docs/forth_tutorial.md's "More graphics"
-; gap (hi-res mode is not attempted here — a bigger undertaking, left
-; open):
+; gap (hi-res mode itself came later, Phase 55's core/hires.asm — see
+; FILL's own guard below, which this file had to extend for it):
 ;   FILL   ( x y -- )   flood-fills the enclosed region containing
 ;             (x, y) with the current color (CURRENT_ATTR, same state
 ;             INK/PAPER set — Phase 15), using kernel/graphics's own
@@ -61,11 +61,20 @@ W_FILL:
     ld   a, l
     ld   (GFX_FILL_X), a
     ld   a, (GFX_MODE)
-    cp   2                  ; 2 = 64-column mode active (kernel/mode64's
-                             ; MODE64_ON) -- FILL's own relocated
-                             ; scratch overlaps its second display file,
-                             ; see this file's own header
-    ret  z                  ; arguments already consumed above; silently
+    or   a                  ; nonzero = some non-Normal video mode is
+                             ; active: 1 (core/hires.asm's HIRES, Phase
+                             ; 55) or 2 (kernel/mode64's MODE64_ON) --
+                             ; FILL's own relocated scratch
+                             ; (GFX_FILL_VISITED/GFX_FILL_STACK,
+                             ; $5B00-$7FFF) overlaps SECOND_DISPLAY_ADDR
+                             ; ($6000-$77FF), which BOTH of those modes
+                             ; use for real, live screen data -- see
+                             ; this file's own header. Originally just
+                             ; `cp 2` (only 64-column mode existed when
+                             ; this guard was written); widened to `or a`
+                             ; when HIRES made mode 1 reachable too, same
+                             ; hazard either way.
+    ret  nz                 ; arguments already consumed above; silently
                              ; do nothing, matching this project's own
                              ; established out-of-range convention
     ld   a, (CURRENT_ATTR)
