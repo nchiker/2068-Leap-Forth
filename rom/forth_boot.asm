@@ -18,36 +18,38 @@
 ; against 2068-Leap's own working ROM files, not guessed.
 ;
 ; The full dictionary is assembled here: every word from every phase
-; (DROP/DUP/SWAP/OVER/+/-/@/!, :/;, 0=/IF/ELSE/THEN/BEGIN/UNTIL,
-; PLOT/LINE/CIRCLE/BORDER/CLS, SAVE-LIB/LOAD-LIB, F+/F-, 64COL/32COL/
-; PALETTE64/PLOT64, F*, F/, EMIT/., F., FSQRT, S>F/F>S/FROUND,
-; PI/SIN/COS, BEEP, SOUND, =/</>, VARIABLE/CONSTANT, ." , WHILE/REPEAT,
-; INK/PAPER, DO/LOOP/LEAVE/+LOOP/I, FILL/AT-XY, KEY/KEY?,
-; ABS/SGN/MOD/SQRT/RND/RANDOMIZE, ARRAY/CELLS,
+; (DROP/DUP/SWAP/OVER/+/-, *, /, :/;, 0=/IF/ELSE/THEN/BEGIN/UNTIL/WHILE/
+; REPEAT, PLOT/LINE/CIRCLE/BORDER/CLS, SAVE-LIB/LOAD-LIB/SAVE-TEXT/
+; LOAD-TEXT, F+/F-, F*, F., F/, EMIT/., .", CR/SPACE/SPACES, FSQRT,
+; S>F/F>S/FROUND, PI/SIN/COS/RAD/DEG, BEEP, SOUND, ULAPLUS/PALETTE,
+; =/</>, VARIABLE/CONSTANT, INK/PAPER, HIRES/NORMAL, 64COL/32COL/
+; PALETTE64/PLOT64, DO/LOOP/LEAVE/+LOOP/I/J, FILL/AT-XY, KEY/KEY?,
+; ABS/SGN/MOD/SQRT/RND/RANDOMIZE, 1+/1-/NEGATE/MAX/MIN, ARRAY/CELLS,
 ; S"/TYPE/STRING/PLACE/COUNT/LEN/VAL, C@/C!, STICK, ACCEPT/INPUT,
-; CHR/STR/UPPER/LOWER/LEFT/RIGHT/SEARCH/CODE, EXECUTE, RAD/DEG — 93
-; words total (cross-checked directly against every H_*/DB header in
-; this file's own INCLUDE chain during a code-consolidation pass rather than
-; trusted from an earlier draft of this same comment, which had
-; quietly drifted 34 words stale — missing everything from the
-; original Phase 2 primitives (DROP/DUP/SWAP/OVER/+/-/@/!) it should
-; have listed from the very start, through most of Phases 24-32),
-; chained into one LATEST list via the same DICT_CHAIN_POINT splices
-; rom/forth_smoke_p9.asm introduced and proved. NOTE: the "93 words"
-; count above already went stale after Phase 49 (1+/1-/NEGATE/MAX/MIN/
-; VLIST/EXIT/J) and is now further out of date after Phase 50's own
-; architectural-tier additions (HERE, `,`, C,, ALLOT, CREATE, DOES>,
-; IMMEDIATE, ABORT, QUIT, IN, OUT, FORGET) — recounting it correctly is
-; left to whichever future pass actually re-derives it from the real
-; INCLUDE chain, per this same comment's own stated method, rather than
-; hand-incrementing a number this comment has already shown can drift.
-; Phase 50's own new files are core/dictspace.asm, core/create.asm,
-; core/does.asm, core/immediate.asm, core/abortquit.asm,
-; core/portio.asm, and core/forget.asm — see each file's own header for
-; what it adds and why. Phase 51 adds one more: core/udg.asm (UDG,
-; n -- addr), spliced in after core/forget.asm/before core/editor.asm,
-; with COLD_START's own LATEST seed updated to
-; DICT_LATEST_INIT_UDG — see that file's own header.
+; CHR/STR/UPPER/LOWER/LEFT/RIGHT/SEARCH/CODE, EXECUTE,
+; HERE/,/C,/ALLOT/CREATE/DOES>/IMMEDIATE, FREE, THROW/CATCH,
+; ROT/2DUP/2DROP/?DUP/PICK, AND/OR/XOR/INVERT, ' (TICK), LPRINT/LLIST,
+; VLIST, ABORT/QUIT, IN/OUT, FORGET, UDG, EXIT — 140 words total.
+; RE-DERIVED, NOT HAND-COUNTED: this comment's own earlier draft
+; (claiming 93) had already gone stale twice over — once discovered
+; during a Phase-24-era consolidation pass (missing the original Phase
+; 2 primitives and most of Phases 24-32), and again silently after
+; Phase 49/50 with nobody re-deriving it (the comment said so itself,
+; rather than guess). Both times the number was hand-counted or hand-
+; incremented from prose. This time it's the result of actually
+; assembling this file and walking the real dictionary's own LINK
+; chain in the compiled binary, byte for byte, from LATEST's own seed
+; (DICT_LATEST_INIT_LOADTEXT) down to the LINK=0 sentinel — the same
+; class of check that caught two real dictionary-orphaning bugs
+; earlier in this project's history (a chain-point set to the wrong
+; tail marker silently drops every word after it, which eyeballing
+; headers can miss but walking the real chain cannot). 140 unique
+; names, zero duplicates, zero shadowing, chained into one LATEST list
+; via the same DICT_CHAIN_POINT splices rom/forth_smoke_p9.asm
+; introduced and proved. Whoever next adds a phase: re-run this same
+; walk (build this ROM, then follow DICT_LATEST_INIT_LOADTEXT's own
+; LINK chain through the assembled .bin) rather than incrementing this
+; number by eye — that's exactly the habit that let it drift twice.
 ; DECIMAL_NUMBER_ENABLED is also DEFINEd here (core/decimal.asm,
 ; Phase 23) — not a dictionary word, a NUMBER/INTERPRET_RUN parsing
 ; capability: typing a literal like `3.5` now pushes a real float
