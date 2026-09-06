@@ -90,6 +90,28 @@ W_EMIT:
     ld   c, a
     ld   a, (EMIT_CHAR_TMP)
     call GFX_PUTCHAR            ; A=char, B=row, C=column
+
+    IFDEF CORE_TS2068_ASM       ; CURRENT_ATTR only exists once
+                                ; core/ts2068.asm is included (several
+                                ; smoke ROMs use EMIT without it) --
+                                ; guarded so this stays a no-op, zero
+                                ; extra bytes, everywhere else
+    ld   a, (PRINT_ROW)          ; reload row/col from the sysvars
+    ld   b, a                    ; rather than preserving BC across
+    ld   a, (PRINT_COL)          ; GFX_PUTCHAR (which destroys it) --
+    ld   c, a                    ; same "value must survive a call ->
+    ld   a, (CURRENT_ATTR)       ; use memory, not a register" pattern
+    call GFX_SET_ATTR            ; kernel/graphics's own GFX_PRINT_
+                                  ; STRING_ATTR header already documents
+    ENDIF                         ; BASIC-style: stamp the current
+                                  ; INK/PAPER attribute into the cell
+                                  ; just printed, same as real Sinclair
+                                  ; BASIC's PRINT (ts2068rom's own
+                                  ; BASIC_COMPUTE_PRINT_ATTR) -- until
+                                  ; now EMIT only wrote the bitmap byte,
+                                  ; so INK/PAPER had no visible effect
+                                  ; on any printed text anywhere in this
+                                  ; project (only PLOT/LINE/CIRCLE/FILL)
     jr   .advance
 
 .newline:

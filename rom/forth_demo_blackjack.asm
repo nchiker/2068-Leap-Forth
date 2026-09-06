@@ -532,11 +532,17 @@ SRC_SCORE_LEN EQU $ - SRC_SCORE
 ;            11111111 01111110 00111100 00011000
 ;   club:    00011000 00111100 00011000 01111110
 ;            11111111 01111110 00011000 00011000
+;   checker: 11001100 11001100 00110011 00110011
+;            11001100 11001100 00110011 00110011
 ; Hand-designed pixel-art approximations of the four card suits, not
 ; claiming photographic card-font fidelity -- visual quality of the
 ; rendered glyphs on real screen geometry is NOT automated-verified by
 ; this ROM (see this file's own closing header note on what's
-; unverified).
+; unverified). Slot 4 (code 148) is the card-back texture: a 2x2-pixel
+; checker with a 4px period in both directions, which divides evenly
+; into the 8x8 cell -- tiling the exact same glyph across every cell of
+; the card back therefore lines up seamlessly into one continuous
+; checkerboard, no per-cell alternation logic needed.
 ; ============================================================================
 SRC_GLYPHS:
     DB ": SETUP-GLYPHS "
@@ -544,13 +550,15 @@ SRC_GLYPHS:
     DB "102 1 UDG C! 255 1 UDG 1 + C! 255 1 UDG 2 + C! 255 1 UDG 3 + C! 126 1 UDG 4 + C! 60 1 UDG 5 + C! 24 1 UDG 6 + C! 0 1 UDG 7 + C! "
     DB "24 2 UDG C! 60 2 UDG 1 + C! 126 2 UDG 2 + C! 255 2 UDG 3 + C! 255 2 UDG 4 + C! 126 2 UDG 5 + C! 60 2 UDG 6 + C! 24 2 UDG 7 + C! "
     DB "24 3 UDG C! 60 3 UDG 1 + C! 24 3 UDG 2 + C! 126 3 UDG 3 + C! 255 3 UDG 4 + C! 126 3 UDG 5 + C! 24 3 UDG 6 + C! 24 3 UDG 7 + C! "
+    DB "204 4 UDG C! 204 4 UDG 1 + C! 51 4 UDG 2 + C! 51 4 UDG 3 + C! 204 4 UDG 4 + C! 204 4 UDG 5 + C! 51 4 UDG 6 + C! 51 4 UDG 7 + C! "
     DB "; "
 SRC_GLYPHS_LEN EQU $ - SRC_GLYPHS
 
 ; ============================================================================
 ; SRC_DISPLAY -- rendering a card as a real pixel-box "card shape" with
-; rank text + colored suit glyph inside it, per the graphics-upgrade
-; pass this file's own header now describes.
+; a real colored paper background, rank text + colored suit glyph
+; inside it, per the graphics-upgrade pass this file's own header now
+; describes.
 ;
 ; SCREEN GEOMETRY (confirmed from kernel/graphics/graphics.asm's own
 ; GFX_PIXEL_ADDR_SETUP header, not guessed): PLOT/LINE take x in 0-255,
@@ -559,63 +567,92 @@ SRC_GLYPHS_LEN EQU $ - SRC_GLYPHS
 ; = R*8" agree directly, no inversion needed.
 ;
 ; CARD-BOX ( col row -- ) draws a real rectangle outline: 4 columns
-; wide (32px) x 3 rows tall (24px), col/row being the box's own TOP-
-; LEFT corner in TEXT cells (matching COLS' new per-card values, see
-; SRC_ARRAYS above). X8 (n -- n*8) triples "DUP +" (n->2n->4n->8n) to
-; convert a column/row into a pixel coordinate without needing a
-; general-purpose multiply word this dictionary doesn't have (same
-; scope reasoning INIT-DECK's own header already gives for avoiding
-; `*`). The two content columns (col+1 rank, col+2 suit glyph) and the
-; content row (row+1) sit STRICTLY INSIDE the box's own border columns/
-; rows (col and col+3; row and row+2) -- deliberate, so a card's own
-; colored ink is never touched by the box-drawing pixels sharing its
-; cell: GFX_PUTCHAR (core/graphics's own text draw) does a flat 8-byte
-; OVERWRITE of a character cell (verified by reading its actual body,
-; not assumed), so if a border pixel and a text glyph ever landed in
-; the SAME cell, whichever was drawn second would silently erase or
-; recolor the other; keeping border and content in disjoint cells
-; sidesteps that entirely, so CARD-BOX can be called in either order
-; relative to the content print (this file draws content first, box
-; second, but it would work the other way too).
+; wide (32px) x 4 rows TALL (32px -- taller than wide, matching a real
+; card's own portrait proportions; the earlier revision was 3 rows/24px,
+; which read as landscape, the wrong way round), col/row being the
+; box's own TOP-LEFT corner in TEXT cells (matching COLS' own per-card
+; values, see SRC_ARRAYS above). X8 (n -- n*8) triples "DUP +" (n->2n->
+; 4n->8n) to convert a column/row into a pixel coordinate without
+; needing a general-purpose multiply word this dictionary doesn't have
+; (same scope reasoning INIT-DECK's own header already gives for
+; avoiding `*`).
+;
+; REAL BUG FOUND AND FIXED (core/print.asm, not this file): EMIT never
+; used to write attribute (color) memory at all, only the bitmap, so
+; INK/PAPER had zero visible effect on printed text anywhere in this
+; project -- CARD-INK's own INK calls below did nothing visible until
+; that kernel fix landed. Now that EMIT stamps CURRENT_ATTR into the
+; cell it just printed (same as real Sinclair BASIC's PRINT), this file
+; can give each card a real paper color distinct from the green felt
+; table: CARD-FILL ( char -- ) paints all 4x4=16 cells of a card's own
+; box interior to a fixed white (7) paper before anything is drawn on
+; top, EMITting whatever character it's given (space, 32, for a face
+; card; the checker glyph, 148, for a card back) via a DO LOOP over the
+; 4 rows rather than unrolling each row by hand -- both SHOWCARD and
+; CARD-BACK share this one word instead of each having their own
+; near-duplicate fill code, real ROM-budget savings once measured
+; against this file's own tight remaining margin. No new kernel word
+; needed either way -- this is exactly the byte-memory-adjacent idiom
+; docs/forth_tutorial.md's own C@/C! section already teaches, just via
+; EMIT's cursor instead of a computed address. Filling the
+; WHOLE box (not just the 2 content cells, as before) before drawing
+; the pixel outline on top means the outline and the paper are the same
+; 4x4-cell block with no seam between a colored region and an
+; uncolored one -- previously the box's own corner/edge cells were left
+; at whatever the felt background was, which is exactly the "different
+; paper join" seam this revision closes.
+;
+; DRAW-CARD-BOX now forces ink 0 (black) for the outline, not 7 (white)
+; as before -- a white outline on the new white card paper would be
+; invisible; black reads correctly against both the white card and
+; (where the outline's own LINE pixels fall on a still-unfilled corner,
+; which no longer happens, but the color would be wrong either way) the
+; green felt.
+;
+; FELT resets ink/paper back to this game's own established table
+; baseline (0 INK / 4 PAPER, matching what SRC_ROUND sets once at the
+; top of every round) after each card -- required now that INK/PAPER
+; actually affects text: without this, the white card paper set by one
+; SHOWCARD/CARD-BACK call would leak into whatever label text prints
+; next (e.g. "YOU:", "YOUR TOTAL:"), which must stay black-on-felt.
 ;
 ; SHOWRANK now ALWAYS emits exactly one character (rank 10 prints as
 ; "T", real playing-card notation) instead of "10"'s two digits --
 ; needed so a card's own text content is a fixed, exactly-two-column
-; width (rank + suit glyph) that matches CARD-BOX's own fixed 2-column
-; content gap; the alternative (a variable-width "10") would have
-; needed a variable-width box per card, real added complexity for a
-; demo ROM already tight on space.
+; width (rank + suit glyph) that matches the card's own fixed content
+; position; the alternative (a variable-width "10") would have needed a
+; variable-width box per card, real added complexity for a demo ROM
+; already tight on space.
 ;
 ; CARD-INK: red (2) for hearts (suit 1)/diamonds (suit 2), else the
 ; default black (0) for spades (0)/clubs (3) -- unchanged from before.
 ;
 ; CARD-BACK ( col row -- ) is the hidden dealer card's real "card back"
-; texture, replacing the old plain "??" text: two different block-
-; graphics quadrant characters (137 = top-right+bottom-left filled,
-; 134 = top-left+bottom-right filled -- codes 128-143 are real hardware
-; block-graphics, generated from the low nibble by
-; GFX_CHAR_TO_FONT_OFFSET's own .is_block_graphics path, confirmed by
-; reading it, not guessed) placed side by side in the card's own two
-; content columns, giving a simple diagonal-weave texture via plain
-; EMIT -- no new UDG slots, no new drawing code, exactly the cheap
-; option this file's own task brief suggested. Drawn in ink 6 (yellow)
-; for a visually distinct "card back" color, then reset to black.
+; texture: UDG slot 4 (code 148, SRC_GLYPHS above)'s repeating checker
+; tile, filling the whole box interior via CARD-BACK-CELLS -- replacing
+; the earlier revision's two lone block-graphics characters (137/134)
+; in just the content row, which read as a small icon rather than an
+; actual card back. Drawn in ink 2 (red) on the same white (7) paper
+; the face cards use, giving a red/white checkerboard.
 ; ============================================================================
 SRC_DISPLAY:
     DB ": SHOWRANK DUP 1 = IF DROP .\" A\" EXIT THEN DUP 10 = IF DROP .\" T\" EXIT THEN "
     DB "DUP 11 = IF DROP .\" J\" EXIT THEN DUP 12 = IF DROP .\" Q\" EXIT THEN DUP 13 = IF DROP .\" K\" EXIT THEN STR TYPE ; "
     DB ": CARD-INK DUP 1 = SWAP 2 = OR IF 2 INK ELSE 0 INK THEN ; "
+    DB ": FELT 0 INK 4 PAPER ; "
     DB "VARIABLE SC-RANK VARIABLE SC-SUIT VARIABLE SC-COL VARIABLE SC-ROW "
     DB "VARIABLE BX0 VARIABLE BY0 VARIABLE BX1 VARIABLE BY1 "
     DB ": X8 DUP + DUP + DUP + ; "
-    DB ": CARD-BOX SWAP X8 BX0 ! X8 BY0 ! BX0 @ 31 + BX1 ! BY0 @ 23 + BY1 ! "
+    DB ": CARD-BOX SWAP X8 BX0 ! X8 BY0 ! BX0 @ 31 + BX1 ! BY0 @ 31 + BY1 ! "
     DB "BX0 @ BY0 @ BX1 @ BY0 @ LINE BX0 @ BY1 @ BX1 @ BY1 @ LINE BX0 @ BY0 @ BX0 @ BY1 @ LINE BX1 @ BY0 @ BX1 @ BY1 @ LINE ; "
-    DB ": DRAW-CARD-BOX 7 INK SC-COL @ SC-ROW @ CARD-BOX 0 INK ; "
-    DB ": SHOWCARD SC-ROW ! SC-COL ! SC-SUIT ! SC-RANK ! SC-COL @ 1+ SC-ROW @ 1+ AT-XY "
-    DB "SC-SUIT @ CARD-INK SC-RANK @ SHOWRANK 144 SC-SUIT @ + EMIT 0 INK DRAW-CARD-BOX ; "
-    DB ": CARD-BACK SC-ROW ! SC-COL ! SC-COL @ 1+ SC-ROW @ 1+ AT-XY 6 INK 137 EMIT 134 EMIT 0 INK DRAW-CARD-BOX ; "
+    DB ": DRAW-CARD-BOX 0 INK SC-COL @ SC-ROW @ CARD-BOX ; "
+    DB "VARIABLE CF-CH "
+    DB ": CARD-FILL CF-CH ! 4 0 DO SC-COL @ SC-ROW @ I + AT-XY CF-CH @ DUP DUP DUP EMIT EMIT EMIT EMIT LOOP ; "
+    DB ": SHOWCARD SC-ROW ! SC-COL ! SC-SUIT ! SC-RANK ! 7 PAPER 0 INK 32 CARD-FILL "
+    DB "SC-COL @ 1+ SC-ROW @ 1+ AT-XY SC-SUIT @ CARD-INK SC-RANK @ SHOWRANK 144 SC-SUIT @ + EMIT DRAW-CARD-BOX FELT ; "
+    DB ": CARD-BACK SC-ROW ! SC-COL ! 7 PAPER 2 INK 148 CARD-FILL DRAW-CARD-BOX FELT ; "
     DB ": SHOW-DEALER-HAND DCOUNT @ 0 DO I CELLS DHR + @ I CELLS DHS + @ I CELLS COLS + @ 2 SHOWCARD LOOP ; "
-    DB ": SHOW-PLAYER-HAND PCOUNT @ 0 DO I CELLS PHR + @ I CELLS PHS + @ I CELLS COLS + @ 7 SHOWCARD LOOP ; "
+    DB ": SHOW-PLAYER-HAND PCOUNT @ 0 DO I CELLS PHR + @ I CELLS PHS + @ I CELLS COLS + @ 8 SHOWCARD LOOP ; "
     DB ": SHOW-DEALER-HIDDEN 0 CELLS DHR + @ 0 CELLS DHS + @ 0 CELLS COLS + @ 2 SHOWCARD "
     DB "1 CELLS COLS + @ 2 CARD-BACK ; "
     DB ": REVEAL-DEALER 0 1 AT-XY .\" DEALER:        \" SHOW-DEALER-HAND ; "
@@ -665,14 +702,14 @@ SRC_TURN:
     DB ": DEALER-WIN-SOUND -3 0.15 BEEP -7 0.2 BEEP ; "
     DB ": BUST-SOUND -4 0.12 BEEP -8 0.12 BEEP -12 0.3 BEEP ; "
     DB ": BLACKJACK-SOUND 12 0.08 BEEP 15 0.08 BEEP 19 0.08 BEEP 24 0.2 BEEP ; "
-    DB ": PLAYER-TURN 0 PBUST ! BEGIN 0 13 AT-XY .\" (H)IT OR (S)TAND?   \" GETKEY KEYVAL ! KEY-BLIP "
+    DB ": PLAYER-TURN 0 PBUST ! BEGIN 0 15 AT-XY .\" (H)IT OR (S)TAND?   \" GETKEY KEYVAL ! KEY-BLIP "
     DB "KEYVAL @ 72 = KEYVAL @ 104 = OR IF DEAL-PLAYER SHOW-PLAYER-HAND PSCORE PTOTAL ! "
-    DB "0 11 AT-XY .\" YOUR TOTAL: \" PTOTAL @ . PTOTAL @ 21 > IF 1 PBUST ! THEN PBUST @ 0= "
+    DB "0 13 AT-XY .\" YOUR TOTAL: \" PTOTAL @ . PTOTAL @ 21 > IF 1 PBUST ! THEN PBUST @ 0= "
     DB "ELSE KEYVAL @ 83 = KEYVAL @ 115 = OR IF 0 ELSE -1 THEN THEN WHILE REPEAT ; "
     DB ": DEALER-TURN BEGIN DSCORE DTOTAL ! DTOTAL @ 17 < WHILE DEAL-DEALER REPEAT ; "
     DB ": DETERMINE-OUTCOME PBUST @ 1 = IF 3 OUTCOME ! EXIT THEN DTOTAL @ 21 > IF 1 OUTCOME ! EXIT THEN "
     DB "PTOTAL @ DTOTAL @ = IF 5 OUTCOME ! EXIT THEN PTOTAL @ DTOTAL @ > IF 1 OUTCOME ! EXIT THEN 2 OUTCOME ! ; "
-    DB ": SHOW-RESULT 0 15 AT-XY .\" DEALER TOTAL: \" DTOTAL @ . 0 16 AT-XY "
+    DB ": SHOW-RESULT 0 17 AT-XY .\" DEALER TOTAL: \" DTOTAL @ . 0 18 AT-XY "
     DB "OUTCOME @ 1 = IF .\" YOU WIN!        \" 4 BORDER WIN-SOUND EXIT THEN "
     DB "OUTCOME @ 2 = IF .\" DEALER WINS     \" 1 BORDER DEALER-WIN-SOUND EXIT THEN "
     DB "OUTCOME @ 3 = IF .\" BUST! YOU LOSE  \" 2 BORDER BUST-SOUND EXIT THEN "
@@ -708,10 +745,10 @@ SRC_ROUND:
     DB ": LOGROUND PTOTAL @ VPTR @ ! VPTR @ 2 + VPTR ! DTOTAL @ VPTR @ ! VPTR @ 2 + VPTR ! "
     DB "OUTCOME @ VPTR @ ! VPTR @ 2 + VPTR ! ROUNDNUM @ 1+ ROUNDNUM ! ; "
     DB ": ROUND 0 PCOUNT ! 0 DCOUNT ! 0 NEXTCARD ! 0 PBUST ! 0 OUTCOME ! "
-    DB "INIT-DECK SHUFFLE SHUFFLE-SOUND CLS 0 INK 4 PAPER TABLEBG 4 BORDER 1 0 AT-XY .\" BLACKJACK\" "
+    DB "INIT-DECK SHUFFLE SHUFFLE-SOUND CLS 0 INK 4 PAPER TABLEBG 4 BORDER 11 0 AT-XY .\" BLACKJACK\" "
     DB "DEAL-PLAYER DEAL-DEALER DEAL-PLAYER DEAL-DEALER CARD-SOUND CARD-SOUND CARD-SOUND CARD-SOUND "
-    DB "0 1 AT-XY .\" DEALER:\" SHOW-DEALER-HIDDEN 0 6 AT-XY .\" YOU:\" SHOW-PLAYER-HAND "
-    DB "PSCORE PTOTAL ! DSCORE DTOTAL ! 0 11 AT-XY .\" YOUR TOTAL: \" PTOTAL @ . "
+    DB "0 1 AT-XY .\" DEALER:\" SHOW-DEALER-HIDDEN 0 7 AT-XY .\" YOU:\" SHOW-PLAYER-HAND "
+    DB "PSCORE PTOTAL ! DSCORE DTOTAL ! 0 13 AT-XY .\" YOUR TOTAL: \" PTOTAL @ . "
     DB "PTOTAL @ 21 = IF 4 OUTCOME ! DTOTAL @ 21 = IF 5 OUTCOME ! THEN "
     DB "ELSE PLAYER-TURN PBUST @ 1 = IF 3 OUTCOME ! ELSE DEALER-TURN DETERMINE-OUTCOME THEN THEN "
     DB "REVEAL-DEALER SHOW-RESULT LOGROUND ; "
@@ -724,10 +761,10 @@ SRC_ROUND_LEN EQU $ - SRC_ROUND
 ; rounds until the player declines.
 ; ============================================================================
 SRC_MAIN:
-    DB ": PLAY-AGAIN? 0 18 AT-XY .\" PLAY AGAIN? (Y/N)     \" "
+    DB ": PLAY-AGAIN? 0 20 AT-XY .\" PLAY AGAIN? (Y/N)     \" "
     DB "BEGIN GETKEY KEYVAL ! KEYVAL @ 89 = KEYVAL @ 121 = OR KEYVAL @ 78 = KEYVAL @ 110 = OR OR UNTIL "
     DB "KEYVAL @ 89 = KEYVAL @ 121 = OR ; "
-    DB ": MAIN BEGIN ROUND PLAY-AGAIN? WHILE REPEAT 0 18 AT-XY .\" THANKS FOR PLAYING!    \" ; "
+    DB ": MAIN BEGIN ROUND PLAY-AGAIN? WHILE REPEAT 0 20 AT-XY .\" THANKS FOR PLAYING!    \" ; "
 SRC_MAIN_LEN EQU $ - SRC_MAIN
 
 SRC_KICKOFF: DB "SETUP-GLYPHS MAIN "

@@ -160,12 +160,35 @@ DICT_LATEST_INIT_P5 EQU H_BORDER   ; head of the dictionary as of Phase
 ; (COLD_START, the editor's own line-shrink path, every smoke ROM's own
 ; setup), but nothing ever exposed it as a word a user could actually
 ; type, a real and simply-overlooked gap.
+;
+; REAL BUG FOUND AND FIXED: GFX_CLS alone always resets the whole
+; attribute area to a hardcoded ATTR_DEFAULT, ignoring whatever PAPER/
+; INK was actually set beforehand -- despite docs/forth_tutorial.md's
+; own long-standing claim that "CLS honors the current PAPER". Real
+; Sinclair BASIC doesn't work that way either: ts2068rom's own
+; BASIC_STMT_CLS calls GFX_CLS, then repaints the attribute area with
+; BASIC_COMPUTE_PRINT_ATTR's current ink/paper/bright/flash byte via
+; GFX_PAINT_ATTR, then resets the print position to (0,0) -- CLS
+; clears the screen, it doesn't reset your chosen colors. Mirrored
+; here exactly, just against this project's own CURRENT_ATTR sysvar
+; (core/color.asm's INK/PAPER already maintain it) instead of a
+; separately-computed byte.
 ; ============================================================================
 H_CLS:
     DW   H_BORDER
     DB   3, "C", "L", "S"
 W_CLS:
     call GFX_CLS
+    ld   a, (CURRENT_ATTR)
+    call GFX_PAINT_ATTR
+
+    IFDEF CORE_PRINT_ASM        ; PRINT_ROW/PRINT_COL only exist once
+                                ; core/print.asm is included (a few
+                                ; smoke ROMs use CLS without it)
+    xor  a
+    ld   (PRINT_ROW), a
+    ld   (PRINT_COL), a
+    ENDIF
     ret
 
 DICT_LATEST_INIT_CLS EQU H_CLS   ; head of the dictionary once this

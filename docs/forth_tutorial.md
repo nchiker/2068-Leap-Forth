@@ -386,6 +386,20 @@ everything up to the next `;`." Each word inside the definition — here
 `DUP` and `+` — is remembered as part of what `DOUBLE` does rather
 than run on the spot. `;` ends the definition.
 
+That's the whole act of "adding a word" — and it's worth confirming for
+yourself that it actually happened, rather than taking it on faith:
+
+```forth
+VLIST
+```
+
+prints `DOUBLE` first — the newest entry — and then keeps going through
+every word this Forth already knew before you typed a thing.
+[Section 13](#13-typing-and-editing-at-the-prompt) covers `VLIST`
+properly; the one piece worth taking from it now is that `DOUBLE` is
+genuinely, immediately a member of the same dictionary `DUP` and `+`
+live in — not a special, lesser kind of word.
+
 **Every space above is required syntax, not tidy formatting.** Forth
 splits everything on whitespace (see
 [section 1](#1-what-forth-actually-is)), so a missing space silently
@@ -2024,7 +2038,7 @@ beyond what each word's own arguments say.
 | `FILL` | `( x y -- )` | Flood-fill the enclosed area touching `(x, y)` with the current color |
 | `CLS` | `( -- )` | Clear the whole screen |
 | `BORDER` | `( color -- )` | Set the screen border to `color` (0-7, same numbering as BASIC's `BORDER`) |
-| `INK` | `( color -- )` | Set the foreground color `PLOT`/`LINE`/`CIRCLE`/`FILL` draw with from now on (0-7) |
+| `INK` | `( color -- )` | Set the foreground color `PLOT`/`LINE`/`CIRCLE`/`FILL` draw with, and printed text (`EMIT`/`.`/`."`/`TYPE`) prints in, from now on (0-7) |
 | `PAPER` | `( color -- )` | Set the background color the same way |
 | `AT-XY` | `( col row -- )` | Move where the next `EMIT`/`.`/`."` prints to (column 0-31, row 0-22) |
 | `BEEP` | `( n-semitones fduration -- )` | Produce a tone |
@@ -2053,6 +2067,22 @@ just the next one, until some later call changes it again. Calling
 each touches only its own half of the color. `CLS` honors the current
 `PAPER` as well — clearing the screen fills it with whatever
 background color is set, not always black.
+
+This isn't limited to graphics. `EMIT` (and everything built on it —
+`.`, `."`, `TYPE`) stamps the current `INK`/`PAPER` into each character
+cell as it prints, the same way real Sinclair BASIC's `PRINT` does:
+
+```forth
+2 INK  6 PAPER
+." RED ON YELLOW"
+0 INK  7 PAPER
+." BACK TO NORMAL"
+```
+
+The first line prints in red on yellow; the second reverts to black on
+white. Only the cells actually written to change — printing a shorter
+line over a longer one leaves the old color sitting in whatever cells
+weren't touched, same as it leaves old characters sitting there too.
 
 ### Drawing many things at once
 
@@ -2183,6 +2213,47 @@ off. That's the same deal `@` and `!` already offer for memory, and the
 same one real BASIC's own `IN`/`OUT` offer on this machine — a
 deliberate choice to leave the hardware reachable rather than fenced
 off, on the understanding that you know which port you're poking.
+
+### Custom characters: `UDG`
+
+Every character `EMIT` can print — letters, digits, punctuation — is a
+fixed 8x8 pixel shape baked into the ROM. Codes 144 through 164 are
+different: they're wired to 21 blank slots you can draw into yourself,
+called **UDGs** ("user-defined graphics"), the same feature and the
+same name real Sinclair BASIC offers.
+
+`UDG ( n -- addr )` takes a slot number, 0-20, and gives you back the
+address of that slot's 8 bytes — one byte per pixel row, top to bottom,
+each bit a pixel across the row (leftmost bit is the leftmost pixel).
+From there it's just `C!`, exactly like any other byte in memory from
+[section 4](#4-reading-and-writing-memory-directly):
+
+```forth
+24  0 UDG        C!
+60  0 UDG 1 +    C!
+126 0 UDG 2 +    C!
+255 0 UDG 3 +    C!
+24  0 UDG 4 +    C!
+24  0 UDG 5 +    C!
+24  0 UDG 6 +    C!
+24  0 UDG 7 +    C!
+
+144 EMIT          \ prints an upward-pointing arrow
+```
+
+Read those eight bytes as bits and the shape falls out: `24` is
+`00011000`, `60` is `00111100`, `126` is `01111110`, `255` is
+`11111111` — a triangle that widens row by row — then four more `24`s
+stack a narrow stem underneath it. Slot `0` maps to character code
+`144`, slot `1` to `145`, and so on up to slot `20` at `164`; once a
+slot is filled in, `EMIT`-ing its code prints it exactly like any
+built-in character, in whatever `INK`/`PAPER` are currently set, with
+no separate "graphics mode" to switch into.
+
+There's no check on `n` — asking for slot `25` computes an address past
+the real table and lets you read or write it anyway, the same trusting
+contract `@`/`!`/`C@`/`C!` already keep. Stay inside 0-20 and it's
+exactly as safe as poking any other array this document has shown you.
 
 ### Getting input: `KEY`, `KEY?`, and `STICK`
 
@@ -2370,31 +2441,33 @@ the three lines above; the second is what you'd actually write.
 ## 11. Saving and loading your work
 
 Programs don't have to be retyped every time the machine starts.
-`SAVE` and `LOAD` write your definitions to tape and read them back.
+`SAVE-LIB` and `LOAD-LIB` write your definitions to tape and read them
+back.
 
 ```forth
 : DOUBLER DUP + ;
-SAVE MYPROG
+SAVE-LIB MYPROG
 ```
 
-`SAVE` takes the name that follows it — not a word to look up, but a
-name, the same way `:` treats the name right after it as something to
-define rather than run — and writes everything you've defined so far
-to tape under it. Later, even after switching the machine off and back
-on, which forgets everything you defined, you can get it back:
+`SAVE-LIB` takes the name that follows it — not a word to look up, but
+a name, the same way `:` treats the name right after it as something
+to define rather than run — and writes everything you've defined so
+far to tape under it. Later, even after switching the machine off and
+back on, which forgets everything you defined, you can get it back:
 
 ```forth
-LOAD MYPROG
+LOAD-LIB MYPROG
 4 DOUBLER
 ```
 
-`LOAD MYPROG` restores your definitions exactly as they were,
+`LOAD-LIB MYPROG` restores your definitions exactly as they were,
 `DOUBLER` included, ready to use immediately as though you'd just
-typed it in again. `LOAD` with no name at all loads whatever was saved
-most recently, so you don't have to remember or retype the name.
+typed it in again. `LOAD-LIB` with no name at all loads whatever was
+saved most recently, so you don't have to remember or retype the name.
 
-There's no partial saving or loading of a single definition — `SAVE`
-always writes everything defined up to that point, in one piece.
+There's no partial saving or loading of a single definition —
+`SAVE-LIB` always writes everything defined up to that point, in one
+piece.
 
 That "up to that point" is worth seeing fail once, since it's obvious
 in hindsight and easy to get bitten by in practice:
@@ -2402,22 +2475,33 @@ in hindsight and easy to get bitten by in practice:
 ```forth
 : DOUBLE  DUP + ;
 : QUADRUPLE  DOUBLE DOUBLE ;
-SAVE MYWORDS
+SAVE-LIB MYWORDS
 
-: TRIPLE  DUP DUP + + ;      \ defined AFTER the SAVE above
+: TRIPLE  DUP DUP + + ;      \ defined AFTER the SAVE-LIB above
 3 TRIPLE .                   \ prints 9 -- works fine, right now
 ```
 
 `TRIPLE` works perfectly well for the rest of this session — nothing
-about defining it after a `SAVE` stops it running right now. But
-`SAVE` had already finished by the time you typed it, so `TRIPLE` was
-never written to tape. Switch the machine off, back on, and `LOAD
-MYWORDS` back, and you'd get `DOUBLE` and `QUADRUPLE` again exactly as
-saved — and no `TRIPLE` at all, because as far as that particular tape
-is concerned, it doesn't exist. If you want your work checkpointed at
-meaningful moments, that's a matter of when you choose to run `SAVE`
-again — here, after defining `TRIPLE` too — not something 2068-Forth
-tracks for you.
+about defining it after a `SAVE-LIB` stops it running right now. But
+`SAVE-LIB` had already finished by the time you typed it, so `TRIPLE`
+was never written to tape. Switch the machine off, back on, and
+`LOAD-LIB MYWORDS` back, and you'd get `DOUBLE` and `QUADRUPLE` again
+exactly as saved — and no `TRIPLE` at all, because as far as that
+particular tape is concerned, it doesn't exist. If you want your work
+checkpointed at meaningful moments, that's a matter of when you choose
+to run `SAVE-LIB` again — here, after defining `TRIPLE` too — not
+something 2068-Forth tracks for you.
+
+There's a real ceiling on how much `SAVE-LIB` can write in one piece:
+8,190 bytes of compiled dictionary. Go past it and `SAVE-LIB` throws
+error `-8` (ANS Forth's own standard "dictionary overflow" code —
+see [section 14](#14-error-handling-throw-and-catch) for catching
+errors like this yourself) rather than writing anything at all. That's
+a deliberate, checked refusal, not an arbitrary inconvenience: an
+earlier version of `SAVE-LIB` copied your whole dictionary into a
+fixed-size scratch buffer with no such check, and would have silently
+corrupted nearby memory instead of stopping cleanly, for anyone whose
+programs grew past a much smaller, undocumented limit.
 
 One honest gap: what's proven so far is 2068-Forth's own bookkeeping —
 what gets saved, how it's found again, and restoring your definitions
@@ -2425,6 +2509,41 @@ so they're immediately usable. Real tape behavior on real hardware, or
 a real emulator's actual cassette playback, remains separately
 unverified. Don't yet treat this as proof that a real recorded tape
 will load back correctly on real hardware.
+
+### `SAVE-TEXT` and `LOAD-TEXT`: saving the source itself
+
+`SAVE-LIB`/`LOAD-LIB` save a **compiled dictionary image** — the actual
+bytes `:` produced, tied to the exact ROM that compiled them. That's
+fast, but it means a tape saved by one build of 2068-Forth isn't
+promised to load correctly into a different one.
+
+`SAVE-TEXT ( addr len "name" -- )` and `LOAD-TEXT ( "name" -- )` save
+something different: the **plain source text** of a program, exactly
+as you'd type it. Where `SAVE-LIB`/`LOAD-LIB` need no addresses at all
+(they already know where the dictionary lives), `SAVE-TEXT` takes an
+address and length on the stack — wherever your program's source text
+already sits in memory — the same `( addr len -- )` shape
+[section 4](#4-reading-and-writing-memory-directly)'s string words use:
+
+```forth
+S" : DOUBLER DUP + ;" SAVE-TEXT PROGTEXT
+```
+
+Loading it back doesn't just restore a dictionary snapshot — it
+**re-runs the interpreter over the saved text**, exactly as if you'd
+typed it at the prompt:
+
+```forth
+LOAD-TEXT PROGTEXT
+4 DOUBLER .     \ prints 8
+```
+
+That re-parsing is the whole point: source text has no dependency on
+which exact ROM build produced it, so it survives a rebuild of
+2068-Forth itself in a way a `SAVE-LIB` image doesn't promise to. The
+trade-off is speed and size — re-parsing and recompiling real source is
+slower than restoring a ready-made binary image — which is why both
+mechanisms exist side by side rather than one replacing the other.
 
 ---
 
@@ -3144,6 +3263,47 @@ normally afterward, unlike the resets in section 14.
 
 ---
 
+## 18. A worked example: the Blackjack demo
+
+Everything up to here has been small, isolated pieces — one new word
+at a time, each proven with a two- or three-line example. `demos/
+blackjack.fs` is the opposite: a complete, real single-deck Blackjack
+game, a few hundred lines of ordinary Forth, that plays a full hand
+against a computer dealer with hit/stand, correct soft-ace scoring, a
+real shuffle, and a scored outcome each round. Nothing in it is a
+special case built into the language — it's the same words this whole
+document has covered, composed the way a real program composes them.
+
+It's worth reading (or building and running — `make forth-demo-blackjack`
+builds it, and its own header comment explains how to run it in Fuse)
+specifically as a review, because it leans on a wide slice of this
+document at once: `VARIABLE`s and `ARRAY`s from
+[section 4](#4-reading-and-writing-memory-directly) hold the deck and
+both hands; `DO`/`LOOP` from [section 7](#7-repeating-yourself) shuffles
+and deals; `IF`/`ELSE`/`THEN` from
+[section 6](#6-making-decisions-if-else-then) scores hands and decides
+outcomes; small single-purpose words are built from smaller ones and
+named for what they mean, exactly as
+[section 2](#2-defining-your-own-words) recommended from the start;
+and `INK`/`PAPER`/`BORDER`, `UDG` (just above), and `BEEP`/`SOUND` from
+this section combine to draw the table and cards and cue each outcome
+— including the card and table colors, which only show up correctly
+because `EMIT` honors the current `INK`/`PAPER` the way this section
+just described.
+None of that composition is new material — the point of reading it now
+is seeing familiar words asked to do real work together, at a scale a
+single tutorial example never quite reaches.
+
+This game's own source is also `LOAD-TEXT`'s real test payload (see
+`SAVE-TEXT`/`LOAD-TEXT` above) — a full, real program, not a toy
+string, round-tripped over the same tape protocol `SAVE-LIB`/`LOAD-LIB`
+use. A worked example of actually loading it that way, from a live
+prompt rather than building it straight into a ROM, belongs here once
+that loading workflow exists as something you can run, not just test —
+not yet written.
+
+---
+
 ## Appendix A: word reference
 
 A quick-lookup table of every word covered in this document, grouped
@@ -3316,6 +3476,7 @@ the same convention applied to the full ANS Forth standard.
 | `PAPER` | `( color -- )` |
 | `BEEP` | `( n-semitones fduration -- )` |
 | `SOUND` | `( register data -- )` |
+| `UDG` | `( n -- addr )` |
 | `64COL` / `32COL` | `( -- )` |
 | `PALETTE64` | `( n -- )` |
 | `PLOT64` | `( x y -- )` |
@@ -3331,10 +3492,12 @@ the same convention applied to the full ANS Forth standard.
 
 **Storage**
 
-| Word | Stack effect |
-|---|---|
-| `SAVE` | `( "name" -- )` |
-| `LOAD` | `( "name" -- )` |
+| Word | Stack effect | Notes |
+|---|---|---|
+| `SAVE-LIB` | `( "name" -- )` | save the compiled dictionary as a binary image |
+| `LOAD-LIB` | `( "name" -- )` | load a dictionary image back |
+| `SAVE-TEXT` | `( addr len "name" -- )` | save plain Forth source text |
+| `LOAD-TEXT` | `( "name" -- )` | load and re-run saved source text |
 
 **Printer** — see [section 15](#15-printing-to-a-real-printer-lprint-and-llist)
 
@@ -3349,7 +3512,7 @@ the same convention applied to the full ANS Forth standard.
 
 None of this is a promise any of it is coming, and none of it should
 stop you writing real programs with what's already here — sections 1
-through 17 cover a genuinely complete language: `IF`/`ELSE`/`THEN`,
+through 18 cover a genuinely complete language: `IF`/`ELSE`/`THEN`,
 three kinds of loop, memory, strings, arrays, error handling, sound,
 graphics, and defining words of your own all included. This is just an honest inventory of the
 gaps, in the same spirit as the caveats already scattered through this
