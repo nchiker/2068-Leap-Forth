@@ -2671,13 +2671,20 @@ the row — ten points, `I` running 20, 60, 100, ... up to 380,
 comfortably inside `PLOT64`'s wider 0-511 range and well past what the
 normal screen's own coordinates could reach.
 
-What isn't yet resolved is `64COL`'s own visual behavior on real
-hardware, which hasn't been fully characterized — testing showed the
-screen rendering somewhat differently than expected, in ways not yet
-explained. Treat this as the least mature word group in this document.
-It works at the level that's been checked, but "what you'll actually
-see on a real screen" isn't the settled answer it is for section 9's
-normal-screen `PLOT`/`LINE`/`CIRCLE`.
+One honest caveat remains about `64COL`'s own visual behavior on real
+hardware. `PLOT64` itself is solid — the pixel it sets is confirmed,
+byte for byte, in two independent emulators (Fuse and ZEsarUX), each
+agreeing on exactly which bit in memory changes. What's still unverified
+is what that pixel actually *looks like* on screen: both emulators
+render 64-column mode's whole drawing area as one flat, uniform color
+rather than showing the individual pixels a real Timex Sinclair 2068
+almost certainly would — most likely because this hardware mode was so
+rarely used in real 1980s software that neither emulator ever invested
+in rendering it accurately, not because of any error in `PLOT64`
+itself. Treat `64COL`'s own on-screen appearance, specifically, as
+unverified — everything else about it (which pixel gets set, at which
+address) is as solid as section 9's normal-screen
+`PLOT`/`LINE`/`CIRCLE`.
 
 ---
 
