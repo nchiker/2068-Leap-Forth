@@ -692,8 +692,13 @@ computed from whatever *was* on it. So when a calculation comes out
 inexplicably wrong, checking that every word in it has the right `F`
 or lack of one is a good first move.
 
-There is no plain integer `*` or `/` in 2068-Forth at all yet; only
-these decimal versions exist. `F.` prints a decimal result, always with
+Plain integer `*` and `/` exist too (see the table in
+[section 3's numeric words](#a-few-more-useful-numeric-words) below) —
+they live on the whole-number stack, exactly like `+`/`-`, and are a
+completely separate pair of words from `F*`/`F/` here. Use `*` and
+`/` when both your ingredients and your answer are whole numbers;
+reach for `F*`/`F/` only once a `.` (decimal point) is actually involved
+somewhere in the calculation. `F.` prints a decimal result, always with
 exactly 4 digits after the point (`6.0` prints as `"6.0000"`, not
 `"6"`), and rounds toward zero rather than to the nearest digit — so
 very small differences near the 4th digit can look slightly off from
@@ -811,6 +816,8 @@ A handful of ordinary whole-number words round out the basics:
 | `1+` | `( n -- n+1 )` | Add one |
 | `1-` | `( n -- n-1 )` | Subtract one |
 | `NEGATE` | `( n -- -n )` | Change the sign |
+| `*` | `( a b -- a*b )` | Multiply |
+| `/` | `( a b -- a/b )` | Divide, truncating toward zero |
 | `ABS` | `( n -- \|n\| )` | Absolute value |
 | `SGN` | `( n -- -1\|0\|1 )` | Sign of `n` |
 | `MOD` | `( a b -- a-mod-b )` | Remainder of `a / b` |
@@ -819,6 +826,9 @@ A handful of ordinary whole-number words round out the basics:
 | `MIN` | `( a b -- min )` | The smaller of two values |
 
 ```forth
+6 7 * .         \ prints 42
+-17 5 / .       \ prints -3 -- truncates toward zero, not toward
+                \ negative infinity (so -17 / 5 is -3, not -4)
 -5 ABS .        \ prints 5
 -17 5 MOD .     \ prints -2 -- the remainder takes the DIVIDEND's
                 \ sign, not the divisor's (so -17 MOD 5 is -2, not 3)
@@ -827,6 +837,12 @@ A handful of ordinary whole-number words round out the basics:
                 \ perfect square, so this is the largest whole number
                 \ whose square doesn't exceed it
 ```
+
+Both `*` and `/` work only in whole numbers and give a whole-number
+answer — `7 2 /` is `3`, with the remainder simply discarded, not
+`3.5`. Dividing by `0` doesn't raise an error; it quietly returns `0`,
+the same convention `MOD` above already uses (both share the same
+underlying division).
 
 `1+` and `1-` are shorthand and nothing more. `5 1+` does exactly what
 `5 1 +` does, in one word instead of two:
@@ -3361,6 +3377,8 @@ the same convention applied to the full ANS Forth standard.
 |---|---|
 | `+` | `( a b -- a+b )` |
 | `-` | `( a b -- a-b )` |
+| `*` | `( a b -- a*b )` |
+| `/` | `( a b -- a/b )` |
 | `1+` | `( n -- n+1 )` |
 | `1-` | `( n -- n-1 )` |
 | `NEGATE` | `( n -- -n )` |
@@ -3549,13 +3567,11 @@ gaps, in the same spirit as the caveats already scattered through this
 document, so you don't go looking for something that plainly isn't
 there yet and conclude you missed it.
 
-A few things a Forth veteran would expect, and a BASIC programmer
-would ask about, aren't part of 2068-Forth yet:
+One thing a Forth veteran would expect, and a BASIC programmer would
+ask about, isn't part of 2068-Forth yet:
 
 - **Hi-res graphics mode** — beyond the normal-resolution words in
   section 9 and the experimental 64-column pixel mode in section 12.
-- **Plain integer `*` and `/`** — only the decimal versions, `F*`/`F/`
-  (section 3), exist so far.
 
 See [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for this project's own build
 history and phased development order, if you're curious how 2068-Forth
