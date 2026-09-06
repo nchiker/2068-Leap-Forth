@@ -1,6 +1,7 @@
 ; ============================================================================
 ; core/mathfn.asm — Phase 25: integer math functions (ABS, SGN, MOD,
-; SQRT, RND, RANDOMIZE)
+; SQRT, RND, RANDOMIZE); Phase 54 added *, / (plain integer multiply
+; and divide)
 ;
 ; Builds on core/dict.asm and core/interp.asm (both must be INCLUDEd
 ; first — this file's own first header chains through DICT_CHAIN_POINT,
@@ -122,7 +123,42 @@ W_RANDOMIZE:
     call MATH_RND_SEED
     ret
 
-DICT_LATEST_INIT_MATHFN EQU H_RANDOMIZE   ; head of the dictionary once
+; ============================================================================
+; * ( a b -- a*b )  Phase 54: thin wrapper around
+; kernel/math/math.asm's own MATH_MULTIPLY16 — same signed,
+; 16-bit-truncated-result contract as that routine's own header
+; documents (verified there via 32,720 Python-simulated cases, not
+; re-verified here).
+; ============================================================================
+H_STAR:
+    DW   H_RANDOMIZE
+    DB   1, "*"
+W_STAR:
+    call DPOP_HL           ; hl = b
+    ex   de, hl             ; de = b
+    call DPOP_HL             ; hl = a
+    call MATH_MULTIPLY16      ; hl = a*b
+    call DPUSH_HL
+    ret
+
+; ============================================================================
+; / ( a b -- a/b )  Phase 54: thin wrapper around
+; kernel/math/math.asm's own MATH_DIVIDE16 — truncates toward zero;
+; b=0 returns 0 (no error signal), matching MOD's own divide-by-zero
+; behavior above since both share the same underlying MATH_UDIV16.
+; ============================================================================
+H_SLASH:
+    DW   H_STAR
+    DB   1, "/"
+W_SLASH:
+    call DPOP_HL           ; hl = b (divisor)
+    ex   de, hl             ; de = b
+    call DPOP_HL             ; hl = a (dividend)
+    call MATH_DIVIDE16        ; hl = a/b, truncated toward zero
+    call DPUSH_HL
+    ret
+
+DICT_LATEST_INIT_MATHFN EQU H_SLASH       ; head of the dictionary once
                                            ; this file's own words are
                                            ; included
 
