@@ -3297,10 +3297,40 @@ single tutorial example never quite reaches.
 This game's own source is also `LOAD-TEXT`'s real test payload (see
 `SAVE-TEXT`/`LOAD-TEXT` above) — a full, real program, not a toy
 string, round-tripped over the same tape protocol `SAVE-LIB`/`LOAD-LIB`
-use. A worked example of actually loading it that way, from a live
-prompt rather than building it straight into a ROM, belongs here once
-that loading workflow exists as something you can run, not just test —
-not yet written.
+use, including a real cassette-tape round trip in Fuse (not just the
+fake-tape hook this project's own automated tests otherwise rely on —
+see `tools/run_realtape_test.sh` if you want to reproduce that proof).
+Here's how to actually load and play the real game that way yourself,
+from a live prompt, rather than the standalone demo ROM's own
+boot-straight-into-the-game shortcut:
+
+1. Build the real product ROM (`make forth-boot`) and a real tape file
+   containing `demos/blackjack.fs` under the name `BLACKJACK`:
+   ```
+   python3 tools/tape_gen_forth.py build/blackjack.tap BLACKJACK:demos/blackjack.fs
+   ```
+2. Start Fuse with that tape already inserted:
+   ```
+   fuse --machine ts2068 --detect-loader \
+        --rom-ts2068-0 build/forth_boot_rom0.bin \
+        --rom-ts2068-1 build/stock_shaped_exrom.bin \
+        --tape build/blackjack.tap
+   ```
+   `--detect-loader` matters: some saved Fuse settings ship with
+   automatic tape-loader detection turned off, in which case the tape
+   never starts playing and `LOAD-TEXT` just waits — passing it
+   explicitly here works regardless of what's saved.
+3. Once the live prompt appears, type:
+   ```
+   LOAD-TEXT BLACKJACK
+   ```
+   and press Enter. The real leader tone, sync, and every data byte
+   play back and get decoded at genuine cassette speed (tens of
+   seconds, not instant) — exactly like loading a real BASIC program
+   from real tape, just with this project's own native Forth source as
+   the payload instead of tokenized BASIC. Once it finishes, the game
+   compiles and starts automatically (the loaded text's own last line
+   is `SETUP-GLYPHS MAIN`), ready to play with the real keyboard.
 
 ---
 

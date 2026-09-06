@@ -75,10 +75,15 @@
 ; (filename handling, the LATEST-prefixed payload format, HERE/LATEST
 ; restoration, and — since the overflow fix below — both the
 ; over-512-byte round trip and the clean-refusal path) — it does NOT
-; prove the real tape wire format actually round-trips in a real
-; emulator, which is the exact risk the design constraint above exists
-; to manage. That remains open, real, follow-up work, not silently
-; treated as covered — see docs/PROJECT_PLAN.md's Phase 7 section.
+; prove the real tape wire format itself round-trips in a real emulator.
+; That risk is no longer open, just not proven THROUGH this file's own
+; SAVE-LIB/LOAD-LIB path specifically: rom/forth_smoke_p53_realtape.asm
+; proves the real wire format via core/loadtext.asm's sibling SAVE-TEXT/
+; LOAD-TEXT mechanism instead (a real .TAP file, decoded by the genuine,
+; non-fake STORAGE_RECEIVE_BLOCK under real Fuse pulse-level emulation)
+; — since both mechanisms call the exact same STORAGE_SAVE/STORAGE_LOAD
+; contract this file also calls, that proof covers this file's own real-
+; tape risk too. See docs/PROJECT_PLAN.md's Phase 7 section.
 ; ============================================================================
 
     IFNDEF CORE_STORAGE_ASM

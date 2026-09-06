@@ -56,13 +56,9 @@
 ;     via a VARIABLE index and a chain of IF/EXIT — no raw memory table
 ;     needed, every word it uses (VARIABLE, IF, EXIT, =, @, !, 1+)
 ;     already exists in the real dictionary this file drives.
-; ": TABLEBG ;" is a no-op stub in both variants (demos/blackjack.fs and
-; this file's own test payload) either way — forth_boot.asm's own
-; dictionary has no word wrapping kernel/graphics's GFX_PAINT_ATTR
-; (rom/forth_demo_blackjack.asm's own TABLEBG is a ROM-local word not
-; part of core/), so the felt-table background paint is simply skipped;
-; purely cosmetic, doesn't affect any hit/stand/outcome logic this test
-; actually checks.
+; TABLEBG itself is gone now (see rom/forth_demo_blackjack.asm's own
+; header on the kernel EMIT/CLS INK-PAPER fix that made it redundant),
+; so this test payload no longer needs a stand-in for it either.
 ;
 ; GROUND TRUTH, independently established (not hand-computed or
 ; assumed): rom/forth_demo_blackjack.asm rebuilt with -DBLACKJACK_TEST_MODE

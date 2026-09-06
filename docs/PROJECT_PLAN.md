@@ -432,8 +432,31 @@ test structurally could not have caught — see Phase 9's own section.
 
 ## Phase 7 — storage
 
-**Status: `SAVE`/`LOAD` proven against a fake tape transport; real
-emulator tape round-trip is a real, separate, still-open gap.**
+**Status: `SAVE`/`LOAD` proven against a fake tape transport, AND (as of
+`rom/forth_smoke_p53_realtape.asm`) against a real .TAP file under real
+Fuse pulse-level tape emulation — the "never a real emulator round-trip"
+gap this section used to describe is closed.** `STORAGE_RECEIVE_BLOCK`
+(no `STORAGE_TEST_FAKE_RECEIVE` hook — the genuine LD-BYTES-derived
+routine) decoded a real `.TAP` file (built by `tools/tape_gen_forth.py`,
+which needed no hand-tuned pulse widths at all — this project's own
+protocol already IS the stock Sinclair format, unlike 2068-Leap/
+ts2068rom's own from-scratch one) and reproduced the exact same
+Blackjack ground truth `rom/forth_smoke_p52.asm`'s own fake-tape
+checkpoint established, byte for byte. Two real environment gotchas
+found getting a headless run working at all, both now handled by
+`tools/run_realtape_test.sh`: Fuse fully block-buffers stdout when it
+isn't a real terminal (silently losing every debugger `print` on a
+killed process — worked around with `script`, which allocates a real
+pty), and this machine's own saved `~/.fuserc` has `detectloader`
+turned off, so the emulated tape never started playing at all until
+`--detect-loader` was passed explicitly on the command line. The SAVE
+side (`STORAGE_SEND_BLOCK`) was not driven through Fuse's own tape
+*recording* — that's a GUI-menu-only action (`Media, Tape, Record
+Start`) with no CLI or debugger-command equivalent — but was judged
+lower-risk anyway (no receiver-side timing ambiguity) and is separately
+verified byte-for-byte against the real ROM's own SA-BYTES; the receive
+side is what every past real SAVE/LOAD bug in this project actually
+came from, and that's what this test exercises for real.
 `core/storage.asm` + `rom/forth_smoke_p7.asm` add `SAVE`/`LOAD` as
 whole-dictionary-image blobs, Jupiter-Ace-style: `SAVE "name"` and
 `LOAD "name"` (or `LOAD` alone for a wildcard) call `STORAGE_SAVE`/

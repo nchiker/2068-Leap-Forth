@@ -9,8 +9,9 @@
 ; renders inside a real LINE-drawn pixel rectangle (a genuine card
 ; "shape", not just floating rank text), the hidden dealer card gets a
 ; block-graphics "card back" texture instead of plain "??" text, the
-; whole screen gets a green felt-table PAPER/BORDER via a new TABLEBG
-; word, and sound effects got richer throughout: a shuffle noise burst,
+; whole screen gets a green felt-table PAPER/BORDER (CLS itself repaints
+; the whole attribute area to the current PAPER — see the kernel EMIT/
+; CLS INK-PAPER fix), and sound effects got richer throughout: a shuffle noise burst,
 ; a confirm blip on every Hit/Stand keypress, and short multi-note
 ; (not single-tone) win/blackjack/bust cues. See SRC_DISPLAY, SRC_DECK,
 ; and SRC_TURN's own headers below for the full details of each.
@@ -372,31 +373,18 @@ W_GETKEY:
     jp   W_KEY                  ; normal build: GETKEY IS KEY
     ENDIF
 
-; ============================================================================
-; TABLEBG ( -- ) -- this file's own second and last ROM-local word:
-; repaints the WHOLE screen attribute area (all 24x32 cells, including
-; every currently-blank one) to CURRENT_ATTR, via kernel/graphics's own
-; already-public GFX_PAINT_ATTR (include/kernel_api.inc EXTERNs it,
-; confirmed before use) — CLS itself only ever resets attributes to a
-; hardcoded black-paper/green-ink default (see kernel/graphics/
-; graphics.asm's own GFX_CLS header), so painting a real green "felt
-; table" background OVER THE WHOLE SCREEN (not just the cells later
-; overwritten by text/graphics) needs this extra step; no existing
-; dictionary word exposed GFX_PAINT_ATTR before this. Called once per
-; round, right after CLS + setting INK/PAPER — see SRC_ROUND below.
-; ============================================================================
-H_TABLEBG:
-    DW   H_GETKEY
-    DB   7, "T","A","B","L","E","B","G"
-W_TABLEBG:
-    ld   a, (CURRENT_ATTR)
-    call GFX_PAINT_ATTR
-    ret
+; TABLEBG (this file's former second ROM-local word) is gone: it used to
+; repaint the whole screen attribute area to CURRENT_ATTR via
+; kernel/graphics's GFX_PAINT_ATTR because CLS only ever reset attributes
+; to a hardcoded black-paper/green-ink default. Once the kernel EMIT/CLS
+; INK-PAPER fix made CLS itself repaint the whole attribute area to
+; whatever PAPER is actually set, TABLEBG became a redundant second
+; repaint of exactly the same cells — removed instead of left as dead
+; weight. SRC_ROUND below no longer calls it.
 
-DICT_LATEST_INIT_GETKEY EQU H_TABLEBG   ; the real final dictionary
-                                          ; head -- name kept for
-                                          ; COLD_START's own reference,
-                                          ; now one word past GETKEY
+DICT_LATEST_INIT_GETKEY EQU H_GETKEY   ; the real final dictionary head
+                                          ; -- name kept for COLD_START's
+                                          ; own reference
 
     IFDEF BLACKJACK_TEST_MODE
 ; TEST_KEY_PTR lives in EDIT_LINE_BUF -- guaranteed free RAM here since
@@ -731,11 +719,10 @@ SRC_TURN_LEN EQU $ - SRC_TURN
 ; player's turn, the dealer's turn (skipped on a player bust), and
 ; determine the outcome; reveal the dealer's hand and show the result
 ; either way. Each round now also establishes a real green "felt table"
-; look right after CLS: 4 PAPER (green) + TABLEBG (this file's own new
-; word, repaints the WHOLE attribute area including blank cells -- see
-; TABLEBG's own header above CLS itself only resets to a hardcoded
-; black/green default, not this game's own chosen color) + 4 BORDER,
-; all distinct from the card boxes' own fixed white (7) outline ink and
+; look right after CLS: 4 PAPER (green) repaints the whole attribute
+; area including blank cells (CLS itself now honors PAPER -- see the
+; kernel EMIT/CLS INK-PAPER fix) + 4 BORDER, all distinct from the card
+; boxes' own fixed white (7) outline ink and
 ; from the outcome-specific BORDER colors SHOW-RESULT sets at the very
 ; end of the round (which intentionally override this felt border for
 ; the outcome flash, then get reset back to felt at the start of the
@@ -745,7 +732,7 @@ SRC_ROUND:
     DB ": LOGROUND PTOTAL @ VPTR @ ! VPTR @ 2 + VPTR ! DTOTAL @ VPTR @ ! VPTR @ 2 + VPTR ! "
     DB "OUTCOME @ VPTR @ ! VPTR @ 2 + VPTR ! ROUNDNUM @ 1+ ROUNDNUM ! ; "
     DB ": ROUND 0 PCOUNT ! 0 DCOUNT ! 0 NEXTCARD ! 0 PBUST ! 0 OUTCOME ! "
-    DB "INIT-DECK SHUFFLE SHUFFLE-SOUND CLS 0 INK 4 PAPER TABLEBG 4 BORDER 11 0 AT-XY .\" BLACKJACK\" "
+    DB "INIT-DECK SHUFFLE SHUFFLE-SOUND CLS 0 INK 4 PAPER 4 BORDER 11 0 AT-XY .\" BLACKJACK\" "
     DB "DEAL-PLAYER DEAL-DEALER DEAL-PLAYER DEAL-DEALER CARD-SOUND CARD-SOUND CARD-SOUND CARD-SOUND "
     DB "0 1 AT-XY .\" DEALER:\" SHOW-DEALER-HIDDEN 0 7 AT-XY .\" YOU:\" SHOW-PLAYER-HAND "
     DB "PSCORE PTOTAL ! DSCORE DTOTAL ! 0 13 AT-XY .\" YOUR TOTAL: \" PTOTAL @ . "

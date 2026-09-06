@@ -6,11 +6,13 @@ game's Forth source; these two other files are portable-text derivatives
 of it (SAVE-TEXT/LOAD-TEXT payload and the p52 smoke test's own payload)
 that must never be hand-edited out of sync with it again.
 
-GETKEY and TABLEBG are NOT part of any SRC_* block -- in the real ROM
-they're hand-written Z80 dictionary words (W_GETKEY/W_TABLEBG), so a
-portable-text rendering of the game needs an explicit Forth-level stand-in
-for each, which is why this script hardcodes them here rather than
-extracting them.
+GETKEY is NOT part of any SRC_* block -- in the real ROM it's a
+hand-written Z80 dictionary word (W_GETKEY), so a portable-text rendering
+of the game needs an explicit Forth-level stand-in, which is why this
+script hardcodes it here rather than extracting it. (TABLEBG was a
+second such stand-in until the kernel EMIT/CLS INK-PAPER fix made the
+real word redundant and it was removed outright -- see
+rom/forth_demo_blackjack.asm's own header.)
 
 Usage: python3 tools/sync_blackjack_source.py [--check]
   --check: don't write anything, just report whether the two generated
@@ -24,7 +26,7 @@ ROM_PATH = "rom/forth_demo_blackjack.asm"
 REAL_OUT = "demos/blackjack.fs"
 TEST_OUT = "rom/forth_smoke_p52_blackjack_test.fs"
 
-# Blocks making up the actual game logic, in source order. GETKEY/TABLEBG/
+# Blocks making up the actual game logic, in source order. GETKEY/
 # RANDOMIZE are handled separately (see below) since they're not plain
 # SRC_* DB blocks.
 BODY_BLOCKS = [
@@ -33,7 +35,6 @@ BODY_BLOCKS = [
 ]
 
 GETKEY_REAL = ": GETKEY KEY ; "
-TABLEBG_STUB = ": TABLEBG ; "
 GETKEY_TEST = (
     ": GETKEY KIDX @ 1+ KIDX ! KIDX @ 1 = IF 89 EXIT THEN KIDX @ 2 = IF 72 "
     "EXIT THEN KIDX @ 3 = IF 89 EXIT THEN KIDX @ 4 = IF 89 EXIT THEN "
@@ -82,8 +83,8 @@ def build():
     seed_test = extract_seed(src, "SRC_SEED_TEST")
     body = "".join(extract_block(src, name) for name in BODY_BLOCKS)
 
-    real_text = GETKEY_REAL + TABLEBG_STUB + seed_real + body
-    test_text = TABLEBG_STUB + KIDX_DECL + GETKEY_TEST + seed_test + body
+    real_text = GETKEY_REAL + seed_real + body
+    test_text = KIDX_DECL + GETKEY_TEST + seed_test + body
     return real_text, test_text
 
 
