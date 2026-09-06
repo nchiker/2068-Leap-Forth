@@ -84,6 +84,18 @@ W_EMIT:
     jr   z, .newline
 
     ld   (EMIT_CHAR_TMP), a    ; stash the character while B/C load row/col
+
+    IFDEF KERNEL_MODE64_ASM    ; real 64-column TEXT mode (Phase 56/57)
+                                ; only exists once kernel/mode64/mode64.asm
+                                ; is INCLUDEd (several smoke ROMs use EMIT
+                                ; without it) -- guarded so this stays
+                                ; zero extra bytes everywhere else, same
+                                ; convention as CORE_TS2068_ASM below
+    ld   a, (GFX_MODE)
+    cp   2
+    jr   z, .emit_64col
+    ENDIF
+
     ld   a, (PRINT_ROW)
     ld   b, a
     ld   a, (PRINT_COL)
@@ -114,9 +126,29 @@ W_EMIT:
                                   ; project (only PLOT/LINE/CIRCLE/FILL)
     jr   .advance
 
+    IFDEF KERNEL_MODE64_ASM
+.emit_64col:
+    ; 64-column mode has no per-cell attribute at all -- the whole
+    ; screen shares one ink/paper pair (kernel/mode64.asm's own
+    ; header) -- so unlike the Normal-mode path above, there is no
+    ; CURRENT_ATTR stamping step here at all, not an oversight
+    ld   a, (PRINT_ROW)
+    ld   b, a
+    ld   a, (PRINT_COL)
+    ld   c, a
+    ld   a, (EMIT_CHAR_TMP)
+    call MODE64_PUTCHAR
+    jr   .advance64
+    ENDIF
+
 .newline:
     xor  a
     ld   (PRINT_COL), a
+    IFDEF KERNEL_MODE64_ASM
+    ld   a, (GFX_MODE)
+    cp   2
+    jr   z, .nextrow64
+    ENDIF
     jr   .nextrow
 
 .advance:
@@ -146,6 +178,40 @@ W_EMIT:
 .storerow:
     ld   (PRINT_ROW), a
     ret
+
+    IFDEF KERNEL_MODE64_ASM
+; ---- 64-column-mode counterparts of .advance/.nextrow above, wrap at
+; column 64 instead of 32, scroll/clear both display files instead of
+; one -- a full sibling rather than a parameterized version of the
+; Normal-mode logic, matching this project's own established
+; precedent for exactly this situation (kernel/graphics's own
+; GFX_SET_ATTR_EXT header reasons through why a sibling routine beats
+; parameterizing a tested one).
+.advance64:
+    ld   a, (PRINT_COL)
+    inc  a
+    cp   64
+    jr   c, .storecol64
+    xor  a
+    ld   (PRINT_COL), a
+    jr   .nextrow64
+.storecol64:
+    ld   (PRINT_COL), a
+    ret
+
+.nextrow64:
+    ld   a, (PRINT_ROW)
+    inc  a
+    cp   23
+    jr   c, .storerow64
+    call MODE64_SCROLL_TEXT_UP
+    ld   b, 22
+    call MODE64_CLEAR_ROW
+    ld   a, 22
+.storerow64:
+    ld   (PRINT_ROW), a
+    ret
+    ENDIF
 
 ; ============================================================================
 ; . ( n -- )

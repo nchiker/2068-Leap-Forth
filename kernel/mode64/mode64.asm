@@ -287,4 +287,263 @@ MODE64_READ_PIXEL:
     ld   a, 1
     ret
 
+; ============================================================================
+; Real 64-column TEXT mode (stretch goal, tracked since 2026-09-01 in
+; docs/PROJECT_PLAN.md; scoped and planned before writing any of this).
+;
+; KEY DESIGN CHOICE, worth stating plainly: these routines draw the
+; SAME 8x8 font glyphs GFX_PUTCHAR already uses, completely unchanged —
+; no new font data anywhere. The 512-pixel-wide Mode 6 bitmap this file
+; already splits into two 256-wide display files (GFX_PIXEL64_ADDR_
+; SETUP above) gives exactly 64 real text columns (32+32) for free once
+; 8-pixel-wide glyphs are drawn across BOTH files instead of one — no
+; narrower glyph shape needed at all, unlike third-party tools like
+; TASWIDE, which apparently drew genuinely narrower (~4px) glyphs (see
+; docs/PROJECT_PLAN.md's own research). This project's version is
+; mathematically exact (32+32=64) rather than "roughly" anything, and
+; costs zero new ROM bytes for font data.
+;
+; Every routine below is modeled directly on an already-verified
+; kernel/graphics/graphics.asm counterpart (GFX_PUTCHAR/_OVER,
+; GFX_COPY_ROW_BITMAP, GFX_SCROLL_TEXT_UP, GFX_CLEAR_ROW) — same
+; algorithm, adapted only for "which of the two display files" and "no
+; per-cell attribute byte to move" (Mode 6 has none — see this file's
+; own header on the single shared palette).
+; ============================================================================
+
+; ============================================================================
+; MODE64_CHAR_ADDR_SETUP (internal — not a public entry point)
+; Shared address computation for MODE64_PUTCHAR/_XOR. Mirrors GFX_CHAR_
+; SETUP's own row/column addressing exactly (GFX_ROW_BASE_ADDR + column
+; is a Primary-Display-File-relative bitmap address), except the column
+; here is 0-63: columns 0-31 land in the Primary Display File exactly
+; as GFX_CHAR_SETUP's own column already would, and columns 32-63 land
+; at the SAME relative offset (col-32) in the Second Display File
+; instead — `col & 31` gives that offset either way (32-63 wraps to
+; 0-31 in exactly the range needed), and `col >= 32` selects which
+; file, the same bit-3-of-the-byte-column split GFX_PIXEL64_ADDR_SETUP
+; already uses for pixels above, just at character-column granularity
+; instead of pixel granularity.
+; In:  A = ASCII character, B = row (0-23), C = column (0-63)
+; Out: carry clear + HL = pointer to the glyph's 8 font bytes, DE =
+;      bitmap address of the character cell's top-left pixel (in
+;      whichever display file col selects); carry set (HL/DE
+;      undefined) if row>=24 or col>=64 — caller must not draw
+; Destroys: AF, BC
+; ============================================================================
+MODE64_CHAR_ADDR_SETUP:
+    ld   d, a                      ; stash the character (GFX_CHAR_
+                                   ; SETUP's own reasoning: A is about
+                                   ; to be scratch for the bounds check)
+    ld   a, b
+    cp   24
+    jr   nc, .out_of_range
+    ld   a, c
+    cp   64
+    jr   nc, .out_of_range
+    ld   a, d                      ; restore the character
+    push bc                        ; preserve row/col -- GFX_CHAR_TO_
+                                   ; FONT_OFFSET's own punctuation-table
+                                   ; scan uses B as its loop counter
+                                   ; internally (the exact clobber
+                                   ; GFX_CHAR_SETUP's own header already
+                                   ; documents and guards against)
+    call GFX_CHAR_TO_FONT_OFFSET
+    jr   nc, .have_offset
+    ld   hl, FONT_TABLE             ; unmapped character -> render as
+                                    ; space, same convention as
+                                    ; GFX_CHAR_SETUP
+.have_offset:
+    pop  bc                          ; restore row/col
+    push hl                            ; save glyph pointer
+
+    ld   a, b
+    call GFX_ROW_BASE_ADDR             ; hl = row base, Primary-relative
+    ex   de, hl                        ; de = row base
+
+    ld   a, c
+    and  31                            ; byte-column within whichever
+                                       ; file (0-31 either way)
+    add  a, e
+    ld   e, a
+    jr   nc, .no_col_carry
+    inc  d
+.no_col_carry:                         ; de = row base + byte-column,
+                                       ; still Primary-relative
+
+    ld   a, c
+    cp   32
+    jr   c, .primary_file
+    ld   hl, SECOND_DISPLAY_DELTA_M64
+    add  hl, de
+    ex   de, hl                        ; de = Second-Display-File address
+.primary_file:
+    pop  hl                                ; hl = glyph pointer
+    or   a                                ; clear carry -- success
+    ret
+
+.out_of_range:
+    scf
+    ret
+
+; ============================================================================
+; MODE64_PUTCHAR
+; Plots one character at a 64-column character-grid position. Mirrors
+; GFX_PUTCHAR's own scanline blit exactly (see that routine's header).
+; In:  A = ASCII character, B = row (0-23), C = column (0-63)
+; Out: none
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+MODE64_PUTCHAR:
+    call MODE64_CHAR_ADDR_SETUP
+    ret  c
+    ld   b, 8
+.scanline_loop:
+    ld   a, (hl)
+    ex   de, hl
+    ld   (hl), a
+    inc  h
+    ex   de, hl
+    inc  hl
+    djnz .scanline_loop
+    ret
+
+; ============================================================================
+; MODE64_PUTCHAR_XOR
+; Same addressing as MODE64_PUTCHAR, XOR-blitted instead of overwritten
+; (mirrors GFX_PUTCHAR_OVER exactly) -- self-inverting, so calling this
+; twice at the same position restores the original bits. Used only for
+; the 64-column editor's own cursor block (core/editor.asm): Mode 6 has
+; no per-cell attribute byte to invert the way the 32-column cursor
+; does (GFX_INVERT_ATTR) or to blink via the ULA's own hardware FLASH
+; bit, so the 64-column cursor is a STATIC (non-blinking) inverted
+; block instead -- drawn by XOR-ing the glyph already there with a
+; solid block shape, one call per redraw, never toggled by a timer.
+; In:  B = row (0-23), C = column (0-63)
+; Out: none
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+MODE64_PUTCHAR_XOR:
+    ld   a, " "                    ; any always-mapped character drives
+                                   ; MODE64_CHAR_ADDR_SETUP's address
+                                   ; math correctly -- its own glyph
+                                   ; pointer (HL) is simply never read
+                                   ; below, since every scanline here
+                                   ; draws a solid block ($FF) instead
+                                   ; of a real glyph byte
+    call MODE64_CHAR_ADDR_SETUP    ; DE = screen address, HL = glyph
+                                   ; pointer (unused)
+    ret  c
+    ex   de, hl                    ; hl = screen address
+    ld   b, 8
+.scanline_loop:
+    ld   a, (hl)
+    xor  $FF                       ; solid block, every pixel set
+    ld   (hl), a
+    inc  h                         ; screen address += 256 (next
+                                   ; scanline)
+    djnz .scanline_loop
+    ret
+
+; ============================================================================
+; MODE64_COPY_ROW_BITMAP (internal — not a public entry point)
+; Mirrors GFX_COPY_ROW_BITMAP exactly, except each scanline's 32 bytes
+; are copied in BOTH display files (Primary AND Second) instead of
+; just one -- Mode 6 has no attribute byte to move separately the way
+; GFX_SCROLL_TEXT_UP's own attribute LDIR does, so there is nothing
+; else this routine needs to touch.
+; In:  (GFX_SCROLL_DST_ROW), (GFX_SCROLL_SRC_ROW) already set by the
+;      caller -- same shared scratch cells GFX_COPY_ROW_BITMAP uses,
+;      safe to reuse since this project is single-threaded and the two
+;      video modes are never scrolled concurrently
+; Out: none
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+MODE64_COPY_ROW_BITMAP:
+    ld   a, (GFX_SCROLL_DST_ROW)
+    call GFX_ROW_BASE_ADDR          ; hl = dst row base (Primary-relative)
+    push hl
+    ld   a, (GFX_SCROLL_SRC_ROW)
+    call GFX_ROW_BASE_ADDR          ; hl = src row base (Primary-relative)
+    pop  de                         ; de = dst row base
+    ld   b, 8                       ; 8 scanlines per text row
+.scanline_loop:
+    push bc
+    push hl
+    push de
+    ld   bc, 32
+    ldir                            ; Primary Display File
+    pop  de
+    pop  hl
+    push hl
+    push de
+    ld   bc, SECOND_DISPLAY_DELTA_M64
+    add  hl, bc
+    ex   de, hl
+    add  hl, bc
+    ex   de, hl                     ; hl = src+delta, de = dst+delta
+    push bc
+    ld   bc, 32
+    ldir                            ; Second Display File
+    pop  bc
+    pop  de
+    pop  hl                         ; restore PRE-delta bases for the
+                                    ; scanline-advance step below
+    ld   a, h
+    inc  a
+    ld   h, a
+    ld   a, d
+    inc  a
+    ld   d, a
+    pop  bc
+    djnz .scanline_loop
+    ret
+
+; ============================================================================
+; MODE64_SCROLL_TEXT_UP
+; Mirrors GFX_SCROLL_TEXT_UP exactly (same 23-row program-listing
+; window, same row-22-left-for-the-caller-to-draw contract), scrolling
+; BOTH display files via MODE64_COPY_ROW_BITMAP instead of one via
+; GFX_COPY_ROW_BITMAP -- no attribute LDIR step at all, since Mode 6
+; has none.
+; In:  none
+; Out: none
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+MODE64_SCROLL_TEXT_UP:
+    xor  a
+    ld   (GFX_SCROLL_DST_ROW), a
+.row_loop:
+    ld   a, (GFX_SCROLL_DST_ROW)
+    inc  a
+    ld   (GFX_SCROLL_SRC_ROW), a
+    call MODE64_COPY_ROW_BITMAP
+    ld   a, (GFX_SCROLL_DST_ROW)
+    inc  a
+    ld   (GFX_SCROLL_DST_ROW), a
+    cp   22
+    jr   c, .row_loop
+    ret
+
+; ============================================================================
+; MODE64_CLEAR_ROW
+; Clears one 64-column text row (both display files) to blank. Mirrors
+; GFX_CLEAR_ROW, minus its attribute-clear half (nothing to clear).
+; In:  B = row (0-23)
+; Out: none
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+MODE64_CLEAR_ROW:
+    ld   c, 0
+.loop:
+    push bc
+    ld   a, " "
+    call MODE64_PUTCHAR
+    pop  bc
+    inc  c
+    ld   a, c
+    cp   64
+    jr   c, .loop
+    ret
+
     ENDIF
