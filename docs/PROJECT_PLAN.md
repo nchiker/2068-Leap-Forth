@@ -3386,11 +3386,22 @@ What Phase 48 confirms is that this project's own port-level code
 matches the same protocol 2068-Leap's own long-tested BASIC
 implementation uses, and that the patched emulator visibly responds to
 it correctly — NOT that genuine, unpatched TS2068/SCLD silicon would
-behave identically. The originally-tracked backlog item (cross-check
-in ZEsarUX, unpatched) remains exactly as open as before; building
-this capability doesn't resolve that question, it just gives
-2068-Forth the same capability 2068-Leap already has, under the
-identical, still-unresolved caveat.
+behave identically. **RESOLVED 2026-09-06 — the cross-check turned out to be moot, not
+open.** Checked directly against ZEsarUX 13.0's own source
+(`src/cpu.c`'s per-machine `poke_byte`/`enable_*` setup): `enable_
+ulaplus()` is called for the Chloe 280SE and Prism machine profiles,
+but the `MACHINE_ID_TIMEX_TS2068`/`MACHINE_ID_TIMEX_TC2068` case calls
+neither `enable_ulaplus()` nor anything equivalent — ZEsarUX doesn't
+implement ULAPlus for this machine AT ALL. There is nothing to
+cross-check `ULAPLUS`/`PALETTE` against: no second emulator offers a
+TS2068 ULAPlus implementation to compare Fuse's patched one to. This
+is exactly consistent with (and reinforces, from an independent
+source) this section's own already-stated belief that real TS2068
+hardware never had genuine ULAPlus — the caveat isn't resolved by
+proving Fuse "right" or "wrong," it's resolved by confirming there's
+no reference implementation anywhere to check it against. Treat
+`ULAPLUS`/`PALETTE` as permanently Fuse-only, by the nature of the
+feature itself, not as a temporarily-unverified one.
 
 ## Documentation pass: the user manual brought current
 
@@ -3459,13 +3470,52 @@ on the input line while `64COL` was active, and a headless diagnostic
 confirmed printed text and the screen fully recovering after switching
 back to `32COL`. The only real visual effect of toggling `64COL` today
 is the whole screen's background/border going to one uniform color —
-and even that observation carries a caveat: **this session's Fuse
+and even that observation carried a caveat: **this session's Fuse
 binary is patched for ULAPlus**, so port `$FF` writes (exactly what
 `MODE64_ON` does) may be getting reinterpreted by that patch rather
-than emulated as genuine TS2068/SCLD hardware behavior. Not yet
-resolved — cross-checking in ZEsarUX (unpatched, with native ULAPlus
-support) is the planned next step before trusting any further
-conclusions about the *visual* side effects of `64COL`.
+than emulated as genuine TS2068/SCLD hardware behavior.
+
+**RESOLVED 2026-09-06 via a real ZEsarUX cross-check.** Two throwaway
+diagnostic ROMs (`rom/mode64_visual_check.asm`, `rom/hires_visual_check.asm`
+— not smoke ROMs, no PASS/FAIL, kept only as reproducible tools for
+this kind of check), each drawing two solid, distinctly-colored 20x20
+blocks with a wide gap between them, were run in ZEsarUX 13.0 via its
+ZRCP remote protocol (`--romfile` wants a single file: this project's
+own 16KB Home ROM immediately followed by its 8KB EXROM concatenated
+together, unlike Fuse's two separate `--rom-ts2068-0`/`-1` flags).
+ZEsarUX's own TS2068 profile has ZERO ULAPlus involvement (see Phase
+48's own section above) — a genuinely independent reference, not just
+a second copy of the same patch.
+
+Findings, confirmed by `read-memory`/`get-io-ports` over ZRCP (byte-
+exact port $FF values and real nonzero pixel data in both display
+files, matching this project's own Fuse-based checkpoints exactly)
+AND by real `save-screen` screenshots:
+- **HIRES (port $FF bits `%010`) renders correctly** — the two test
+  blocks appeared as two distinctly colored solid squares, proving a
+  second, ULAPlus-uninvolved emulator agrees this mode's real
+  per-scanline-attribute visuals are sound.
+- **64COL (port $FF bits `%110`) renders as a single flat-colored
+  rectangle in ZEsarUX too** — regardless of the confirmed-correct
+  underlying bitmap content, and unchanged across every palette value
+  tried (0, 3, 5, 7). The border color tracks the palette selection;
+  the interior never does.
+
+Conclusion: the "whole screen goes to one color" behavior is NOT a
+Fuse-specific ULAPlus-patch artifact — ZEsarUX shows the identical
+flat-rectangle behavior for the identical hardware mode, and ZEsarUX
+has no ULAPlus patch to blame it on. The much more likely explanation
+is that BOTH commonly-used Spectrum-family emulators have an
+incomplete/simplified rendering path for this specific, rare 512-pixel
+split-display-file "Mode 6" — unsurprising given how few real programs
+ever used it (three obscure third-party tools, per this section's own
+research below). This is an emulator-fidelity limitation shared by
+both tools available in this environment, not a bug in this project's
+own Z80 code (already independently confirmed byte-correct in both
+emulators) and not something either emulator's own settings can fix.
+Actually seeing 64COL's real visual appearance would need either real
+TS2068 hardware or a third emulator with a more complete Mode 6
+implementation — out of scope to pursue further here.
 
 **Real TS2068 hardware genuinely could do 64-column text**, confirmed
 via web research (not this project's own emulation): connected to a

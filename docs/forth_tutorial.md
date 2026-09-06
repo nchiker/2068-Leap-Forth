@@ -3644,7 +3644,5 @@ an obvious place to be recorded, in the same spirit as the caveats
 already scattered through this document.
 
 See [`PROJECT_PLAN.md`](PROJECT_PLAN.md) for this project's own build
-history and phased development order — including the ULAPlus visual-
-fidelity item still tracked there (an ongoing cross-emulator question,
-not a missing word) — if you're curious how 2068-Forth was actually
-put together rather than just how to use it.
+history and phased development order, if you're curious how 2068-Forth
+was actually put together rather than just how to use it.
