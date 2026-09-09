@@ -2,10 +2,10 @@ name: Build ROM
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     tags: ["v*"]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 env:
   SJASMPLUS_REF: v1.23.1
@@ -102,4 +102,5 @@ jobs:
             dist/2068-forth/forth_boot_rom0.bin
             dist/2068-forth/stock_shaped_exrom.bin
             dist/2068-forth/forth_boot_combined_24k.bin
+            dist/2068-forth/forth_exrom_eightyone.dck
           generate_release_notes: true

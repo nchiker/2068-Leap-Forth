@@ -9,6 +9,48 @@ is free to diverge from its conventions from here on. See
 [`docs/PROJECT_PLAN.md`](docs/PROJECT_PLAN.md) for exactly what was
 inherited, what was deliberately left behind, and the phased build order.
 
+## Download
+
+Ready-to-run ROM images are attached to each
+[GitHub Release](https://github.com/nchiker/2068-Leap-Forth/releases/latest)
+(built and packaged automatically by
+[`.github/workflows/build.yml`](.github/workflows/build.yml) — see
+[Actions](https://github.com/nchiker/2068-Leap-Forth/actions) for the
+build behind any given tag). Every push and pull request also gets a
+build artifact from the same workflow, if you want an image from a
+specific commit without waiting for a tagged release.
+
+- `forth_boot_rom0.bin` — 16K Home ROM.
+- `stock_shaped_exrom.bin` — 8K EXROM placeholder.
+- `forth_boot_combined_24k.bin` — Home+EXROM concatenated, for ZEsarUX.
+- `forth_exrom_eightyone.dck` — EXROM wrapped for EightyOne's cartridge slot.
+
+No prebuilt binaries are committed into this repository itself — it's the
+source/development repo. This is only 2068-Forth's own product ROM
+(the "Try it" section below); it doesn't include 2068-Leap's separate
+BASIC ROM or extensions.
+
+### Run in Fuse
+
+```sh
+fuse --machine ts2068 --rom-ts2068-0 forth_boot_rom0.bin \
+     --rom-ts2068-1 stock_shaped_exrom.bin
+```
+
+### Run in ZEsarUX
+
+```sh
+zesarux --noconfigfile --machine TS2068 --romfile forth_boot_combined_24k.bin
+```
+
+### Run in EightyOne 1.41
+
+Select the TS2068 machine, use `forth_boot_rom0.bin` as the ROM file, and
+use `forth_exrom_eightyone.dck` as a **Timex ROM Cartridge** (not the raw
+`stock_shaped_exrom.bin`). See
+[`docs/eightyone_setup.md`](docs/eightyone_setup.md) for dialog-by-dialog
+instructions.
+
 ## Status
 
 - Milestone 0 (`rom/main.asm`, inherited verbatim from 2068-Leap's own
