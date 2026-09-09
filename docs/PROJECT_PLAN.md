@@ -3958,6 +3958,164 @@ code between files, not in or out of any given ROM's own build).
 `rom/forth_smoke_p52.asm` uses 16383 of 16384 bytes ($3FFF of $4000),
 1 byte free — confirmed identical to its own pre-Phase-63 baseline.
 
+## Phase 64 — LIST-DEFS, RECALL
+
+**Status: implemented, assembles clean across every affected ROM
+(`make check`/`make all`, 0 errors, 0 warnings across all 68+ targets),
+confirmed passing under real ZEsarUX — both this phase's own new smoke
+ROM AND `rom/forth_smoke_p52.asm`'s full LOAD-TEXT/Blackjack round trip,
+re-run after a real correctness bug this phase introduced and then
+caught (see "A real bug caught mid-phase" below).**
+
+Grew out of a design conversation, not a BASIC-gap audit like most
+earlier phases: the user asked how to fix a typo in a program AFTER
+pressing Enter on it. The honest finding: you can't, for anything typed
+live at the prompt — `core/editor.asm`'s `EDITOR_LOOP_LIVE` hands
+`EDIT_BUF` straight to `INTERPRET_RUN` and never keeps a copy, so the
+source is simply gone once compiled. `LOAD-TEXT`'d programs fare better
+only because `LOADTEXT_BUF` happens to stay resident after a load.
+
+Several heavier designs were considered and rejected in conversation
+before landing here — worth recording why, since they're the reason
+this phase's actual shape looks the way it does:
+- **A full-screen multi-row editor** (the `structured-basic-poc`
+  sibling project's own Phase 8 design, and the Spectrum 128K ROM's
+  own screen editor) was rejected as disproportionate to what 2068-Forth
+  actually needs: Forth's own `:`/`;` structure already gives a natural
+  recall unit without inventing line numbers or a persistent multi-row
+  viewport.
+- **In-place variable-length splice-on-edit** (replacing a definition's
+  old span with its corrected one, shifting everything after it) was
+  designed, costed (~100-150 bytes, the single most expensive and most
+  bug-prone piece of the whole feature), and then dropped in favor of
+  appending the corrected definition to the end of the workspace instead
+  — the same code path a freshly-typed line already uses. The honest
+  tradeoff, stated plainly rather than hidden: the workspace keeps the
+  old, superseded copy sitting in the middle after an edit; recalling
+  that name again shows both, oldest first, same "newest wins"
+  convention the dictionary itself already has. It slowly fills
+  `LOADTEXT_MAX_LEN` (8192 bytes) with stale copies over a long editing
+  session rather than staying compact.
+- **`FORGET`-and-replay the whole program on every edit** (redefine by
+  wiping back to the program's own start and re-running the corrected
+  buffer from scratch) was designed and then rejected outright, not just
+  costed: `FORGET` erases a word *and everything defined after it* — no
+  way to remove just one definition from the middle — so replaying the
+  whole buffer on every edit would also reset every `VARIABLE`/
+  `CONSTANT` back to its as-defined value and re-run any top-level side
+  effects (a `RANDOMIZE`, a game-start loop) the program has. Fixing a
+  typo isn't supposed to also reset your score. Ordinary Forth
+  redefinition — the corrected word simply shadows the old one, same as
+  retyping it live already does — avoids all of that, at the cost of a
+  documented, standard Forth limitation: a word already compiled to call
+  the OLD version doesn't automatically pick up the fix; it needs
+  redefining too.
+
+**What got built**, all in `core/recall.asm` (new file, chained after
+`core/loadtext.asm`, before `core/editor.asm`):
+- `WORKSPACE_APPEND` — appends bytes to the persistent workspace
+  (`core/loadtext.asm`'s own `LOADTEXT_BUF`), inserting exactly one
+  separating space when the workspace is non-empty (so
+  `INTERPRET_RUN`'s own single-space delimiter, per `core/interp.asm`'s
+  own header, doesn't glue two entries' tokens together), and silently
+  refusing to overflow the buffer rather than corrupting dictionary RAM
+  above it.
+- `SCAN_DEFS` — a single-pass byte scanner finding every top-level
+  `":"`..`";"` span in the workspace (Forth doesn't nest colon
+  definitions, so no depth tracking is needed), populating a 16-entry
+  `DEF_TABLE` (offset + length per entry).
+- `LIST-DEFS ( -- )` — re-scans, then prints each entry's index and a
+  20-character source preview.
+- `RECALL ( n -- )` — re-scans, copies entry `n`'s full span into
+  `EDIT_BUF`, and sets a new `RECALL_PENDING` flag.
+- `core/editor.asm`'s `EDITOR_LOOP_LIVE` updated in two places, both
+  gated behind `IFDEF CORE_RECALL_ASM` (see "A real bug caught
+  mid-phase" below on why gating, not an unconditional change, was
+  necessary): it now appends every committed line to the workspace
+  BEFORE running it (so live typing is recoverable the same way a
+  loaded program already was), and it checks `RECALL_PENDING` before its
+  own usual "clear the line for a fresh prompt" reset — otherwise
+  `RECALL`'s own line finishing would immediately wipe out what it just
+  recalled.
+- `core/loadtext.asm`'s `W_LOADTEXT` updated to set `WORKSPACE_END` (a
+  new cell tracking the append cursor) to `LOADTEXT_BUF + DE` after a
+  successful load, gated behind a `TRACK_WORKSPACE_END` flag `rom/
+  forth_boot.asm` DEFINEs right before its own `INCLUDE` of that file —
+  see below on why this had to be opt-in, not automatic.
+
+**ROM budget, measured not estimated**: the feature was scoped, before
+writing any code, against `rom/forth_boot.asm`'s real free space at the
+time (632 bytes, `$3D88` of `$4000`) rather than assumed. First
+implementation landed at 485 bytes (147 free) — well over the ~270-400
+initial estimate. A dedup pass (factoring `SCAN_DEFS`'s three identical
+inline "reached the end of the workspace?" checks into one `AT_END`
+subroutine, and `LIST-DEFS`/`RECALL`'s identical `DEF_TABLE` index
+arithmetic into one `GET_DEF_SPAN` subroutine — reuse over cleverness,
+consistent with `z80-skills:shrink-z80`'s own SAFE-attack-order
+guidance) recovered 17 bytes. Final: 447 bytes used, 163 bytes free
+(`rom/forth_boot.asm` at `$3F5D` of `$4000`) after also converting one
+checker-flagged `jr` (real displacement +126, 1 byte under the +-127
+limit) to `jp`, same practice Phase 62 already established for
+exactly this situation.
+
+**A real bug caught mid-phase, worth recording**: the first working
+version added `W_LOADTEXT`'s `WORKSPACE_END`-tracking code
+UNCONDITIONALLY to `core/loadtext.asm`, which broke two things
+simultaneously, both caught by actually running `make all`/`make check`
+rather than trusting a clean `forth-boot` build alone:
+1. `rom/forth_smoke_p52.asm` (already at 1 byte free, per its own
+   Phase-63 baseline above) overflowed by 5 bytes — it includes
+   `core/loadtext.asm` but not `core/recall.asm`, so it was paying for
+   bookkeeping nothing there ever reads. Fixed by gating the addition
+   behind `TRACK_WORKSPACE_END`, DEFINEd only by `rom/forth_boot.asm`.
+2. While writing that gate, `ld hl, LOADTEXT_BUF` — `INTERPRET_RUN`'s
+   own required source-address argument, needed on EVERY successful
+   `LOAD-TEXT` regardless of whether workspace-tracking is enabled — got
+   pulled inside the `IFDEF TRACK_WORKSPACE_END` block along with the
+   tracking code it was adjacent to. That would have left every ROM
+   WITHOUT `TRACK_WORKSPACE_END` defined (`rom/forth_smoke_p52.asm`
+   included) calling `INTERPRET_RUN` with a stale/wrong `HL` on every
+   `LOAD-TEXT` — silently breaking the exact mechanism `rom/
+   forth_smoke_p52.asm`'s own checkpoint 2 exists to prove (loading and
+   running the full ~60-word Blackjack game from tape). Caught two ways:
+   the freed-byte count came back 3 bytes higher than the gate alone
+   should have produced (a real accounting mismatch, not just "it
+   compiles"), AND by actually re-running `rom/forth_smoke_p52.asm`
+   under real ZEsarUX afterward rather than trusting a clean assemble —
+   border settled to green (`04`) only after `ld hl, LOADTEXT_BUF` was
+   moved back out of the gated block to run unconditionally. Two
+   separate, real, independently-corroborating checks catching the same
+   bug — assembling clean is not the same as being correct, the same
+   lesson `docs/PROJECT_PLAN.md`'s own dictionary-orphaning bug history
+   already established for this project.
+
+**Smoke ROM**: `rom/forth_smoke_p64.asm`, six checkpoints, deliberately
+NOT including `core/loadtext.asm` or `core/editor.asm` (redeclares their
+few needed constants as the same literal values instead, confirmed by
+direct comparison) to avoid pulling in `kernel/storage`'s own fake-tape
+harness and `core/editor.asm`'s live-keyboard dependencies for a test
+that needs neither: `SCAN_DEFS` finds the right spans over a hand-
+indexed two-definition test payload, `GET_DEF_SPAN` reports each span's
+offset/length correctly, `RECALL` copies a span into `EDIT_BUF` and sets
+`EDIT_LEN`/`EDIT_CURSOR`/`RECALL_PENDING` correctly, an out-of-range
+`RECALL` is a confirmed no-op, and `WORKSPACE_APPEND` inserts exactly
+one separator between two appends starting from empty. Confirmed PASS
+(border green, `04`) via real ZEsarUX over ZRCP (`get-io-ports`, "Spectrum
+FE port"), not just a clean assemble.
+
+**The honest gaps, stated plainly, same class as `EDITOR_LOOP_LIVE`'s
+own existing one**: `LIST-DEFS`'s actual screen output (via `PRINT_UDEC16`
+and `W_EMIT`) is reviewed by eye under the real `rom/forth_boot.asm`
+build, not covered by an automated checkpoint — it's text on a screen,
+not a boolean condition, the same gap class as `rom/
+mode64_visual_check.asm`. `EDITOR_LOOP_LIVE`'s own append-on-commit and
+`RECALL_PENDING` handling can't be automated either, for the same
+reason `EDITOR_LOOP_LIVE` itself never has been (needs a live or
+injected keyboard). A definition longer than `EDIT_MAX_LEN` (128 bytes)
+cannot be `RECALL`ed — reported by simply doing nothing, not truncated.
+`DEF_TABLE`'s own 16-entry cap means `LIST-DEFS`/`RECALL` only see the
+first 16 definitions found in a session, oldest first.
+
 ## Testing discipline
 
 Carry forward the validated order from 2068-Leap, applied to Forth

@@ -29,7 +29,8 @@
 ; ACCEPT/INPUT, CHR/STR/UPPER/LOWER/LEFT/RIGHT/SEARCH/CODE, EXECUTE,
 ; HERE/,/C,/ALLOT/CREATE/DOES>/IMMEDIATE, FREE, THROW/CATCH,
 ; ROT/2DUP/2DROP/?DUP/PICK, AND/OR/XOR/INVERT, ' (TICK), LPRINT/LLIST,
-; VLIST, ABORT/QUIT, IN/OUT, FORGET, UDG, EXIT — 143 words total.
+; VLIST, ABORT/QUIT, IN/OUT, FORGET, UDG, TONE/VOLUME/MIXER/NOISE/
+; ENVELOPE, LIST-DEFS, RECALL, EXIT — 150 words total.
 ; RE-DERIVED, NOT HAND-COUNTED: this comment's own earlier draft
 ; (claiming 93) had already gone stale twice over — once discovered
 ; during a Phase-24-era consolidation pass (missing the original Phase
@@ -37,20 +38,23 @@
 ; Phase 49/50 with nobody re-deriving it (the comment said so itself,
 ; rather than guess). Both times the number was hand-counted or hand-
 ; incremented from prose. This time (and again for Phase 60/61's
-; BRIGHT/FLASH, and Phase 62's BREAK?) it's the result of actually
-; assembling this file and walking the real dictionary's own LINK
-; chain in the compiled binary, byte for byte, from LATEST's own seed
-; (DICT_LATEST_INIT_LOADTEXT) down to the LINK=0 sentinel — the same
-; class of check that caught two real dictionary-orphaning bugs
-; earlier in this project's history (a chain-point set to the wrong
-; tail marker silently drops every word after it, which eyeballing
-; headers can miss but walking the real chain cannot). 143 unique
-; names, zero duplicates, zero shadowing, chained into one LATEST list
-; via the same DICT_CHAIN_POINT splices rom/forth_smoke_p9.asm
-; introduced and proved. Whoever next adds a phase: re-run this same
-; walk (build this ROM, then follow DICT_LATEST_INIT_LOADTEXT's own
-; LINK chain through the assembled .bin) rather than incrementing this
-; number by eye — that's exactly the habit that let it drift twice.
+; BRIGHT/FLASH, Phase 62's BREAK?, and Phase 64's LIST-DEFS/RECALL —
+; the count had again drifted silently at 148 real words when this
+; comment still said 143, missing Phase 63's own TONE/VOLUME/MIXER/
+; NOISE/ENVELOPE entirely) it's the result of actually assembling this
+; file and walking the real dictionary's own LINK chain in the compiled
+; binary, byte for byte, from LATEST's own seed (DICT_LATEST_INIT_RECALL)
+; down to the LINK=0 sentinel — the same class of check that caught two
+; real dictionary-orphaning bugs earlier in this project's history (a
+; chain-point set to the wrong tail marker silently drops every word
+; after it, which eyeballing headers can miss but walking the real chain
+; cannot). 150 unique names, zero duplicates, zero shadowing, chained
+; into one LATEST list via the same DICT_CHAIN_POINT splices
+; rom/forth_smoke_p9.asm introduced and proved. Whoever next adds a
+; phase: re-run this same walk (build this ROM, then follow
+; DICT_LATEST_INIT_RECALL's own LINK chain through the assembled .bin)
+; rather than incrementing this number by eye — that's exactly the habit
+; that let it drift, repeatedly.
 ; DECIMAL_NUMBER_ENABLED is also DEFINEd here (core/decimal.asm,
 ; Phase 23) — not a dictionary word, a NUMBER/INTERPRET_RUN parsing
 ; capability: typing a literal like `3.5` now pushes a real float
@@ -133,12 +137,21 @@ COLD_START:
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
-    ld   hl, DICT_LATEST_INIT_LOADTEXT   ; the full chain's own head —
+    ld   hl, DICT_LATEST_INIT_RECALL   ; the full chain's own head —
                                     ; see this file's own header (Phase
-                                    ; 52 -- core/loadtext.asm's SAVE-TEXT/
-                                    ; LOAD-TEXT -- spliced on after
-                                    ; core/udg.asm's own tail)
+                                    ; 64 -- core/recall.asm's LIST-DEFS/
+                                    ; RECALL -- spliced on after
+                                    ; core/loadtext.asm's own tail)
     ld   (LATEST), hl
+
+    ; Phase 64 (core/recall.asm): WORKSPACE_END starts undefined RAM at
+    ; cold boot -- must be LOADTEXT_BUF (an empty workspace) before the
+    ; first live-typed line's own WORKSPACE_APPEND call (core/editor.asm's
+    ; EDITOR_LOOP_LIVE), or that call reads garbage and can write outside
+    ; LOADTEXT_BUF entirely. A later LOAD-TEXT resets it again to cover
+    ; exactly what it received (core/loadtext.asm's own W_LOADTEXT).
+    ld   hl, LOADTEXT_BUF
+    ld   (WORKSPACE_END), hl
     ld   hl, FORTH_DICT_RAM
     ld   (HERE), hl
     xor  a
@@ -540,6 +553,11 @@ DICT_CHAIN_POINT DEFL H_OUT
 DICT_CHAIN_POINT DEFL H_FORGET
     INCLUDE "core/udg.asm"
 DICT_CHAIN_POINT DEFL H_UDG
+    DEFINE TRACK_WORKSPACE_END   ; opt in to core/loadtext.asm's
+                                 ; WORKSPACE_END tracking -- see that
+                                 ; file's own W_LOADTEXT comment on why
+                                 ; this must be a per-ROM opt-in, not
+                                 ; unconditional
     INCLUDE "core/loadtext.asm"
     ; core/storage.asm's own SAVE_LOAD_TEMP_BUF/SAVE_LOAD_MAX_DICT are
     ; literals that deliberately TIME-SHARE this exact same physical RAM
@@ -553,6 +571,9 @@ DICT_CHAIN_POINT DEFL H_UDG
     ; RAM the two mechanisms were supposed to be safely sharing.
     ASSERT SAVE_LOAD_TEMP_BUF == LOADTEXT_BUF
     ASSERT SAVE_LOAD_MAX_DICT == LOADTEXT_MAX_LEN - 2
+DICT_CHAIN_POINT DEFL H_LOADTEXT
+    INCLUDE "core/recall.asm"
+DICT_CHAIN_POINT DEFL H_RECALL
     INCLUDE "core/editor.asm"
 
     DS   $4000 - $, $FF
