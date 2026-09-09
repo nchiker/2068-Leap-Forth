@@ -117,10 +117,22 @@ onward assumes a memory map that's actually this project's own:
    the file is safe to build against as-is (it's git history from a
    working project, not experimental) — just don't treat its untrimmed
    contents as this project's actual RAM map.
-3. Decide what happens to `kernel/memory/memory.asm`'s `MEM_LINE_*`/
-   `MEM_LABEL_*` routines: delete them from this project's copy once the
-   dictionary module (Phase 2) supersedes them, rather than letting dead
-   BASIC-program-model code sit next to the kernel indefinitely.
+3. **Done** (post-Phase-64, prompted by a direct "should we clean up
+   entirely-unused inherited kernel modules?" question): `kernel/
+   memory/memory.asm` deleted outright, along with its now-empty
+   directory. It was never `INCLUDE`d by any ROM in this project (Phase
+   2's dictionary module superseded it from the start — see "What was
+   deliberately left behind" above), and every remaining reference
+   anywhere in the tree was prose/comments, not code — confirmed by
+   grep before deleting, not assumed. `kernel/bank/bank.asm` was
+   considered for the same treatment and deliberately kept instead: it
+   is NOT dead weight the way `kernel/memory` was — it's explicitly
+   reserved for a real, documented future plan (Phase 8's own "Still
+   open" list: "a second dictionary segment in EXROM via the
+   already-proven `kernel/bank` trampoline, if the Home-resident
+   dictionary gets tight"). Currently unused by any ROM here too, but
+   for a different, deliberate reason — don't delete it on the same
+   reasoning that justified removing `kernel/memory`.
 4. Re-run `make check` after each trim and keep it clean (the one
    pre-existing `check_z80_opcodes.py` warning on `GFX_LINE`'s `.loop`
    displacement estimate is inherited unchanged from 2068-Leap itself,
@@ -4235,13 +4247,17 @@ real banner via a real ZEsarUX `save-screen` screenshot, not just an
 assumption that a clean build meant a working ROM.
 
 Two entire kernel modules, `kernel/bank/bank.asm` and `kernel/memory/
-memory.asm`, are never `INCLUDE`d by any ROM in this project at all —
-zero ROM-byte cost since they're never compiled in, but 100% dead
-source relative to 2068-Forth. `kernel/memory/memory.asm`'s `MEM_LINE_*`/
-`MEM_LABEL_*` routines were already flagged for deletion back in the
-still-open Phase 0 item 3 ("delete them... rather than letting dead
-BASIC-program-model code sit next to the kernel indefinitely") —
-recorded here as still-open, not acted on this pass.
+memory.asm`, were never `INCLUDE`d by any ROM in this project — zero
+ROM-byte cost either way since neither was ever compiled in, but 100%
+dead source relative to 2068-Forth at the time this pass found them.
+`kernel/memory/memory.asm`'s `MEM_LINE_*`/`MEM_LABEL_*` routines were
+already flagged for deletion back in Phase 0 item 3 ("delete them...
+rather than letting dead BASIC-program-model code sit next to the
+kernel indefinitely") — recorded here as still-open at the time, then
+actually deleted in a later follow-up pass (see Phase 0's own item 3
+for the final writeup). `kernel/bank/bank.asm` was deliberately kept,
+not deleted alongside it — see that same follow-up for why (a real,
+documented future plan, not dead weight for the same reason).
 
 **2. `WRAP_CALC`/`WRAP_CALC64` merged into two thin entry stubs sharing
 one body (111 bytes; measured free-byte recovery, 410 -> 521).** The
