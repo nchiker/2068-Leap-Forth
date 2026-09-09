@@ -128,6 +128,85 @@ onward assumes a memory map that's actually this project's own:
    against 2068-Leap's own copy of the file; leave it alone unless that
    routine grows).
 
+**Item 2, full audit results (post-Phase-64, prompted by a direct "is
+there dead RAM now?" question after the Home ROM shrink pass below)**:
+item 2 itself remains undone (no `sysvars.inc` edit made), but it's now
+fully scoped with real evidence instead of the vague "~2,000 lines of
+BASIC-only sysvars" estimate above.
+
+`core/free.asm`'s own Phase 44 header already did HALF of this audit,
+for the `$C000-$FEFF` range only: it found that range full of "sprite
+capture buffers, and BASIC-only state this project never uses: label
+table, UDGs, DEF FN, the loadable-extension registry" — and instead of
+editing `sysvars.inc` (address-shift risk), it just raised
+`DICT_RAM_CEILING` to `$F000`, letting the dictionary grow straight
+through that dead space with zero risk and zero `sysvars.inc` changes.
+That fix already stands; nothing new needed there. (One small drift
+worth naming: that comment calls UDGs dead, which was true in Phase 44
+but stopped being true once Phase 62 added the real `UDG` word — a
+live example of exactly the staleness risk any RAM-map document runs,
+not a bug, just why this project always prefers re-deriving over
+trusting an old writeup.)
+
+This session extended the same method (grep every symbol against every
+caller in `core/`, the seven `kernel/*.asm` files `rom/forth_boot.asm`
+actually includes, and `rom/forth_boot.asm` itself) to the range Phase
+44 never covered: everything below `FORTH_DICT_RAM`'s `$9800` floor.
+Result: **485 dead bytes across 95 of 168 `DEFS`-reserved cells**,
+`$8000`-`~$8270`, confirmed zero references anywhere. They cluster
+cleanly by name into recognizable BASIC-only subsystems, all consistent
+with this file's own "what was deliberately left behind" list above:
+- A full-screen BASIC program editor's state (`LOOKUP_NAME_PTR`/
+  `ADD_POSITION`/`REMOVE_ENTRY_*`/`STORE_*`/`DELRANGE_*`/`TOKEN_BUF`/
+  `HILITE_*`/`ROW_SHADOW_POS`/`ROW_SHADOW_FLAGS`/`CHECK_ERROR_*`/
+  `GOTO_TARGET`) — matches 2068-Leap's own `rom/exrom_editor.asm`,
+  already documented above as deliberately not ported.
+- BASIC's `FOR`/`NEXT` loop stack (`FOR_STACK`, 56 bytes, plus
+  `FOR_TEMP_*`/`FOR_SCAN_*`) — this project uses `DO`/`LOOP` instead.
+- BASIC's array/scalar/string variable pool bookkeeping (`ARRAYS_END`/
+  `VARS_START`/`STR_FUNC_POOL_NEXT`).
+- The sprite-only cells found and their code removed earlier this
+  session (`SPRITE_BUF_PTR`/`_TOP_ROW`/`_TOP_COL`/`_W`/`_H`/
+  `_ROW_IDX`/`_COL_IDX`, plus `SPRITE_SLOT_DEFINED` — referenced only
+  by `kernel/memory/memory.asm`, which is never `INCLUDE`d by any ROM
+  in this project at all, so dead twice over) and `BANK_EXROM_DEPTH`
+  (matching `kernel/bank/bank.asm`, also never `INCLUDE`d anywhere).
+
+Separately, of 25 `EQU`-declared explicit-address buffer symbols in the
+same sysvars block, 21 are also dead — mostly `$E800`-`$F600`
+(`SPRITE_SLOT_IMG_BUF`/`_BG_BUF`, `STR_FUNC_POOL`, `DETOK_BUF`,
+`EDIT_LINE_BUF`, `LABEL_TABLE_TOP`, `PROG_AREA_MAX`, the whole
+`EXTENSION_*`/`EXT_SERVICE_*` loadable-module registry) — already
+covered by Phase 44's ceiling-raise fix above, so no new action needed
+there. Worth flagging as a real (if inert) hazard, not just waste:
+`SPRITE_SLOT_IMG_BUF` (`$E800`) and `SPRITE_SLOT_BG_BUF` (through
+`$F0FF`) both sit *inside* `core/loadtext.asm`'s real, live
+`LOADTEXT_BUF` (`$D000-$EFFF`) — nothing reads or writes through those
+stale labels today, so there's no actual corruption, but they'd
+mislead a future reader into thinking that range is sprite-reserved
+when it's actually live dictionary/text-workspace RAM.
+
+Risk check for item 2's own real hazard (a raw hex address literal
+somewhere bypassing a symbol name, which an address shift wouldn't
+trigger an assembler error for): grepped every `$8000-$8300` and
+`$E800-$F600` literal across `core/`, the seven included `kernel/`
+files, and `rom/forth_boot.asm` — all hits are either comments/prose or
+legitimate references to addresses already confirmed live
+(`DICT_RAM_CEILING`/`$F000`, `GFX_LINE_X0-Y1`/`$F3C4-$F3C7`,
+`LOADTEXT_BUF`'s own `$EFFF` end, `UDG_TABLE`/`$F180`). No hidden raw-
+address hazard found.
+
+**Why item 2 is being left undone rather than executed now**: unlike
+the `$C000-$FEFF` range, this `$8000-$9800` space isn't one contiguous
+dead block that a boundary move can reclaim for free — dead
+`sysvars.inc` cells are interspersed with `core/`'s own live
+"confirmed-idle gap" scratch cells (`EDIT_BUF`, the `FWRAP_*`/
+`RECALL_*`/`LOADTEXT_*` cells, etc.), so an actual trim means real
+`DEFS`-reordering edits carrying the address-shift risk item 2 itself
+already named, for a comparatively modest 485 bytes. Recorded here,
+fully scoped with real numbers, for whenever that tradeoff looks worth
+taking — not pursued this session.
+
 ## Phase 1 — design decisions to lock in early
 
 - **Cell size: 16 bits.** Matches `MATH_MULTIPLY16`/`MATH_DIVIDE16`
