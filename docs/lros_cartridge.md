@@ -80,6 +80,13 @@ work" — this could not be confirmed in this environment).
   to drive it interactively. ZEsarUX (already used elsewhere in this
   project for independent hardware cross-checks) may support DOCK/DCK
   loading — worth checking before trusting this format further.
+  Note: EightyOne 1.41 IS confirmed (by a real user, on the sibling
+  `ts2068rom` project) to load a `.dck`-wrapped cartridge — see
+  `docs/eightyone_setup.md`. That confirms the general 9-byte-header +
+  chunk-image DCK container mechanics used by `tools/pack_dck.sh` are
+  real and correctly understood. It does NOT confirm the LROS-specific
+  bank id (`$0`, DOCK) or in-ROM 5-byte header used here — the confirmed
+  case uses bank id `$FE` (EXROM) instead, a different cartridge slot.
 - **The handoff-state assumption is unverified.** `COLD_START` assumes
   the stock ROM has already set up a live stack and doesn't touch `SP` —
   reasonable per the sourced convention, but not proven against real

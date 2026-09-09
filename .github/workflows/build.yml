@@ -48,6 +48,9 @@ jobs:
       - name: Generate EXROM placeholder
         run: tools/make_exrom_placeholder.sh
 
+      - name: Package EXROM as an EightyOne cartridge
+        run: tools/make_eightyone_exrom_dck.sh build/stock_shaped_exrom.bin build/forth_exrom_eightyone.dck
+
       - name: Build LROS cartridge stub (experimental)
         run: |
           make forth-lros
@@ -62,6 +65,7 @@ jobs:
           cp build/stock_shaped_exrom.bin "$pkg/stock_shaped_exrom.bin"
           cat build/forth_boot_rom0.bin build/stock_shaped_exrom.bin \
             > "$pkg/forth_boot_combined_24k.bin"
+          cp build/forth_exrom_eightyone.dck "$pkg/forth_exrom_eightyone.dck"
           cp README.md LICENSE "$pkg/"
           cp -r docs "$pkg/docs"
           mkdir -p "$pkg/experimental-lros"
@@ -75,6 +79,8 @@ jobs:
             echo "forth_boot_rom0.bin        - 16K Home ROM (--rom-ts2068-0 in Fuse)"
             echo "stock_shaped_exrom.bin     - 8K EXROM placeholder (--rom-ts2068-1 in Fuse)"
             echo "forth_boot_combined_24k.bin - Home+EXROM concatenated (ZEsarUX --romfile)"
+            echo "forth_exrom_eightyone.dck  - EXROM wrapped for EightyOne's cartridge slot"
+            echo "                             (see docs/eightyone_setup.md)"
             echo
             echo "experimental-lros/          - EXPERIMENTAL LROS DOCK-cartridge boot"
             echo "                               stub. NOT hardware-verified. See"
