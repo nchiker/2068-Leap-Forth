@@ -1,4 +1,4 @@
-# EightyOne setup
+# EightyOne / TS-Pico setup
 
 Ported from the sibling `ts2068rom` project's own `docs/eightyone_setup.md`,
 which a real EightyOne user confirmed working (Windows, released version
@@ -12,11 +12,11 @@ tools/make_exrom_placeholder.sh
 tools/make_eightyone_exrom_dck.sh build/stock_shaped_exrom.bin build/forth_exrom_eightyone.dck
 ```
 
-This produces two files for EightyOne:
+This produces two files for EightyOne and TS-Pico:
 
 - `build/forth_boot_rom0.bin` — the 16K Home ROM image.
 - `build/forth_exrom_eightyone.dck` — the 8K EXROM packaged as an
-  EightyOne Timex cartridge.
+  EightyOne/TS-Pico Timex cartridge.
 
 EightyOne v1.41 does not load a raw EXROM binary as a cartridge. Its
 `.dck` file is the raw EXROM preceded by these nine bytes:
@@ -41,6 +41,12 @@ and verifies the input is exactly 8192 bytes and the output exactly 8201.
 
 Do not select the raw `stock_shaped_exrom.bin` in the ROM Cartridge field;
 use the `.dck` file.
+
+## Use on TS-Pico
+
+`build/forth_exrom_eightyone.dck` is also the correct cartridge image for
+TS-Pico — load `build/forth_boot_rom0.bin` as the Home ROM and
+`build/forth_exrom_eightyone.dck` as the cartridge, the same as above.
 
 ## Not yet independently confirmed for 2068-Forth
 

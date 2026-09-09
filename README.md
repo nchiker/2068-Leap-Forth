@@ -23,7 +23,7 @@ specific commit without waiting for a tagged release.
 - `forth_boot_rom0.bin` — 16K Home ROM.
 - `stock_shaped_exrom.bin` — 8K EXROM placeholder.
 - `forth_boot_combined_24k.bin` — Home+EXROM concatenated, for ZEsarUX.
-- `forth_exrom_eightyone.dck` — EXROM wrapped for EightyOne's cartridge slot.
+- `forth_exrom_eightyone.dck` — EXROM wrapped for EightyOne's cartridge slot and TS-Pico.
 
 No prebuilt binaries are committed into this repository itself — it's the
 source/development repo. This is only 2068-Forth's own product ROM

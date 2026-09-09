@@ -83,6 +83,7 @@ jobs:
             echo "stock_shaped_exrom.bin     - 8K EXROM placeholder (--rom-ts2068-1 in Fuse)"
             echo "forth_boot_combined_24k.bin - Home+EXROM concatenated (ZEsarUX --romfile)"
             echo "forth_exrom_eightyone.dck  - EXROM wrapped for EightyOne's cartridge slot"
+            echo "                             and TS-Pico"
             echo "                             (see docs/eightyone_setup.md)"
             echo
             echo "experimental-lros/          - EXPERIMENTAL LROS DOCK-cartridge boot"
