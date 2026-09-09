@@ -10,6 +10,9 @@ on:
 env:
   SJASMPLUS_REF: v1.23.1
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
