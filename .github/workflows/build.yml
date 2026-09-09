@@ -1,0 +1,99 @@
+name: Build ROM
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+env:
+  SJASMPLUS_REF: v1.23.1
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Cache sjasmplus build
+        id: sjasmplus-cache
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/bin/sjasmplus
+          key: sjasmplus-${{ env.SJASMPLUS_REF }}-${{ runner.os }}
+
+      - name: Build sjasmplus ${{ env.SJASMPLUS_REF }}
+        if: steps.sjasmplus-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+          git clone --branch "${SJASMPLUS_REF}" --depth 1 \
+            https://github.com/z00m128/sjasmplus.git /tmp/sjasmplus-src
+          make -C /tmp/sjasmplus-src -j"$(nproc)"
+          sudo install -m 0755 /tmp/sjasmplus-src/sjasmplus /usr/local/bin/sjasmplus
+
+      - name: Verify toolchain
+        run: |
+          sjasmplus --version
+          python3 --version
+
+      - name: Static asm checks
+        run: make check
+
+      - name: Build all ROMs (smoke suite + product ROM)
+        run: make all
+
+      - name: Generate EXROM placeholder
+        run: tools/make_exrom_placeholder.sh
+
+      - name: Build LROS cartridge stub (experimental)
+        run: |
+          make forth-lros
+          tools/pack_dck.sh build/forth_lros_chunk0.bin build/forth_lros.dck
+
+      - name: Assemble release package
+        run: |
+          set -eu
+          pkg=dist/2068-forth
+          mkdir -p "$pkg"
+          cp build/forth_boot_rom0.bin "$pkg/forth_boot_rom0.bin"
+          cp build/stock_shaped_exrom.bin "$pkg/stock_shaped_exrom.bin"
+          cat build/forth_boot_rom0.bin build/stock_shaped_exrom.bin \
+            > "$pkg/forth_boot_combined_24k.bin"
+          cp README.md LICENSE "$pkg/"
+          cp -r docs "$pkg/docs"
+          mkdir -p "$pkg/experimental-lros"
+          cp build/forth_lros_chunk0.bin build/forth_lros.dck "$pkg/experimental-lros/"
+          {
+            echo "2068-Forth build"
+            echo "Commit:  ${GITHUB_SHA}"
+            echo "Ref:     ${GITHUB_REF_NAME}"
+            echo "Built:   $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            echo "forth_boot_rom0.bin        - 16K Home ROM (--rom-ts2068-0 in Fuse)"
+            echo "stock_shaped_exrom.bin     - 8K EXROM placeholder (--rom-ts2068-1 in Fuse)"
+            echo "forth_boot_combined_24k.bin - Home+EXROM concatenated (ZEsarUX --romfile)"
+            echo
+            echo "experimental-lros/          - EXPERIMENTAL LROS DOCK-cartridge boot"
+            echo "                               stub. NOT hardware-verified. See"
+            echo "                               docs/lros_cartridge.md before using."
+          } > "$pkg/BUILD_INFO.txt"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: 2068-forth-${{ github.sha }}
+          path: dist/2068-forth
+          if-no-files-found: error
+
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/2068-forth/forth_boot_rom0.bin
+            dist/2068-forth/stock_shaped_exrom.bin
+            dist/2068-forth/forth_boot_combined_24k.bin
+          generate_release_notes: true
