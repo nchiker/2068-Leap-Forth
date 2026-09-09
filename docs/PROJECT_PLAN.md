@@ -4116,6 +4116,101 @@ cannot be `RECALL`ed — reported by simply doing nothing, not truncated.
 `DEF_TABLE`'s own 16-entry cap means `LIST-DEFS`/`RECALL` only see the
 first 16 definitions found in a session, oldest first.
 
+## Post-Phase-64 ROM shrink pass
+
+Prompted directly by a question after Phase 64 landed at 163 bytes free
+("any other actions we should take to shrink the HOME ROM?"). Preflight
+(`z80-skills:shrink-z80`, computed from `rom/forth_boot.lst`'s own file
+boundaries, not estimated): `kernel/graphics/graphics.asm` is the single
+biggest module at 2805 bytes (17% of the whole ROM), followed by
+`core/editor.asm` (1109), `core/storage.asm` (974). Two real,
+independently-verified wins, in the order actually pursued:
+
+**1. Dead sprite code removed from `kernel/graphics/graphics.asm`
+(234 bytes; measured 247 free-byte recovery, 163 -> 410).** A full
+inventory of every top-level routine in the seven `kernel/` modules
+`rom/forth_boot.asm` actually includes (100 routines checked against
+every caller in `core/` and `rom/forth_boot.asm` itself) found one
+genuinely dead cluster: `GFX_SPRITE_BOUNDS_CHECK`/`_CELL_ROWCOL`/
+`_CAPTURE`/`_DRAW` plus their own private `GFX_CELL_BITMAP_ADDR` helper
+— a save/restore sprite pair with no Forth word exposing it anywhere
+(confirmed: zero mentions of "sprite" in `docs/forth_tutorial.md` or
+`README.md`). `GFX_SPRITE_INVALIDATE`, despite the similar name, is
+NOT dead — it's called from three other places in the same file
+(screen-clear/scroll paths) and was left alone. `kernel/graphics.asm`
+is explicitly documented elsewhere in this file as staying "exactly as
+inherited" (the Phase 8/mode64 section) — removing provably-unreachable
+code was treated as a deliberate, explicit one-off exception to that
+policy, not a precedent for further edits, and confirmed with the user
+before touching the file. The sprite-only RAM cells in
+`include/sysvars.inc` (`SPRITE_TOP_ROW`/`_TOP_COL`/`_W`/`_H`/
+`_ROW_IDX`/`_COL_IDX`/`_BUF_PTR`) were deliberately left alone — they're
+`DEFS` (RAM reservations above the 16K ROM boundary, zero ROM-byte
+cost either way) in a file whose own trim is already a separate,
+still-open Phase 0 task with real address-shift risk this pass didn't
+take on. Verified beyond a clean assemble: `rom/forth_smoke_p5.asm`
+(PLOT/LINE/CIRCLE pixel-readback, the routines most likely to have
+depended on anything nearby) confirmed passing (border green) under
+real ZEsarUX, and `rom/forth_boot.asm` itself confirmed booting to its
+real banner via a real ZEsarUX `save-screen` screenshot, not just an
+assumption that a clean build meant a working ROM.
+
+Two entire kernel modules, `kernel/bank/bank.asm` and `kernel/memory/
+memory.asm`, are never `INCLUDE`d by any ROM in this project at all —
+zero ROM-byte cost since they're never compiled in, but 100% dead
+source relative to 2068-Forth. `kernel/memory/memory.asm`'s `MEM_LINE_*`/
+`MEM_LABEL_*` routines were already flagged for deletion back in the
+still-open Phase 0 item 3 ("delete them... rather than letting dead
+BASIC-program-model code sit next to the kernel indefinitely") —
+recorded here as still-open, not acted on this pass.
+
+**2. `WRAP_CALC`/`WRAP_CALC64` merged into two thin entry stubs sharing
+one body (111 bytes; measured free-byte recovery, 410 -> 521).** The
+two routines were byte-for-byte identical except for their column-width
+constants (32 vs 64) — a real, evidence-confirmed duplication (`diff`
+of the two routines' bodies showed nothing else differed). `core/
+editor.asm`'s own header for `WRAP_CALC64` explicitly documented this
+as A DELIBERATE DECISION, citing `kernel/graphics.asm`'s own
+`GFX_SET_ATTR_EXT` precedent (a full sibling beats parameterizing a
+tested routine, because changing an existing routine's calling contract
+risks every existing call site for a small saving) — that precedent was
+read in full before touching anything, and its actual concern (don't
+force every CALLER to change) doesn't apply to a refactor that leaves
+both entry points, names, and calling conventions completely untouched
+and only merges the internal duplicate body. A new 1-byte scratch cell,
+`FWRAP_WIDTH_MINUS1` ($88F7, in the same confirmed-idle gap as
+`core/recall.asm`'s own `RECALL_PENDING` at $88F6), holds 31 or 63,
+set by each entry stub before falling into the shared `WRAP_CALC_SHARED`
+body via `jp` (not `jr` — no range assumptions made). Every
+width-dependent immediate inside the shared body became a memory read
+instead, real overhead paid once instead of not at all in two separate
+copies — net-positive confirmed by the actual measured byte count, not
+assumed from the size of the removed duplication alone. Verified with
+the two smoke ROMs that exist specifically for this: `rom/
+forth_smoke_p33.asm` (`WRAP_CALC`'s own four checkpoints — word-boundary
+wrap, hard-break wrap, exact capacity cap, overflow rejection, each
+value hand-derived by an independent Python simulation before any Z80
+was written) and `rom/forth_smoke_p58.asm` (the same four checkpoints
+for `WRAP_CALC64`), both confirmed passing (border green) under real
+ZEsarUX after the refactor, plus a final real-ZEsarUX boot-screenshot
+re-confirmation of `rom/forth_boot.asm` itself.
+
+**Net result: `rom/forth_boot.asm` at $3DF7 of $4000, 521 bytes free**
+(up from 163 before this pass), `make check`/`make all` clean across
+every target both before and after each individual change, not just at
+the end.
+
+**Left alone, evidence-based, not pursued this pass**:
+`kernel/graphics/graphics.asm` (2805 bytes, by far the single biggest
+module) — inherited, hardware-proven, shared with the sibling
+`ts2068rom` project; touching it further for size reasons trades
+shared-project risk against a benefit local to this ROM only, and the
+one clear dead-code win it contained is already taken. `EDITOR_REDRAW`/
+`EDITOR_REDRAW64` (~410 bytes combined) — the same duplication pattern
+as `WRAP_CALC`/`WRAP_CALC64`, flagged as a real candidate but not
+pursued this pass; it's the live REPL's own core screen-rendering path,
+a bigger and riskier refactor than `WRAP_CALC` was.
+
 ## Testing discipline
 
 Carry forward the validated order from 2068-Leap, applied to Forth
