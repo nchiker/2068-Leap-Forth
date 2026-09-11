@@ -32,7 +32,9 @@ To make the most of this manual, keep two conventions in mind before you start t
 
 In BASIC, every line is a **statement** governed by strict grammar (e.g., `LET X = 5+3`, `IF X > 3 THEN GOTO 100`). `LET` requires an equals sign; `IF` requires a `THEN`.
 
-Forth has **no grammar at all**. A Forth program is simply a sequence of **words** separated by spaces, driven by one fundamental rule: *Read the next word, then either run it or compile it.*
+Forth has **no grammar at all**. A Forth program is simply a sequence of **words** separated by spaces, driven by one fundamental rule: *Read the next word, then either run it or compile it.
+
+In Forth, spaces are strict required syntax rather than mere formatting. Because the interpreter splits everything on whitespace, a missing space silently glues two separate words together into a single, unrecognized token that the system cannot distinguish from a genuine typo.
 
 ### Words and the Dictionary
 
@@ -117,9 +119,7 @@ Everything so far has described *what happens* when a line of Forth runs. This s
 
 The habit worth noting is that **the cursor does not have to stay at the end of the line.** Type `13`, move the cursor left one position so it sits between the `1` and the `3`, and type `2`. The line becomes `123`—the `2` is inserted exactly where the cursor was, and everything following it shifts over to make room.
 
-character, hit **Delete** to remove the one *before* the cursor, and continue typing or press **Enter**. While this is standard behavior in modern text fields, it is worth highlighting since BASIC on this same hardware family historically handled line editing rather differently.
-
-None of this changes what Forth actually reads. No matter how many times you insert, delete, or move the cursor around, Forth receives only the final, finished line, split on spaces exactly as described from the start—editing happens *before* reading, never during it.#
+None of this changes what Forth actually reads. No matter how many times you insert, delete, or move the cursor around, Forth receives only the final, finished line, split on spaces exactly as described from the start—editing happens *before* reading, never during it.
 
 ### Seeing the Answer: The `.` (Dot) Word
 
@@ -169,9 +169,7 @@ Consider this contrast:
 3 10 - .      \ prints -7
 ```
 
-Rather than throwing an error or defaulting to a positive number, the second example is a perfectly valid subtraction running in reverse (`3 - 10`). Reading `10 3 -` aloud as "ten, three, subtract"—the exact order you would write it on paper as `10 - 3`—makes the mental pattern stick: the operands stay in the order you speak them, and only the operator moves to the end.
-
-# 
+Rather than throwing an error or defaulting to a positive number, the second example is a perfectly valid subtraction running in reverse (`3 - 10`). Reading `10 3 -` aloud as "ten, three, subtract"—the exact order you would write it on paper as `10 - 3`—makes the mental pattern stick: the operands stay in the order you speak them, and only the operator moves to the end. 
 
 ### Rearranging the Stack
 
@@ -257,11 +255,7 @@ That behavior won't fully click until you meet `IF` in section 7, which returns 
 
 `PICK` does no bounds checking on its own argument. Asking for a value
 deeper than the stack actually holds reads whatever memory happens to
-sit past it — not a crash, but not meaningful data either. That's the
-same "trust the caller" posture most of this project's lower-level
-words take; the honest-limits notes throughout this document flag the
-others, `BEEP`'s among them (see
-[Drawing and sound](#10-drawing-and-sound)).
+sit past it — not a crash, but not meaningful data either. 
 
 ###### Where You Are Now
 
@@ -326,145 +320,7 @@ Everything in the rest of this document is simply those five mechanics applied t
 
 ---
 
-# 2 Understanding System Feedback & Errors
-
-What happens if you press **Enter** on a word that doesn't exist? A typo like `5 BRODER` instead of `5 BORDER` prints the unrecognized word followed by `?`, then drops you straight back to a fresh prompt:
-
-![The word "BRODER ?" printed after typing an unrecognized word](images/typo_error.png)
-
-```forth
-5 BRODER
-BRODER ?
-```
-
-This is the first thing to check whenever a `?` appears unexpectedly: read the exact text printed before it. Typos are often caused by a dropped space that silently glues two distinct words together, and printing the offending token makes that immediately obvious rather than leaving you guessing.
-
-When a line runs successfully, **`OK`** prints on its own line, ensuring that every entered line receives visible confirmation rather than silence.
-
-A second kind of mistake—such as popping from an empty stack or pushing past its reserved space (like executing `DROP` on an empty stack)—prints **`STACK?`** and resets both stacks to empty rather than leaving them in a corrupted state. Like the unrecognized-word prompt, this is a blunt, whole-line reset. *(See 
-[Error handling: THROW and CATCH](#14-error-handling-throw-and-catch)
-for a way to intercept an error like this yourself, from inside your
-own program, instead of always falling back to this default reset.
-
-### Seeing what words exist: `VLIST`
-
-The other half of "was that word really a typo?" is being able to look.
-`VLIST ( -- )` prints the name of every word the dictionary currently
-holds:
-
-```forth
-: DOUBLE  DUP + ;
-: TRIPLE  DUP DUP + + ;
-VLIST
-```
-
-`VLIST` prints `TRIPLE`, then `DOUBLE`, and continues backward through every built-in word all the way to the oldest definition. Names are separated by single spaces and wrap across the screen using the same `EMIT` mechanism used for general printing. Expect several screens of output.
-
-Because the dictionary is searched newest-first, `VLIST` follows that exact same lookup chain out loud. Your own definitions appear first, and any redefined name appears twice (with the active version preceding the shadowed one).
-
-- **`VLIST`**: Prints everything to the screen to answer prompt questions like *"does this word exist and is it spelled right?"*
-
-- **`LLIST`**: Walks the same chain but stops at the built-in words, sending its output to a physical printer to list *your program*.
-
-## Fixing a typo after you've already pressed Enter: `LIST-DEFS` and `RECALL`
-
-Everything above fixes a mistake *before* you press Enter — inserting,
-deleting, moving the cursor. But what about a typo you don't notice
-until afterwards? Say you define a word, use it, and only then spot
-the bug:
-
-```forth
-: SQURE  DUP * ;
-5 SQURE .    \ prints 25 -- it works, the name is just misspelled
-```
-
-`SQURE` runs fine; nothing about the typo stops it. The problem only
-shows up later, when you (or someone reading your program) expects a
-word called `SQUARE` and it isn't there. Retyping the whole definition
-by hand works, but for anything longer than one line, that's tedious
-and error-prone in its own right. `LIST-DEFS ( -- )` and
-`RECALL ( n -- )` exist for exactly this: they let you pull a
-definition you already entered back onto the input line, so you can
-fix it with the same cursor-left/Delete editing from earlier in this
-section instead of retyping it from scratch.
-
-`LIST-DEFS` prints every colon definition you've entered so far this
-session — whether typed live at the prompt or brought in with
-`LOAD-TEXT` (see [section 12](#12-saving-and-loading-your-work)) —
-numbered from 0, oldest first, each with a short preview of its source:
-
-```forth
-LIST-DEFS
-```
-
-```
-0: : SQURE  DUP * ;
-```
-
-`RECALL` takes one of those numbers and copies that definition's
-*entire* source — not just the preview — back onto the input line,
-cursor at the end, ready to edit:
-
-```forth
-0 RECALL
-```
-
-The input line now reads `: SQURE  DUP * ;` exactly as you first typed
-it. From here it's ordinary editing: move the cursor onto `SQURE`,
-fix it to `SQUARE`, and press Enter. The corrected line runs — defining
-`SQUARE`, which now shadows nothing since `SQURE` was never right in
-the first place — and is also appended to the end of the workspace, so
-a later `LIST-DEFS` shows it too.
-
-#### Important Limits to Keep in Mind
-
-- `RECALL` only handles complete `:`...`;` definitions, not arbitrary single lines typed outside a definition. It also cannot recall definitions longer than 128 characters or reach past the first 16 definitions found by `LIST-DEFS`.
-
-- Recalling and re-entering a definition does not erase the old, mistyped version; it simply adds the corrected version after it in the workspace. Running `LIST-DEFS` again will show both `SQURE` and `SQUARE`, which is entirely harmless since the dictionary resolves names on a newest-wins basis.
-
-### Summary
-
-- **Editing Model:** Editing happens before reading; no matter how much you move the cursor around, Forth only sees the finished line upon pressing Enter.
-
-- **Feedback Signals:** Lines provide visible feedback—`OK` on success, an unrecognized word followed by `?` on typos, and `STACK?` on stack underflow/overflow resets.
-
-- **Dictionary Inspection & Recovery:** Use `VLIST` to inspect available words, `LIST-DEFS` to review past definitions, and `RECALL` to pull and fix definitions without retyping them from scratch.
-
-- **Key Words:** `VLIST`, `LIST-DEFS`, `RECALL`.
-
-### Exercises
-
-1. Type `13`, move the cursor left one position so it sits between the
-   `1` and the `3`, and type `2`. Press Enter and then `.` twice. Now
-   do the same thing again but use Delete instead, turning `123` back
-   into `13` before you press Enter. Neither the insert nor the delete
-   is visible to Forth afterwards; it only ever sees the finished line.
-
-2. Make each of the three messages appear on purpose. `5 BRODER` for
-   the unrecognised-word `?`; `DROP` on an empty stack for `STACK?`;
-   and any correct line at all for `OK`. Read what is printed *before*
-   the `?` in the first case — that name is the whole diagnostic.
-
-3. Define two words of your own and run `VLIST`. Your two appear first.
-   Keep reading and find the point where your definitions stop and the
-   built-in words begin — that boundary is where `LLIST` in section 15
-   stops, and `VLIST` doesn't.
-
-4. Redefine one of those two words, then run `VLIST` again. The name
-   now appears twice: the live one first and the shadowed one further
-   down. Confirm that, and then check that typing the name gets you the
-   newer definition — which is the newest-first search from section 1,
-   made visible.
-
-5. Repeat the `SQURE`/`SQUARE` example above yourself: define `SQURE`,
-   run `LIST-DEFS`, `RECALL` it, fix the name, and press Enter. Then
-   run `LIST-DEFS` one more time and confirm both the old and the
-   corrected definition are listed — the honest limit described above,
-   seen directly rather than just taken on faith.
-
----
-
-## 3. Defining Your Own Words
+## 2 Defining Your Own Words
 
 Here is the part BASIC has no real equivalent for. In BASIC, you write a program, and the language itself remains fixed while you use it. In Forth, defining a word **extends the language**—your new word becomes just as usable as `+` or `DUP`, completely indistinguishable in kind.
 
@@ -655,6 +511,136 @@ Splitting finding and calling into two separate steps allows you to store word i
    input. Confirm that with `4` on the stack, both ways. Then try
    `' DOUBLE .` on its own — you'll print the execution token itself,
    which is just an ordinary number like any other.
+
+## 3 Understanding System Feedback & Errors
+
+What happens if you press **Enter** on a word that doesn't exist? A typo like `5 BRODER` instead of `5 BORDER` prints the unrecognized word followed by `?`, then drops you straight back to a fresh prompt:
+
+![The word "BRODER ?" printed after typing an unrecognized word](images/typo_error.png)
+
+```forth
+5 BRODER
+BRODER ?
+```
+
+This is the first thing to check whenever a `?` appears unexpectedly: read the exact text printed before it. Typos are often caused by a dropped space that silently glues two distinct words together, and printing the offending token makes that immediately obvious rather than leaving you guessing.
+
+When a line runs successfully, **`OK`** prints on its own line, ensuring that every entered line receives visible confirmation rather than silence.
+
+A second kind of mistake—such as popping from an empty stack or pushing past its reserved space (like executing `DROP` on an empty stack)—prints **`STACK?`** and resets both stacks to empty rather than leaving them in a corrupted state. Like the unrecognized-word prompt, this is a blunt, whole-line reset. *(See 
+[Error handling: THROW and CATCH](#14-error-handling-throw-and-catch)
+for a way to intercept an error like this yourself, from inside your
+own program, instead of always falling back to this default reset.
+
+### Seeing what words exist: `VLIST`
+
+The other half of "was that word really a typo?" is being able to look.
+`VLIST ( -- )` prints the name of every word the dictionary currently
+holds:
+
+```forth
+: DOUBLE  DUP + ;
+: TRIPLE  DUP DUP + + ;
+VLIST
+```
+
+`VLIST` prints `TRIPLE`, then `DOUBLE`, and continues backward through every built-in word all the way to the oldest definition. Names are separated by single spaces and wrap across the screen using the same `EMIT` mechanism used for general printing. Expect several screens of output.
+
+Because the dictionary is searched newest-first, `VLIST` follows that exact same lookup chain out loud. Your own definitions appear first, and any redefined name appears twice (with the active version preceding the shadowed one).
+
+- **`VLIST`**: Prints everything to the screen to answer prompt questions like *"does this word exist and is it spelled right?"*
+
+- **`LLIST`**: Walks the same chain but stops at the built-in words, sending its output to a physical printer to list *your program*.
+
+## Fixing a typo after you've already pressed Enter: `LIST-DEFS` and `RECALL`
+
+Everything above fixes a mistake *before* you press Enter — inserting,
+deleting, moving the cursor. But what about a typo you don't notice
+until afterwards? Say you define a word, use it, and only then spot
+the bug:
+
+```forth
+: SQURE  DUP * ;
+5 SQURE .    \ prints 25 -- it works, the name is just misspelled
+```
+
+`SQURE` runs fine; nothing about the typo stops it. The problem only
+shows up later, when you (or someone reading your program) expects a
+word called `SQUARE` and it isn't there. Retyping the whole definition
+by hand works, but for anything longer than one line, that's tedious
+and error-prone in its own right. `LIST-DEFS ( -- )` and
+`RECALL ( n -- )` exist for exactly this: they let you pull a
+definition you already entered back onto the input line, so you can
+fix it with the same cursor-left/Delete editing from earlier in this
+section instead of retyping it from scratch.
+
+`LIST-DEFS` prints every colon definition you've entered so far this
+session — whether typed live at the prompt or brought in with
+`LOAD-TEXT` (see [section 12](#12-saving-and-loading-your-work)) —
+numbered from 0, oldest first, each with a short preview of its source:
+
+```forth
+LIST-DEFS
+```
+
+```
+0: : SQURE  DUP * ;
+```
+
+`RECALL` takes one of those numbers and copies that definition's
+*entire* source — not just the preview — back onto the input line,
+cursor at the end, ready to edit:
+
+```forth
+0 RECALL
+```
+
+The input line now reads `: SQURE  DUP * ;` exactly as you first typed
+it. From here it's ordinary editing: move the cursor onto `SQURE`,
+fix it to `SQUARE`, and press Enter. The corrected line runs — defining
+`SQUARE`, which now shadows nothing since `SQURE` was never right in
+the first place — and is also appended to the end of the workspace, so
+a later `LIST-DEFS` shows it too.
+
+#### Important Limits to Keep in Mind
+
+- `RECALL` only handles complete `:`...`;` definitions, not arbitrary single lines typed outside a definition. It also cannot recall definitions longer than 128 characters or reach past the first 16 definitions found by `LIST-DEFS`.
+
+- Recalling and re-entering a definition does not erase the old, mistyped version; it simply adds the corrected version after it in the workspace. Running `LIST-DEFS` again will show both `SQURE` and `SQUARE`, which is entirely harmless since the dictionary resolves names on a newest-wins basis.
+
+### Summary
+
+- **Editing Model:** Editing happens before reading; no matter how much you move the cursor around, Forth only sees the finished line upon pressing Enter.
+
+- **Feedback Signals:** Lines provide visible feedback—`OK` on success, an unrecognized word followed by `?` on typos, and `STACK?` on stack underflow/overflow resets.
+
+- **Dictionary Inspection & Recovery:** Use `VLIST` to inspect available words, `LIST-DEFS` to review past definitions, and `RECALL` to pull and fix definitions without retyping them from scratch.
+
+- **Key Words:** `VLIST`, `LIST-DEFS`, `RECALL`.
+
+### Exercises
+
+1. Make each of the three messages appear on purpose. `5 BRODER` for
+   the unrecognised-word `?`; `DROP` on an empty stack for `STACK?`;
+   and any correct line at all for `OK`. Read what is printed *before*
+   the `?` in the first case — that name is the whole diagnostic.
+
+2. Define two words of your own and run `VLIST`. Your two appear first.
+   Keep reading and find the point where your definitions stop and the
+   built-in words begin — that boundary is where `LLIST` in section 15
+   stops, and `VLIST` doesn't.
+
+3. Redefine one of those two words, then run `VLIST` again. The name
+   now appears twice: the live one first and the shadowed one further
+   down. Confirm that, and then check that typing the name gets you the
+   newer definition — which is the newest-first search from section 1,
+   made visible.
+
+4. Repeat the `SQURE`/`SQUARE` example above yourself: define `SQURE`,
+   run `LIST-DEFS`, `RECALL` it, fix the name, and press Enter. Then
+   run `LIST-DEFS` one more time and confirm both the old and the
+   corrected definition are listed — the honest limit described above,
+   seen directly rather than just taken on faith.
 
 ---
 
@@ -2576,23 +2562,25 @@ durations are naturally fractional):
 -12 0.5 BEEP      \ one octave below middle C, half a second
 ```
 
-Two honest limits are worth knowing. Only WHOLE semitones are
-supported — BASIC's `BEEP` accepts a fractional pitch; this one
-doesn't — and there's a real, physical ceiling around 12.9 kHz, above
-which a note clamps to the ceiling rather than actually going higher,
-since that's as fast as this hardware loop can toggle the speaker.
-Ordinary musical use, a few octaves around middle C, is nowhere near
-either limit.
+## Sound: `BEEP` Limits and Direct Chip Access
 
-For anything `BEEP` can't do — a sustained tone, more than one note at
-once, precise volume control — `SOUND ( register data -- )` gives
-direct, register-level access to the machine's AY-3-8912 sound chip,
-the same authentic command real BASIC has. It writes one raw byte into
-one of the chip's registers (1-16; out-of-range values are silently
-ignored) and does nothing else. Getting an actual tone out of it takes
-THREE coordinated calls rather than one, because the chip's registers
-each control a different piece: a tone's pitch, which channels are
-switched on, and how loud.
+While `BEEP` handles simple note playback, it operates under a few clear hardware boundaries:
+
+- **Whole Semitones Only:** Unlike BASIC's `BEEP`, which accepts fractional pitches, this implementation supports whole semitones exclusively.
+
+- **The 12.9 kHz Ceiling:** There is a strict physical ceiling around 12.9 kHz. Notes pushed past this threshold clamp to the ceiling rather than increasing further, as this represents the maximum toggle speed of the hardware speaker loop.
+
+For ordinary musical use—spanning a few octaves around middle C—these limits are well out of reach.
+
+### Direct Register Access: `SOUND`
+
+For anything `BEEP` cannot achieve—such as a sustained tone, simultaneous multi-note playback, or precise volume control—**`SOUND ( register data -- )`** provides direct, register-level access to the machine's AY-3-8912 sound chip, mirroring authentic BASIC commands.
+
+- **Stack Effect:** `( register data -- )`
+
+- **What it does:** Writes a raw byte into one of the chip's registers (`1–16`). Out-of-range values are silently ignored.
+
+Because the chip isolates different properties across separate registers—such as pitch, active channels, and volume—producing a complete tone requires **three coordinated calls** rather than a single all-in-one command.
 
 ```forth
 2 251 SOUND        \ channel B's tone pitch (fine byte)
@@ -3218,13 +3206,6 @@ fixed-size scratch buffer with no such check, and would have silently
 corrupted nearby memory instead of stopping cleanly, for anyone whose
 programs grew past a much smaller, undocumented limit.
 
-One honest gap: what's proven so far is 2068-Leap-Forth's own bookkeeping —
-what gets saved, how it's found again, and restoring your definitions
-so they're immediately usable. Real tape behavior on real hardware, or
-a real emulator's actual cassette playback, remains separately
-unverified. Don't yet treat this as proof that a real recorded tape
-will load back correctly on real hardware.
-
 ### `SAVE-TEXT` and `LOAD-TEXT`: saving the source itself
 
 `SAVE-LIB`/`LOAD-LIB` save a **compiled dictionary image** — the actual
@@ -3360,20 +3341,15 @@ the row — ten points, `I` running 20, 60, 100, ... up to 380,
 comfortably inside `PLOT64`'s wider 0-511 range and well past what the
 normal screen's own coordinates could reach.
 
-One honest caveat remains about `64COL`'s own visual behavior on real
-hardware. `PLOT64` itself is solid — the pixel it sets is confirmed,
-byte for byte, in two independent emulators (Fuse and ZEsarUX), each
-agreeing on exactly which bit in memory changes. What's still unverified
-is what that pixel actually *looks like* on screen: both emulators
-render 64-column mode's whole drawing area as one flat, uniform color
-rather than showing the individual pixels a real Timex Sinclair 2068
-almost certainly would — most likely because this hardware mode was so
-rarely used in real 1980s software that neither emulator ever invested
-in rendering it accurately, not because of any error in `PLOT64`
-itself. Treat `64COL`'s own on-screen appearance, specifically, as
-unverified — everything else about it (which pixel gets set, at which
-address) is as solid as section 10's normal-screen
-`PLOT`/`LINE`/`CIRCLE`.
+## A Caveat on 64-Column Visual Rendering
+
+While `PLOT64`'s underlying logic is completely solid—confirmed byte-for-byte across independent emulators like **Fuse** and **ZEsarUX**, which agree on exactly which bit in memory changes—its on-screen visual appearance comes with one important caveat:
+
+- **Memory vs. Display:** Both emulators render 64-column mode's entire drawing area as a flat, uniform color rather than showing the individual pixels a real Timex Sinclair 2068 hardware would display.
+
+- **The Reason:** Because 64-column mode was rarely utilized in 1980s software, neither emulator ever invested engineering effort into rendering it accurately. This is an emulator limitation, not an error in `PLOT64` itself.
+
+Treat `64COL`'s visual on-screen appearance as **unverified**. However, everything else about its operation—such as which pixel gets set and at which memory address—is entirely reliable, functioning just as solidly as the standard-screen `PLOT`, `LINE`, and `CIRCLE` commands.
 
 ### Summary
 
@@ -3675,19 +3651,6 @@ same walk sent to the screen instead, and without the stop at the
 built-ins — `LLIST` for a paper record of your program, `VLIST` for a
 look at the whole dictionary while you're working.
 
-**Status**: confirmed working against a real printer-capable Fuse
-(`--printer --zxprinter`). `LPRINT` of a short string, and `LLIST`
-after defining two words, both produced correct, legible printouts,
-with `LLIST` in the documented newest-first order. A small amount of
-pixel drift can appear in the raw printed dots; that traces to a Fuse
-printer-emulation timing quirk — its virtual print head doesn't reset
-position between the 8 raster rows of one character line — which the
-real, unmodified 48K BASIC ROM reproduces too under the same setup. So
-it isn't a bug in this project's code, and isn't necessarily something
-real hardware would exhibit. See
-[`PROJECT_PLAN.md`](PROJECT_PLAN.md)'s Phase 47 section for the full
-verification history.
-
 ### Summary
 
 The same idea as BASIC's printer words, adapted to a dictionary. A
@@ -3772,19 +3735,9 @@ and back on never touches them:
                   \ whether the hardware is currently reading it
 ```
 
-**Honest limit worth knowing**: a stock, unmodified Timex Sinclair 2068
-does not natively support ULAplus. ULAplus is a specification, not a
-machine — it can be implemented as a physical replacement chip for an
-existing ULA, inside an emulator, or in modern FPGA-based hardware like
-the ZX Spectrum Next, and real add-on hardware for the TS2068
-specifically (like the PicoVideo project) exists precisely because the
-stock machine doesn't have it. This project's own support for it has
-only ever been tested against a patched emulator. What's confirmed is
-that this project's own port-level code matches the documented real
-protocol and visibly works there; whether it would behave identically
-on real, unmodified TS2068 hardware remains
-an open question — the same honest caveat this project's 64-column
-mode carries in [A wider screen](#13-a-wider-screen).
+A stock, unmodified Timex Sinclair 2068 does not natively support **ULAplus**. Because ULAplus is a hardware specification rather than a built-in feature, it requires implementation either as a physical replacement chip for an existing ULA, inside an emulator, or via modern FPGA hardware like the ZX Spectrum Next.
+
+Add-on hardware for the TS2068—such as the PicoVideo project—exists precisely because the stock machine lacks native support.
 
 ### Summary
 
@@ -3800,7 +3753,7 @@ Forth words `ULAPLUS`, `PALETTE`.
 
 ### Exercises
 
-These need a ULAplus-capable emulator — see the honest limit above.
+These need a ULAplus-capable emulator
 
 1. Work out the palette values for pure red, pure green and pure blue
    from the `GGGRRRBB` layout. (White, with every bit set, is 255 —
@@ -3906,13 +3859,11 @@ which is occasionally handy and worth using carefully, since anything
 already defined in the space you just gave back is now in the path of
 whatever gets defined next.
 
-Two honest warnings. None of these four check that there's any room
-left — `FREE` exists so a program can check for itself before a large
-`ALLOT`, and nothing checks on your behalf, the same "trust the caller"
-posture `PICK` and `!` already take. And `,` writing at `HERE` only
-lands where you expect when nothing else has moved `HERE` in between;
-these words are for a definition being built *right now*, not for
-stashing something and coming back to it later.
+When working with low-level memory management primitives (`HERE`, `ALLOT`, and `,`), keep two important caveats in mind:
+
+- **No Capacity Checks:** None of these words check whether there is actually room left in memory. `FREE` exists specifically so a program can check for available space before executing a large `ALLOT`. Otherwise, the system maintains the same strict "trust the caller" posture found in words like `PICK` and `!`.
+
+- **Transient Targets (`HERE`):** The comma word (`,`) writes directly at `HERE`, which only lands where you expect if nothing else has moved `HERE` in the interim. These words are designed for building a definition *right now*, not for stashing data to come back to later.
 
 ### Making a word by hand: `CREATE`
 
@@ -4157,44 +4108,37 @@ Forth words `HERE`, `,`, `C,`, `ALLOT`, `CREATE`, `DOES>`, `FORGET`.
 
 ## 18. A worked example: the Blackjack demo
 
-Everything up to here has been small, isolated pieces — one new word
-at a time, each proven with a two- or three-line example. `demos/
-blackjack.fs` is the opposite: a complete, real single-deck Blackjack
-game, a few hundred lines of ordinary Forth, that plays a full hand
-against a computer dealer with hit/stand, correct soft-ace scoring, a
-real shuffle, and a scored outcome each round. Nothing in it is a
-special case built into the language — it's the same words this whole
-document has covered, composed the way a real program composes them.
+Everything up to this point has been explored in small, isolated pieces—one new word at a time, each demonstrated with a brief two- or three-line example. **`demos/blackjack.fs`** is the opposite: a complete, fully functional single-deck Blackjack game written in a few hundred lines of ordinary Forth. It plays a full hand against a computer dealer complete with hit/stand logic, correct soft-ace scoring, a real shuffle, and a scored outcome every round.
 
-It's worth reading (or building and running — `make forth-demo-blackjack`
-builds it, and its own header comment explains how to run it in Fuse)
-specifically as a review, because it leans on a wide slice of this
-document at once: `VARIABLE`s and `ARRAY`s from
-[section 5](#5-reading-and-writing-memory-directly) hold the deck and
-both hands; `DO`/`LOOP` from [section 8](#8-repeating-yourself) shuffles
-and deals; `IF`/`ELSE`/`THEN` from
-[section 7](#7-making-decisions-if-else-then) scores hands and decides
-outcomes; small single-purpose words are built from smaller ones and
-named for what they mean, exactly as
-[section 3](#3-defining-your-own-words) recommended from the start;
-and `INK`/`PAPER`/`BORDER`, `UDG` (just above), and `BEEP`/`SOUND` from
-this section combine to draw the table and cards and cue each outcome
-— including the card and table colors, which only show up correctly
-because `EMIT` honors the current `INK`/`PAPER` the way this section
-just described.
-None of that composition is new material — the point of reading it now
-is seeing familiar words asked to do real work together, at a scale a
-single tutorial example never quite reaches.
+Nothing in it is a special case built into the language; it is built entirely from the same words covered throughout this document, composed the way real programs are meant to be written.
 
-This game's own source is also `LOAD-TEXT`'s real test payload (see
-`SAVE-TEXT`/`LOAD-TEXT` above) — a full, real program, not a toy
-string, round-tripped over the same tape protocol `SAVE-LIB`/`LOAD-LIB`
-use, including a real cassette-tape round trip in Fuse (not just the
-fake-tape hook this project's own automated tests otherwise rely on —
-see `tools/run_realtape_test.sh` if you want to reproduce that proof).
-Here's how to actually load and play the real game that way yourself,
-from a live prompt, rather than the standalone demo ROM's own
-boot-straight-into-the-game shortcut:
+#### What the Demo Pulls Together
+
+Reading (or building and running) the demo serves as a comprehensive review, as it leans on a wide slice of the system all at once:
+
+- **`VARIABLE`s and `ARRAY`s** (from Section 5) hold the deck and both hands.
+
+- **`DO`/`LOOP`** (from Section 8) handles the shuffle and deal.
+
+- **`IF`/`ELSE`/`THEN`** (from Section 7) scores hands and decides outcomes.
+
+- **Small, single-purpose words** are built from smaller ones and named for what they mean (following Section 3's core design principle).
+
+- **`INK`/`PAPER`/`BORDER`, custom graphics (`UDG`), and `BEEP`/`SOUND`** combine to draw the table and cards and cue each outcome—with card and table colors rendering correctly because `EMIT` respects active color attributes.
+
+This composition is not new material. The value of examining the demo now is seeing familiar words asked to do real work together at a scale a single tutorial example cannot reach.
+
+#### Real-World Testing: The `LOAD-TEXT` Test Payload
+
+The game's source code also doubles as the real test payload for **`LOAD-TEXT`** (and `SAVE-TEXT`). Rather than a toy string, it is a full, real-world program round-tripped over the standard tape protocol used by `SAVE-LIB`/`LOAD-LIB`—including verification via a real cassette-tape round trip in the Fuse emulator (distinct from the automated fake-tape hooks used by the test suite; see `tools/run_realtape_test.sh` if you wish to reproduce that proof yourself).
+
+To build the demo and review its instructions:
+
+- **Build Command:** `make forth-demo-blackjack`
+
+- **Execution:** Refer to the header comment inside `demos/blackjack.fs` for step-by-step instructions on running it in the Fuse emulator.
+
+Here is how to load and play the real game directly from a live prompt, bypassing the standalone boot-straight-into-the-game shortcut:
 
 1. Build the real product ROM (`make forth-boot`) and a real tape file
    containing `demos/blackjack.fs` under the name `BLACKJACK`:
@@ -4202,6 +4146,7 @@ boot-straight-into-the-game shortcut:
    ```
    python3 tools/tape_gen_forth.py build/blackjack.tap BLACKJACK:demos/blackjack.fs
    ```
+
 2. Start Fuse with that tape already inserted:
    
    ```
@@ -4215,6 +4160,7 @@ boot-straight-into-the-game shortcut:
    automatic tape-loader detection turned off, in which case the tape
    never starts playing and `LOAD-TEXT` just waits — passing it
    explicitly here works regardless of what's saved.
+
 3. Once the live prompt appears, type:
    
    ```
