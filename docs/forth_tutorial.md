@@ -1,102 +1,94 @@
 # Learning Forth on 2068-Leap-Forth
 
-This document teaches Forth from scratch. It assumes you're comfortable
-with BASIC — line numbers, `LET`/`PRINT`/`IF`, variables — but *not*
-with Forth.
+## About This Manual
 
-The sections run in the order you'd want to *learn* the language — the
-stack first, then how to type and edit at the prompt, then defining
-your own words, then control flow, data, and finally the screen and
-keyboard. Examples are provided that you can type at a real
-2068-Leap-Forth prompt.
+This manual teaches Forth from scratch. It assumes you are comfortable with classic BASIC (line numbers, `LET`, `PRINT`, `IF`, and standard variables), but requires **no prior experience with Forth**.
 
-And the prompt really is live: turn the machine on and you get a
-banner, a short startup sound, and a keyboard-driven prompt waiting for
-you.
+#### A Live Environment
 
-### How to read the examples
+Every example in this manual can be typed directly into a **2068-Leap-Forth** prompt.
 
-Two small conventions, so nothing later surprises you.
+When you turn on the machine, you will immediately be greeted by a startup banner, a brief audio cue, and an active, keyboard-driven prompt waiting for your input.
 
-Anything after a `\` in an example is a note **from this document to
-you**, explaining what just happened. It is not part of the Forth.
-2068-Leap-Forth has no comment word at all — not `\`, not the `(` that
-larger Forths use — so if you type one of those notes in, the
-interpreter will try to look up `\` as a word, fail to find it, and
-complain. Type only what comes before the `\`.
+#### How to Read the Examples
 
-And each section genuinely builds on the one before it. Where a later
-section leans on something earlier, it says so and reminds you of the
-part that matters, so you shouldn't need to keep flipping back — but
-the sections are in learning order for a reason, and reading them out
-of order will cost you more than it saves.
+To make the most of this manual, keep two conventions in mind before you start typing:
 
-![2068-Leap-Forth boot screen, showing the banner and `5 3 + .` printing `8`](images/boot_and_arithmetic.png)
+#### Understanding Comments (and Their Absence)
+
+- Anything appearing after a `\` symbol in an example is an explanatory note for you, **not** part of the Forth code.
+
+- **Important:** 2068-Leap-Forth does not include a built-in comment word (unlike larger Forth implementations that use `\` or parentheses). If you type a backslash and its note into the interpreter, it will treat `\` as a command, fail to find it, and return an error. **Type only the code that precedes the backslash.**
+
+#### Sequential Learning
+
+- **Builds in Order:** Each section builds directly on the previous one. When a later exercise relies on an earlier concept, the text provides a quick refresher so you won't need to constantly flip backward.
+
+- **Linear Design:** The manual is structured in a strict learning progression. Reading out of order will make concepts harder to grasp than moving through them step by step.
 
 ---
 
-## 1. What Forth actually is
+## 1. What Forth Actually Is
 
-In BASIC, every line is a *statement*: `LET X = 5+3`, `PRINT X`,
-`IF X > 3 THEN GOTO 100`. The language has grammar. `LET` needs its
-`=`; `IF` needs its `THEN`.
+In BASIC, every line is a **statement** governed by strict grammar (e.g., `LET X = 5+3`, `IF X > 3 THEN GOTO 100`). `LET` requires an equals sign; `IF` requires a `THEN`.
 
-Forth has no grammar at all. A Forth program is a sequence of **words**
-separated by spaces, and the whole language runs on a single rule:
-*read the next word, then either run it or compile it.* That rule,
-repeated, is everything.
+Forth has **no grammar at all**. A Forth program is simply a sequence of **words** separated by spaces, driven by one fundamental rule: *Read the next word, then either run it or compile it.*
 
-### Words and the dictionary
+### Words and the Dictionary
 
-Everything in Forth — `+`, `DUP`, a word you wrote yourself — lives in
-the **dictionary**, the complete list of every word the system
-currently knows. Type a word and Forth looks it up there by name. If
-the lookup fails, Forth tries to read it as a plain number instead. If
-*that* fails, you've hit a typo or an undefined word, and Forth prints
-`?` on its own line and returns you to a fresh prompt rather than
-doing nothing visible or crashing (see
-[Typing and editing at the prompt](#2-typing-and-editing-at-the-prompt)
-for more).
+Everything in Forth—from arithmetic operators like `+` to stack manipulators like `DUP` and custom words you write yourself—lives in the **dictionary**, which is the complete list of every word the system currently knows.
 
-The dictionary is searched **newest-first**. Define a word with the
-same name as an existing one and your version takes over for anything
-you type *after* that point; the old one still exists deeper in the
-dictionary, so anything that already used it keeps working unchanged
-— it's simply no longer what a plain lookup finds by that name. That's
-occasionally useful (redefining a word to fix a mistake without
-restarting) and occasionally confusing (forgetting you shadowed
-something), which makes it worth knowing either way.
+- **Lookup Process:** When you type a word, Forth searches the dictionary by name.
 
-That single idea — read a word, look it up, run whatever it names —
-is the whole of "read the next word" from above. The next question is
-what running a word actually *does*, and that's where the stack comes
-in.
+- **Number Fallback:** If the dictionary lookup fails, Forth attempts to interpret the input as a plain number.
 
-### The stack, and why `5 3 +` means "5 + 3"
+- **Error Handling:** If that also fails, Forth recognizes an undefined word or typo, prints a simple `?` on its own line, and returns you to a fresh prompt without crashing or failing silently.
 
-BASIC writes arithmetic *infix* — the operator sits between its
-operands, `5 + 3`. Forth writes it **postfix**: operands first,
-operator last, `5 3 +`. That isn't a stylistic quirk. It's precisely
-what lets "read a word, run it" work with no grammar to lean on.
+#### Shadowing Existing Words
 
-The mechanism is a **stack**: a pile of numbers, where you can only
-ever see or remove the top one. The picture worth holding in your head
-is a pile of index cards. To remember a number, the machine writes it
-on a fresh card and drops that card on top of the pile. To *use* a
-number, it takes the top card off, reads it, and throws it away.
+The dictionary is searched **newest-first**:
 
-Every word does one of two things to that pile.
+- **Redefining:** If you define a new word with the exact same name as an existing one, your version takes over for any new commands you type.
 
-- A **number** gets *pushed*: a new card on top.
-- An **operator** *pops* however many cards it needs off the top,
-  computes something, and pushes one card back with the answer on it.
+- **Old References:** The old definition remains intact deeper in the dictionary, meaning any existing code that already relied on it continues working unchanged.
 
-Which gives Forth's whole working rule, and it's the same rule a recipe
-uses: **first gather the ingredients, then say what to do with them.**
-The numbers go on the stack first; the word that acts on them comes
-last.
+- **Trade-off:** This behavior is occasionally useful for quickly fixing a mistake without restarting, but can occasionally be confusing if you accidentally shadow an existing word.
 
-Trace `5 3 +` one word at a time:
+That single cycle—read a word, look it up in the dictionary, and run whatever it names—forms the foundation of the language. The next question is what running a word actually does, which brings us to the data stack.
+
+#### The Stack, and Why `5 3 +` Means "5 + 3"
+
+In BASIC, arithmetic is written **infix**—the operator sits right between its operands (`5 + 3`). Forth writes it **postfix** (or Reverse Polish Notation): operands first, operator last (`5 3 +`).
+
+This isn't a stylistic quirk. Postfix notation is precisely what allows Forth's "read a word, run it" rule to work without any grammar rules or order-of-operations parsing.
+
+### The Stack (The Index Card Analogy)
+
+The engine behind Forth is a **data stack**: a LIFO (last-in, first-out) pile of numbers where you can only ever see, add to, or remove from the top.
+
+Hold this mental picture:
+
+- **The Pile:** Think of a stack of index cards.
+
+- **Pushing a Number:** To remember a number, the machine writes it on a fresh card and drops it right on top of the pile.
+
+- **Popping a Number:** To *use* a number, it takes the top card off, reads it, and discards it.
+
+#### How Words Interact with the Stack
+
+Every word in Forth does one of two things to that pile:
+
+- **A Number:** Gets *pushed* onto the stack as a new card on top.
+
+- **An Operator:** *Pops* however many cards it needs off the top, computes the result, and *pushes* a single new card back down with the answer.
+
+#### The Recipe Rule
+
+Forth's workflow follows the exact same logic as a kitchen recipe: **first gather your ingredients, then say what to do with them.**
+
+The numbers (ingredients) go on the stack first; the word that acts on them (the action) comes last.
+
+Let's trace how this works step by step with `5 3 +`:
 
 ```
 you type   stack after (top is rightmost)
@@ -106,105 +98,95 @@ you type   stack after (top is rightmost)
 +          [8]           -- pop 3 and 5, push their sum
 ```
 
-No parentheses, no operator precedence, no parsing whatsoever — the
-stack *is* the grammar. `+` never needs to know whether `5` and `3`
-came from literals, from variables, or from other words; it takes the
-top two numbers, whatever put them there.
+## The Stack *Is* the Grammar
 
-### Seeing the answer: `.`
+Because of this stack-based design, Forth needs **no parentheses, no operator precedence rules, and no complex parser**.
 
-That `8` is sitting on the stack, and the stack is invisible. Nothing
-appears on screen unless you ask, so before going further you need one
-more word — `.`, pronounced "dot". `.` takes the top number off the
-stack and prints it.
+The `+` operator doesn't care whether `5` and `3` came from raw numbers, variables, or the results of previous calculations. It simply grabs the top two numbers waiting on the stack and adds them together.
+
+### Typing and editing at the prompt
+
+Everything so far has described *what happens* when a line of Forth runs. This section is about typing the line in the first place. While you're entering something at the keyboard, before you press Enter, a few keys behave specially rather than just adding a letter:
+
+| Key                    | What it does                                 |
+| ---------------------- | -------------------------------------------- |
+| any ordinary character | Inserted at the cursor position              |
+| Enter                  | Finishes the line and runs it                |
+| Delete / backspace     | Removes the character just before the cursor |
+| Cursor left / right    | Moves the cursor without changing anything   |
+
+The habit worth noting is that **the cursor does not have to stay at the end of the line.** Type `13`, move the cursor left one position so it sits between the `1` and the `3`, and type `2`. The line becomes `123`—the `2` is inserted exactly where the cursor was, and everything following it shifts over to make room.
+
+character, hit **Delete** to remove the one *before* the cursor, and continue typing or press **Enter**. While this is standard behavior in modern text fields, it is worth highlighting since BASIC on this same hardware family historically handled line editing rather differently.
+
+None of this changes what Forth actually reads. No matter how many times you insert, delete, or move the cursor around, Forth receives only the final, finished line, split on spaces exactly as described from the start—editing happens *before* reading, never during it.#
+
+### Seeing the Answer: The `.` (Dot) Word
+
+- **Objective:** Understand how to reveal hidden stack data using the print operator and how Forth’s left-to-right execution flow replaces traditional nested expressions.
+
+- **Core Concepts:**
+  
+  - **Invisible Stack:** Calculated values sit on the stack automatically, but nothing appears on screen without an explicit display command.
+  
+  - **The Dot Word (`.`):** Pronounced "dot," it acts like any other word by following the "ingredients first" rule—it pops and consumes the top number off the stack to print it.
+  
+  - **Destructive Output:** Because printing consumes the target value, executing `5 3 + .` leaves the stack completely empty after outputting `8`.
 
 ```forth
 5 3 + .        \ prints 8
+10 11 + 12 + . \ prints 33
 ```
 
-`.` is a word like any other. It follows the same "ingredients first"
-rule: it wants a number already sitting on the stack, and it takes it
-away when it prints it. That last part matters and catches people out
-— after `5 3 + .` the stack is empty again, because printing consumed
-the `8`. (There's more to say about `.` and its relatives, but it waits
-until [Printing](#9-printing), by which point you'll have used it
-dozens of times.)
+- **Execution Breakdown (Tracing `10 11 + 12 + .`):**
+  
+  - `10` $\rightarrow$ `[10]` (Pushes initial starting value)
+  
+  - `11` $\rightarrow$ `[10, 11]` (Pushes second value)
+  
+  - `+` $\rightarrow$ `[21]` (Pops both, adds them, pushes result)
+  
+  - `12` $\rightarrow$ `[21, 12]` (Pushes next value)
+  
+  - `+` $\rightarrow$ `[33]` (Pops both, adds them, pushes result)
+  
+  - `.` $\rightarrow$ `[]` (Pops final value, prints it, empties stack)
 
-### A longer trace
+- **Key Takeaways:**
+  
+  - **Left-to-Right Adjustments:** Expressions read as a series of incremental updates to the top of the stack (e.g., `11 +` means "add 11 to whatever is on top").
+  
+  - **Breaking the BASIC Habit:** Unlike nested expressions like `(5+3)-2`, Forth sequences operations directly as `5 3 + 2 -`, matching the exact chronological order the machine performs the work.
 
-One three-word example is thin evidence. Here's a slightly bigger one,
-adding three numbers together, traced the same way. Notice that the
-intermediate answer never needs printing or storing anywhere — it just
-stays on the stack, ready for the next `+`:
+##### Order Matters — Even When You'd Swear It Didn't
 
-```forth
-10 11 + 12 + .        \ prints 33
-```
+While `+` is symmetric and treats its inputs equally (`5 3 +` and `3 5 +` both yield 8), subtraction is directional. The `-` operator subtracts the **top** of the stack from the value sitting directly **underneath** it:
 
-```
-you type   stack after
---------   -----------
-10         [10]         -- push 10
-11         [10, 11]     -- push 11
-+          [21]         -- pop both, push 21
-12         [21, 12]     -- push 12
-+          [33]         -- pop both, push 33
-.          []           -- pop 33, print it
-```
-
-One way of looking at that: `11 +` means "add 11 to whatever's on
-top", `12 +` means "add 12 to whatever's on top", and the `10` at the
-front is simply what starts the pile off. Read that way, a Forth line
-is a series of small adjustments to the top of the stack, applied left
-to right.
-
-This is also why Forth reads differently. A BASIC expression like
-`(5+3)-2` nests outward from its innermost operation, while the Forth
-equivalent, `5 3 + 2 -`, reads left to right in the exact order the
-machine does the work: push 5, push 3, add, push 2, subtract. Once that
-clicks, you stop translating BASIC expressions in your head and start
-thinking in the order operations actually happen.
-
-### Order matters — even when you'd swear it didn't
-
-`+` doesn't care which of its two numbers came first; `5 3 +` and
-`3 5 +` both give 8. `-` very much does. It subtracts the **top** of
-the stack from the one **underneath** it:
+Consider this contrast:
 
 ```forth
 10 3 - .      \ prints 7
 3 10 - .      \ prints -7
 ```
 
-You might expect the second one to be an error, or to quietly give 7
-as well. It isn't and it doesn't — it's a perfectly valid subtraction
-that happens to run the other way round, and Forth has no way to know
-you meant the first. Read `10 3 -` out loud as "ten, three, subtract",
-in the same order you'd write it on paper as `10 - 3`, and the pattern
-sticks: the operands stay in the order you'd say them, only the
-operator moves to the end.
+Rather than throwing an error or defaulting to a positive number, the second example is a perfectly valid subtraction running in reverse (`3 - 10`). Reading `10 3 -` aloud as "ten, three, subtract"—the exact order you would write it on paper as `10 - 3`—makes the mental pattern stick: the operands stay in the order you speak them, and only the operator moves to the end.
 
-### Rearranging the stack
+# 
 
-With no variable names anywhere, getting a value into the right
-position *is* frequently the whole problem. Take something as simple
-as doubling a number: `5 5 +` works, but only because `5` was typed
-twice by hand. A word that doubles *whatever's already on the stack*
-has to make that second copy itself — it can't "read" a value without
-also consuming it, and it has no variable to stash a copy in either.
+### Rearranging the Stack
 
-That's exactly what a handful of words exist to do: not compute
-anything, just shuffle what's already on the stack so the next word
-finds what it needs on top.
+When a language has no variable names, getting values into the correct position is frequently the primary challenge. For instance, doubling a number by writing `5 5 +` only works because you manually typed the `5` twice. A custom word meant to double *whatever* sits on the stack must generate that second copy itself, since it cannot read a value without consuming it or stash a copy in a variable.
 
-| Word | Stack effect | What it does |
-|---|---|---|
-| `DUP` | `( n -- n n )` | Duplicate the top value |
-| `SWAP` | `( a b -- b a )` | Swap the top two values |
-| `DROP` | `( n -- )` | Discard the top value |
-| `OVER` | `( a b -- a b a )` | Copy the second value to the top |
+Stack-shuffling primitives exist precisely to solve this problem. They perform no math; they simply rearrange existing items so that the next word finds its ingredients waiting on top:
 
-Doubling, then, is `5 DUP +`. Traced out, exactly as before:
+| **Word** | **Stack effect**   | **What it does**                 |
+| -------- | ------------------ | -------------------------------- |
+| `DUP`    | `( n -- n n )`     | Duplicate the top value          |
+| `SWAP`   | `( a b -- b a )`   | Swap the top two values          |
+| `DROP`   | `( n -- )`         | Discard the top value            |
+| `OVER`   | `( a b -- a b a )` | Copy the second value to the top |
+
+Doubling a number dynamically becomes `5 DUP +`. Tracing this out step-by-step shows how it works:
 
 ```
 you type   stack after
@@ -214,147 +196,60 @@ DUP        [5, 5]       -- copy the top card
 +          [10]         -- pop both, push their sum
 ```
 
-### Reading the `( n -- n n )` shorthand
+#### Reading Stack Effect Shorthand
 
-That notation in the table's middle column is standard Forth shorthand,
-and it's worth stopping on for a moment, because it's the vocabulary
-the rest of this document (and every Forth manual you'll ever read)
-uses to describe what a word does.
+Writing out a card-by-card trace for every command quickly becomes tedious. Instead, Forth manuals use a concise one-line notation: **the stack just before execution, an arrow, and the stack just after**, with the top of the stack always positioned on the far right.
 
-Writing out a card-by-card trace every time gets tedious fast. So
-instead of a trace, a word gets one line: **the stack just before it
-runs, an arrow, then the stack just after**, with the top of the stack
-always rightmost in each group. `DUP`'s `( n -- n n )` says: there was
-one value on top; afterwards there are two copies of it.
+For example, `DUP`'s notation—`( n -- n n )`—indicates that one value was on top beforehand, and two identical copies remain afterward. This same shorthand describes every core word:
 
-The useful thing about the notation is that it applies just as well to
-words you've *already* met. Re-read the last few pages through it:
+- A bare number `( -- n )` takes nothing and leaves one value.
 
-- A **number** you type is `( -- n )`. It takes nothing and leaves one
-  value.
-- `+` is `( a b -- a+b )`. Two values in, one out.
-- `-` is `( a b -- a-b )` — and now the ordering rule from earlier has
-  a compact home: `a` is the deeper one, `b` is on top, and the result
-  is `a` minus `b`, not the other way round.
-- `.` is `( n -- )`. One value in, *nothing* left. That's the notation
-  saying, in three characters, the thing that trips people up: `.`
-  consumes what it prints.
+- `+` `( a b -- a+b )` takes two values in and returns one sum.
 
-Notice that the two sides needn't list the same number of values.
-`DROP`'s `( n -- )` takes one and leaves none; `DUP`'s `( n -- n n )`
-takes one and leaves two; a bare number's `( -- n )` takes none and
-leaves one. A word's number of inputs and its number of outputs are
-completely independent, and nothing anywhere requires them to match.
-This is a real freedom rather than an accident, and later words lean on
-it heavily.
+- `-` `( a b -- a-b )` takes two values, where `a` is deeper, `b` is on top, and the result is `a` minus `b`.
 
-One caution: the letters in a stack effect are just placeholders,
-picked to be readable. `( a b -- b a )` and `( n1 n2 -- n2 n1 )` say
-exactly the same thing about `SWAP`. Don't read meaning into the
-choice of letter — read the *positions*.
+- `.` `( n -- )` takes one value and leaves nothing behind, reflecting the fact that printing consumes its target.
 
-Back to the shuffling words themselves. Here's `OVER` and `SWAP`
-earning their keep, computing both differences of a subtraction from a
-single pair of numbers:
+Input and output counts do not need to match. `DROP` takes one value and leaves none `( n -- )`, while `DUP` takes one and leaves two `( n -- n n )`. Furthermore, letters like `a`, `b`, or `n` are merely readable placeholders; you should always read positions rather than attaching meaning to specific letters.
+
+### Advanced Shuffling & Extended Primitives
+
+When dealing with three or more values, or when you need to reach deeper into the stack without disturbing what rests above, a few additional words round out the set:
+
+| **Word** | **Stack effect**     | **What it does**                                                 |
+| -------- | -------------------- | ---------------------------------------------------------------- |
+| `ROT`    | `( a b c -- b c a )` | Rotate the third value to the top                                |
+| `2DUP`   | `( a b -- a b a b )` | Duplicate the top *pair*                                         |
+| `2DROP`  | `( a b -- )`         | Discard the top *pair*                                           |
+| `?DUP`   | `( n -- 0 \| n n )`  | Duplicate, but only if `n` isn't zero                            |
+| `PICK`   | `( ... n -- ... x )` | Copy the $n$-th value from the top (`0` is `DUP`, `1` is `OVER`) |
+
+`ROT` is notoriously tricky to visualize without a trace. When you run `1 2 3 ROT . . .`, it prints `1 3 2`:
 
 ```forth
-10 3 OVER OVER SWAP - .    \ prints -7
-- .                        \ prints 7
+you type    stack after
+--------    -----------
+1           [1]
+2           [1, 2]
+3           [1, 2, 3]
+ROT         [2, 3, 1]    -- the THIRD value (1) moves to the top
+.           [2, 3]       -- prints 1
+.           [2]          -- prints 3
+.           []           -- prints 2
 ```
 
-That's dense enough to deserve a full trace. The trick is that
-`OVER OVER` makes a spare copy of *both* numbers, so the first
-subtraction can eat the copies and leave the originals untouched
-underneath:
+Rather than merely being copied, the third value is completely removed from its original slot and reinserted on top, causing the values above it to slide down one slot to fill the gap.
+
+Meanwhile, `?DUP` solves a very specific structural problem. Testing a value normally consumes it, meaning you would otherwise have to copy the value, test the copy, and clean up the extra item afterward. `?DUP` avoids this overhead by copying the value *only* if it is non-zero, making it ideal for conditional checks like `SOME-WORD ?DUP IF . THEN`.
 
 ```
-you type   stack after
---------   -----------
-10         [10]
-3          [10, 3]
-OVER       [10, 3, 10]        -- copy the second value up
-OVER       [10, 3, 10, 3]     -- and again: a full spare pair
-SWAP       [10, 3, 3, 10]     -- flip just the spare pair round
--          [10, 3, -7]        -- 3 - 10, using up the spares
-.          [10, 3]            -- prints -7; originals still there
--          [7]                -- 10 - 3, using the originals
-.          []                 -- prints 7
+10 20 2DUP + .        \ [10, 20, 10, 20] then prints 30, leaving [10, 20]
+10 20 2DROP           \ [10, 20] then [] -- both gone in one word
 ```
 
-Notice what the `SWAP` is for. Without it, the first `-` would have
-computed `10 - 3` and you'd have had no way to get at `3 - 10`
-afterward, because the numbers it needed would already be gone. Making
-a spare copy *before* consuming anything is the single most common
-reason any of these words get used at all.
+That behavior won't fully click until you meet `IF` in section 7, which returns to `?DUP` and shows the same example written both ways—with and without it—so you can see exactly what it saves. For now, just note that the word exists and that its strange-looking `( n -- 0 | n n )` stack effect is entirely honest: it really does leave a different number of values depending on what it finds.
 
-A few more round out the set, for when three or more values need
-rearranging, or when something further down needs reaching without
-disturbing what sits above it:
-
-| Word | Stack effect | What it does |
-|---|---|---|
-| `ROT` | `( a b c -- b c a )` | Rotate the third value to the top |
-| `2DUP` | `( a b -- a b a b )` | Duplicate the top *pair* |
-| `2DROP` | `( a b -- )` | Discard the top *pair* |
-| `?DUP` | `( n -- 0 \| n n )` | Duplicate, but only if `n` isn't zero |
-| `PICK` | `( ... n -- ... x )` | Copy the `n`th value from the top (0 = same as `DUP`, 1 = same as `OVER`) |
-
-`ROT` is the one whose effect is hardest to hold in your head, so it's
-worth a trace of its own:
-
-```forth
-1 2 3 ROT . . .    \ prints 1 3 2
-```
-
-```
-you type   stack after
---------   -----------
-1          [1]
-2          [1, 2]
-3          [1, 2, 3]
-ROT        [2, 3, 1]        -- the THIRD value (1) moves to the top
-.          [2, 3]           -- prints 1
-.          [2]              -- prints 3
-.          []                -- prints 2
-```
-
-The third value from the top doesn't just get copied, the way `PICK`
-would — it's *removed* from where it was and *reinserted* on top, and
-the two values that were above it slide down one slot to fill the gap.
-
-`2DUP` and `2DROP` do to a *pair* of values what `DUP` and `DROP` do to
-one — useful whenever a pair travels together, like a stack-held
-`(addr len)` string or an `(x y)` coordinate:
-
-```forth
-10 20 2DUP + .    \ [10, 20, 10, 20] then prints 30, leaving [10, 20]
-10 20 2DROP       \ [10, 20] then [] -- both gone in one word
-```
-
-`?DUP` looks like an odd thing to want, and it's the one word in that
-table you can't guess the point of. It exists for a single pattern that
-turns out to be extremely common: testing a value while still wanting
-to *use* it afterward if the test passed. Making a decision consumes
-the value being tested, so without `?DUP` you'd have to make a copy,
-test the copy, and then remember to throw the spare away again on the
-branch where you didn't need it. `?DUP` copies only when there'll be a
-use for the copy, which makes that cleanup unnecessary.
-
-```forth
-SOME-WORD ?DUP IF . THEN     \ prints the result, but only if nonzero
-```
-
-That won't fully make sense until you've met `IF`, which is
-[section 7](#7-making-decisions-if-else-then) — and section 7 comes
-back to `?DUP` and shows the same example written both ways, with and
-without it, so you can see exactly what it saved. For now just note
-that the word exists and that its strange-looking `( n -- 0 | n n )`
-stack effect is honest: it really does leave a different number of
-values depending on what it found.
-
-`PICK` generalizes `DUP` and `OVER` to reach deeper without a chain of
-`ROT`s. `2 PICK` reaches the third value from the top — the same place
-`ROT` would bring up — but *copies* it rather than moving it:
+`PICK` generalizes `DUP` and `OVER` to reach deeper without requiring a chain of `ROT`s. `2 PICK` reaches the third value from the top—the exact same place `ROT` would bring up—but *copies* it rather than moving it:
 
 ```forth
 10 20 30  2 PICK .    \ [10, 20, 30, 10] then prints 10, leaving [10, 20, 30]
@@ -368,32 +263,27 @@ words take; the honest-limits notes throughout this document flag the
 others, `BEEP`'s among them (see
 [Drawing and sound](#10-drawing-and-sound)).
 
-### Where you are now
+###### Where You Are Now
 
-That's the entire foundation, and it's worth stating compactly before
-building anything on top of it:
+That is the entire foundation, and it is worth stating compactly before building anything on top of it:
 
-1. A Forth program is words separated by spaces, and the rule is *read
-   the next word, look it up in the dictionary, run it.*
-2. Words pass values to each other through one shared pile — the stack.
-   Numbers push; other words pop what they need and push results.
-3. Ingredients first, action last: `5 3 +`, not `5 + 3`.
-4. Nothing prints unless you ask, and `.` is how you ask.
-5. `( before -- after )` is how a word's effect on the stack gets
-   written down, top of stack rightmost.
+1. **Dictionary Execution:** A Forth program consists of words separated by spaces, running on a simple rule: *read the next word, look it up in the dictionary, and run it.*
 
-Everything in the rest of this document is those five things applied to
-progressively more interesting problems. If any of them still feels
-shaky, the exercises below are the place to fix that — they are worth a
-few minutes at the keyboard now rather than later.
+2. **The Stack:** Words pass values to each other through a single shared pile. Numbers push values onto it, while other words pop what they need and push their results.
+
+3. **Postfix Order:** Ingredients always come before the action—`5 3 +`, never `5 + 3`.
+
+4. **Explicit Output:** Nothing prints automatically; `.` is how you ask the system to display a value.
+
+5. **Stack Notation:** `( before -- after )` records a word's effect on the stack, with the top of the stack always positioned on the right.
+
+Everything in the rest of this document is simply those five mechanics applied to progressively more interesting problems. If any of them still feels shaky, the exercises below are the place to fix that—they are well worth a few minutes at the keyboard now rather than later.
 
 ### Summary
 
-Words and the dictionary. The stack. Postfix: ingredients first, action
-last. The `( before -- after )` stack-effect notation.
+- **Core Concepts:** Words and the dictionary, the stack, postfix notation (ingredients first, action last), and the `( before -- after )` stack-effect notation.
 
-Forth words `.`, `+`, `-`, `DUP`, `SWAP`, `DROP`, `OVER`, `ROT`,
-`2DUP`, `2DROP`, `?DUP`, `PICK`.
+- **Forth Words:** `.`, `+`, `-`, `DUP`, `SWAP`, `DROP`, `OVER`, `ROT`, `2DUP`, `2DROP`, `?DUP`, and `PICK`.
 
 ### Exercises
 
@@ -436,66 +326,22 @@ Forth words `.`, `+`, `-`, `DUP`, `SWAP`, `DROP`, `OVER`, `ROT`,
 
 ---
 
-## 2. Typing and editing at the prompt
+# 2 Understanding System Feedback & Errors
 
-Everything so far has described *what happens* when a line of Forth
-runs. This section is about typing the line in the first place. While
-you're entering something at the keyboard, before you press Enter, a
-few keys behave specially rather than just adding a letter:
-
-| Key | What it does |
-|---|---|
-| any ordinary character | Inserted at the cursor position |
-| Enter | Finishes the line and runs it |
-| Delete / backspace | Removes the character just before the cursor |
-| Cursor left / right | Moves the cursor without changing anything |
-
-The habit worth noticing: **the cursor doesn't have to be at the end
-of the line.** Type `13`, move the cursor left one position so it sits
-between the `1` and the `3`, type `2`, and the line becomes `123` —
-the `2` was inserted exactly where the cursor was, and everything
-after it shifted over to make room:
-
-![The input line reading "123" with the cursor positioned before the final digit](images/live_editing.png)
-
-The same works in reverse for fixing a typo: move the cursor past the
-wrong character, hit Delete to remove the one *before* the cursor,
-then keep typing or press Enter. None of this is specific to Forth —
-it's the editing model of practically any text field — but it's worth
-stating plainly, since BASIC on this same family of machines
-historically handled line editing rather differently.
-
-Notice, too, that none of this changes what actually gets read once
-you press Enter. However many times you've inserted, deleted, or moved
-the cursor around first, what Forth sees is simply the finished line,
-split on spaces exactly the way [section
-1](#1-what-forth-actually-is) described from the very start — editing
-happens *before* reading, never during it.
-
-So what happens if you press Enter on a word that doesn't exist? A
-typo like `5 BRODER` instead of `5 BORDER` prints the actual word it
-didn't recognize, followed by `?`, then drops you right back at a
-fresh prompt:
+What happens if you press **Enter** on a word that doesn't exist? A typo like `5 BRODER` instead of `5 BORDER` prints the unrecognized word followed by `?`, then drops you straight back to a fresh prompt:
 
 ![The word "BRODER ?" printed after typing an unrecognized word](images/typo_error.png)
 
-That's the first thing to check whenever `?` appears unexpectedly:
-read exactly what's printed before it. It's often not the word you
-think you typed — a dropped space silently glues two words together
-(see the space-by-space breakdown in
-[Defining your own words](#3-defining-your-own-words)) — and the
-printed word makes that obvious instead of leaving you guessing.
+```forth
+5 BRODER
+BRODER ?
+```
 
-When a line runs successfully, `OK` prints on its own line, so every
-line you enter gets *some* visible confirmation one way or the other,
-never silence.
+This is the first thing to check whenever a `?` appears unexpectedly: read the exact text printed before it. Typos are often caused by a dropped space that silently glues two distinct words together, and printing the offending token makes that immediately obvious rather than leaving you guessing.
 
-A second kind of mistake — popping from an empty stack, or pushing
-past its reserved space, as `DROP` with nothing on the stack would —
-prints `STACK?` instead, and resets both stacks to empty rather than
-leaving them in whatever corrupted state caused the problem. Like the
-unrecognized-word `?`, this is a blunt, whole-line reset, not a
-word-by-word explanation of what went wrong. See
+When a line runs successfully, **`OK`** prints on its own line, ensuring that every entered line receives visible confirmation rather than silence.
+
+A second kind of mistake—such as popping from an empty stack or pushing past its reserved space (like executing `DROP` on an empty stack)—prints **`STACK?`** and resets both stacks to empty rather than leaving them in a corrupted state. Like the unrecognized-word prompt, this is a blunt, whole-line reset. *(See 
 [Error handling: THROW and CATCH](#14-error-handling-throw-and-catch)
 for a way to intercept an error like this yourself, from inside your
 own program, instead of always falling back to this default reset.
@@ -512,34 +358,15 @@ holds:
 VLIST
 ```
 
-(`:` and `;` define a new word — [section
-3](#3-defining-your-own-words) explains exactly how; all that matters
-here is that `DOUBLE` and `TRIPLE` are now two new entries in the
-dictionary, ready for `VLIST` to show you.)
+`VLIST` prints `TRIPLE`, then `DOUBLE`, and continues backward through every built-in word all the way to the oldest definition. Names are separated by single spaces and wrap across the screen using the same `EMIT` mechanism used for general printing. Expect several screens of output.
 
-prints `TRIPLE`, then `DOUBLE`, and then keeps going — through every
-one of the built-in words this Forth ships with, all the way back to
-the oldest. Names are separated by single spaces and wrap across the
-screen exactly the way any other printed output does, since `VLIST` is
-using the same `EMIT` underneath that [section 9](#9-printing)
-described. Expect several screens of it.
+Because the dictionary is searched newest-first, `VLIST` follows that exact same lookup chain out loud. Your own definitions appear first, and any redefined name appears twice (with the active version preceding the shadowed one).
 
-That order is the same one [section 1](#1-what-forth-actually-is)
-described for how a lookup searches: newest first. `VLIST` isn't
-inventing an ordering — it's walking the identical chain a plain word
-lookup walks, out loud, which is what makes it a straight answer to
-"what would Forth find if I typed this name?" Your own definitions, being
-newest, always come first; a name you've redefined appears twice, the
-live one before the shadowed one.
+- **`VLIST`**: Prints everything to the screen to answer prompt questions like *"does this word exist and is it spelled right?"*
 
-Two related words are worth keeping apart. `LLIST` (see
-[section 15](#15-printing-to-a-real-printer-lprint-and-llist)) walks
-the same chain but stops at the built-ins and sends its output to a
-printer — it's for listing *your program*. `VLIST` prints everything to
-the screen and is for answering a question at the prompt, usually
-"does that word exist, and did I spell it the way I think I did?"
+- **`LLIST`**: Walks the same chain but stops at the built-in words, sending its output to a physical printer to list *your program*.
 
-### Fixing a typo after you've already pressed Enter: `LIST-DEFS` and `RECALL`
+## Fixing a typo after you've already pressed Enter: `LIST-DEFS` and `RECALL`
 
 Everything above fixes a mistake *before* you press Enter — inserting,
 deleting, moving the cursor. But what about a typo you don't notice
@@ -589,32 +416,21 @@ fix it to `SQUARE`, and press Enter. The corrected line runs — defining
 the first place — and is also appended to the end of the workspace, so
 a later `LIST-DEFS` shows it too.
 
-Two honest limits worth knowing before you rely on this:
+#### Important Limits to Keep in Mind
 
-- `RECALL` only understands whole `:`...`;` definitions — Forth's own
-  natural boundary — not arbitrary single lines typed outside a
-  definition. It also can't recall anything longer than 128 characters,
-  or reach past the first 16 definitions `LIST-DEFS` finds.
-- Recalling and re-entering a definition doesn't erase the old,
-  mistyped one — it simply adds the corrected version after it in the
-  workspace, the same way a freshly typed line would. Run `LIST-DEFS`
-  again after the example above and you'll see *both* `SQURE` and
-  `SQUARE` listed, oldest first — harmless, since the dictionary itself
-  already works on a newest-wins basis (see [section
-  1](#1-what-forth-actually-is)), but worth expecting rather than being
-  surprised by.
+- `RECALL` only handles complete `:`...`;` definitions, not arbitrary single lines typed outside a definition. It also cannot recall definitions longer than 128 characters or reach past the first 16 definitions found by `LIST-DEFS`.
+
+- Recalling and re-entering a definition does not erase the old, mistyped version; it simply adds the corrected version after it in the workspace. Running `LIST-DEFS` again will show both `SQURE` and `SQUARE`, which is entirely harmless since the dictionary resolves names on a newest-wins basis.
 
 ### Summary
 
-Editing happens before reading: however much you move the cursor about,
-what Forth sees when you press Enter is the finished line. Every line
-gets a visible answer — `OK` when it ran, the offending word followed
-by `?` when a word wasn't recognised, `STACK?` when the stack was
-mishandled. Looking at the dictionary directly with `VLIST`, or pulling
-a past definition back onto the input line with `LIST-DEFS` and
-`RECALL` to fix it, rather than retyping it from scratch.
+- **Editing Model:** Editing happens before reading; no matter how much you move the cursor around, Forth only sees the finished line upon pressing Enter.
 
-Forth words `VLIST`, `LIST-DEFS`, `RECALL`.
+- **Feedback Signals:** Lines provide visible feedback—`OK` on success, an unrecognized word followed by `?` on typos, and `STACK?` on stack underflow/overflow resets.
+
+- **Dictionary Inspection & Recovery:** Use `VLIST` to inspect available words, `LIST-DEFS` to review past definitions, and `RECALL` to pull and fix definitions without retyping them from scratch.
+
+- **Key Words:** `VLIST`, `LIST-DEFS`, `RECALL`.
 
 ### Exercises
 
@@ -648,67 +464,49 @@ Forth words `VLIST`, `LIST-DEFS`, `RECALL`.
 
 ---
 
-## 3. Defining your own words
+## 3. Defining Your Own Words
 
-Here's the part BASIC has no real equivalent for. In BASIC you write a
-program, and the language itself doesn't grow while you use it. In
-Forth, defining a word **extends the language** — your word becomes as
-usable as `+` or `DUP`, no different in kind.
+Here is the part BASIC has no real equivalent for. In BASIC, you write a program, and the language itself remains fixed while you use it. In Forth, defining a word **extends the language**—your new word becomes just as usable as `+` or `DUP`, completely indistinguishable in kind.
 
 ```forth
 : DOUBLE  DUP + ;
 ```
 
-Left to right: `:` says "define a new word named `DOUBLE`, out of
-everything up to the next `;`." Each word inside the definition — here
-`DUP` and `+` — is remembered as part of what `DOUBLE` does rather
-than run on the spot. `;` ends the definition.
+Reading this from left to right:
 
-That's the whole act of "adding a word" — and it's worth confirming for
-yourself that it actually happened, rather than taking it on faith:
+1. `:` is the word that starts a definition.
+
+2. Immediately following it (separated by a space) is **the name** of the new word (`DOUBLE`).
+
+3. The **body** consists of the sequence of already-existing words the new definition is made of (`DUP +`).
+
+4. `;` ends the definition and hands you back the ordinary prompt.
+
+That is the entire act of adding a word. You can confirm it happened by checking the dictionary directly:
 
 ```forth
 VLIST
 ```
 
-prints `DOUBLE` first — the newest entry — and then keeps going through
-every word this Forth already knew before you typed a thing.
-[Section 2](#2-typing-and-editing-at-the-prompt) already covered
-`VLIST` properly; the one piece worth taking from it now is that
-`DOUBLE` is genuinely, immediately a member of the same dictionary
-`DUP` and `+` live in — not a special, lesser kind of word.
+`VLIST` prints `DOUBLE` first—as the newest entry—before continuing through every word the system already knew. As covered previously, `DOUBLE` is a genuine, first-class member of the dictionary, sitting right alongside `+` and `DUP`.
 
-**Every space above is required syntax, not tidy formatting.** Forth
-splits everything on whitespace (see
-[section 1](#1-what-forth-actually-is)), so a missing space silently
-glues two words into one that doesn't exist, and the ROM has no way to
-distinguish that from a genuine typo. In a real screen's fixed-width
-font, one missing space is easy to miss by eye. `: DOUBLE DUP + ;`
-needs a space in **every** one of these 4 places (marked with `·` here
-just to make them visible — don't type the dots):
+### The Crucial Role of Spaces
+
+**Every space in a definition is required syntax, not tidy formatting.** Because Forth splits everything on whitespace, a missing space silently glues two distinct words into a single unrecognized token, and the interpreter has no way to distinguish that from a genuine typo.
+
+In a fixed-width terminal font, a single missing space is easy to overlook. `: DOUBLE DUP + ;` requires a space in **every** one of these four positions (marked with `·` here just to make them visible—do not type the dots):
 
 ```
 :·DOUBLE·DUP·+·;
 ```
 
-Type `:DOUBLE` with no space after the `:` and the interpreter reads
-`:DOUBLE` as a single word — not found, not defined, just an
-unrecognized token. `DUP+` with no space before the `+` does the same
-thing to `DUP+`. So if a `?` appears right after you define a word,
-check this first, before suspecting the definition itself: retype it
-slowly, one character at a time, confirming a space lands between
-every pair of words before you press Enter.
+Typing `:DOUBLE` without a space after the colon causes the interpreter to read it as a single, unknown word. Likewise, gluing `DUP+` together causes a lookup failure. If a `?` appears immediately after defining a word, check your spacing first before suspecting the logic of the definition itself.
 
-Nothing has *run* yet, incidentally — you've only taught Forth a new
-word. `DUP` did not duplicate anything and `+` did not add anything;
-both were merely written down as part of what `DOUBLE` means. That
-distinction is the whole of what `:` does, and it's why you can safely
-put a word inside a definition that would be a disaster to type at the
-prompt right then.
+### Compiling vs. Executing
 
-You can see that for yourself with a word that would be obvious if it
-ran. `.` prints and consumes the top of the stack, so typing `5 .` at
-the prompt prints `5` immediately. But:
+Nothing inside the definition has *run* yet—you have only taught Forth a new word. `DUP` did not duplicate anything, and `+` did not add anything; both were merely written down as part of what `DOUBLE` means. This distinction is the whole point of the `:` operator, and it is why you can safely put a word inside a definition that would be a disaster to type directly at the prompt.
+
+You can verify this with a word that is immediately obvious when run. Typing `5 .` at the prompt prints `5` right away. But if you write:
 
 ```forth
 : SHOW  . ;
@@ -732,37 +530,19 @@ Now use `DOUBLE`:
 4 DOUBLE .   \ prints 8
 ```
 
-`4` is pushed (`[4]`). `DOUBLE` is looked up, found, and run — and
-running it means running what's inside it, in order: `DUP` (`[4, 4]`),
-then `+` (`[8]`). `.` then prints the `8` and clears it away.
+Here is what happens under the hood:
 
-Notice that `DOUBLE`'s own stack effect works out to `( n -- n*2 )`.
-Nowhere did you declare that. It simply falls out of what `DUP` and `+`
-do: `DUP` was `( n -- n n )`, `+` was `( a b -- a+b )`, and stacking
-those end to end gives one value in and one value out. Working out a
-word's stack effect by following its parts in order is a habit worth
-starting now, because it's how you check a definition is right without
-running it.
+1. `4` is pushed (`[4]`).
 
-This is worth sitting with. `DOUBLE` isn't a macro, and it isn't a
-subroutine call in some special sense. Once defined it is a word, full
-stop, exactly as first-class as anything Forth shipped with. A real
-Forth program is mostly a sequence of small definitions like this,
-each built from the ones before it, until the last few read almost
-like plain English describing what the program does.
+2. `DOUBLE` is looked up, found, and run—which means running its inner body in order: `DUP` (`[4, 4]`), then `+` (`[8]`).
 
-So, collected in one place — to define a word you need, in this order:
+3. `.` prints the `8` and clears the stack.
 
-1. `:` — the word that starts a definition;
-2. immediately after it, and separated by a space, **the name** of the
-   new word;
-3. the body: the sequence of already-existing words the new one is
-   made of;
-4. `;` — which ends the definition and hands you back the ordinary
-   prompt.
+Notice that `DOUBLE`'s stack effect works out to `( n -- n*2 )`. Nowhere did you explicitly declare that; it simply falls out of combining `DUP` `( n -- n n )` and `+` `( a b -- a+b )` end to end. Working out a word's stack effect by tracing its parts in order is a habit worth starting now, as it lets you verify a definition without running it.
 
-A slightly bigger example puts that habit to work — a word that
-quadruples a number, built out of a word that doubles one:
+### Building Larger Words from Smaller Pieces
+
+A slightly bigger example puts that habit to work: a word that quadruples a number, built directly out of the word that doubles one:
 
 ```forth
 : DOUBLE     DUP + ;
@@ -771,121 +551,54 @@ quadruples a number, built out of a word that doubles one:
 3 QUADRUPLE .   \ prints 12
 ```
 
-- `QUADRUPLE` is defined *using* `DOUBLE`, which is completely
-  ordinary: a definition may use any word that exists at the moment
-  it's defined, including one you wrote seconds earlier.
-- `3 QUADRUPLE` pushes `3` (`[3]`), then runs `QUADRUPLE`, which runs
-  `DOUBLE` twice: `[3]` → `[6]` → `[12]`.
+- `QUADRUPLE` is defined *using* `DOUBLE`. A definition may use any word that exists at the moment it is compiled, including one you wrote seconds earlier.
 
-Notice that `QUADRUPLE` never mentions the stack, arithmetic, or how
-`DOUBLE` works inside. It just names a sequence of existing words.
-That's the normal shape of Forth programming: small words, each
-trivially checkable by hand, combined into larger ones.
+- Running `3 QUADRUPLE` pushes `3` (`[3]`), runs `QUADRUPLE`, which invokes `DOUBLE` twice: `[3]` $\rightarrow$ `[6]` $\rightarrow$ `[12]`.
 
-The order of those two lines is not negotiable, and this is the one
-place beginners reliably get stuck. `QUADRUPLE`'s definition mentions
-`DOUBLE`, and `:` compiles a definition by looking each word up in the
-dictionary **as it reads it**. If `DOUBLE` doesn't exist yet, the
-lookup fails at that moment and you get `DOUBLE ?` — not later, when
-you try to run `QUADRUPLE`, but right there while you're still typing
-its definition. Define the small pieces first, always, and build
-upward.
+`QUADRUPLE` never mentions the stack, arithmetic, or how `DOUBLE` works internally; it simply names a sequence of existing words. This is the normal shape of Forth programming: small, easily verifiable words combined into larger ones.
 
-The reverse is comfortably safe, though. Once `QUADRUPLE` is compiled,
-it holds onto the `DOUBLE` that existed when it was defined. Redefining
-`DOUBLE` afterward — that newest-first dictionary search from
-[section 1](#1-what-forth-actually-is) — changes what *you* get when
-you type `DOUBLE`, but leaves `QUADRUPLE` running the original. Useful
-to know, occasionally surprising, and worth remembering as the reason a
-"fixed" word sometimes seems not to have taken effect.
+#### The Order of Definitions Matters
 
-### Interpreting vs. compiling — why `;` is special
+`QUADRUPLE`'s definition mentions `DOUBLE`, and `:` compiles definitions by looking each word up in the dictionary **as it reads it**. If `DOUBLE` does not exist yet, the lookup fails immediately and you receive a `DOUBLE ?` error right while typing. **Always define smaller pieces first and build upward.**
 
-You've now seen Forth behave two different ways with the same input.
-Type `DUP +` at the prompt and both words run. Type `: DOUBLE DUP + ;`
-and neither does; they get written down instead. Something must be
-keeping track of which mode it's in, and something is: an internal
-flag, conventionally called **STATE**. It's either "interpreting" —
-run each word as you read it, everything in section 1 — or
-"compiling" — remember each word as part of a definition instead. `:`
-switches it to compiling. `;` switches it back.
+Conversely, once `QUADRUPLE` is compiled, it holds a reference to the `DOUBLE` that existed at that moment. Redefining `DOUBLE` afterward changes what you get when you type `DOUBLE` at the prompt, but leaves `QUADRUPLE` running the original version—a useful consequence of newest-first dictionary searching.
 
-Which raises a question worth actually asking, because the answer
-explains a whole family of words later in this document: **if
-everything between `:` and `;` gets remembered rather than run, how
-does `;` ever run?**
+### Interpreting vs. Compiling: Why `;` Is Special
 
-It can't, by the ordinary rule. If `;` were remembered like everything
-else, the definition would never close and you'd be compiling forever.
-So `;` is exempt. It runs the instant it's read, even though compiling
-is otherwise in effect, and flips STATE back before the interpreter
-reads another word. A word carrying that exemption is called
-**IMMEDIATE**.
+Forth handles identical inputs in two completely different ways depending on its internal mode, tracked by a flag called **`STATE`**:
 
-`;` isn't the only one carrying that exemption: `IF`, `ELSE`, `THEN`,
-`DO`, `LOOP`, `BEGIN`, `UNTIL`, `WHILE`, `REPEAT`, `LEAVE`, `EXIT`,
-`."` and `S"` are all IMMEDIATE too. When you reach [making
-decisions](#7-making-decisions-if-else-then) and
-[loops](#8-repeating-yourself), that's the piece of background that
-makes them make sense: `IF` is not a word that gets compiled into your
-definition and runs later. `IF` runs *while you are typing the
-definition*, and what it does is shape the code being built around it.
-That's also why several of those words only work inside a definition
-and complain if you type them at the prompt — there is no definition
-under construction for them to shape.
+- **Interpreting:** Run each word as it is read (the default prompt behavior).
 
-### Marking a word of your own IMMEDIATE
+- **Compiling:** Record each word as part of a definition under construction. `:` switches `STATE` to compiling; `;` switches it back.
 
-None of that has to stay a built-in privilege. `IMMEDIATE ( -- )` marks
-the word you defined most recently — the one whose `;` you just typed —
-as immediate, so from then on it behaves like `;` and `IF` do: it *runs*
-when the compiler meets it, instead of being compiled into whatever
-definition is under construction.
+This raises a vital question: *if everything between `:` and `;` gets recorded rather than run, how does `;` ever execute?*
 
-The whole of the idiom is putting `IMMEDIATE` after the `;`:
+It cannot, under the ordinary rule. If `;` were recorded like everything else, the definition would never close and you would compile forever. Therefore, `;` is exempt. It runs the instant it is read—even while compiling is active—and flips `STATE` back before the interpreter reads the next word. Words carrying this exemption are called **IMMEDIATE**.
+
+`;` is not alone: `IF`, `ELSE`, `THEN`, `DO`, `LOOP`, `BEGIN`, `UNTIL`, `WHILE`, `REPEAT`, `LEAVE`, `EXIT`, `."`, and `S"` are all immediate as well. When you reach control structures and loops, this explains how they work: words like `IF` do not get compiled into your definition to run later; they run *while you are typing*, shaping the code being built around them.
+
+### Marking Your Own Words IMMEDIATE
+
+You can make your own words immediate using the **`IMMEDIATE`** command, which modifies the word you defined most recently (the one whose `;` you just typed):
 
 ```forth
 : FOO  42 ; IMMEDIATE
 ```
 
-`FOO` is an ordinary word right up until that last token; `IMMEDIATE`
-then reaches back and flips the flag on it. Now watch what changes:
+Now watch how behavior changes:
 
 ```forth
 : BAR  FOO ;      \ prints nothing, but pushes 42 -- FOO RAN, here, now
 BAR               \ does nothing at all: BAR's body is empty
 ```
 
-Read that carefully, because it's the same "nothing has *run* yet" point
-from the top of this section, deliberately turned inside out. Ordinarily
-`: BAR FOO ;` would record a call to `FOO` and run it later — that's
-exactly what `: QUADRUPLE DOUBLE DOUBLE ;` did earlier. Because `FOO` is
-immediate, it doesn't get recorded at all. It runs on the spot, while
-`BAR` is still being built, and leaves its `42` on the stack there and
-then. `BAR` itself ends up containing nothing, which is why running it
-afterward does nothing and pushes nothing.
+Ordinarily, `: BAR FOO ;` would record a call to `FOO` to run later. Because `FOO` is immediate, it runs on the spot while `BAR` is being built, pushing `42` onto the stack right then and leaving `BAR` completely empty.
 
-That is genuinely all `IMMEDIATE` does, and it's the whole difference
-between `IF` and `+`. Getting real use out of it means writing a word
-whose job is to *shape the definition being compiled* rather than to
-compute something — which is the same territory
-[section 17](#17-growing-the-dictionary-yourself) covers with `CREATE`
-and `DOES>`. Until then it's worth knowing mostly because it explains
-the words you've already been handed.
+This is the whole difference between control words like `IF` and ordinary math words like `+`. Because `IMMEDIATE` always targets the newest dictionary entry, it must always be placed on the same line immediately following the `;` it applies to.
 
-One caution follows straight from "the word you defined most recently":
-`IMMEDIATE` has no name of its own to aim at. It always marks whatever
-is currently newest in the dictionary, so it belongs on the same line as
-the `;` it applies to. Define something else in between and you'll have
-marked the wrong word, with nothing to tell you so.
+### Indirect Calls: `'` and `EXECUTE`
 
-### Indirect calls: `'` and `EXECUTE`
-
-Every word so far has been called by typing its name. `'` (pronounced
-"tick") and `EXECUTE` let a program call a word it only learned the
-*name* of at some earlier point — useful for passing a word around as
-a value, the way another language might pass a function as an
-argument.
+Every word encountered so far is called by typing its name directly. The tick mark (**`'`**) and **`EXECUTE`** allow a program to call a word whose name or identity is only known dynamically:
 
 ```forth
 : DOUBLE  DUP + ;
@@ -894,30 +607,25 @@ argument.
                      \ typing DOUBLE would have
 ```
 
-`' DOUBLE` doesn't run `DOUBLE`. It looks `DOUBLE` up in the
-dictionary and pushes a single number identifying it — an **`xt`**,
-short for "execution token" — without calling it. `EXECUTE` then takes
-that `xt` off the stack and calls whatever it identifies. Splitting
-"find" and "call" into two steps is what makes it possible to store a
-word's identity in a variable, hand it to another word as an ordinary
-argument, or decide *at runtime* which of several words to call. Just
-typing a name can do none of that, since it only ever means "call it
-right now."
+`
 
-`'` resolves its name the moment it runs, exactly as the outer prompt
-resolves anything else you type, so asking for a name that doesn't
-exist is an error — see
-[Error handling: THROW and CATCH](#14-error-handling-throw-and-catch)
-for what that actually does.
+- **`'` (tick):** Looks up a word in the dictionary without running it, pushing a single identifier called an **`xt`** (execution token) onto the stack.
+
+- **`EXECUTE`:** Takes an `xt` off the stack and calls whatever word it represents.
+
+Splitting finding and calling into two separate steps allows you to store word identities in variables, pass functions as arguments, or decide at runtime which routine to run.
 
 ### Summary
 
-Defining a word extends the language. Interpreting versus compiling,
-and the STATE flag that decides which is happening. IMMEDIATE words,
-which run while a definition is being built rather than when it is run.
-Execution tokens.
+- **Extending the Language:** Defining new words grows the vocabulary so they are indistinguishable from built-in primitives.
 
-Forth words `:`, `;`, `IMMEDIATE`, `'`, `EXECUTE`.
+- **Syntax Rule:** Strict whitespace is required around every token inside a definition.
+
+- **State & Immediate Words:** `:` compiles words rather than running them, while `IMMEDIATE` words execute immediately during compilation to shape code.
+
+- **Execution Tokens:** `'` (tick) and `EXECUTE` enable indirect, dynamic function calls via execution tokens (`xt`).
+
+- **Key Words:** `:`, `;`, `IMMEDIATE`, `'`, `EXECUTE`.
 
 ### Exercises
 
@@ -1085,11 +793,11 @@ usual one-line notation can't express that. Two groups are written
 instead — the first for the whole-number stack, the second for the
 decimal one:
 
-| Word | Whole-number stack | Decimal stack | What it does |
-|---|---|---|---|
-| `S>F` | `( n -- )` | `( -- f )` | Whole number to decimal (exact) |
-| `F>S` | `( -- n )` | `( f -- )` | Decimal to whole number (see below) |
-| `FROUND` | — | `( f -- f' )` | Round to the nearest whole decimal value |
+| Word     | Whole-number stack | Decimal stack | What it does                             |
+| -------- | ------------------ | ------------- | ---------------------------------------- |
+| `S>F`    | `( n -- )`         | `( -- f )`    | Whole number to decimal (exact)          |
+| `F>S`    | `( -- n )`         | `( f -- )`    | Decimal to whole number (see below)      |
+| `FROUND` | —                  | `( f -- f' )` | Round to the nearest whole decimal value |
 
 Read `S>F` as: takes a value off the whole-number stack, leaves one on
 the decimal stack. The name says the same thing — `S` for the standard
@@ -1128,19 +836,19 @@ the other stack.
 
 A handful of ordinary whole-number words round out the basics:
 
-| Word | Stack effect | What it does |
-|---|---|---|
-| `1+` | `( n -- n+1 )` | Add one |
-| `1-` | `( n -- n-1 )` | Subtract one |
-| `NEGATE` | `( n -- -n )` | Change the sign |
-| `*` | `( a b -- a*b )` | Multiply |
-| `/` | `( a b -- a/b )` | Divide, truncating toward zero |
-| `ABS` | `( n -- \|n\| )` | Absolute value |
-| `SGN` | `( n -- -1\|0\|1 )` | Sign of `n` |
-| `MOD` | `( a b -- a-mod-b )` | Remainder of `a / b` |
-| `SQRT` | `( n -- isqrt(n) )` | Integer square root, truncating |
-| `MAX` | `( a b -- max )` | The larger of two values |
-| `MIN` | `( a b -- min )` | The smaller of two values |
+| Word     | Stack effect         | What it does                    |
+| -------- | -------------------- | ------------------------------- |
+| `1+`     | `( n -- n+1 )`       | Add one                         |
+| `1-`     | `( n -- n-1 )`       | Subtract one                    |
+| `NEGATE` | `( n -- -n )`        | Change the sign                 |
+| `*`      | `( a b -- a*b )`     | Multiply                        |
+| `/`      | `( a b -- a/b )`     | Divide, truncating toward zero  |
+| `ABS`    | `( n -- \|n\| )`     | Absolute value                  |
+| `SGN`    | `( n -- -1\|0\|1 )`  | Sign of `n`                     |
+| `MOD`    | `( a b -- a-mod-b )` | Remainder of `a / b`            |
+| `SQRT`   | `( n -- isqrt(n) )`  | Integer square root, truncating |
+| `MAX`    | `( a b -- max )`     | The larger of two values        |
+| `MIN`    | `( a b -- min )`     | The smaller of two values       |
 
 ```forth
 6 7 * .         \ prints 42
@@ -1247,12 +955,12 @@ These act on all 16 bits of a value at once — real bit manipulation,
 not the boolean `=`/`<`/`>` results covered in
 [Comparisons and true/false](#6-comparisons-and-truefalse):
 
-| Word | Stack effect | What it does |
-|---|---|---|
-| `AND` | `( a b -- a AND b )` | Bitwise AND |
-| `OR` | `( a b -- a OR b )` | Bitwise OR |
-| `XOR` | `( a b -- a XOR b )` | Bitwise exclusive-OR |
-| `INVERT` | `( a -- NOT a )` | Bitwise complement — every bit flipped |
+| Word     | Stack effect         | What it does                           |
+| -------- | -------------------- | -------------------------------------- |
+| `AND`    | `( a b -- a AND b )` | Bitwise AND                            |
+| `OR`     | `( a b -- a OR b )`  | Bitwise OR                             |
+| `XOR`    | `( a b -- a XOR b )` | Bitwise exclusive-OR                   |
+| `INVERT` | `( a -- NOT a )`     | Bitwise complement — every bit flipped |
 
 ```forth
 15 240 OR .     \ prints 255 -- 15 is 00001111, 240 is 11110000;
@@ -1292,11 +1000,11 @@ Forth words `F+`, `F-`, `F*`, `F/`, `F.`, `FSQRT`, `PI`, `SIN`, `COS`,
    16 bits, which gives 65536 different values; used as signed numbers
    those run from `-32768` up to `32767`, and the two ends *join up*.
    Try
-
+   
    ```forth
    32767 1+ .
    ```
-
+   
    You get `-32768`. Counting up past the largest positive value wraps
    straight round to the most negative one, exactly as a car odometer
    rolls over. Try `32768 .` as well, and see what a number that can't
@@ -1305,11 +1013,11 @@ Forth words `F+`, `F-`, `F*`, `F/`, `F.`, `FSQRT`, `PI`, `SIN`, `COS`,
 2. The same ceiling causes most trouble with `*`, because it is easy to
    multiply two perfectly reasonable numbers and get a product that
    doesn't fit. Predict the answer to `256 256 *`, then run
-
+   
    ```forth
    256 256 * .
    ```
-
+   
    The true answer is 65536, which needs 17 bits. What you get is the
    bottom 16 of them. Nothing is reported; the number is simply wrong,
    which is why it is worth knowing about now rather than discovering
@@ -1317,7 +1025,7 @@ Forth words `F+`, `F-`, `F*`, `F/`, `F.`, `FSQRT`, `PI`, `SIN`, `COS`,
 
 3. `SGN` reports only which side of zero a number is on. Predict the
    three results, then check:
-
+   
    ```forth
    -17 SGN .
    0 SGN .
@@ -1358,10 +1066,10 @@ count from 0 to 255 and that isn't enough.
 
 Two words reach into that street:
 
-| Word | Stack effect | What it does |
-|---|---|---|
+| Word                     | Stack effect    | What it does                    |
+| ------------------------ | --------------- | ------------------------------- |
 | `@` (pronounced "fetch") | `( addr -- n )` | Read the value stored at `addr` |
-| `!` (pronounced "store") | `( n addr -- )` | Write `n` to `addr` |
+| `!` (pronounced "store") | `( n addr -- )` | Write `n` to `addr`             |
 
 Watch the order for `!`: the *value* goes on the stack first, then the
 *address*. Read it as "store `n` at `addr`," which matches the order
@@ -1422,9 +1130,9 @@ of the numbers you've been pushing. `C@` and `C!` do the same job one
 *byte* at a time — the natural pair for anything that's genuinely
 byte-sized, text especially:
 
-| Word | Stack effect | What it does |
-|---|---|---|
-| `C@` | `( addr -- byte )` | Read one byte at `addr` |
+| Word | Stack effect       | What it does             |
+| ---- | ------------------ | ------------------------ |
+| `C@` | `( addr -- byte )` | Read one byte at `addr`  |
 | `C!` | `( byte addr -- )` | Write one byte to `addr` |
 
 To see the two-slots-per-number arrangement for real, store a number
@@ -1622,16 +1330,16 @@ A further set covers the everyday BASIC string operations
 under Forth-standard names, all still working on the same
 address/length pairs:
 
-| Word | Stack effect | What it does |
-|---|---|---|
-| `CHR` | `( code -- addr len )` | A one-character string from a character code |
-| `STR` | `( n -- addr len )` | A number, as a string |
-| `UPPER` | `( addr len -- addr len )` | Uppercase, in place |
-| `LOWER` | `( addr len -- addr len )` | Lowercase, in place |
-| `LEFT` | `( addr len n -- addr len' )` | The first `n` characters |
-| `RIGHT` | `( addr len n -- addr' len' )` | The last `n` characters |
-| `SEARCH` | `( addr1 len1 addr2 len2 -- addr3 len3 flag )` | Find string 2 inside string 1 |
-| `CODE` | `( addr len -- code )` | The character code of a string's first character |
+| Word     | Stack effect                                   | What it does                                     |
+| -------- | ---------------------------------------------- | ------------------------------------------------ |
+| `CHR`    | `( code -- addr len )`                         | A one-character string from a character code     |
+| `STR`    | `( n -- addr len )`                            | A number, as a string                            |
+| `UPPER`  | `( addr len -- addr len )`                     | Uppercase, in place                              |
+| `LOWER`  | `( addr len -- addr len )`                     | Lowercase, in place                              |
+| `LEFT`   | `( addr len n -- addr len' )`                  | The first `n` characters                         |
+| `RIGHT`  | `( addr len n -- addr' len' )`                 | The last `n` characters                          |
+| `SEARCH` | `( addr1 len1 addr2 len2 -- addr3 len3 flag )` | Find string 2 inside string 1                    |
+| `CODE`   | `( addr len -- code )`                         | The character code of a string's first character |
 
 ```forth
 65 CHR TYPE                  \ prints A
@@ -1726,24 +1434,24 @@ Forth words `@`, `!`, `C@`, `C!`, `VARIABLE`, `CONSTANT`, `FREE`,
    and an address/length pair is exactly what they are for — the pair
    *is* the "top two values" they act on. Predict what each of these
    prints, then run them:
-
+   
    ```forth
    S" HELLO" 2DUP TYPE TYPE
    S" HELLO" 2DUP TYPE 2DROP
    ```
-
+   
    The first prints the same text twice from one literal, because
    `2DUP` copied the whole pair before the first `TYPE` ate it. The
    second prints it once and leaves the stack clean.
 
 2. `CODE` gives you the character code of a string's first character.
    Check that
-
+   
    ```forth
    S" A" CODE .
    S" A" DROP C@ .
    ```
-
+   
    print the same number, and work out why: `DROP` throws away the
    length, leaving just the address, and `C@` reads the byte there.
    `CODE` is that pair of words in one.
@@ -1757,7 +1465,7 @@ Forth words `@`, `!`, `C@`, `C!`, `VARIABLE`, `CONSTANT`, `FREE`,
 
 4. This is the `CELLS` trap from above, made visible. 258 is stored as
    the two bytes 2 and 1, which makes a wrong read easy to spot:
-
+   
    ```forth
    5 ARRAY SCORES
    258 1 CELLS SCORES + !
@@ -1765,7 +1473,7 @@ Forth words `@`, `!`, `C@`, `C!`, `VARIABLE`, `CONSTANT`, `FREE`,
    1 CELLS SCORES + @ .
    3 SCORES + @ .
    ```
-
+   
    The fourth line prints 258, correctly. The fifth forgets the
    `CELLS`, so it lands three *bytes* along instead of three elements,
    reads the top half of one element and the bottom half of the next,
@@ -1800,11 +1508,11 @@ else at all means true.** No separate true/false type, no third kind of
 value — just a number on the same stack as all the others. A value used
 this way is called a **flag**.
 
-| Word | Stack effect | What it does |
-|---|---|---|
-| `0=` | `( n -- flag )` | `flag` is true if `n` is exactly `0` |
-| `=`  | `( a b -- flag )` | `flag` is true if `a` and `b` are equal |
-| `<`  | `( a b -- flag )` | `flag` is true if `a` is less than `b` |
+| Word | Stack effect      | What it does                              |
+| ---- | ----------------- | ----------------------------------------- |
+| `0=` | `( n -- flag )`   | `flag` is true if `n` is exactly `0`      |
+| `=`  | `( a b -- flag )` | `flag` is true if `a` and `b` are equal   |
+| `<`  | `( a b -- flag )` | `flag` is true if `a` is less than `b`    |
 | `>`  | `( a b -- flag )` | `flag` is true if `a` is greater than `b` |
 
 Try them and print the flags, since a flag is a printable number like
@@ -1869,13 +1577,13 @@ Forth words `0=`, `=`, `<`, `>`.
 ### Exercises
 
 1. Define the three comparisons this Forth doesn't ship with:
-
+   
    ```forth
    : <=  > 0= ;
    : >=  < 0= ;
    : <>  = 0= ;
    ```
-
+   
    Each is a test followed by `0=` reversing its answer. Now check all
    three at the boundary, which is the case they exist for: try each
    with two *equal* numbers, and confirm `<=` and `>=` pass there while
@@ -1883,12 +1591,12 @@ Forth words `0=`, `=`, `<`, `>`.
 
 2. `0=` applied twice in a row turns any number at all into a proper
    `-1`/`0` flag. Predict and then check:
-
+   
    ```forth
    7 0= 0= .
    0 0= 0= .
    ```
-
+   
    This is occasionally useful when a value that is merely "nonzero"
    needs to become the specific number `-1`.
 
@@ -2514,11 +2222,11 @@ Forth words `BEGIN`, `UNTIL`, `WHILE`, `REPEAT`, `DO`, `LOOP`, `+LOOP`,
 
 1. The same job, written two ways. `FIVE` above prints 0 to 4 with
    `DO`/`LOOP`. Here it is again with no counter word at all:
-
+   
    ```forth
    : FIVE2  0 BEGIN DUP . 1+ DUP 5 = UNTIL DROP ;
    ```
-
+   
    Check that `FIVE2` prints the same thing `FIVE` does, then work out
    what each of `DUP`, `1+` and the final `DROP` is there for. Which
    version would you rather come back to in a month?
@@ -2536,11 +2244,11 @@ Forth words `BEGIN`, `UNTIL`, `WHILE`, `REPEAT`, `DO`, `LOOP`, `+LOOP`,
    `STARS` needed. Check it with `3 STARS-W` and `0 STARS-W`.
 
 4. `LEAVE` exits only the loop it is directly inside. Type
-
+   
    ```forth
    : NEST  3 0 DO  3 0 DO  I 1 = IF LEAVE THEN  I .  LOOP  CR  LOOP ;
    ```
-
+   
    and run `NEST`. Count the lines it prints and the numbers on each.
    If `LEAVE` escaped both loops you would get one line; if it escapes
    only the inner one you get three. Which happens?
@@ -2550,11 +2258,11 @@ Forth words `BEGIN`, `UNTIL`, `WHILE`, `REPEAT`, `DO`, `LOOP`, `+LOOP`,
 
 6. `J` reaches the enclosing loop's index, which is exactly what a
    table needs. Type
-
+   
    ```forth
    : TABLE  4 1 DO  4 1 DO  J I * .  LOOP  CR  LOOP ;
    ```
-
+   
    and check that `TABLE` prints the 1-to-3 multiplication table, three
    numbers to a row. Then swap the `J` and the `I` and work out why the
    output changes the way it does.
@@ -2565,17 +2273,17 @@ Forth words `BEGIN`, `UNTIL`, `WHILE`, `REPEAT`, `DO`, `LOOP`, `+LOOP`,
    each element of a five-element `ARRAY`, and `TOTAL-SCORES`, which
    uses a second `DO` loop to add all five elements together and leave
    the sum on the stack:
-
+   
    ```forth
    5 ARRAY SCORES
-
+   
    : FILL-SCORES   5 0 DO  I 10 * I CELLS SCORES + !  LOOP ;
    : TOTAL-SCORES  ( -- n )  0  5 0 DO  I CELLS SCORES + @ +  LOOP ;
-
+   
    FILL-SCORES
    TOTAL-SCORES .    \ prints 100 -- 0+10+20+30+40
    ```
-
+   
    `TOTAL-SCORES` starts by pushing `0` — the running total — *before*
    the loop begins, so there's always something underneath for the
    first `+` to add to. Each pass then adds one more element on top of
@@ -2617,11 +2325,11 @@ Three small words exist purely for convenience, each a thin wrapper
 around `EMIT` for a character you'd otherwise have to look the code up
 for:
 
-| Word | Stack effect | What it does |
-|---|---|---|
-| `CR` | `( -- )` | Move to the start of the next line — `13 EMIT` |
-| `SPACE` | `( -- )` | Print one space — `32 EMIT` |
-| `SPACES` | `( n -- )` | Print `n` spaces |
+| Word     | Stack effect | What it does                                   |
+| -------- | ------------ | ---------------------------------------------- |
+| `CR`     | `( -- )`     | Move to the start of the next line — `13 EMIT` |
+| `SPACE`  | `( -- )`     | Print one space — `32 EMIT`                    |
+| `SPACES` | `( n -- )`   | Print `n` spaces                               |
 
 ```forth
 ." NAME:" SPACE ." FORTH" CR
@@ -2660,11 +2368,11 @@ Forth words `.`, `EMIT`, `CR`, `SPACE`, `SPACES`.
 
 1. Section 8's `STARS` prints one character per pass with no idea where
    on the screen it is landing. Run
-
+   
    ```forth
    40 STARS
    ```
-
+   
    It prints 32 stars, wraps to a fresh line exactly where the
    paragraph above said it would, puts the remaining 8 on the second
    line, and then the `CR` already built into `STARS` moves past even
@@ -2676,11 +2384,11 @@ Forth words `.`, `EMIT`, `CR`, `SPACE`, `SPACES`.
 
 2. `EMIT` prints whatever character code it is given, and character
    codes run in order, so a loop can walk through them. Type
-
+   
    ```forth
    : ALPHABET  91 65 DO I EMIT LOOP CR ;
    ```
-
+   
    and run it. Work out why the limit is 91 rather than 90 before you
    look back at section 8's warning about `DO` stopping *before* its
    limit.
@@ -2693,11 +2401,11 @@ Forth words `.`, `EMIT`, `CR`, `SPACE`, `SPACES`.
    length is exactly how many characters it will take, so five minus
    that is how many `SPACES` to print first. `TYPE` then prints the
    number itself.) Test it with
-
+   
    ```forth
    : COL  10 0 DO I I * RJ CR LOOP ;
    ```
-
+   
    which should print the squares of 0 to 9 in a neat right-hand
    column.
 
@@ -2715,28 +2423,28 @@ direct, single-purpose action, in the same spirit as BASIC's `PLOT`,
 `CIRCLE`, and `BEEP`: there's no drawing "state" to set up first
 beyond what each word's own arguments say.
 
-| Word | Stack effect | What it does |
-|---|---|---|
-| `PLOT` | `( x y -- )` | Set the pixel at `(x, y)` |
-| `LINE` | `( x1 y1 x2 y2 -- )` | Draw a line from `(x1, y1)` to `(x2, y2)` |
-| `CIRCLE` | `( xc yc r -- )` | Draw a circle outline centered at `(xc, yc)` with radius `r` |
-| `FILL` | `( x y -- )` | Flood-fill the enclosed area touching `(x, y)` with the current color |
-| `CLS` | `( -- )` | Clear the whole screen |
-| `BORDER` | `( color -- )` | Set the screen border to `color` (0-7, same numbering as BASIC's `BORDER`) |
-| `INK` | `( color -- )` | Set the foreground color `PLOT`/`LINE`/`CIRCLE`/`FILL` draw with, and printed text (`EMIT`/`.`/`."`/`TYPE`) prints in, from now on (0-7) |
-| `PAPER` | `( color -- )` | Set the background color the same way |
-| `BRIGHT` | `( flag -- )` | `1` draws `INK`/`PAPER` in their high-intensity shade from now on; `0` returns to normal intensity |
-| `FLASH` | `( flag -- )` | `1` makes `INK`/`PAPER` flash (hardware-blink) from now on; `0` returns to steady |
-| `AT-XY` | `( col row -- )` | Move where the next `EMIT`/`.`/`."` prints to (column 0-31, row 0-22) |
-| `HIRES` | `( -- )` | Switch to High Resolution Graphics mode |
-| `NORMAL` | `( -- )` | Switch back to Normal mode |
-| `BEEP` | `( n-semitones fduration -- )` | Produce a tone |
-| `SOUND` | `( register data -- )` | Write directly to an AY-3-8912 sound-chip register |
-| `TONE` | `( channel period -- )` | Set channel 0/1/2 (A/B/C)'s tone pitch |
-| `VOLUME` | `( channel level -- )` | Set channel 0/1/2's volume (0-15, fixed) |
-| `MIXER` | `( mask -- )` | Choose which tones/noise generators are on |
-| `NOISE` | `( period -- )` | Set the shared noise generator's pitch |
-| `ENVELOPE` | `( period shape -- )` | Set the shared envelope generator's shape |
+| Word       | Stack effect                   | What it does                                                                                                                             |
+| ---------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `PLOT`     | `( x y -- )`                   | Set the pixel at `(x, y)`                                                                                                                |
+| `LINE`     | `( x1 y1 x2 y2 -- )`           | Draw a line from `(x1, y1)` to `(x2, y2)`                                                                                                |
+| `CIRCLE`   | `( xc yc r -- )`               | Draw a circle outline centered at `(xc, yc)` with radius `r`                                                                             |
+| `FILL`     | `( x y -- )`                   | Flood-fill the enclosed area touching `(x, y)` with the current color                                                                    |
+| `CLS`      | `( -- )`                       | Clear the whole screen                                                                                                                   |
+| `BORDER`   | `( color -- )`                 | Set the screen border to `color` (0-7, same numbering as BASIC's `BORDER`)                                                               |
+| `INK`      | `( color -- )`                 | Set the foreground color `PLOT`/`LINE`/`CIRCLE`/`FILL` draw with, and printed text (`EMIT`/`.`/`."`/`TYPE`) prints in, from now on (0-7) |
+| `PAPER`    | `( color -- )`                 | Set the background color the same way                                                                                                    |
+| `BRIGHT`   | `( flag -- )`                  | `1` draws `INK`/`PAPER` in their high-intensity shade from now on; `0` returns to normal intensity                                       |
+| `FLASH`    | `( flag -- )`                  | `1` makes `INK`/`PAPER` flash (hardware-blink) from now on; `0` returns to steady                                                        |
+| `AT-XY`    | `( col row -- )`               | Move where the next `EMIT`/`.`/`."` prints to (column 0-31, row 0-22)                                                                    |
+| `HIRES`    | `( -- )`                       | Switch to High Resolution Graphics mode                                                                                                  |
+| `NORMAL`   | `( -- )`                       | Switch back to Normal mode                                                                                                               |
+| `BEEP`     | `( n-semitones fduration -- )` | Produce a tone                                                                                                                           |
+| `SOUND`    | `( register data -- )`         | Write directly to an AY-3-8912 sound-chip register                                                                                       |
+| `TONE`     | `( channel period -- )`        | Set channel 0/1/2 (A/B/C)'s tone pitch                                                                                                   |
+| `VOLUME`   | `( channel level -- )`         | Set channel 0/1/2's volume (0-15, fixed)                                                                                                 |
+| `MIXER`    | `( mask -- )`                  | Choose which tones/noise generators are on                                                                                               |
+| `NOISE`    | `( period -- )`                | Set the shared noise generator's pitch                                                                                                   |
+| `ENVELOPE` | `( period shape -- )`          | Set the shared envelope generator's shape                                                                                                |
 
 ```forth
 CLS
@@ -2910,13 +2618,13 @@ anything `SOUND` couldn't already reach — they're shorthand for it,
 so you don't have to remember which register pair belongs to which
 channel or work out a fine/coarse split by hand every time:
 
-| Word | Stack effect | What it does |
-|---|---|---|
-| `TONE` | `( channel period -- )` | Set channel 0/1/2 (A/B/C)'s tone pitch |
-| `VOLUME` | `( channel level -- )` | Set channel 0/1/2's volume (0-15, fixed) |
-| `MIXER` | `( mask -- )` | Choose which tones/noise generators are on |
-| `NOISE` | `( period -- )` | Set the shared noise generator's pitch |
-| `ENVELOPE` | `( period shape -- )` | Set the shared envelope generator's shape |
+| Word       | Stack effect            | What it does                               |
+| ---------- | ----------------------- | ------------------------------------------ |
+| `TONE`     | `( channel period -- )` | Set channel 0/1/2 (A/B/C)'s tone pitch     |
+| `VOLUME`   | `( channel level -- )`  | Set channel 0/1/2's volume (0-15, fixed)   |
+| `MIXER`    | `( mask -- )`           | Choose which tones/noise generators are on |
+| `NOISE`    | `( period -- )`         | Set the shared noise generator's pitch     |
+| `ENVELOPE` | `( period shape -- )`   | Set the shared envelope generator's shape  |
 
 The four-line tone from above becomes:
 
@@ -3021,10 +2729,10 @@ The machine's chips aren't reached through memory addresses like
 [section 5](#5-reading-and-writing-memory-directly)'s `@` and `!`. They
 sit on a separate set of numbered **ports**, and two words reach them:
 
-| Word | Stack effect | What it does |
-|---|---|---|
-| `IN` | `( port -- value )` | Read one byte from `port` |
-| `OUT` | `( value port -- )` | Write one byte to `port` |
+| Word  | Stack effect        | What it does              |
+| ----- | ------------------- | ------------------------- |
+| `IN`  | `( port -- value )` | Read one byte from `port` |
+| `OUT` | `( value port -- )` | Write one byte to `port`  |
 
 Note `OUT`'s order — value first, then port — which is deliberately the
 same shape as `!`'s `( n addr -- )` from section 5, and remembered the
@@ -3261,11 +2969,11 @@ Forth words `PLOT`, `LINE`, `CIRCLE`, `FILL`, `CLS`, `BORDER`, `INK`,
 
 3. `BEEP` takes a whole number of semitones and a decimal duration, so
    a loop can walk up a scale. Type
-
+   
    ```forth
    : SCALE  13 0 DO  I 0.2 BEEP  LOOP ;
    ```
-
+   
    and run it. That is a chromatic octave from middle C. Now change the
    `13 0` to `13 0 DO ... 2 +LOOP` and listen to what stepping by two
    semitones instead of one gives you.
@@ -3437,7 +3145,7 @@ word runs at runtime instead of hard-coding the choice with `IF`.
    the other) but visible now as a word you can point `OP` at, rather
    than a decision buried inside `IF`.
 
-4. `MAYBE-RECORD` throws the score away once it has compared it. Write
+5. `MAYBE-RECORD` throws the score away once it has compared it. Write
    a version that also counts how many scores have beaten the record so
    far, in a second `VARIABLE`. You will need the branching version
    rather than the `MAX` one — which is a fair illustration of why both
@@ -3578,11 +3286,11 @@ Forth words `SAVE-LIB`, `LOAD-LIB`, `SAVE-TEXT`, `LOAD-TEXT`.
 3. `SAVE-TEXT` saves whatever address and length you hand it, and a
    string literal is an address and a length. Save a source string
    containing *two* definitions at once —
-
+   
    ```forth
    S" : DOUBLER DUP + ; : QUADER DOUBLER DOUBLER ;" SAVE-TEXT PROG2
    ```
-
+   
    — then `LOAD-TEXT PROG2` and check that both words exist afterwards.
    This is the difference from `SAVE-LIB` in one line: what came back
    was recompiled from text, not restored from an image.
@@ -3682,13 +3390,13 @@ Forth words `64COL`, `32COL`, `PALETTE64`, `PLOT64`.
 
 1. Print the same long line of text twice, once in each mode, and count
    where each one wraps:
-
+   
    ```forth
    32COL 60 SPACES 42 EMIT CR
    64COL 60 SPACES 42 EMIT CR
    32COL
    ```
-
+   
    Nothing about the printing changed — only the width the same `EMIT`
    wraps at.
 
@@ -3725,10 +3433,10 @@ outright.
 
 `THROW` and `CATCH` do exactly that:
 
-| Word | Stack effect | What it does |
-|---|---|---|
-| `CATCH` | `( xt -- 0 \| n )` | Run the word `xt` identifies. `0` if it finished normally; the thrown value `n` if it `THROW`ed instead |
-| `THROW` | `( n -- )` | `0` does nothing at all. Any other `n` abandons whatever's currently running and hands `n` to the nearest `CATCH` |
+| Word    | Stack effect       | What it does                                                                                                      |
+| ------- | ------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `CATCH` | `( xt -- 0 \| n )` | Run the word `xt` identifies. `0` if it finished normally; the thrown value `n` if it `THROW`ed instead           |
+| `THROW` | `( n -- )`         | `0` does nothing at all. Any other `n` abandons whatever's currently running and hands `n` to the nearest `CATCH` |
 
 ```forth
 : RISKY   42 THROW ;         \ always throws 42
@@ -3818,10 +3526,10 @@ That fallback — abandon everything, come back to a fresh prompt — is
 useful enough that you can ask for it deliberately, without an error
 having happened at all.
 
-| Word | Stack effect | What it does |
-|---|---|---|
-| `ABORT` | `( -- )` | Abandon everything and return to the prompt, **clearing both stacks** |
-| `QUIT` | `( -- )` | Abandon everything and return to the prompt, **leaving the stacks alone** |
+| Word    | Stack effect | What it does                                                              |
+| ------- | ------------ | ------------------------------------------------------------------------- |
+| `ABORT` | `( -- )`     | Abandon everything and return to the prompt, **clearing both stacks**     |
+| `QUIT`  | `( -- )`     | Abandon everything and return to the prompt, **leaving the stacks alone** |
 
 Both stop the current line dead. Nothing after them runs, and nothing
 that called them gets resumed — however many definitions deep you were,
@@ -3899,13 +3607,13 @@ Forth words `CATCH`, `THROW`, `ABORT`, `QUIT`.
 
 3. `THROW` reaches the *nearest* `CATCH`, not the outermost one. Set up
    three words to prove it:
-
+   
    ```forth
    : INNER   42 THROW ;
    : MIDDLE  ' INNER CATCH DROP ;
    : OUTER   ' MIDDLE CATCH . ;
    ```
-
+   
    Predict what `OUTER` prints before running it. `MIDDLE` catches the
    throw and returns normally, so what does `OUTER`'s own `CATCH` see?
 
@@ -3930,10 +3638,10 @@ BASIC's `LPRINT` and `LLIST` send output to an attached printer
 instead of the screen. 2068-Leap-Forth has the same idea, adapted to the
 way this Forth's dictionary works:
 
-| Word | Stack effect | What it does |
-|---|---|---|
+| Word     | Stack effect      | What it does                                                                                       |
+| -------- | ----------------- | -------------------------------------------------------------------------------------------------- |
 | `LPRINT` | `( addr len -- )` | Print a string to the printer, wrapping across multiple printed lines if it's longer than one line |
-| `LLIST` | `( -- )` | Print the name of every word you've defined since the machine started, newest first |
+| `LLIST`  | `( -- )`          | Print the name of every word you've defined since the machine started, newest first                |
 
 ```forth
 S" HELLO WORLD" LPRINT
@@ -4021,10 +3729,10 @@ an extension that replaces those 8 with 64 colors *you* choose,
 without changing how
 `INK`/`PAPER`/`PLOT`/`LINE`/`CIRCLE`/`FILL` are used at all.
 
-| Word | Stack effect | What it does |
-|---|---|---|
-| `ULAPLUS` | `( flag -- )` | Nonzero enables the extended palette; zero reverts to the standard 8 colors |
-| `PALETTE` | `( index value -- )` | Program palette register `index` (0-63) with color `value` |
+| Word      | Stack effect         | What it does                                                                |
+| --------- | -------------------- | --------------------------------------------------------------------------- |
+| `ULAPLUS` | `( flag -- )`        | Nonzero enables the extended palette; zero reverts to the standard 8 colors |
+| `PALETTE` | `( index value -- )` | Program palette register `index` (0-63) with color `value`                  |
 
 A palette value packs green, red, and blue into one number,
 `GGGRRRBB` — 3 bits of green, 3 of red, 2 of blue:
@@ -4155,12 +3863,12 @@ region — the frontier, one past everything defined so far. It's an
 ordinary address like any other from section 5, and it moves every time
 you define anything.
 
-| Word | Stack effect | What it does |
-|---|---|---|
-| `HERE` | `( -- addr )` | The address of the first unused dictionary byte |
-| `,` | `( n -- )` | Write a two-byte cell at `HERE`, and advance `HERE` by 2 |
-| `C,` | `( n -- )` | Write one byte at `HERE`, and advance `HERE` by 1 |
-| `ALLOT` | `( n -- )` | Advance `HERE` by `n` bytes without writing anything |
+| Word    | Stack effect  | What it does                                             |
+| ------- | ------------- | -------------------------------------------------------- |
+| `HERE`  | `( -- addr )` | The address of the first unused dictionary byte          |
+| `,`     | `( n -- )`    | Write a two-byte cell at `HERE`, and advance `HERE` by 2 |
+| `C,`    | `( n -- )`    | Write one byte at `HERE`, and advance `HERE` by 1        |
+| `ALLOT` | `( n -- )`    | Advance `HERE` by `n` bytes without writing anything     |
 
 `,` is pronounced "comma", and it is a real word — a lone comma, with
 spaces around it like everything else. `C,` is "C-comma", the
@@ -4410,14 +4118,14 @@ Forth words `HERE`, `,`, `C,`, `ALLOT`, `CREATE`, `DOES>`, `FORGET`.
 
 1. `C,` is the byte-sized counterpart of `,`, and a table of small
    numbers has no reason to waste two bytes on each. Type
-
+   
    ```forth
    CREATE BYTES  1 C, 2 C, 3 C, 4 C,
    BYTES C@ .
    BYTES 1 + C@ .
    BYTES 3 + C@ .
    ```
-
+   
    Note that the elements are one byte apart, so the offsets are the
    indices themselves and no `CELLS` is involved at all. Then work out
    how many bytes the same four values would have taken written with
@@ -4490,24 +4198,29 @@ boot-straight-into-the-game shortcut:
 
 1. Build the real product ROM (`make forth-boot`) and a real tape file
    containing `demos/blackjack.fs` under the name `BLACKJACK`:
+   
    ```
    python3 tools/tape_gen_forth.py build/blackjack.tap BLACKJACK:demos/blackjack.fs
    ```
 2. Start Fuse with that tape already inserted:
+   
    ```
    fuse --machine ts2068 --detect-loader \
         --rom-ts2068-0 build/forth_boot_rom0.bin \
         --rom-ts2068-1 build/stock_shaped_exrom.bin \
         --tape build/blackjack.tap
    ```
+   
    `--detect-loader` matters: some saved Fuse settings ship with
    automatic tape-loader detection turned off, in which case the tape
    never starts playing and `LOAD-TEXT` just waits — passing it
    explicitly here works regardless of what's saved.
 3. Once the live prompt appears, type:
+   
    ```
    LOAD-TEXT BLACKJACK
    ```
+   
    and press Enter. The real leader tone, sync, and every data byte
    play back and get decoded at genuine cassette speed (tens of
    seconds, not instant) — exactly like loading a real BASIC program
@@ -4572,211 +4285,209 @@ the same convention applied to the full ANS Forth standard.
 
 **Stack manipulation**
 
-| Word | Stack effect |
-|---|---|
-| `DUP` | `( n -- n n )` |
-| `SWAP` | `( a b -- b a )` |
-| `DROP` | `( n -- )` |
-| `OVER` | `( a b -- a b a )` |
-| `ROT` | `( a b c -- b c a )` |
-| `2DUP` | `( a b -- a b a b )` |
-| `2DROP` | `( a b -- )` |
-| `?DUP` | `( n -- 0 \| n n )` |
-| `PICK` | `( ... n -- ... x )` |
+| Word    | Stack effect         |
+| ------- | -------------------- |
+| `DUP`   | `( n -- n n )`       |
+| `SWAP`  | `( a b -- b a )`     |
+| `DROP`  | `( n -- )`           |
+| `OVER`  | `( a b -- a b a )`   |
+| `ROT`   | `( a b c -- b c a )` |
+| `2DUP`  | `( a b -- a b a b )` |
+| `2DROP` | `( a b -- )`         |
+| `?DUP`  | `( n -- 0 \| n n )`  |
+| `PICK`  | `( ... n -- ... x )` |
 
 **Arithmetic and comparison**
 
-| Word | Stack effect |
-|---|---|
-| `+` | `( a b -- a+b )` |
-| `-` | `( a b -- a-b )` |
-| `*` | `( a b -- a*b )` |
-| `/` | `( a b -- a/b )` |
-| `1+` | `( n -- n+1 )` |
-| `1-` | `( n -- n-1 )` |
-| `NEGATE` | `( n -- -n )` |
-| `MAX` | `( a b -- max )` |
-| `MIN` | `( a b -- min )` |
-| `0=` | `( n -- flag )` |
-| `=` | `( a b -- flag )` |
-| `<` | `( a b -- flag )` |
-| `>` | `( a b -- flag )` |
-| `ABS` | `( n -- \|n\| )` |
-| `SGN` | `( n -- -1\|0\|1 )` |
-| `MOD` | `( a b -- a-mod-b )` |
-| `SQRT` | `( n -- isqrt(n) )` |
-| `RND` | `( x -- n )` |
-| `RANDOMIZE` | `( n -- )` |
-| `AND` | `( a b -- a AND b )` |
-| `OR` | `( a b -- a OR b )` |
-| `XOR` | `( a b -- a XOR b )` |
-| `INVERT` | `( a -- NOT a )` |
+| Word        | Stack effect         |
+| ----------- | -------------------- |
+| `+`         | `( a b -- a+b )`     |
+| `-`         | `( a b -- a-b )`     |
+| `*`         | `( a b -- a*b )`     |
+| `/`         | `( a b -- a/b )`     |
+| `1+`        | `( n -- n+1 )`       |
+| `1-`        | `( n -- n-1 )`       |
+| `NEGATE`    | `( n -- -n )`        |
+| `MAX`       | `( a b -- max )`     |
+| `MIN`       | `( a b -- min )`     |
+| `0=`        | `( n -- flag )`      |
+| `=`         | `( a b -- flag )`    |
+| `<`         | `( a b -- flag )`    |
+| `>`         | `( a b -- flag )`    |
+| `ABS`       | `( n -- \|n\| )`     |
+| `SGN`       | `( n -- -1\|0\|1 )`  |
+| `MOD`       | `( a b -- a-mod-b )` |
+| `SQRT`      | `( n -- isqrt(n) )`  |
+| `RND`       | `( x -- n )`         |
+| `RANDOMIZE` | `( n -- )`           |
+| `AND`       | `( a b -- a AND b )` |
+| `OR`        | `( a b -- a OR b )`  |
+| `XOR`       | `( a b -- a XOR b )` |
+| `INVERT`    | `( a -- NOT a )`     |
 
 **Decimal (floating-point) arithmetic** — own stack, see section 4
 
-| Word | Stack effect |
-|---|---|
-| `F+` | `( f1 f2 -- f1+f2 )` |
-| `F-` | `( f1 f2 -- f1-f2 )` |
-| `F*` | `( f1 f2 -- f1*f2 )` |
-| `F/` | `( f1 f2 -- f1/f2 )` |
-| `FSQRT` | `( f -- sqrt(f) )` |
-| `FROUND` | `( f -- f' )` |
-| `PI` | `( -- f )` |
-| `SIN` | `( f -- sin(f) )` |
-| `COS` | `( f -- cos(f) )` |
-| `RAD` | `( degrees -- radians )` |
-| `DEG` | `( radians -- degrees )` |
-| `S>F` | `( n -- )` `( -- f )` |
-| `F>S` | `( f -- )` `( -- n )` |
-| `F.` | `( f -- )` |
+| Word     | Stack effect             |
+| -------- | ------------------------ |
+| `F+`     | `( f1 f2 -- f1+f2 )`     |
+| `F-`     | `( f1 f2 -- f1-f2 )`     |
+| `F*`     | `( f1 f2 -- f1*f2 )`     |
+| `F/`     | `( f1 f2 -- f1/f2 )`     |
+| `FSQRT`  | `( f -- sqrt(f) )`       |
+| `FROUND` | `( f -- f' )`            |
+| `PI`     | `( -- f )`               |
+| `SIN`    | `( f -- sin(f) )`        |
+| `COS`    | `( f -- cos(f) )`        |
+| `RAD`    | `( degrees -- radians )` |
+| `DEG`    | `( radians -- degrees )` |
+| `S>F`    | `( n -- )` `( -- f )`    |
+| `F>S`    | `( f -- )` `( -- n )`    |
+| `F.`     | `( f -- )`               |
 
 **Memory**
 
-| Word | Stack effect |
-|---|---|
-| `@` | `( addr -- n )` |
-| `!` | `( n addr -- )` |
-| `C@` | `( addr -- byte )` |
-| `C!` | `( byte addr -- )` |
-| `VARIABLE` | `( "name" -- )` |
-| `CONSTANT` | `( n "name" -- )` |
-| `ARRAY` | `( n "name" -- )` |
-| `CELLS` | `( n -- n*2 )` |
-| `FREE` | `( -- n )` |
+| Word       | Stack effect       |
+| ---------- | ------------------ |
+| `@`        | `( addr -- n )`    |
+| `!`        | `( n addr -- )`    |
+| `C@`       | `( addr -- byte )` |
+| `C!`       | `( byte addr -- )` |
+| `VARIABLE` | `( "name" -- )`    |
+| `CONSTANT` | `( n "name" -- )`  |
+| `ARRAY`    | `( n "name" -- )`  |
+| `CELLS`    | `( n -- n*2 )`     |
+| `FREE`     | `( -- n )`         |
 
 **Strings**
 
-| Word | Stack effect | Notes |
-|---|---|---|
-| `S" text"` | `( -- addr len )` | IMMEDIATE, a string literal |
-| `TYPE` | `( addr len -- )` | print a string |
-| `STRING` | `( n "name" -- )` | a mutable buffer, up to `n` characters |
-| `PLACE` | `( addr len dest -- )` | store a string into a buffer |
-| `COUNT` | `( caddr -- addr len )` | a buffer's contents as `(addr len)` |
-| `LEN` | `( caddr -- n )` | a buffer's own length |
-| `VAL` | `( addr len -- n )` | parse a string as an integer |
-| `CHR` | `( code -- addr len )` | a one-character string from a code |
-| `STR` | `( n -- addr len )` | a number, as a string |
-| `UPPER` | `( addr len -- addr len )` | uppercase, in place |
-| `LOWER` | `( addr len -- addr len )` | lowercase, in place |
-| `LEFT` | `( addr len n -- addr len' )` | first `n` characters |
-| `RIGHT` | `( addr len n -- addr' len' )` | last `n` characters |
-| `SEARCH` | `( addr1 len1 addr2 len2 -- addr3 len3 flag )` | find string 2 inside string 1 |
-| `CODE` | `( addr len -- code )` | character code of the first character |
+| Word       | Stack effect                                   | Notes                                  |
+| ---------- | ---------------------------------------------- | -------------------------------------- |
+| `S" text"` | `( -- addr len )`                              | IMMEDIATE, a string literal            |
+| `TYPE`     | `( addr len -- )`                              | print a string                         |
+| `STRING`   | `( n "name" -- )`                              | a mutable buffer, up to `n` characters |
+| `PLACE`    | `( addr len dest -- )`                         | store a string into a buffer           |
+| `COUNT`    | `( caddr -- addr len )`                        | a buffer's contents as `(addr len)`    |
+| `LEN`      | `( caddr -- n )`                               | a buffer's own length                  |
+| `VAL`      | `( addr len -- n )`                            | parse a string as an integer           |
+| `CHR`      | `( code -- addr len )`                         | a one-character string from a code     |
+| `STR`      | `( n -- addr len )`                            | a number, as a string                  |
+| `UPPER`    | `( addr len -- addr len )`                     | uppercase, in place                    |
+| `LOWER`    | `( addr len -- addr len )`                     | lowercase, in place                    |
+| `LEFT`     | `( addr len n -- addr len' )`                  | first `n` characters                   |
+| `RIGHT`    | `( addr len n -- addr' len' )`                 | last `n` characters                    |
+| `SEARCH`   | `( addr1 len1 addr2 len2 -- addr3 len3 flag )` | find string 2 inside string 1          |
+| `CODE`     | `( addr len -- code )`                         | character code of the first character  |
 
 **Defining and control flow**
 
-| Word | Stack effect | Notes |
-|---|---|---|
-| `:` ... `;` | — | define a new word |
-| `'` | `( -- xt )` | look up a word by name, without calling it |
-| `EXECUTE` | `( xt -- )` | call the word an `xt` identifies |
-| `IF` ... `ELSE` ... `THEN` | `( flag -- )` | IMMEDIATE, compile-only |
-| `BEGIN` ... `UNTIL` | `( flag -- )` | IMMEDIATE, compile-only |
-| `BEGIN` ... `WHILE` ... `REPEAT` | `( flag -- )` | IMMEDIATE, compile-only |
-| `DO` ... `LOOP` | `( limit start -- )` | IMMEDIATE, compile-only |
-| `DO` ... `+LOOP` | `( limit start -- )` / `( step -- )` | IMMEDIATE, compile-only |
-| `LEAVE` | `( -- )` | IMMEDIATE, compile-only; exits the innermost `DO` loop |
-| `EXIT` | `( -- )` | IMMEDIATE, compile-only; returns from the whole definition, unwinding any open `DO` loops |
-| `I` | `( -- index )` | innermost `DO` loop's index |
-| `J` | `( -- n )` | the *enclosing* `DO` loop's index, one level out |
-| `IMMEDIATE` | `( -- )` | mark the most recently defined word immediate |
+| Word                             | Stack effect                         | Notes                                                                                     |
+| -------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `:` ... `;`                      | —                                    | define a new word                                                                         |
+| `'`                              | `( -- xt )`                          | look up a word by name, without calling it                                                |
+| `EXECUTE`                        | `( xt -- )`                          | call the word an `xt` identifies                                                          |
+| `IF` ... `ELSE` ... `THEN`       | `( flag -- )`                        | IMMEDIATE, compile-only                                                                   |
+| `BEGIN` ... `UNTIL`              | `( flag -- )`                        | IMMEDIATE, compile-only                                                                   |
+| `BEGIN` ... `WHILE` ... `REPEAT` | `( flag -- )`                        | IMMEDIATE, compile-only                                                                   |
+| `DO` ... `LOOP`                  | `( limit start -- )`                 | IMMEDIATE, compile-only                                                                   |
+| `DO` ... `+LOOP`                 | `( limit start -- )` / `( step -- )` | IMMEDIATE, compile-only                                                                   |
+| `LEAVE`                          | `( -- )`                             | IMMEDIATE, compile-only; exits the innermost `DO` loop                                    |
+| `EXIT`                           | `( -- )`                             | IMMEDIATE, compile-only; returns from the whole definition, unwinding any open `DO` loops |
+| `I`                              | `( -- index )`                       | innermost `DO` loop's index                                                               |
+| `J`                              | `( -- n )`                           | the *enclosing* `DO` loop's index, one level out                                          |
+| `IMMEDIATE`                      | `( -- )`                             | mark the most recently defined word immediate                                             |
 
 **Dictionary space and defining words** — see
 [section 17](#17-growing-the-dictionary-yourself)
 
-| Word | Stack effect | Notes |
-|---|---|---|
-| `HERE` | `( -- addr )` | the first unused dictionary byte |
-| `,` | `( n -- )` | write a cell at `HERE`, advance it by 2 |
-| `C,` | `( n -- )` | write a byte at `HERE`, advance it by 1 |
-| `ALLOT` | `( n -- )` | advance `HERE` by `n` bytes (negative shrinks) |
-| `CREATE` | `( "name" -- )` | make a word that pushes its own data address |
-| `DOES>` | `( -- )` | give a `CREATE`d word its behavior; the code after it runs with that address on the stack |
-| `FORGET` | `( "name" -- )` | remove a word and everything defined after it; refuses built-ins |
-| `VLIST` | `( -- )` | print every word in the dictionary, newest first — see [section 2](#2-typing-and-editing-at-the-prompt) |
-| `LIST-DEFS` | `( -- )` | list every colon definition entered so far, numbered, with a source preview — see [section 2](#2-typing-and-editing-at-the-prompt) |
-| `RECALL` | `( n -- )` | copy `LIST-DEFS` entry `n`'s full source onto the input line for editing — see [section 2](#2-typing-and-editing-at-the-prompt) |
+| Word        | Stack effect    | Notes                                                                                                                              |
+| ----------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `HERE`      | `( -- addr )`   | the first unused dictionary byte                                                                                                   |
+| `,`         | `( n -- )`      | write a cell at `HERE`, advance it by 2                                                                                            |
+| `C,`        | `( n -- )`      | write a byte at `HERE`, advance it by 1                                                                                            |
+| `ALLOT`     | `( n -- )`      | advance `HERE` by `n` bytes (negative shrinks)                                                                                     |
+| `CREATE`    | `( "name" -- )` | make a word that pushes its own data address                                                                                       |
+| `DOES>`     | `( -- )`        | give a `CREATE`d word its behavior; the code after it runs with that address on the stack                                          |
+| `FORGET`    | `( "name" -- )` | remove a word and everything defined after it; refuses built-ins                                                                   |
+| `VLIST`     | `( -- )`        | print every word in the dictionary, newest first — see [section 2](#2-typing-and-editing-at-the-prompt)                            |
+| `LIST-DEFS` | `( -- )`        | list every colon definition entered so far, numbered, with a source preview — see [section 2](#2-typing-and-editing-at-the-prompt) |
+| `RECALL`    | `( n -- )`      | copy `LIST-DEFS` entry `n`'s full source onto the input line for editing — see [section 2](#2-typing-and-editing-at-the-prompt)    |
 
 **Error handling** — see [section 14](#14-error-handling-throw-and-catch)
 
-| Word | Stack effect | Notes |
-|---|---|---|
-| `CATCH` | `( xt -- 0 \| n )` | |
-| `THROW` | `( n -- )` | |
-| `ABORT` | `( -- )` | back to the prompt, clearing both stacks |
-| `QUIT` | `( -- )` | back to the prompt, leaving the stacks alone |
+| Word    | Stack effect       | Notes                                        |
+| ------- | ------------------ | -------------------------------------------- |
+| `CATCH` | `( xt -- 0 \| n )` |                                              |
+| `THROW` | `( n -- )`         |                                              |
+| `ABORT` | `( -- )`           | back to the prompt, clearing both stacks     |
+| `QUIT`  | `( -- )`           | back to the prompt, leaving the stacks alone |
 
 **Printing and input**
 
-| Word | Stack effect |
-|---|---|
-| `.` | `( n -- )` |
-| `."` text`"` | `( -- )` — compile-only |
-| `EMIT` | `( char -- )` |
-| `CR` | `( -- )` |
-| `SPACE` | `( -- )` |
-| `SPACES` | `( n -- )` |
-| `KEY` | `( -- char )` |
-| `KEY?` | `( -- flag )` |
-| `BREAK?` | `( -- flag )` |
-| `STICK` | `( device -- value )` |
-| `ACCEPT` | `( dest maxlen -- len )` |
-| `INPUT` | `( -- n )` |
-| `AT-XY` | `( col row -- )` |
+| Word         | Stack effect             |
+| ------------ | ------------------------ |
+| `.`          | `( n -- )`               |
+| `."` text`"` | `( -- )` — compile-only  |
+| `EMIT`       | `( char -- )`            |
+| `CR`         | `( -- )`                 |
+| `SPACE`      | `( -- )`                 |
+| `SPACES`     | `( n -- )`               |
+| `KEY`        | `( -- char )`            |
+| `KEY?`       | `( -- flag )`            |
+| `BREAK?`     | `( -- flag )`            |
+| `STICK`      | `( device -- value )`    |
+| `ACCEPT`     | `( dest maxlen -- len )` |
+| `INPUT`      | `( -- n )`               |
+| `AT-XY`      | `( col row -- )`         |
 
 **Drawing and sound**
 
-| Word | Stack effect |
-|---|---|
-| `PLOT` | `( x y -- )` |
-| `LINE` | `( x1 y1 x2 y2 -- )` |
-| `CIRCLE` | `( xc yc r -- )` |
-| `FILL` | `( x y -- )` |
-| `CLS` | `( -- )` |
-| `BORDER` | `( color -- )` |
-| `INK` | `( color -- )` |
-| `PAPER` | `( color -- )` |
-| `BRIGHT` | `( flag -- )` |
-| `FLASH` | `( flag -- )` |
-| `HIRES` | `( -- )` |
-| `NORMAL` | `( -- )` |
-| `BEEP` | `( n-semitones fduration -- )` |
-| `SOUND` | `( register data -- )` |
-| `TONE` | `( channel period -- )` |
-| `VOLUME` | `( channel level -- )` |
-| `MIXER` | `( mask -- )` |
-| `NOISE` | `( period -- )` |
-| `ENVELOPE` | `( period shape -- )` |
-| `UDG` | `( n -- addr )` |
-| `64COL` / `32COL` | `( -- )` |
-| `PALETTE64` | `( n -- )` |
-| `PLOT64` | `( x y -- )` |
-| `ULAPLUS` | `( flag -- )` — see [section 16](#16-ulaplus-a-bigger-color-palette) |
-| `PALETTE` | `( index value -- )` — see [section 16](#16-ulaplus-a-bigger-color-palette) |
+| Word              | Stack effect                                                                |
+| ----------------- | --------------------------------------------------------------------------- |
+| `PLOT`            | `( x y -- )`                                                                |
+| `LINE`            | `( x1 y1 x2 y2 -- )`                                                        |
+| `CIRCLE`          | `( xc yc r -- )`                                                            |
+| `FILL`            | `( x y -- )`                                                                |
+| `CLS`             | `( -- )`                                                                    |
+| `BORDER`          | `( color -- )`                                                              |
+| `INK`             | `( color -- )`                                                              |
+| `PAPER`           | `( color -- )`                                                              |
+| `BRIGHT`          | `( flag -- )`                                                               |
+| `FLASH`           | `( flag -- )`                                                               |
+| `HIRES`           | `( -- )`                                                                    |
+| `NORMAL`          | `( -- )`                                                                    |
+| `BEEP`            | `( n-semitones fduration -- )`                                              |
+| `SOUND`           | `( register data -- )`                                                      |
+| `TONE`            | `( channel period -- )`                                                     |
+| `VOLUME`          | `( channel level -- )`                                                      |
+| `MIXER`           | `( mask -- )`                                                               |
+| `NOISE`           | `( period -- )`                                                             |
+| `ENVELOPE`        | `( period shape -- )`                                                       |
+| `UDG`             | `( n -- addr )`                                                             |
+| `64COL` / `32COL` | `( -- )`                                                                    |
+| `PALETTE64`       | `( n -- )`                                                                  |
+| `PLOT64`          | `( x y -- )`                                                                |
+| `ULAPLUS`         | `( flag -- )` — see [section 16](#16-ulaplus-a-bigger-color-palette)        |
+| `PALETTE`         | `( index value -- )` — see [section 16](#16-ulaplus-a-bigger-color-palette) |
 
 **Hardware ports** — see [section 10](#10-drawing-and-sound)
 
-| Word | Stack effect |
-|---|---|
-| `IN` | `( port -- value )` |
+| Word  | Stack effect        |
+| ----- | ------------------- |
+| `IN`  | `( port -- value )` |
 | `OUT` | `( value port -- )` |
 
 **Storage**
 
-| Word | Stack effect | Notes |
-|---|---|---|
-| `SAVE-LIB` | `( "name" -- )` | save the compiled dictionary as a binary image |
-| `LOAD-LIB` | `( "name" -- )` | load a dictionary image back |
-| `SAVE-TEXT` | `( addr len "name" -- )` | save plain Forth source text |
-| `LOAD-TEXT` | `( "name" -- )` | load and re-run saved source text |
+| Word        | Stack effect             | Notes                                          |
+| ----------- | ------------------------ | ---------------------------------------------- |
+| `SAVE-LIB`  | `( "name" -- )`          | save the compiled dictionary as a binary image |
+| `LOAD-LIB`  | `( "name" -- )`          | load a dictionary image back                   |
+| `SAVE-TEXT` | `( addr len "name" -- )` | save plain Forth source text                   |
+| `LOAD-TEXT` | `( "name" -- )`          | load and re-run saved source text              |
 
 **Printer** — see [section 15](#15-printing-to-a-real-printer-lprint-and-llist)
 
-| Word | Stack effect |
-|---|---|
+| Word     | Stack effect      |
+| -------- | ----------------- |
 | `LPRINT` | `( addr len -- )` |
-| `LLIST` | `( -- )` |
-
-
+| `LLIST`  | `( -- )`          |
