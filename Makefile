@@ -550,13 +550,21 @@ forth-smoke-p65:
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p65.sym --lst=build/forth_smoke_p65.lst rom/forth_smoke_p65.asm
 	mv forth_smoke_p65_rom0.bin build/forth_smoke_p65_rom0.bin
 
-# EXROM-resident graphics services (chunk 5, $A000-$BFFF) -- RECT today,
-# Polygon draw/fill and Sprites planned next. See rom/graphics_exrom.asm's
+# Generated from rom/forth_boot.asm's own GRAPHICS_HOME_TABLE -- see
+# tools/export_home_symbols.py's own header and rom/graphics_exrom.asm's.
+# Regenerated on every graphics-exrom build, never hand-edited or
+# committed (build/ is gitignored).
+build/graphics_home_table.inc: rom/forth_boot.asm tools/export_home_symbols.py
+	mkdir -p build
+	python3 tools/export_home_symbols.py rom/forth_boot.asm build/graphics_home_table.inc
+
+# EXROM-resident graphics services (chunk 5, $A000-$BFFF): RECT, POLYGON,
+# POLYGON-FILL, SPRITE-DEFINE/SHOW/HIDE. See rom/graphics_exrom.asm's
 # own header, and docs/PROJECT_PLAN.md's chunk-by-chunk audit for why
 # chunk 5. Standalone 8K image, not concatenated with forth-boot's own
 # source -- combine with build/forth_boot_rom0.bin for ZEsarUX the same
-# way README.md's own "Run in ZEsarUX" section already does for EXROM.
-graphics-exrom:
+# way README.md's own "Try it" section already does for EXROM.
+graphics-exrom: build/graphics_home_table.inc
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/graphics_exrom.sym --lst=build/graphics_exrom.lst rom/graphics_exrom.asm
 	mv graphics_exrom.bin build/graphics_exrom.bin

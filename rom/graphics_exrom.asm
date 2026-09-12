@@ -38,11 +38,16 @@
 ; file is assembled completely separately with no visibility into that
 ; build. GRAPHICS_HOME_TABLE (rom/forth_boot.asm, fixed at $0100) is
 ; the fix — stable, low, append-only JP veneers this file calls
-; through instead. Keep both files' own copies of that table's layout
-; in sync by hand until this project builds a real export-symbols tool
-; (structured-basic-poc's tools/export_home_symbols.py is the proven
-; model for that, not yet built here — a known, deliberate gap, not an
-; oversight).
+; through instead. The two files' own copies of that table's layout
+; used to be kept in sync BY HAND — the exact class of bug that
+; shipped twice in this project's own history (a shifted service-table
+; offset, twice) — until tools/export_home_symbols.py (modeled on the
+; sibling structured-basic-poc project's own tool of the same name)
+; started generating build/graphics_home_table.inc directly from rom/
+; forth_boot.asm's own GRAPHICS_HOME_TABLE, INCLUDEd below instead of
+; hand-typed. Regenerated automatically by the Makefile's own
+; graphics-exrom target — never edit build/graphics_home_table.inc by
+; hand, and never hand-copy its constants back into this file.
 ; ============================================================================
 
     INCLUDE "include/hardware.inc"
@@ -56,17 +61,8 @@ GRAPHICS_EXROM_MAGIC EQU $F0
 GRAPHICS_EXROM_ABI   EQU 1
 
 ; ---- Home-side stable call targets (rom/forth_boot.asm, $0100) ----
-; Must match that file's own GRAPHICS_HOME_TABLE layout exactly — see
-; this file's own header on why these can't be derived automatically
-; yet.
-GRAPHICS_HOME_WRITE_PIXEL EQU $0100   ; slot 0 — B=x,C=y,A=attr,D=OVER
-GRAPHICS_HOME_SET_ATTR    EQU $0103   ; slot 1 — A=attr,B=row,C=col
-GRAPHICS_HOME_LINE        EQU $0106   ; slot 2 — no register args;
-                                     ; reads GFX_LINE_X0/Y0/X1/Y1/
-                                     ; ATTR/OVER
-GRAPHICS_HOME_ROW_BASE_ADDR EQU $0109 ; slot 3 — A=row -> HL=bitmap
-                                     ; base address (scanline 0)
-GRAPHICS_HOME_CELL_ATTR_ADDR EQU $010C ; slot 4 — B=row,C=col -> HL=addr
+; Generated, not hand-typed — see this file's own header above.
+    INCLUDE "build/graphics_home_table.inc"
 
 ; ============================================================================
 ; Service table — FIXED SIZE (GRAPHICS_EXROM_MAX_SLOTS slots, see this
