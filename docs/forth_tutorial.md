@@ -4038,7 +4038,7 @@ every time." In Forth the answer is to define your own defining word,
 and it needs three things: somewhere to put the new word's data, a way
 to make the word itself, and a way to say what it does when run.
 
-### Where new words go: `HERE`, `,`, `C,`, and `ALLOT`
+### Where New Words Go: `HERE`, `,`, `C,`, and `ALLOT`
 
 `FREE` back in [section 5](#5-reading-and-writing-memory-directly)
 reported how much room was left for new definitions, which quietly
@@ -4052,16 +4052,16 @@ ordinary address like any other from section 5, and it moves every time
 you define anything.
 
 | Word    | Stack effect  | What it does                                             |
-| ------- | ------------- | -------------------------------------------------------- |
+| ------- | --------------- | -------------------------------------------------------------- |
 | `HERE`  | `( -- addr )` | The address of the first unused dictionary byte          |
 | `,`     | `( n -- )`    | Write a two-byte cell at `HERE`, and advance `HERE` by 2 |
 | `C,`    | `( n -- )`    | Write one byte at `HERE`, and advance `HERE` by 1        |
 | `ALLOT` | `( n -- )`    | Advance `HERE` by `n` bytes without writing anything     |
 
-`,` is pronounced "comma", and it is a real word — a lone comma, with
-spaces around it like everything else. `C,` is "C-comma", the
-byte-sized version, matching the `C@`/`C!` naming from section 5 for
-exactly the same reason.
+- **Pronunciation:** `,` is pronounced "comma", and it is a real
+  word — a lone comma, with spaces around it like everything else.
+  `C,` is "C-comma", the byte-sized version, matching the `C@`/`C!`
+  naming from section 5 for exactly the same reason.
 
 They're easiest to see all at once:
 
@@ -4071,10 +4071,10 @@ HERE            \ remember the frontier -- an address, on the stack
 @ .             \ prints 1234 -- read back from the address we saved
 ```
 
-Nothing there is new except the words. `HERE` pushed an address, `,`
-wrote a cell at it, and `@` from section 5 read the cell back — the
-same fetch you've used on every `VARIABLE` in this document. The only
-difference is that nothing gave this cell a name.
+- **Nothing New But the Words:** `HERE` pushed an address, `,` wrote a
+  cell at it, and `@` from section 5 read the cell back — the same
+  fetch you've used on every `VARIABLE` in this document. The only
+  difference is that nothing gave this cell a name.
 
 `ALLOT` reserves space without filling it, which is what you want for a
 buffer you're about to write into:
@@ -4084,15 +4084,16 @@ HERE            \ the address of what we're about to reserve
 20 ALLOT        \ reserve 20 bytes -- HERE jumps 20 further along
 ```
 
-A negative count legitimately runs the other way and gives space back:
+- **`ALLOT` Can Also Give Space Back:** A negative count legitimately
+  runs the other way and gives space back:
 
-```forth
--4 ALLOT        \ HERE moves back 4 bytes -- the dictionary shrinks
-```
+  ```forth
+  -4 ALLOT        \ HERE moves back 4 bytes -- the dictionary shrinks
+  ```
 
-which is occasionally handy and worth using carefully, since anything
-already defined in the space you just gave back is now in the path of
-whatever gets defined next.
+  which is occasionally handy and worth using carefully, since anything
+  already defined in the space you just gave back is now in the path of
+  whatever gets defined next.
 
 When working with low-level memory management primitives (`HERE`, `ALLOT`, and `,`), keep two important caveats in mind:
 
@@ -4100,7 +4101,7 @@ When working with low-level memory management primitives (`HERE`, `ALLOT`, and `
 
 - **Transient Targets (`HERE`):** The comma word (`,`) writes directly at `HERE`, which only lands where you expect if nothing else has moved `HERE` in the interim. These words are designed for building a definition *right now*, not for stashing data to come back to later.
 
-### Making a word by hand: `CREATE`
+### Making a Word by Hand: `CREATE`
 
 `CREATE ( "name" -- )` takes the name that follows it, exactly as `:`
 and `VARIABLE` do, and builds a dictionary entry for it. The word it
@@ -4119,12 +4120,13 @@ POINT @ .                 \ prints 5
 POINT 2 + @ .             \ prints 7
 ```
 
-Look at what that actually is: a two-cell `VARIABLE`, built by hand out
-of pieces. `VARIABLE SCORE` and `CREATE SCORE 0 ,` produce words that
-behave the same way — push an address, fetch with `@`, store with `!`.
-(2068-Leap-Forth's own `VARIABLE` is written directly in machine code rather
-than in terms of `CREATE`, for reasons of size; the point is that it
-*could* be, and that in most Forths it is.)
+- **A `VARIABLE`, Built by Hand:** Look at what that actually is: a
+  two-cell `VARIABLE`, built by hand out of pieces. `VARIABLE SCORE`
+  and `CREATE SCORE 0 ,` produce words that behave the same way — push
+  an address, fetch with `@`, store with `!`. (2068-Leap-Forth's own
+  `VARIABLE` is written directly in machine code rather than in terms
+  of `CREATE`, for reasons of size; the point is that it *could* be,
+  and that in most Forths it is.)
 
 Now put `CREATE` inside a colon definition and you have a defining word
 of your own:
@@ -4136,13 +4138,14 @@ T1 T1FOO         \ makes a new word, T1FOO
 T1FOO @ .        \ prints 1234
 ```
 
-Read `T1` carefully, because two different times are involved and
-keeping them apart is the whole skill here. `T1` is defined once. It
-*runs* when you type `T1 T1FOO` — and while running, it creates
-`T1FOO` and stores 1234 in it. `T1FOO` is what runs later, when you type
-`T1FOO`, and all it does is push its own address.
+- **Two Different Times:** Read `T1` carefully, because two different
+  times are involved and keeping them apart is the whole skill here.
+  `T1` is defined once. It *runs* when you type `T1 T1FOO` — and while
+  running, it creates `T1FOO` and stores 1234 in it. `T1FOO` is what
+  runs later, when you type `T1FOO`, and all it does is push its own
+  address.
 
-### `DOES>` — saying what the new word should *do*
+### `DOES>` — Saying What the New Word Should *Do*
 
 `T1FOO` pushes an address, and so does every other word `CREATE` makes.
 That's the limitation. `CONSTANT` doesn't behave that way: `MAXHEALTH`
@@ -4165,28 +4168,28 @@ FIVE .        \ prints 5
 SEVEN .       \ prints 7
 ```
 
-That is a working `CONSTANT`, in eleven characters of definition. Take
-it apart in the two times again, because everything about `DOES>`
-depends on them:
+- **Two Times Again:** That is a working `CONSTANT`, in eleven
+  characters of definition. Take it apart in the two times again,
+  because everything about `DOES>` depends on them:
 
-- **When `5 CONST FIVE` runs**: `CREATE` makes a word called `FIVE`;
-  `,` writes the `5` that was on the stack into `FIVE`'s data; and
-  `DOES>` attaches everything after it — the `@` — to `FIVE` as its
-  behavior, then ends `CONST` on the spot.
-- **When `FIVE` runs, later**: it pushes its own data address, exactly
-  as any `CREATE`d word does, and then runs the `@`. What's left on the
-  stack is `5`.
+  - **When `5 CONST FIVE` runs**: `CREATE` makes a word called `FIVE`;
+    `,` writes the `5` that was on the stack into `FIVE`'s data; and
+    `DOES>` attaches everything after it — the `@` — to `FIVE` as its
+    behavior, then ends `CONST` on the spot.
+  - **When `FIVE` runs, later**: it pushes its own data address,
+    exactly as any `CREATE`d word does, and then runs the `@`. What's
+    left on the stack is `5`.
 
-The part after `DOES>` never runs as part of `CONST` itself. It is
-`FIVE`'s body, written in the middle of `CONST`'s. And it always starts
-with the new word's own data address already on the stack, which is why
-`@` on its own is a complete behavior — there's nothing for it to be
-handed but that address.
+  The part after `DOES>` never runs as part of `CONST` itself. It is
+  `FIVE`'s body, written in the middle of `CONST`'s. And it always
+  starts with the new word's own data address already on the stack,
+  which is why `@` on its own is a complete behavior — there's nothing
+  for it to be handed but that address.
 
-Everything before `DOES>` runs once per new word. Everything after it
-runs every time one of those new words is used. `CONST` was invoked
-twice above and `FIVE` and `SEVEN` are genuinely separate words with
-separate data; nothing is shared but the recipe.
+  Everything before `DOES>` runs once per new word. Everything after
+  it runs every time one of those new words is used. `CONST` was
+  invoked twice above and `FIVE` and `SEVEN` are genuinely separate
+  words with separate data; nothing is shared but the recipe.
 
 The behavior can be as long as you like, and it doesn't have to ignore
 the stack it's given. Here's an array-style defining word — the second
@@ -4203,32 +4206,33 @@ ARR3 NUMS
 2 NUMS .      \ prints 30
 ```
 
-`ARR3 NUMS` runs the three `,`s, so `NUMS` is born holding 10, 20 and
-30 in consecutive cells. Then `1 NUMS` runs the behavior with two things
-on the stack — the `1` you pushed, and `NUMS`'s own address underneath
-it, pushed automatically:
+- **Tracing `1 NUMS`:** `ARR3 NUMS` runs the three `,`s, so `NUMS` is
+  born holding 10, 20 and 30 in consecutive cells. Then `1 NUMS` runs
+  the behavior with two things on the stack — the `1` you pushed, and
+  `NUMS`'s own address underneath it, pushed automatically:
 
-```
-you type   stack after
---------   -----------
-1          [1]
-NUMS       [1, addr]        -- the data address, pushed automatically
-SWAP       [addr, 1]        -- put the index on top
-CELLS      [addr, 2]        -- index 1 means 2 bytes along
-+          [addr+2]         -- the address of element 1
-@          [20]             -- and fetch it
-```
+  ```
+  you type   stack after
+  --------   -----------
+  1          [1]
+  NUMS       [1, addr]        -- the data address, pushed automatically
+  SWAP       [addr, 1]        -- put the index on top
+  CELLS      [addr, 2]        -- index 1 means 2 bytes along
+  +          [addr+2]         -- the address of element 1
+  @          [20]             -- and fetch it
+  ```
 
-`SWAP CELLS + @` is section 5's `index CELLS name +` idiom, in a
-different order because of where the address arrives, doing precisely
-what that section spelled out at length — including the `CELLS`, for
-exactly the reason given there: elements are two bytes apart, so index 1
-is byte 2. The difference is that here it's written **once**, inside the
-defining word, instead of at every use. That's the practical payoff of
-this entire section: `1 NUMS` where you'd otherwise write
-`1 CELLS NUMS +  @`, and no chance of forgetting the `CELLS`.
+- **The Practical Payoff:** `SWAP CELLS + @` is section 5's
+  `index CELLS name +` idiom, in a different order because of where
+  the address arrives, doing precisely what that section spelled out
+  at length — including the `CELLS`, for exactly the reason given
+  there: elements are two bytes apart, so index 1 is byte 2. The
+  difference is that here it's written **once**, inside the defining
+  word, instead of at every use. That's the practical payoff of this
+  entire section: `1 NUMS` where you'd otherwise write
+  `1 CELLS NUMS +  @`, and no chance of forgetting the `CELLS`.
 
-### Taking words back: `FORGET`
+### Taking Words Back: `FORGET`
 
 `FORGET ( "name" -- )` is the eraser. It takes the name that follows
 it, and removes that word **and everything defined after it**,
@@ -4242,63 +4246,68 @@ FORGET ZZZ
 ZZZ .           \ prints 222
 ```
 
-The space really is reclaimed, not merely hidden: the second `ZZZ`
-lands on exactly the same bytes the first one occupied, and `FREE` from
-section 5 reports the room back. That makes `FORGET` the tidy way to
-retract a definition you're still iterating on, rather than piling
-redefinitions up in memory the way [section
-1](#1-what-forth-actually-is)'s newest-first shadowing does.
+- **Space Really Is Reclaimed:** The space really is reclaimed, not
+  merely hidden: the second `ZZZ` lands on exactly the same bytes the
+  first one occupied, and `FREE` from section 5 reports the room back.
+  That makes `FORGET` the tidy way to retract a definition you're
+  still iterating on, rather than piling redefinitions up in memory
+  the way [section 1](#1-what-forth-actually-is)'s newest-first
+  shadowing does.
 
-"And everything defined after it" is not a footnote — it's the main
-thing to understand. The dictionary is a stack of definitions, and
-`FORGET` pops back to a point, so anything you defined later goes too,
-whether or not it had anything to do with the word you named:
+- **Everything Defined After It Goes Too:** "And everything defined
+  after it" is not a footnote — it's the main thing to understand. The
+  dictionary is a stack of definitions, and `FORGET` pops back to a
+  point, so anything you defined later goes too, whether or not it had
+  anything to do with the word you named:
 
-```forth
-: A  1 ;
-: B  2 ;
-: C  3 ;
-FORGET B        \ B and C are both gone now; A survives
-```
+  ```forth
+  : A  1 ;
+  : B  2 ;
+  : C  3 ;
+  FORGET B        \ B and C are both gone now; A survives
+  ```
 
-There is no way to remove `B` alone. If that matters, `VLIST` from
-[section 3](#seeing-what-words-exist-vlist) is the way to see
-what you've actually got left afterward.
+  There is no way to remove `B` alone. If that matters, `VLIST` from
+  [section 3](#seeing-what-words-exist-vlist) is the way to see what
+  you've actually got left afterward.
 
-One real safety behavior, which you'll meet the moment you aim `FORGET`
-at the wrong thing. Naming one of this Forth's own built-in words gets
-you a refusal rather than an obedient disaster:
+- **Built-In Words Refuse to Be Forgotten:** One real safety behavior,
+  which you'll meet the moment you aim `FORGET` at the wrong thing.
+  Naming one of this Forth's own built-in words gets you a refusal
+  rather than an obedient disaster:
 
-```forth
-FORGET DUP      \ prints FORGET: BUILT-IN, REFUSED, and changes nothing
-5 DUP . .       \ prints 5 5 -- DUP is exactly as it was
-```
+  ```forth
+  FORGET DUP      \ prints FORGET: BUILT-IN, REFUSED, and changes nothing
+  5 DUP . .       \ prints 5 5 -- DUP is exactly as it was
+  ```
 
-The reason is worth a sentence, because it's a genuine hazard rather
-than a fussy restriction. Built-in words live in ROM, which is
-physically unchangeable, so forgetting one could not reclaim a single
-byte. Worse, "everything defined after it" would then mean *every word
-you have ever defined in this session* — a `FORGET DUP` typed by
-mistake would silently wipe your entire program to no purpose at all.
-Refusing costs nothing anybody legitimately wants and closes that trap
-completely.
+  The reason is worth a sentence, because it's a genuine hazard rather
+  than a fussy restriction. Built-in words live in ROM, which is
+  physically unchangeable, so forgetting one could not reclaim a
+  single byte. Worse, "everything defined after it" would then mean
+  *every word you have ever defined in this session* — a `FORGET DUP`
+  typed by mistake would silently wipe your entire program to no
+  purpose at all. Refusing costs nothing anybody legitimately wants
+  and closes that trap completely.
 
-A name the dictionary doesn't have at all gets a different message —
-`FORGET: NOT FOUND` — and likewise changes nothing. Both are ordinary
-printed messages, not errors: the rest of your line carries on running
-normally afterward, unlike the resets in section 14.
+  A name the dictionary doesn't have at all gets a different message —
+  `FORGET: NOT FOUND` — and likewise changes nothing. Both are
+  ordinary printed messages, not errors: the rest of your line carries
+  on running normally afterward, unlike the resets in section 14.
 
 ### Summary
 
-The dictionary is a region of memory that grows upward, and `HERE` is
-its frontier. Words that write into that frontier, and one that merely
-reserves space in it. Defining words: `CREATE` makes a word that pushes
-its own data address, and `DOES>` replaces that behaviour with one you
-write, so that everything before `DOES>` runs once per new word and
-everything after it runs every time one of those words is used. And an
-eraser that rewinds the frontier to a named point.
+- **Core Concepts:** The dictionary is a region of memory that grows
+  upward, and `HERE` is its frontier. Words that write into that
+  frontier, and one that merely reserves space in it. Defining words:
+  `CREATE` makes a word that pushes its own data address, and `DOES>`
+  replaces that behaviour with one you write, so that everything
+  before `DOES>` runs once per new word and everything after it runs
+  every time one of those words is used. And an eraser that rewinds
+  the frontier to a named point.
 
-Forth words `HERE`, `,`, `C,`, `ALLOT`, `CREATE`, `DOES>`, `FORGET`.
+- **Forth Words:** `HERE`, `,`, `C,`, `ALLOT`, `CREATE`, `DOES>`,
+  `FORGET`.
 
 ### Exercises
 
