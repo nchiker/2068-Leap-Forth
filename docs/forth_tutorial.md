@@ -3840,7 +3840,7 @@ instead of the screen. 2068-Leap-Forth has the same idea, adapted to the
 way this Forth's dictionary works:
 
 | Word     | Stack effect      | What it does                                                                                       |
-| -------- | ----------------- | -------------------------------------------------------------------------------------------------- |
+| -------- | ------------------- | ------------------------------------------------------------------------------------------------------ |
 | `LPRINT` | `( addr len -- )` | Print a string to the printer, wrapping across multiple printed lines if it's longer than one line |
 | `LLIST`  | `( -- )`          | Print the name of every word you've defined since the machine started, newest first                |
 
@@ -3848,48 +3848,51 @@ way this Forth's dictionary works:
 S" HELLO WORLD" LPRINT
 ```
 
-`LLIST` deliberately does **not** print the 150 built-in words this
-Forth ships with — only what you've personally defined, the same way
-BASIC's `LLIST` only ever showed *your* program and never anything
-built into the ROM. There's also no real equivalent of BASIC's
-line-numbered program listing to reproduce in the first place: once a
-word is compiled, its original source text isn't kept around, so
-`LLIST` shows *what exists*, a list of names, rather than
-re-displaying the exact lines you typed.
+#### What `LLIST` Does and Doesn't Show
 
-That "newest first" is worth seeing rather than just taking on faith,
-and it's the identical order [section 1](#1-what-forth-actually-is)
-already described for how a plain word lookup searches the dictionary
-— `LLIST` isn't inventing a new ordering, it's just walking the same
-chain out loud:
+- **Only Your Own Words:** `LLIST` deliberately does **not** print the
+  150 built-in words this Forth ships with — only what you've
+  personally defined, the same way BASIC's `LLIST` only ever showed
+  *your* program and never anything built into the ROM. There's also
+  no real equivalent of BASIC's line-numbered program listing to
+  reproduce in the first place: once a word is compiled, its original
+  source text isn't kept around, so `LLIST` shows *what exists*, a
+  list of names, rather than re-displaying the exact lines you typed.
 
-```forth
-: DOUBLE  DUP + ;
-: TRIPLE  DUP DUP + + ;
-LLIST          \ prints TRIPLE, then DOUBLE -- most recently defined
-               \ first, exactly the order a plain lookup of either
-               \ name would find them in
-```
+- **Newest First:** That "newest first" is worth seeing rather than
+  just taking on faith, and it's the identical order
+  [section 1](#1-what-forth-actually-is) already described for how a
+  plain word lookup searches the dictionary — `LLIST` isn't inventing
+  a new ordering, it's just walking the same chain out loud:
 
-`VLIST` from [section 3](#seeing-what-words-exist-vlist) is the
-same walk sent to the screen instead, and without the stop at the
-built-ins — `LLIST` for a paper record of your program, `VLIST` for a
-look at the whole dictionary while you're working.
+  ```forth
+  : DOUBLE  DUP + ;
+  : TRIPLE  DUP DUP + + ;
+  LLIST          \ prints TRIPLE, then DOUBLE -- most recently defined
+                 \ first, exactly the order a plain lookup of either
+                 \ name would find them in
+  ```
+
+- **`LLIST` vs. `VLIST`:** `VLIST` from
+  [section 3](#seeing-what-words-exist-vlist) is the same walk sent to
+  the screen instead, and without the stop at the built-ins — `LLIST`
+  for a paper record of your program, `VLIST` for a look at the whole
+  dictionary while you're working.
 
 ### Summary
 
-The same idea as BASIC's printer words, adapted to a dictionary. A
-string goes to the printer as an address and a length, exactly as it
-goes to the screen. `LLIST` lists the names of *your* words only,
-stopping at the built-ins, because a compiled word no longer has any
-source text to reproduce.
+- **Core Concepts:** The same idea as BASIC's printer words, adapted
+  to a dictionary. A string goes to the printer as an address and a
+  length, exactly as it goes to the screen. `LLIST` lists the names of
+  *your* words only, stopping at the built-ins, because a compiled
+  word no longer has any source text to reproduce.
 
-Forth words `LPRINT`, `LLIST`.
+- **Forth Words:** `LPRINT`, `LLIST`.
 
 ### Exercises
 
 These need a printer attached, or an emulator started with printer
-support — see the status note above.
+support enabled.
 
 1. `LPRINT` a string longer than one printed line and confirm it wraps
    onto a second line rather than being cut off.
@@ -3908,7 +3911,6 @@ support — see the status note above.
    printer neither knows nor cares where the pair came from.
 
 ---
-
 ## 16. ULAPlus: a bigger color palette
 
 Every color word covered so far — `INK`, `PAPER`, `BORDER` — picks
