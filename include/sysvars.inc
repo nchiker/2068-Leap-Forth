@@ -1858,87 +1858,107 @@ FRAMES:              DEFS 2           ; 2 bytes
                                 ; $01 for the boolean attributes,
                                 ; $1F for TAB)
 
-; ---- GFX_SPRITE_CAPTURE/GFX_SPRITE_DRAW scratch (Sprites feature,
-; 2026-08-19) ----
-; Both routines run the same nested row/col loop over a rectangle of
-; whole 8x8 character cells, and both call out to GFX_CELL_BITMAP_ADDR/
-; GFX_CELL_ATTR_ADDR partway through each cell — routines that destroy
-; AF/DE/HL per their own contracts — so the loop's own live state
-; (which cell, how far through the buffer) has to survive those calls
-; via memory, not registers, same defensive pattern GFX_FILL/GFX_CPLOT
-; already established for their own scratch state.
-SPRITE_BUF_PTR:      DEFS 2           ; 2 bytes — next unwritten (CAPTURE) or
-                                ; unread (DRAW) byte in the caller's
-                                ; buffer; advances by 9 per cell
-SPRITE_TOP_ROW:      DEFS 1           ; 1 byte — the rectangle's own top
-                                ; character row (0-23), fixed for the
-                                ; whole call
-SPRITE_TOP_COL:      DEFS 1           ; 1 byte — same, top column (0-31)
-SPRITE_W:            DEFS 1           ; 1 byte — width in cells (1-32)
-SPRITE_H:            DEFS 1           ; 1 byte — height in cells (1-24)
-SPRITE_ROW_IDX:      DEFS 1           ; 1 byte — 0-based row offset from
-                                ; SPRITE_TOP_ROW, current cell
-SPRITE_COL_IDX:      DEFS 1           ; 1 byte — same, column offset
+; ---- Sprites, rebuilt fresh for 2068-Forth (this session) ----
+; The inherited 2068-Leap sprite scaffolding above this point (GFX_
+; SPRITE_CAPTURE/DRAW scratch, GRAB/SHOW/HIDE's own BASIC-only slot
+; metadata and 2304-byte image/background buffers) was confirmed dead
+; for this project (no core/*.asm file ever called any GFX_SPRITE_*
+; routine — the capture/draw routines themselves were already deleted
+; as dead code in an earlier ROM-shrink pass) and removed outright
+; rather than reused as-is: its own variable W/H (1-4 cells) format
+; needs GFX_CELL_BITMAP_ADDR-style addressing this project never
+; rebuilt after deleting it, and its buffer sizing was never re-
+; reasoned about for THIS project's own needs, just inherited.
+;
+; SPRITE_DEFINE/SPRITE_SHOW/SPRITE_HIDE (core/sprite.asm) instead use
+; a fixed 16x16-pixel (2x2 character cell) sprite size — deliberately
+; smaller than the old 32x32 cap, chosen to keep the whole feature
+; simple and this RAM budget modest rather than matching BASIC's own
+; assumptions. Each cell is stored as a direct, exact byte-for-byte
+; copy of that cell's own 8 bitmap scanlines plus its 1 attribute byte
+; (9 bytes/cell — the same per-cell shape the old, deleted GFX_SPRITE_
+; CAPTURE/DRAW used, chosen again here for the same reason: a straight
+; memory copy needs no per-pixel OR/AND masking at all, and — unlike a
+; masked/transparent sprite — HIDE can restore the exact prior screen
+; content, on AND off bits alike, which GFX_WRITE_PIXEL's own OR-only
+; "set" mode has no way to do one pixel at a time).
+SPRITE_SLOT_MAX      EQU 4           ; number of slots (0-3) — smaller
+                                    ; than the old 8, matching the
+                                    ; smaller per-slot size below; both
+                                    ; numbers can grow later if a real
+                                    ; use ever needs more, nothing here
+                                    ; assumes either is final
+SPRITE_CELLS         EQU 2           ; fixed sprite size: 2x2 cells
+SPRITE_SLOT_BYTES    EQU SPRITE_CELLS * SPRITE_CELLS * 9   ; 36
 
-; ---- BASIC-level sprite slots (2026-08-19) — SPRITE GRAB/SHOW/HIDE ----
-; Fixed slots, not arrays — this project's BASIC has no array/named-
-; buffer support yet (see docs/language design), so a small fixed
-; number of numbered slots is the buildable-now option, same pragmatic
-; choice EXIT FOR made picking classic NEXT over SuperBASIC's END FOR.
-; Each slot is capped at SPRITE_CELL_MAX x SPRITE_CELL_MAX whole 8x8
-; cells (4x4 = 32x32 pixels), fixing every slot's buffer at exactly
-; SPRITE_SLOT_BYTES regardless of what GRAB actually captures (a
-; smaller w/h just leaves the unused tail of the buffer alone).
-SPRITE_SLOT_MAX     EQU 8       ; number of slots (0-7). Doubled from
-                                ; 4 (2026-08-23) — free in ROM terms
-                                ; (the slot-offset math is a `djnz`
-                                ; loop, not unrolled per-slot code, and
-                                ; GRAB/SHOW/HIDE/MOVE/HIT all already
-                                ; take the slot count as a runtime
-                                ; bound, not a compile-time one), so
-                                ; the only real cost is RAM. The large
-                                ; image/background buffers now live at
-                                ; $E800-$F0FF; only the small per-slot
-                                ; metadata remains below PROG_AREA_START.
-SPRITE_SLOT_BYTES   EQU 144     ; SPRITE_CELL_MAX*SPRITE_CELL_MAX*9
-                                ; (GFX_SPRITE_CAPTURE/DRAW's own 9-
-                                ; bytes-per-cell buffer format)
+SPRITE_SLOT_DEFINED: DEFS SPRITE_SLOT_MAX   ; 4 bytes (1/slot) — has
+                                   ; SPRITE-DEFINE been called for this
+                                   ; slot yet (SHOW refuses otherwise)
+SPRITE_SLOT_SHOWN:   DEFS SPRITE_SLOT_MAX   ; 4 bytes (1/slot) —
+                                   ; currently drawn on screen (HIDE
+                                   ; refuses otherwise; SHOW refuses if
+                                   ; already shown — HIDE then SHOW to
+                                   ; reposition a shown sprite)
+SPRITE_SLOT_ROW:     DEFS SPRITE_SLOT_MAX   ; 4 bytes (1/slot) — top-left
+                                   ; character row last SHOWN at,
+                                   ; meaningful only while SHOWN (HIDE
+                                   ; needs this to know where the saved
+                                   ; background goes back)
+SPRITE_SLOT_COL:     DEFS SPRITE_SLOT_MAX   ; 4 bytes (1/slot) — same,
+                                   ; column
 
-SPRITE_SLOT_DEFINED: DEFS 8           ; 8 bytes (1/slot) — has GRAB been
-                                ; called for this slot yet (SHOW
-                                ; refuses otherwise)
-SPRITE_SLOT_SHOWN:   DEFS 8           ; 8 bytes (1/slot) — currently drawn
-                                ; on screen (HIDE/MOVE refuse
-                                ; otherwise; SHOW refuses if already
-                                ; shown — call MOVE, or HIDE then SHOW,
-                                ; to reposition a shown sprite)
-                                ; as given to the slot's own GRAB
-                                ; (1-4)
-                                ; (1-4)
-                                ; row, meaningful only while SHOWN
-                                ; (HIDE/MOVE need this to know where
-                                ; the saved background goes back)
-SPRITE_DISPLAY_DEPTH: DEFS 1          ; number of slots currently shown
-                                ; save-under restoration must pop these
-                                ; in reverse order to preserve overlaps
-; The two large buffers are persistent across EXROM calls, so they live in
-; chunk 7, which this project never pages. This returns 2304 bytes below
-; PROG_AREA_START to BASIC while keeping the buffers visible to the EXROM-
-; resident sprite driver. Their $F100 end leaves $0E00 (3584) bytes before
-; the machine stack at $FF00.
-SPRITE_SLOT_IMG_BUF  EQU $E800         ; 1152 bytes — captured sprite
-                                ; image itself (SPRITE_SLOT_MAX *
-                                ; SPRITE_SLOT_BYTES), filled once per
-                                ; GRAB, read (never written) by every
-                                ; SHOW/MOVE
-SPRITE_SLOT_BG_BUF   EQU $EC80         ; 1152 bytes — saved background
-                                ; under the sprite, captured fresh by
-                                ; each SHOW/MOVE, consumed by the
-                                ; matching HIDE/MOVE
+SPRITE_SLOT_IMG_BUF  EQU $E800         ; 144 bytes — captured sprite
+                                   ; image itself (SPRITE_SLOT_MAX *
+                                   ; SPRITE_SLOT_BYTES), filled once
+                                   ; per SPRITE-DEFINE, read (never
+                                   ; written) by every SHOW
+SPRITE_SLOT_BG_BUF   EQU SPRITE_SLOT_IMG_BUF + (SPRITE_SLOT_MAX * SPRITE_SLOT_BYTES)
+                                   ; 144 bytes — saved background under
+                                   ; the sprite, captured fresh by each
+                                   ; SHOW, consumed by the matching HIDE
 
-    ASSERT SPRITE_SLOT_IMG_BUF + (SPRITE_SLOT_MAX * SPRITE_SLOT_BYTES) == SPRITE_SLOT_BG_BUF
-    ASSERT SPRITE_SLOT_BG_BUF + (SPRITE_SLOT_MAX * SPRITE_SLOT_BYTES) == $F100
-    ASSERT $F100 <= $FF00              ; preserve machine-stack headroom
+    ASSERT SPRITE_SLOT_BG_BUF + (SPRITE_SLOT_MAX * SPRITE_SLOT_BYTES) < $F000
+                                   ; stays comfortably below DICT_RAM_
+                                   ; CEILING (core/free.asm) — same
+                                   ; headroom convention LOADTEXT_BUF
+                                   ; and the extension-registry region
+                                   ; already established, even though
+                                   ; nothing actually enforces that
+                                   ; ceiling against HERE today (core/
+                                   ; dictspace.asm's own header notes
+                                   ; this gap)
+
+; ---- rom/graphics_exrom.asm's own sprite transfer scratch ----
+; Staged by core/sprite.asm's Home-resident words before paging chunk
+; 5 in — same "plain memory, not registers" reasoning RECT/POLYGON's
+; own state above already documents.
+SPRITE_OP_SLOT:      DEFS 1           ; 1 byte — which slot (0-3)
+SPRITE_OP_ROW:       DEFS 1           ; 1 byte — top-left character row
+SPRITE_OP_COL:       DEFS 1           ; 1 byte — top-left character column
+SPRITE_OP_DIR:       DEFS 1           ; 1 byte — 0 = capture (screen ->
+                                   ; buffer), nonzero = blit (buffer ->
+                                   ; screen)
+SPRITE_OP_BUF:       DEFS 2           ; 2 bytes — base address of the
+                                   ; buffer this transfer reads/writes
+                                   ; (IMG_BUF or BG_BUF, slot-offset
+                                   ; already applied) — set by the
+                                   ; Home-side word, not derived
+                                   ; EXROM-side, so core/sprite.asm's
+                                   ; own three words stay the only
+                                   ; place that decides which buffer
+                                   ; a given operation means
+SPRITE_OP_CELL:      DEFS 1           ; 1 byte — which of the 2x2
+                                   ; cells this transfer is on (0-3),
+                                   ; EXROM-side loop cursor only
+SPRITE_OP_PTR:       DEFS 2           ; 2 bytes — next byte in
+                                   ; SPRITE_OP_BUF's own buffer to
+                                   ; transfer, EXROM-side loop cursor
+                                   ; only, advances by 9 per cell
+SPRITE_CELL_ROW:     DEFS 1           ; 1 byte — this cell's own
+                                   ; absolute character row (SPRITE_
+                                   ; OP_ROW + this cell's row offset),
+                                   ; EXROM-side loop cursor only
+SPRITE_CELL_COL:     DEFS 1           ; 1 byte — same, column
 
 ; Parse-time scratch for GRAB/SHOW's own multi-argument grammar (slot,
 ; row, col[, w, h]) — each argument gets evaluated and written here

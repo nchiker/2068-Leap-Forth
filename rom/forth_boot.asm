@@ -147,6 +147,9 @@ GRAPHICS_HOME_TABLE:
     jp   GFX_SET_ATTR             ; slot 1 — A=attr, B=row, C=col
     jp   GFX_LINE                 ; slot 2 — no register args; reads
                                   ; GFX_LINE_X0/Y0/X1/Y1/ATTR/OVER
+    jp   GFX_ROW_BASE_ADDR        ; slot 3 — A=row -> HL=that row's
+                                  ; bitmap base address (scanline 0)
+    jp   GFX_CELL_ATTR_ADDR       ; slot 4 — B=row, C=col -> HL=addr
 
 ; ============================================================================
 ; COLD_START
@@ -554,6 +557,8 @@ DICT_CHAIN_POINT DEFL H_NORMAL
 DICT_CHAIN_POINT DEFL H_RECT
     INCLUDE "core/polygon.asm"
 DICT_CHAIN_POINT DEFL H_POLYGON
+    INCLUDE "core/sprite.asm"
+DICT_CHAIN_POINT DEFL H_SPRITEHIDE
     INCLUDE "core/key.asm"
 DICT_CHAIN_POINT DEFL H_BREAKQ
     INCLUDE "core/mathfn.asm"

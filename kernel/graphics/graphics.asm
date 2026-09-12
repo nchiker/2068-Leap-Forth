@@ -159,10 +159,20 @@ GFX_PAINT_ATTR:
 
 ; ============================================================================
 ; GFX_SPRITE_INVALIDATE
-; Forget displayed/save-under state before a global screen transformation.
-; Captured images and dimensions remain defined and may be SHOWn again.
+; Forget displayed/save-under state before a global screen transformation
+; (CLS, mode switch) — the screen no longer shows whatever a SHOWn
+; slot's own saved background/position described, so a later SPRITE-
+; HIDE must not try to "restore" it. Captured images (SPRITE_SLOT_
+; DEFINED) remain defined and may be SPRITE-SHOWn again.
+;
+; SPRITE_SLOT_MAX/SPRITE_SLOT_SHOWN are core/sprite.asm's own fresh
+; 2068-Forth design (this session) — smaller (4 slots, not 8) than the
+; inherited 2068-Leap scaffolding this routine originally reset, and
+; that design's own SPRITE_DISPLAY_DEPTH z-order counter has no
+; equivalent here: each slot restores its own single saved background
+; directly, no overlap-ordering stack to unwind.
 ; In: none
-; Out: SPRITE_SLOT_SHOWN[0..7]=0, SPRITE_DISPLAY_DEPTH=0
+; Out: SPRITE_SLOT_SHOWN[0..SPRITE_SLOT_MAX-1] = 0
 ; Destroys: AF, B, HL
 ; ============================================================================
 GFX_SPRITE_INVALIDATE:
@@ -173,7 +183,6 @@ GFX_SPRITE_INVALIDATE:
     ld   (hl), a
     inc  hl
     djnz .loop
-    ld   (SPRITE_DISPLAY_DEPTH), a
     ret
 
 ; ============================================================================

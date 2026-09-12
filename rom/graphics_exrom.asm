@@ -64,6 +64,9 @@ GRAPHICS_HOME_SET_ATTR    EQU $0103   ; slot 1 — A=attr,B=row,C=col
 GRAPHICS_HOME_LINE        EQU $0106   ; slot 2 — no register args;
                                      ; reads GFX_LINE_X0/Y0/X1/Y1/
                                      ; ATTR/OVER
+GRAPHICS_HOME_ROW_BASE_ADDR EQU $0109 ; slot 3 — A=row -> HL=bitmap
+                                     ; base address (scanline 0)
+GRAPHICS_HOME_CELL_ATTR_ADDR EQU $010C ; slot 4 — B=row,C=col -> HL=addr
 
 ; ============================================================================
 ; Service table — FIXED SIZE (GRAPHICS_EXROM_MAX_SLOTS slots, see this
@@ -77,10 +80,10 @@ GRAPHICS_EXROM_MAX_SLOTS EQU 8
 GRAPHICS_EXROM_TABLE:
     jp   RECT_FILL_IMPL              ; slot 0 ($A000) — RECT
     jp   POLY_DRAW_IMPL              ; slot 1 ($A003) — POLYGON (outline)
-    jp   GRAPHICS_EXROM_UNIMPLEMENTED ; slot 2 — reserved (POLYGON fill)
-    jp   GRAPHICS_EXROM_UNIMPLEMENTED ; slot 3 — reserved (Sprites)
-    jp   GRAPHICS_EXROM_UNIMPLEMENTED ; slot 4 — reserved
-    jp   GRAPHICS_EXROM_UNIMPLEMENTED ; slot 5 — reserved
+    jp   SPRITE_DEFINE_IMPL          ; slot 2 ($A006) — SPRITE-DEFINE
+    jp   SPRITE_SHOW_IMPL            ; slot 3 ($A009) — SPRITE-SHOW
+    jp   SPRITE_HIDE_IMPL            ; slot 4 ($A00C) — SPRITE-HIDE
+    jp   GRAPHICS_EXROM_UNIMPLEMENTED ; slot 5 — reserved (POLYGON fill)
     jp   GRAPHICS_EXROM_UNIMPLEMENTED ; slot 6 — reserved
     jp   GRAPHICS_EXROM_UNIMPLEMENTED ; slot 7 — reserved
     ASSERT $ - GRAPHICS_EXROM_TABLE == GRAPHICS_EXROM_MAX_SLOTS * 3
@@ -264,6 +267,322 @@ POLY_DRAW_IMPL:
     cp   b
     jr   nz, .edge_loop              ; i < count: draw the next edge
 .done:
+    ret
+
+; ============================================================================
+; SPRITE_TRANSFER_IMPL (internal — not a service-table slot itself)
+; Shared core behind SPRITE_DEFINE_IMPL/SPRITE_SHOW_IMPL/SPRITE_HIDE_
+; IMPL below: copies all SPRITE_CELLS*SPRITE_CELLS cells of an exact,
+; direct byte-for-byte cell image (8 bitmap scanlines + 1 attribute
+; byte per cell, 9 bytes — see include/sysvars.inc's own SPRITE_SLOT_
+; BYTES header for why a raw copy, not a per-pixel OR/AND, is the
+; right shape here) between the screen at (SPRITE_OP_ROW,SPRITE_OP_
+; COL) and SPRITE_OP_BUF, direction set by SPRITE_OP_DIR.
+;
+; Cell (row,col) offsets come from a small fixed table
+; (SPRITE_CELL_OFFSETS) rather than computed via div/mod on SPRITE_
+; CELLS — clearer to read and just as cheap for a 2x2 grid.
+;
+; GFX_ROW_BASE_ADDR/GFX_CELL_ATTR_ADDR (via their own Home veneers)
+; both destroy DE per their own documented contracts, so SPRITE_OP_PTR
+; is always reloaded fresh from memory immediately after either call,
+; never held across one — same "value must survive a call -> use
+; memory, not a register" pattern this file's own RECT/POLYGON code
+; already established.
+; In:  SPRITE_OP_ROW/COL (top-left character position, 0-23/0-31 —
+;      caller's responsibility that +1 stays in range, no bounds
+;      check here, matching this project's established scope), SPRITE_
+;      OP_BUF (buffer base address), SPRITE_OP_DIR (0 = capture screen
+;      -> buffer, nonzero = blit buffer -> screen)
+; Out: none
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+SPRITE_TRANSFER_IMPL:
+    ld   hl, (SPRITE_OP_BUF)
+    ld   (SPRITE_OP_PTR), hl
+    xor  a
+    ld   (SPRITE_OP_CELL), a
+.cell_loop:
+    ld   a, (SPRITE_OP_CELL)
+    ld   l, a
+    ld   h, 0
+    add  hl, hl                      ; hl = cell*2 (2 bytes/table entry)
+    ld   de, SPRITE_CELL_OFFSETS
+    add  hl, de
+    ld   a, (hl)                     ; row offset
+    ld   d, a
+    inc  hl
+    ld   a, (hl)                     ; col offset
+    ld   e, a                        ; D = row offset, E = col offset
+
+    ld   a, (SPRITE_OP_ROW)
+    add  a, d
+    ld   (SPRITE_CELL_ROW), a
+    ld   a, (SPRITE_OP_COL)
+    add  a, e
+    ld   (SPRITE_CELL_COL), a
+
+    ; ---- this cell's bitmap address, scanline 0 ----
+    ld   a, (SPRITE_CELL_ROW)
+    call GRAPHICS_HOME_ROW_BASE_ADDR ; hl = row base (destroys DE)
+    ld   a, (SPRITE_CELL_COL)
+    ld   e, a
+    ld   d, 0
+    add  hl, de                      ; hl = bitmap address, scanline 0
+
+    ld   b, 8                        ; 8 scanlines/cell
+.scan_loop:
+    ld   de, (SPRITE_OP_PTR)         ; reloaded fresh every iteration
+    ld   a, (SPRITE_OP_DIR)
+    or   a
+    jr   nz, .blit_scan
+    ld   a, (hl)                     ; capture: screen -> buffer
+    ld   (de), a
+    jr   .scan_done
+.blit_scan:
+    ld   a, (de)                     ; blit: buffer -> screen
+    ld   (hl), a
+.scan_done:
+    inc  de
+    ld   (SPRITE_OP_PTR), de
+    inc  h                           ; next scanline: +256 (high byte
+                                     ; only — see this file's own RECT/
+                                     ; POLYGON header precedent citing
+                                     ; the same convention)
+    djnz .scan_loop
+
+    ; ---- attribute byte, 9th byte of this cell ----
+    ld   a, (SPRITE_CELL_ROW)
+    ld   b, a
+    ld   a, (SPRITE_CELL_COL)
+    ld   c, a
+    call GRAPHICS_HOME_CELL_ATTR_ADDR ; hl = attr address (destroys DE)
+    ld   de, (SPRITE_OP_PTR)          ; reloaded fresh, see header
+    ld   a, (SPRITE_OP_DIR)
+    or   a
+    jr   nz, .blit_attr
+    ld   a, (hl)
+    ld   (de), a
+    jr   .attr_done
+.blit_attr:
+    ld   a, (de)
+    ld   (hl), a
+.attr_done:
+    inc  de
+    ld   (SPRITE_OP_PTR), de
+
+    ld   a, (SPRITE_OP_CELL)
+    inc  a
+    ld   (SPRITE_OP_CELL), a
+    cp   SPRITE_CELLS * SPRITE_CELLS
+    jr   c, .cell_loop
+    ret
+
+SPRITE_CELL_OFFSETS: DB 0,0, 0,1, 1,0, 1,1
+
+; ============================================================================
+; SPRITE_DEFINE_IMPL
+; Captures the SPRITE_CELLS x SPRITE_CELLS screen area at (SPRITE_OP_
+; ROW,SPRITE_OP_COL) into slot SPRITE_OP_SLOT's own image buffer —
+; SPRITE-DEFINE's actual mechanism.
+; In:  SPRITE_OP_SLOT (0-SPRITE_SLOT_MAX-1), SPRITE_OP_ROW/COL — all
+;      pre-set by the Home-side SPRITE-DEFINE word
+; Out: none
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+SPRITE_DEFINE_IMPL:
+    ld   a, (SPRITE_OP_SLOT)
+    cp   SPRITE_SLOT_MAX
+    ret  nc                          ; out-of-range slot: silently do
+                                     ; nothing, same convention as
+                                     ; RECT/POLYGON's own out-of-range
+                                     ; handling
+    call SPRITE_BUF_ADDR_IMG         ; hl = this slot's own image buffer
+    ld   (SPRITE_OP_BUF), hl
+    xor  a
+    ld   (SPRITE_OP_DIR), a          ; 0 = capture
+    call SPRITE_TRANSFER_IMPL
+
+    ld   a, (SPRITE_OP_SLOT)
+    ld   hl, SPRITE_SLOT_DEFINED
+    ld   e, a
+    ld   d, 0
+    add  hl, de
+    ld   (hl), 1
+    ret
+
+; ============================================================================
+; SPRITE_SHOW_IMPL
+; Saves the current screen content at (SPRITE_OP_ROW,SPRITE_OP_COL)
+; into slot SPRITE_OP_SLOT's own background buffer, then blits that
+; slot's image over it — SPRITE-SHOW's actual mechanism. Refuses (does
+; nothing) if the slot was never DEFINEd, or is already SHOWN — same
+; "HIDE then SHOW to reposition" convention include/sysvars.inc's own
+; SPRITE_SLOT_SHOWN header already documents.
+; In:  SPRITE_OP_SLOT, SPRITE_OP_ROW/COL — pre-set by the Home-side
+;      SPRITE-SHOW word
+; Out: none
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+SPRITE_SHOW_IMPL:
+    ld   a, (SPRITE_OP_SLOT)
+    cp   SPRITE_SLOT_MAX
+    ret  nc
+
+    call SPRITE_FLAG_ADDR_DEFINED
+    ld   a, (hl)
+    or   a
+    ret  z                           ; never DEFINEd: refuse
+
+    call SPRITE_FLAG_ADDR_SHOWN
+    ld   a, (hl)
+    or   a
+    ret  nz                          ; already SHOWN: refuse
+
+    ; ---- save background ----
+    call SPRITE_BUF_ADDR_BG
+    ld   (SPRITE_OP_BUF), hl
+    xor  a
+    ld   (SPRITE_OP_DIR), a          ; 0 = capture
+    call SPRITE_TRANSFER_IMPL
+
+    ; ---- blit the sprite's own image on top ----
+    call SPRITE_BUF_ADDR_IMG
+    ld   (SPRITE_OP_BUF), hl
+    ld   a, 1
+    ld   (SPRITE_OP_DIR), a          ; nonzero = blit
+    call SPRITE_TRANSFER_IMPL
+
+    ; ---- remember where, and mark shown ----
+    ld   a, (SPRITE_OP_SLOT)
+    ld   hl, SPRITE_SLOT_ROW
+    ld   e, a
+    ld   d, 0
+    add  hl, de
+    ld   a, (SPRITE_OP_ROW)
+    ld   (hl), a
+    ld   a, (SPRITE_OP_SLOT)
+    ld   hl, SPRITE_SLOT_COL
+    ld   e, a
+    ld   d, 0
+    add  hl, de
+    ld   a, (SPRITE_OP_COL)
+    ld   (hl), a
+
+    call SPRITE_FLAG_ADDR_SHOWN
+    ld   (hl), 1
+    ret
+
+; ============================================================================
+; SPRITE_HIDE_IMPL
+; Restores slot SPRITE_OP_SLOT's own saved background over wherever it
+; was last SHOWN — SPRITE-HIDE's actual mechanism. Refuses (does
+; nothing) if the slot isn't currently SHOWN.
+; In:  SPRITE_OP_SLOT — pre-set by the Home-side SPRITE-HIDE word
+;      (SPRITE_OP_ROW/COL are NOT inputs here — HIDE recalls the
+;      position SHOW itself recorded, so a caller only ever needs to
+;      name the slot)
+; Out: none
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+SPRITE_HIDE_IMPL:
+    ld   a, (SPRITE_OP_SLOT)
+    cp   SPRITE_SLOT_MAX
+    ret  nc
+
+    call SPRITE_FLAG_ADDR_SHOWN
+    ld   a, (hl)
+    or   a
+    ret  z                           ; not currently SHOWN: refuse
+
+    ld   a, (SPRITE_OP_SLOT)
+    ld   hl, SPRITE_SLOT_ROW
+    ld   e, a
+    ld   d, 0
+    add  hl, de
+    ld   a, (hl)
+    ld   (SPRITE_OP_ROW), a
+    ld   a, (SPRITE_OP_SLOT)
+    ld   hl, SPRITE_SLOT_COL
+    ld   e, a
+    ld   d, 0
+    add  hl, de
+    ld   a, (hl)
+    ld   (SPRITE_OP_COL), a
+
+    call SPRITE_BUF_ADDR_BG
+    ld   (SPRITE_OP_BUF), hl
+    ld   a, 1
+    ld   (SPRITE_OP_DIR), a          ; nonzero = blit (restore)
+    call SPRITE_TRANSFER_IMPL
+
+    call SPRITE_FLAG_ADDR_SHOWN
+    xor  a
+    ld   (hl), a
+    ret
+
+; ============================================================================
+; SPRITE_BUF_ADDR_IMG / SPRITE_BUF_ADDR_BG / SPRITE_FLAG_ADDR_DEFINED /
+; SPRITE_FLAG_ADDR_SHOWN (internal — not service-table slots)
+; Small address helpers shared by the three services above — SPRITE_
+; OP_SLOT's own offset into whichever fixed array/buffer is needed.
+; In:  SPRITE_OP_SLOT
+; Out: HL = the address
+; Destroys: AF, DE, HL
+; ============================================================================
+SPRITE_BUF_ADDR_IMG:
+    ld   a, (SPRITE_OP_SLOT)
+    ld   hl, SPRITE_SLOT_BYTES
+    call SPRITE_MUL_A_HL
+    ld   de, SPRITE_SLOT_IMG_BUF
+    add  hl, de
+    ret
+
+SPRITE_BUF_ADDR_BG:
+    ld   a, (SPRITE_OP_SLOT)
+    ld   hl, SPRITE_SLOT_BYTES
+    call SPRITE_MUL_A_HL
+    ld   de, SPRITE_SLOT_BG_BUF
+    add  hl, de
+    ret
+
+SPRITE_FLAG_ADDR_DEFINED:
+    ld   a, (SPRITE_OP_SLOT)
+    ld   e, a
+    ld   d, 0
+    ld   hl, SPRITE_SLOT_DEFINED
+    add  hl, de
+    ret
+
+SPRITE_FLAG_ADDR_SHOWN:
+    ld   a, (SPRITE_OP_SLOT)
+    ld   e, a
+    ld   d, 0
+    ld   hl, SPRITE_SLOT_SHOWN
+    add  hl, de
+    ret
+
+; ============================================================================
+; SPRITE_MUL_A_HL (internal — not a service-table slot)
+; HL = A * HL — a plain repeated-add multiply, not a shift-based one:
+; A is always SPRITE_OP_SLOT (0 to SPRITE_SLOT_MAX-1, at most 3 today),
+; so the loop runs at most 3 times and clarity wins over a shift/add
+; sequence that would only pay for itself at much larger A.
+; In:  A = multiplier (small), HL = multiplicand (SPRITE_SLOT_BYTES)
+; Out: HL = A * HL
+; Destroys: AF, DE
+; ============================================================================
+SPRITE_MUL_A_HL:
+    ld   e, l
+    ld   d, h                        ; DE = the original multiplicand
+    ld   hl, 0                       ; HL = running total, starts at 0
+    or   a
+    ret  z                           ; A=0: HL is already the correct
+                                     ; 0*multiplicand, nothing to add
+.loop:
+    add  hl, de
+    dec  a
+    jr   nz, .loop
     ret
 
     DS   $C000 - $, $FF             ; pad to the end of this 8K image
