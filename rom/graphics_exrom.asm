@@ -56,9 +56,7 @@
     ORG $A000
 
     INCLUDE "include/sysvars.inc"
-
-GRAPHICS_EXROM_MAGIC EQU $F0
-GRAPHICS_EXROM_ABI   EQU 1
+    INCLUDE "include/graphics_exrom_abi.inc"
 
 ; ---- Home-side stable call targets (rom/forth_boot.asm, $0100) ----
 ; Generated, not hand-typed — see this file's own header above.
@@ -71,8 +69,9 @@ GRAPHICS_EXROM_ABI   EQU 1
 ; defensive stub, not expected to ever actually be reached, since a
 ; Home-side caller only ever calls a slot number it was built knowing
 ; about.
+; GRAPHICS_EXROM_MAX_SLOTS itself lives in include/graphics_exrom_abi.inc
+; now (INCLUDEd above) — see that file's own header for why.
 ; ============================================================================
-GRAPHICS_EXROM_MAX_SLOTS EQU 8
 GRAPHICS_EXROM_TABLE:
     jp   RECT_FILL_IMPL              ; slot 0 ($A000) — RECT
     jp   POLY_DRAW_IMPL              ; slot 1 ($A003) — POLYGON (outline)
