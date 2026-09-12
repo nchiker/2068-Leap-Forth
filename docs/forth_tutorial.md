@@ -3180,6 +3180,8 @@ Sections 4 and 5 introduced `VARIABLE`/`CONSTANT` and the comparison
 words separately. Here's a slightly larger example putting several
 pieces together: a simple counter that stops at a limit.
 
+#### A Counter That Stops at a Limit
+
 ```forth
 VARIABLE COUNT
 0 COUNT !
@@ -3193,25 +3195,27 @@ TICK TICK TICK
 DONE? .          \ prints -1 (true) -- now ticked 6 times, past 5
 ```
 
-Nothing here is a new word. It's the same `VARIABLE`, `@`, `!`, `+`,
-`>`, and `.` from earlier sections, combined the way a real program
-would combine them.
+- **Nothing New:** Nothing here is a new word. It's the same
+  `VARIABLE`, `@`, `!`, `+`, `>`, and `.` from earlier sections,
+  combined the way a real program would combine them.
 
-Trace `TICK` once, since it does two things in one line that are easy
-to gloss over: `COUNT @ 1 +` reads the stored count and adds one — an
-ordinary `VARIABLE` read, exactly like `SCORE @` in section 5 — and
-then `DUP COUNT !` makes a spare copy *before* storing, the same
-"copy before you consume it" habit as section 1's `OVER OVER` example,
-because `!` would otherwise eat the very value `TICK` is supposed to
-leave behind for whoever called it.
+- **Tracing `TICK`:** `TICK` does two things in one line that are easy
+  to gloss over: `COUNT @ 1 +` reads the stored count and adds one —
+  an ordinary `VARIABLE` read, exactly like `SCORE @` in section 5 —
+  and then `DUP COUNT !` makes a spare copy *before* storing, the same
+  "copy before you consume it" habit as section 1's `OVER OVER`
+  example, because `!` would otherwise eat the very value `TICK` is
+  supposed to leave behind for whoever called it.
 
-```
-you type   stack after   COUNT afterward
---------   -----------   ---------------
-TICK       [1]           1     -- COUNT @ was 0, +1, DUP'd, then stored
-TICK       [2]           2
-TICK       [3]           3
-```
+  ```
+  you type   stack after   COUNT afterward
+  --------   -----------   ---------------
+  TICK       [1]           1     -- COUNT @ was 0, +1, DUP'd, then stored
+  TICK       [2]           2
+  TICK       [3]           3
+  ```
+
+#### Remembering the Best of Several Scores
 
 A second example puts the same pieces to slightly more realistic
 use — remembering the best of several scores, rather than just
@@ -3228,30 +3232,32 @@ VARIABLE HIGH
 75 MAYBE-RECORD   HIGH @ .    \ prints 75 -- a new high score
 ```
 
-This is the `?PRINT` shape from [section
-7](#7-making-decisions-if-else-then) again: `DUP` makes a spare copy
-of the score before `HIGH @ >` consumes one of them to test it, so if
-the test passes, the *original* score is still there for `HIGH !` to
-store. Skip the `DUP` and `MAYBE-RECORD` would have nothing left to
-record with by the time it decided the score was worth keeping.
+- **The Same Shape as `?PRINT`:** This is the `?PRINT` shape from
+  [section 7](#7-making-decisions-if-else-then) again: `DUP` makes a
+  spare copy of the score before `HIGH @ >` consumes one of them to
+  test it, so if the test passes, the *original* score is still there
+  for `HIGH !` to store. Skip the `DUP` and `MAYBE-RECORD` would have
+  nothing left to record with by the time it decided the score was
+  worth keeping.
 
-Worth writing out longhand once, because that combination of copying,
-testing, branching and tidying up is the pattern half this document has
-been building toward. But "keep the larger of two numbers" is common
-enough to have its own word, and [section 4](#4-numbers)'s `MAX` does
-the entire job in one:
+- **A Shorter Spelling:** Worth writing out longhand once, because
+  that combination of copying, testing, branching and tidying up is
+  the pattern half this document has been building toward. But "keep
+  the larger of two numbers" is common enough to have its own word,
+  and [section 4](#4-numbers)'s `MAX` does the entire job in one:
 
-```forth
-: MAYBE-RECORD  ( score -- )  HIGH @ MAX HIGH ! ;
-```
+  ```forth
+  : MAYBE-RECORD  ( score -- )  HIGH @ MAX HIGH ! ;
+  ```
 
-`HIGH @` puts the current record on top of the incoming score, `MAX`
-throws away whichever of the two is smaller, and `HIGH !` stores what's
-left. No `DUP`, no `IF`, no `DROP`, and nothing to get wrong on the
-branch you weren't thinking about. Both versions behave identically on
-the three lines above; the second is what you'd actually write.
+  `HIGH @` puts the current record on top of the incoming score, `MAX`
+  throws away whichever of the two is smaller, and `HIGH !` stores
+  what's left. No `DUP`, no `IF`, no `DROP`, and nothing to get wrong
+  on the branch you weren't thinking about. Both versions behave
+  identically on the three lines above; the second is what you'd
+  actually write.
 
-### Choosing a word to run at runtime
+### Choosing a Word to Run at Runtime
 
 [Section 2](#2-defining-your-own-words) introduced `'` and `EXECUTE`
 with an example that deliberately did nothing more than call `DOUBLE`
@@ -3273,29 +3279,36 @@ VARIABLE OP
 5 OP @ EXECUTE .      \ prints 4 -- same line, OP now holds DOWN's xt
 ```
 
-`OP` is an ordinary `VARIABLE`, storing an ordinary number — it just so
-happens that the number is an execution token instead of a score or a
-count. `' UP OP !` looks `UP` up and stores its `xt`; `OP @ EXECUTE`
-reads that `xt` back and calls whatever it identifies. The line that
-runs — `OP @ EXECUTE .` — never changes; what it *does* changes,
-because what's sitting in `OP` changed underneath it. Compare that with
-`MAYBE-RECORD` just above: there, an `IF` chose between two fixed
-actions written directly into the definition. Here, the choice itself
-is data, decided once (by whatever stores an `xt` into `OP`) and used
-somewhere else entirely (by whatever later runs `OP @ EXECUTE`) — the
-two don't have to be the same word, or even know about each other,
-which is exactly what "pass a word around as a value" was promising
-back in section 2.
+- **Reading This Example:** `OP` is an ordinary `VARIABLE`, storing an
+  ordinary number — it just so happens that the number is an execution
+  token instead of a score or a count. `' UP OP !` looks `UP` up and
+  stores its `xt`; `OP @ EXECUTE` reads that `xt` back and calls
+  whatever it identifies. The line that runs — `OP @ EXECUTE .` —
+  never changes; what it *does* changes, because what's sitting in
+  `OP` changed underneath it.
+
+- **Contrast With `MAYBE-RECORD`:** Compare that with `MAYBE-RECORD`
+  just above: there, an `IF` chose between two fixed actions written
+  directly into the definition. Here, the choice itself is data,
+  decided once (by whatever stores an `xt` into `OP`) and used
+  somewhere else entirely (by whatever later runs `OP @ EXECUTE`) —
+  the two don't have to be the same word, or even know about each
+  other, which is exactly what "pass a word around as a value" was
+  promising back in section 2.
 
 ### Summary
 
-No new words except a reminder of `'` and `EXECUTE` from section 2.
-`VARIABLE`, `@`, `!`, `DUP`, `+`, `>`, `MAX` and `IF`/`ELSE`/`THEN` from
-earlier sections, combined the way a real program combines them. The
-habit of copying a value before something consumes it, the habit of
-looking for a word that does the whole job before writing the long
-version, and storing an execution token in a `VARIABLE` to choose which
-word runs at runtime instead of hard-coding the choice with `IF`.
+- **Core Concepts:** No new words except a reminder of `'` and
+  `EXECUTE` from section 2. `VARIABLE`, `@`, `!`, `DUP`, `+`, `>`,
+  `MAX` and `IF`/`ELSE`/`THEN` from earlier sections, combined the way
+  a real program combines them. The habit of copying a value before
+  something consumes it, the habit of looking for a word that does
+  the whole job before writing the long version, and storing an
+  execution token in a `VARIABLE` to choose which word runs at
+  runtime instead of hard-coding the choice with `IF`.
+
+- **Forth Words:** `VARIABLE`, `@`, `!`, `DUP`, `+`, `>`, `MAX`, `IF`,
+  `ELSE`, `THEN`, `'`, `EXECUTE`.
 
 ### Exercises
 
