@@ -2550,6 +2550,95 @@ it's the loop wrapped around it
 that's new, and it's the identical loop `STARS` used, just feeding a
 different word each pass.
 
+### `RECT`, `POLYGON`, and `POLYGON-FILL`: more shapes, from a second ROM
+
+`PLOT`/`LINE`/`CIRCLE`/`FILL` above all live in the same 16K Home ROM as
+everything else in this tutorial. Three more shape words — `RECT`,
+`POLYGON`, and `POLYGON-FILL` — exist too, but they're dispatched
+through a SECOND, separate 8K ROM plugged into the TS2068's own EXROM
+socket, not the Home ROM. This matters practically: the placeholder
+EXROM most setups boot with has no real code in it, so these three
+words will each just silently do nothing (the same "refuse quietly
+rather than crash" behavior every word in this project already uses
+when something's missing) unless you've built and loaded the real
+`graphics_exrom.bin` image instead — see the main
+[README](../README.md)'s own "Try it" section for exactly how, or
+[`docs/eightyone_setup.md`](eightyone_setup.md) if you're running on
+EightyOne or TS-Pico.
+
+| Word           | Stack effect                     | What it does                                                     |
+| -------------- | --------------------------------- | ----------------------------------------------------------------- |
+| `RECT`         | `( x0 y0 x1 y1 -- )`               | Draw a FILLED rectangle between two opposite corners              |
+| `POLYGON`      | `( x1 y1 x2 y2 ... xn yn n -- )`   | Draw the OUTLINE of a closed shape through `n` given vertices (3-12), the last edge closing back to the first vertex |
+| `POLYGON-FILL` | `( x1 y1 x2 y2 ... xn yn n -- )`   | Fill that same shape's INTERIOR instead of outlining it (even-odd rule — a concave notch stays unfilled, correctly) |
+
+```forth
+2 INK 20 20 60 60 RECT
+```
+
+Like `LINE`, `RECT`'s two corners can be given in any order — sorted,
+backwards, or a mix of the two — and it always fills the same box
+either way; it's the OPPOSITE two corners of the box that matter, not
+which one comes first on the stack.
+
+`POLYGON` and `POLYGON-FILL` share the same argument shape: `n`
+vertices, each an `(x y)` pair, then `n` itself last so the word knows
+how many pairs to expect:
+
+```forth
+4 INK 100 40 140 40 100 80 3 POLYGON
+```
+
+draws a red triangle outline through `(100,40)`, `(140,40)`, and
+`(100,80)` — three vertices, then the count `3`. `n` must be between 3
+and 12; giving a count outside that range (including the two you'd
+naturally reach for by mistake, `0` or `1`) draws nothing at all rather
+than guessing which of the remaining stack values were meant for it.
+
+`POLYGON-FILL` takes the exact same arguments and fills the interior
+instead:
+
+```forth
+3 INK 50 50 90 70 50 90 65 70 4 POLYGON-FILL
+```
+
+fills a concave arrow/chevron shape — the notch cut into its left side
+stays empty, correctly, because the fill uses the even-odd rule rather
+than just "fill everything between the leftmost and rightmost edge on
+each row." `POLYGON-FILL` never draws the outline itself; call
+`POLYGON` too, with the same vertices, if you want both.
+
+### Sprites: capturing and moving a shape
+
+Three more words, from that same second EXROM: `SPRITE-DEFINE`,
+`SPRITE-SHOW`, and `SPRITE-HIDE` — four numbered slots (0-3), each
+holding one captured 16x16-pixel image plus whatever the screen looked
+like where it was last shown, so hiding it again restores the original
+background exactly rather than just erasing to blank.
+
+| Word            | Stack effect          | What it does                                                                                          |
+| --------------- | ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| `SPRITE-DEFINE` | `( slot row col -- )`  | Capture the 16x16-pixel block at character row/col into `slot` (0-3)                                   |
+| `SPRITE-SHOW`   | `( slot row col -- )`  | Draw `slot`'s captured image at character row/col, first saving whatever was there so `SPRITE-HIDE` can restore it |
+| `SPRITE-HIDE`   | `( slot -- )`          | Erase `slot`'s currently-shown image, restoring the exact background `SPRITE-SHOW` saved                |
+
+```forth
+2 INK 40 40 55 55 RECT      \ draw a 16x16 red box at row/col (5,5)
+0 5 5 SPRITE-DEFINE         \ capture it into slot 0
+CLS                         \ clear the whole screen
+0 10 10 SPRITE-SHOW         \ redraw the captured box at row/col (10,10)
+0 SPRITE-HIDE               \ remove it, restoring the (now blank) background
+```
+
+Row/col here are the same 0-31/0-22 CHARACTER-cell coordinates
+`AT-XY` uses above, not raw pixels — a sprite is always exactly two
+character cells wide and two tall (16x16 pixels), positioned by its
+own top-left cell. `SPRITE-SHOW`ing a slot that's already showing
+elsewhere, or `SPRITE-HIDE`ing a slot that was never shown, both
+refuse quietly rather than doing anything unexpected — the same
+"silently do nothing on invalid input" convention `FILL`/`SOUND`/
+`STICK` already use elsewhere in this project.
+
 `BEEP` takes real musical units, exactly as BASIC's own `BEEP` does:
 an INTEGER number of semitones (0 = middle C, positive up, negative
 down — the data stack's job, since a semitone count is a whole number)
@@ -4414,6 +4503,19 @@ the same convention applied to the full ANS Forth standard.
 | `PLOT64`          | `( x y -- )`                                                                |
 | `ULAPLUS`         | `( flag -- )` — see [section 16](#16-ulaplus-a-bigger-color-palette)        |
 | `PALETTE`         | `( index value -- )` — see [section 16](#16-ulaplus-a-bigger-color-palette) |
+
+**EXROM graphics (RECT, POLYGON, sprites)** — see [section
+10](#10-drawing-and-sound); needs the real `graphics_exrom.bin`
+loaded, not the placeholder EXROM
+
+| Word            | Stack effect                     |
+| --------------- | --------------------------------- |
+| `RECT`          | `( x0 y0 x1 y1 -- )`               |
+| `POLYGON`       | `( x1 y1 ... xn yn n -- )`         |
+| `POLYGON-FILL`  | `( x1 y1 ... xn yn n -- )`         |
+| `SPRITE-DEFINE` | `( slot row col -- )`              |
+| `SPRITE-SHOW`   | `( slot row col -- )`              |
+| `SPRITE-HIDE`   | `( slot -- )`                      |
 
 **Hardware ports** — see [section 10](#10-drawing-and-sound)
 
