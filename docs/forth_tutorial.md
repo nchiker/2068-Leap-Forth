@@ -788,9 +788,9 @@ PI F.               \ prints 3.1416
   step no longer guarantees a correct result. Ordinary trigonometric
   usage stays comfortably inside that range.
 
-`RAD` and `DEG` convert between the two common angle units, for
-situations where degrees are the more natural unit — a compass
-heading, say:
+Two more words convert between the two common angle units: `RAD` and
+`DEG`, for situations where degrees are the more natural unit — a
+compass heading, say:
 
 ```forth
 90.0 RAD F.       \ prints 1.5707 -- 90 degrees in radians
@@ -912,8 +912,8 @@ instead of two:
   section](#5-reading-and-writing-memory-directly) introduces memory
   addresses, where this exact shorthand appears constantly.
 
-`NEGATE` flips a value's sign, which section 1's `-` can already do the
-long way round:
+The next word changes a value's sign directly: `NEGATE`, which
+section 1's `-` can already do the long way round:
 
 ```forth
 3 NEGATE .      \ prints -3
@@ -929,7 +929,7 @@ long way round:
   (`INVERT` gives exactly one less than `NEGATE` for any input) but
   entirely different meanings.
 
-`MAX` and `MIN` each take two values and keep one:
+Two more words each take two values and keep one: `MAX` and `MIN`:
 
 ```forth
 5 3 MAX .       \ prints 5
@@ -956,7 +956,9 @@ long way round:
   `3 5 MAX` both give `5` — the same relaxed category as `+`, a
   contrast with section 1's own warnings about operand order.
 
-`RND` and `RANDOMIZE` give a pseudo-random whole number:
+The last two words in this table produce randomness rather than
+computing from an input: `RND` and `RANDOMIZE`, which together give a
+pseudo-random whole number:
 
 ```forth
 100 RND .          \ prints something in 0..99
