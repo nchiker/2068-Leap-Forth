@@ -2346,38 +2346,40 @@ EVENS     \ prints 0 2 4 6 8
 ## 9. Printing
 
 A word like `+` leaves its answer sitting on the stack, and nothing
-shows it to you unless you ask. `.` (pronounced "dot") is how you ask:
+displays it until asked. `.` (pronounced "dot") is how that's done:
 
 ```forth
 5 3 + .
 ```
 
-prints `8`, followed by a trailing space, so that several `.`s in a
-row read as separate space-separated numbers instead of running
-together. It also removes the value from the stack on the way past —
-`.` both reads *and consumes* the top of the stack, unlike, say,
-`DUP`. Negative numbers print with a leading `-`, and zero prints as
-`0`. (`F.`, for printing a *decimal* number, is covered in
-[Numbers](#4-numbers).)
+- **What `.` Does:** Prints `8`, followed by a trailing space, so
+  several `.`s in a row read as separate space-separated numbers
+  instead of running together. It also removes the value from the
+  stack on the way past — `.` both reads *and consumes* the top of the
+  stack, unlike, say, `DUP`. Negative numbers print with a leading
+  `-`, and zero prints as `0`. (`F.`, for printing a *decimal* number,
+  is covered in [Numbers](#4-numbers).)
 
 `EMIT` is the lower-level word underneath `.`. It takes a single
 number off the stack and prints it as one character, at whatever
 character code that number is: `65 EMIT` prints `A`, since 65 is
-`A`'s character code. `.` itself is built out of repeated `EMIT`
-calls, one per digit. Both share a single printing position, which
-wraps to a new line automatically past column 32 and scrolls the
-screen once it reaches the row just above where you're typing, so
-printed output can never collide with the line you're currently
-entering. `AT-XY` (see [Drawing and sound](#10-drawing-and-sound))
-moves that printing position directly, for output somewhere other than
-wherever the last thing printed left off.
+`A`'s character code.
+
+- **Shared Printing Position:** `.` itself is built out of repeated
+  `EMIT` calls, one per digit. Both share a single printing position,
+  which wraps to a new line automatically past column 32 and scrolls
+  the screen once it reaches the row just above the one being typed
+  on, so printed output can never collide with the line currently
+  being entered. `AT-XY` (see [Drawing and sound](#10-drawing-and-sound))
+  moves that printing position directly, for output somewhere other
+  than wherever the last thing printed left off.
 
 Three small words exist purely for convenience, each a thin wrapper
-around `EMIT` for a character you'd otherwise have to look the code up
-for:
+around `EMIT` for a character that would otherwise require looking up
+its code:
 
 | Word     | Stack effect | What it does                                   |
-| -------- | ------------ | ---------------------------------------------- |
+| -------- | ------------ | ----------------------------------------------- |
 | `CR`     | `( -- )`     | Move to the start of the next line — `13 EMIT` |
 | `SPACE`  | `( -- )`     | Print one space — `32 EMIT`                    |
 | `SPACES` | `( n -- )`   | Print `n` spaces                               |
@@ -2387,33 +2389,36 @@ for:
 ." VERSION:" SPACE ." 1" CR
 ```
 
-prints `NAME: FORTH`, then `VERSION: 1` on the line below — each lined
-up by hand with `SPACE`, no column-alignment word required.
+- **The Output:** Prints `NAME: FORTH`, then `VERSION: 1` on the line
+  below — each lined up by hand with `SPACE`, no column-alignment word
+  required.
 
-### Putting `.`, `."`, and `SPACE` together
+### Putting `.`, `."`, and `SPACE` Together
 
-None of this is new, only combined. Here's the same "label, `SPACE`,
-value, `CR`" shape as the `NAME:`/`VERSION:` example above, just with
-a computed number where a fixed word was:
+None of this is new, only combined. Here is the same "label, `SPACE`,
+value, `CR`" shape as the `NAME:`/`VERSION:` example above, with a
+computed number in place of a fixed word:
 
 ```forth
 ." SCORE:" SPACE 42 . CR
 ." LEVEL:" SPACE 3 . CR
 ```
 
-prints `SCORE: 42` then `LEVEL: 3` underneath it. `."` and `.` are
-doing exactly what section 1 and this section already said — `."`
-prints fixed text and never touches the stack, `.` prints and consumes
-a number — the only thing new is seeing them share a line.
+- **Reading the Result:** Prints `SCORE: 42` then `LEVEL: 3`
+  underneath it. `."` and `.` do exactly what section 1 and this
+  section already established — `."` prints fixed text and never
+  touches the stack, `.` prints and consumes a number — the only new
+  part is seeing them share a line.
 
 ### Summary
 
-Printing a computed number, printing fixed text, and printing one
-character at a time. The shared printing position, its automatic wrap
-at column 32, and the scroll that keeps output clear of the line you're
-typing. Three convenience wrappers around `EMIT`.
+- **Core Concepts:** Printing a computed number, printing fixed text,
+  and printing one character at a time. The shared printing position,
+  its automatic wrap at column 32, and the scroll that keeps output
+  clear of the line currently being typed. Three convenience wrappers
+  around `EMIT`.
 
-Forth words `.`, `EMIT`, `CR`, `SPACE`, `SPACES`.
+- **Forth Words:** `.`, `EMIT`, `CR`, `SPACE`, `SPACES`.
 
 ### Exercises
 
