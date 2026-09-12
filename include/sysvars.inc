@@ -1482,6 +1482,30 @@ RECT_ATTR:           DEFS 1           ; 1 byte — fill color (CURRENT_ATTR
 RECT_CUR_X:          DEFS 1           ; 1 byte — row-fill loop cursor,
 RECT_CUR_Y:          DEFS 1           ; 1 byte    EXROM-side scratch only
 
+; ---- POLYGON's own state (rom/graphics_exrom.asm, chunk 5 EXROM) ----
+; Staged by core/polygon.asm's Home-resident POLYGON word before
+; paging chunk 5 in — same "plain memory, not registers" reasoning
+; RECT's own state above already documents.
+POLY_MAXPTS          EQU 12          ; cap chosen to match libgpx's own
+                                   ; MAXPTS convention (this project's
+                                   ; own libgpx comparison, prior
+                                   ; session) — small enough to keep
+                                   ; this RAM modest, generous enough
+                                   ; for any real hand-drawn shape
+POLY_COUNT:          DEFS 1           ; 1 byte — vertex count (3-12);
+                                   ; 0 or out-of-range means POLYGON
+                                   ; draws nothing (same "silently do
+                                   ; nothing on invalid input"
+                                   ; convention SOUND/STICK/FILL/RECT
+                                   ; already established)
+POLY_VERTS:          DEFS POLY_MAXPTS * 2   ; 24 bytes — (x,y) pairs,
+                                   ; 1 byte each (screen coords always
+                                   ; fit in a byte), in the order given
+POLY_ATTR:           DEFS 1           ; 1 byte — CURRENT_ATTR at the
+                                   ; time POLYGON was called
+POLY_IDX:            DEFS 1           ; 1 byte — EXROM-side edge-walk
+                                   ; cursor, 0..POLY_COUNT-1
+
 ; ---- kernel/editor word-wrap tables ----
 ; Populated by EDITOR_WRAP_CALC (kernel/editor/editor.asm) from a line
 ; buffer's text; consumed by both the multi-row redraw (BASIC_REDRAW_

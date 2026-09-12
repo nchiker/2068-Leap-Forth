@@ -53,10 +53,10 @@
 EXROM_CALL_RECT_FILL:
     call BANK_PAGE_EXROM_IN
 
-    ld   a, ($A003)                  ; magic byte, right after the one
-    cp   GRAPHICS_EXROM_MAGIC        ; service-table slot this project
-    jr   nz, .mismatch               ; currently has (rom/graphics_
-    ld   a, ($A004)                  ; exrom.asm's own header)
+    ld   a, (GRAPHICS_EXROM_MAGIC_ADDR)
+    cp   GRAPHICS_EXROM_MAGIC
+    jr   nz, .mismatch
+    ld   a, (GRAPHICS_EXROM_MAGIC_ADDR + 1)
     cp   GRAPHICS_EXROM_ABI
     jr   nz, .mismatch
 
@@ -72,6 +72,22 @@ EXROM_CALL_RECT_FILL:
 
 GRAPHICS_EXROM_MAGIC EQU $F0          ; must match rom/graphics_exrom.
 GRAPHICS_EXROM_ABI   EQU 1            ; asm's own copy of these exactly
+
+; Computed, not hand-typed: must exactly match where rom/graphics_
+; exrom.asm's own DB GRAPHICS_EXROM_MAGIC actually lands. That file's
+; own service table is GRAPHICS_EXROM_MAX_SLOTS (8) slots of 3 bytes
+; each, immediately followed by GRAPHICS_EXROM_UNIMPLEMENTED's own
+; 1-byte RET, THEN the magic/ABI pair -- this exact formula shipped
+; once with that trailing RET byte forgotten (a real off-by-one,
+; caught by re-running the RECT/POLYGON smoke ROMs under real ZEsarUX
+; after the table was fixed-sized, not by re-deriving the number by
+; eye a second time). If rom/graphics_exrom.asm's own table size or
+; GRAPHICS_EXROM_UNIMPLEMENTED's own body ever changes, this formula
+; must change with it -- there is no shared build-time symbol export
+; between these two separately-assembled files yet (a known,
+; deliberate gap — see rom/graphics_exrom.asm's own header).
+GRAPHICS_EXROM_TABLE_SLOTS   EQU 8
+GRAPHICS_EXROM_MAGIC_ADDR    EQU $A000 + (GRAPHICS_EXROM_TABLE_SLOTS * 3) + 1
 
 ; ============================================================================
 ; RECT ( x0 y0 x1 y1 -- )

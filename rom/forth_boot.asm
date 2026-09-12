@@ -145,6 +145,8 @@ NMI_ENTRY:
 GRAPHICS_HOME_TABLE:
     jp   GFX_WRITE_PIXEL          ; slot 0 — B=x, C=y, A=attr, D=OVER
     jp   GFX_SET_ATTR             ; slot 1 — A=attr, B=row, C=col
+    jp   GFX_LINE                 ; slot 2 — no register args; reads
+                                  ; GFX_LINE_X0/Y0/X1/Y1/ATTR/OVER
 
 ; ============================================================================
 ; COLD_START
@@ -550,6 +552,8 @@ DICT_CHAIN_POINT DEFL H_ATXY
 DICT_CHAIN_POINT DEFL H_NORMAL
     INCLUDE "core/rectfill.asm"
 DICT_CHAIN_POINT DEFL H_RECT
+    INCLUDE "core/polygon.asm"
+DICT_CHAIN_POINT DEFL H_POLYGON
     INCLUDE "core/key.asm"
 DICT_CHAIN_POINT DEFL H_BREAKQ
     INCLUDE "core/mathfn.asm"

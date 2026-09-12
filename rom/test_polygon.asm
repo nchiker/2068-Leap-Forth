@@ -1,30 +1,27 @@
 ; ============================================================================
-; rom/test_rect.asm — smoke ROM for RECT (EXROM-resident rectangle fill)
+; rom/test_polygon.asm — smoke ROM for POLYGON (EXROM-resident outline)
 ;
 ; Mirrors rom/forth_boot.asm's own GRAPHICS_HOME_TABLE placement at
-; $0100 exactly — rom/graphics_exrom.asm's service table calls through
-; those fixed addresses, so ANY Home ROM exercising it (this one
-; included) must place the same veneers at the same fixed spot.
+; $0100 exactly, same as rom/test_rect.asm — see that file's own
+; header for why.
 ;
-; THREE CHECKPOINTS:
-;   1. RECT 20,20 to 60,60 (already-sorted corners) — interior pixel
-;      (40,40) must be SET afterward, and a point well outside the box
-;      (5,5) must stay CLEAR.
-;   2. RECT 150,120 to 110,90 (corners given BACKWARDS — x1<x0 AND
-;      y1<y0) — same box as checkpoint 1's shape, different position,
-;      deliberately unsorted to prove RECT_FILL_IMPL's own corner-
-;      normalization actually runs. Interior pixel (130,105) must be
-;      SET, and the box's own far corner (111,91, one pixel inside
-;      each edge) must ALSO be set, proving the whole box filled, not
-;      just the seed corner.
-; The magic/ABI mismatch path (EXROM_CALL_RECT_FILL must refuse to
-; draw when the paged image doesn't check out) is deliberately NOT a
-; checkpoint here — EXROM is real ROM, so nothing running from it can
-; corrupt its own header at runtime to simulate a mismatch. That path
-; is instead verified by running this exact same Home image against a
-; deliberately-wrong EXROM binary as a separate run (see the project's
-; own build notes for this test) — the pixel at RECT's own seed
-; position must stay CLEAR when run that way.
+; TWO CHECKPOINTS:
+;   1. A right triangle, vertices (100,40) (140,40) (100,80), drawn via
+;      "100 40 140 40 100 80 3 POLYGON". Deliberately chosen so every
+;      edge has a point GUARANTEED to land exactly on it, not just
+;      approximately: the top edge is horizontal (120,40 is on it),
+;      the left edge is vertical (100,60 is on it), and the closing
+;      (hypotenuse) edge is a perfect 45-degree diagonal from (140,40)
+;      to (100,80) (120,60 is its exact midpoint) — so checking all
+;      three confirms all three edges actually drew, including the
+;      CLOSING edge specifically (the one edge that only exists
+;      because POLY_DRAW_IMPL wraps back to vertex 0, not just walks
+;      forward). A point well outside the triangle (10,10) must stay
+;      CLEAR.
+;   2. n=2 (below the 3-vertex minimum) via "10 10 20 20 2 POLYGON" —
+;      must draw nothing at all: a point that a 2-point "line" would
+;      have covered if n's own validation were skipped (15,15) must
+;      stay CLEAR.
 ;
 ; Border goes GREEN (4) if both checkpoints pass; otherwise it shows
 ; the failing checkpoint's number.
@@ -73,7 +70,7 @@ COLD_START:
     ld   sp, $FF00
     ld   ix, DSTACK_TOP
 
-    ld   hl, DICT_LATEST_INIT_RECTFILL
+    ld   hl, DICT_LATEST_INIT_POLYGON
     ld   (LATEST), hl
     ld   hl, FORTH_DICT_RAM
     ld   (HERE), hl
@@ -84,44 +81,49 @@ COLD_START:
 
     call GFX_CLS
 
-; ---- checkpoint 1: sorted corners ----
+; ---- checkpoint 1: right triangle, all three edges + closing edge ----
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
     ld   hl, SRC_CP1
     ld   de, SRC_CP1_LEN
     call INTERPRET_RUN
-    ld   b, 40
+    ld   b, 120
     ld   c, 40
-    call GFX_READ_PIXEL           ; interior must be SET
+    call GFX_READ_PIXEL           ; top edge
     or   a
     jp   z, FAIL_TEST
-    ld   b, 5
-    ld   c, 5
+    ld   b, 100
+    ld   c, 60
+    call GFX_READ_PIXEL           ; left edge
+    or   a
+    jp   z, FAIL_TEST
+    ld   b, 120
+    ld   c, 60
+    call GFX_READ_PIXEL           ; closing (hypotenuse) edge
+    or   a
+    jp   z, FAIL_TEST
+    ld   b, 10
+    ld   c, 10
     call GFX_READ_PIXEL           ; well outside: must stay CLEAR
     or   a
     jp   nz, FAIL_TEST
 
-; ---- checkpoint 2: corners given backwards ----
+; ---- checkpoint 2: n=2, below the 3-vertex minimum -- must draw nothing ----
     ld   a, 2
     ld   (CHECKPOINT_NUM), a
     ld   hl, SRC_CP2
     ld   de, SRC_CP2_LEN
     call INTERPRET_RUN
-    ld   b, 130
-    ld   c, 105
-    call GFX_READ_PIXEL           ; interior must be SET
+    ld   b, 15
+    ld   c, 15
+    call GFX_READ_PIXEL
     or   a
-    jp   z, FAIL_TEST
-    ld   b, 111
-    ld   c, 91
-    call GFX_READ_PIXEL           ; far corner (one px inside each
-    or   a                        ; edge): must ALSO be SET -- proves
-    jp   z, FAIL_TEST             ; the whole box filled
+    jp   nz, FAIL_TEST
 
     jp   PASS_TEST
 
 PASS_TEST:
-    ld   a, 4                    ; green: all three checkpoints passed
+    ld   a, 4                    ; green: both checkpoints passed
     out  (PORT_ULA), a
     jr   PASS_TEST
 
@@ -139,13 +141,12 @@ INTERPRET_UNKNOWN_WORD:
 
 CHECKPOINT_NUM EQU $8800
 
-; checkpoint 1: sorted corners (20,20)-(60,60)
-SRC_CP1: DB "20 20 60 60 RECT "
+; checkpoint 1: right triangle (100,40) (140,40) (100,80)
+SRC_CP1: DB "100 40 140 40 100 80 3 POLYGON "
 SRC_CP1_LEN EQU $ - SRC_CP1
 
-; checkpoint 2: backwards corners -- (150,120) to (110,90), same
-; 40x30 shape as checkpoint 1, different spot, deliberately unsorted
-SRC_CP2: DB "150 120 110 90 RECT "
+; checkpoint 2: n=2, invalid
+SRC_CP2: DB "10 10 20 20 2 POLYGON "
 SRC_CP2_LEN EQU $ - SRC_CP2
 
 ; ---- dictionary: included here, after the vector table and the
@@ -165,7 +166,9 @@ DICT_CHAIN_POINT DEFL H_DOT
     INCLUDE "core/color.asm"
 DICT_CHAIN_POINT DEFL H_FLASH
     INCLUDE "core/rectfill.asm"
+DICT_CHAIN_POINT DEFL H_RECT
+    INCLUDE "core/polygon.asm"
 
     DS   $4000 - $, $FF
 
-    SAVEBIN "test_rect_rom0.bin", $0000, $4000
+    SAVEBIN "test_polygon_rom0.bin", $0000, $4000
