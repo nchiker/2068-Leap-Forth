@@ -130,6 +130,23 @@ NMI_ENTRY:
     DS   $0100 - $, $FF
 
 ; ============================================================================
+; GRAPHICS_HOME_TABLE — fixed-address JP veneers for EXROM-resident
+; graphics code (rom/graphics_exrom.asm) to call into Home through.
+; Real routines like GFX_WRITE_PIXEL move every time this ROM's own
+; dictionary grows or shrinks; code assembled as a separate, standalone
+; EXROM image has no way to track that automatically the way a single
+; concatenated build would. Fixed slots at a fixed, low, never-moving
+; address are the fix — same shape as 2068-Leap's own inherited EXT_
+; SERVICE_TABLE veneers (include/sysvars.inc), reused here for the same
+; reason rather than inventing a different mechanism. Append-only: an
+; existing slot's position must never change once an EXROM image has
+; been built against it.
+; ============================================================================
+GRAPHICS_HOME_TABLE:
+    jp   GFX_WRITE_PIXEL          ; slot 0 — B=x, C=y, A=attr, D=OVER
+    jp   GFX_SET_ATTR             ; slot 1 — A=attr, B=row, C=col
+
+; ============================================================================
 ; COLD_START
 ; ============================================================================
 COLD_START:
@@ -469,6 +486,7 @@ RUNTIME_ERROR_MSG: DB "STACK?", 0
     INCLUDE "kernel/sound/sound.asm"
     INCLUDE "kernel/storage/storage.asm"
     INCLUDE "kernel/mode64/mode64.asm"
+    INCLUDE "kernel/bank/bank.asm"
     INCLUDE "core/dict.asm"
     DEFINE DECIMAL_NUMBER_ENABLED
     DEFINE RUNTIME_ERROR_CHECK_ENABLED
@@ -530,6 +548,8 @@ DICT_CHAIN_POINT DEFL H_J
 DICT_CHAIN_POINT DEFL H_ATXY
     INCLUDE "core/hires.asm"
 DICT_CHAIN_POINT DEFL H_NORMAL
+    INCLUDE "core/rectfill.asm"
+DICT_CHAIN_POINT DEFL H_RECT
     INCLUDE "core/key.asm"
 DICT_CHAIN_POINT DEFL H_BREAKQ
     INCLUDE "core/mathfn.asm"

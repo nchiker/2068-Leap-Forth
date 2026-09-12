@@ -29,8 +29,11 @@ PORT_AY_DATA        EQU $F6     ; write/read AY register data
 ; space (chunk N = $0000 + N*$2000, N=0-7; A13-A15 decode). 0 = that
 ; chunk comes from Home, 1 = from whichever alternate bank PORT_SCLD's
 ; own bit 7 currently selects (EXROM or Dock — see below). This
-; project only ever pages chunk 6 ($C000-$DFFF) — see
-; kernel/bank/bank.asm's BANK_PAGE_EXROM_IN/OUT, the only writers.
+; project only ever pages chunk 5 ($A000-$BFFF) — see
+; kernel/bank/bank.asm's BANK_PAGE_EXROM_IN/OUT, the only writers, and
+; that file's own header for why chunk 5 specifically (a full chunk-
+; by-chunk audit found it the one chunk nothing else in this project's
+; memory map claims).
 PORT_BANK_HOME      EQU $F4
 
 ; ---- SCLD Display Enhancement Control (Port $FF) ----

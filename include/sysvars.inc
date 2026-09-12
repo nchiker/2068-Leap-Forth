@@ -1466,6 +1466,22 @@ GFX_FILL_SCAN_END:   DEFS 1           ; 1 byte — inclusive right bound
                                    ; that routine's own header for why
                                    ; the scan is NOT widened by 1)
 
+; ---- RECT's own state (rom/graphics_exrom.asm, chunk 5 EXROM) ----
+; Staged by core/rectfill.asm's Home-resident RECT word before paging
+; chunk 5 in, then read back by the EXROM-resident RECT_FILL_IMPL —
+; plain memory, not registers, the same "value must survive a call
+; that destroys everything -> use memory" pattern GFX_FILL's own state
+; already established, doubly true here since an EXROM page-in/out
+; round trip sits in between.
+RECT_X0:             DEFS 1           ; 1 byte — corners as given, NOT
+RECT_Y0:             DEFS 1           ; 1 byte    pre-normalized —
+RECT_X1:             DEFS 1           ; 1 byte    RECT_FILL_IMPL sorts
+RECT_Y1:             DEFS 1           ; 1 byte    them itself
+RECT_ATTR:           DEFS 1           ; 1 byte — fill color (CURRENT_ATTR
+                                   ; at the time RECT was called)
+RECT_CUR_X:          DEFS 1           ; 1 byte — row-fill loop cursor,
+RECT_CUR_Y:          DEFS 1           ; 1 byte    EXROM-side scratch only
+
 ; ---- kernel/editor word-wrap tables ----
 ; Populated by EDITOR_WRAP_CALC (kernel/editor/editor.asm) from a line
 ; buffer's text; consumed by both the multi-row redraw (BASIC_REDRAW_
@@ -2210,10 +2226,14 @@ GFX_FILL_VISITED     EQU $5B00         ; 6144 bytes, through $72FF
 ; BANK_EXROM_DEPTH makes BANK_PAGE_EXROM_IN/_OUT nesting-safe: IN only
 ; does the real port write when depth was 0 (0->1 transition), OUT
 ; only does the real port write when depth reaches back to 0 — any
-; inner, nested pair just adjusts the counter and leaves chunk 6
-; mapped exactly as the outer caller left it. The single-call (depth
-; 0->1->0) case — every caller before this — is completely unchanged.
-BANK_EXROM_DEPTH:    DEFS 1           ; 1 byte — 0 = chunk 6 currently Home
+; inner, nested pair just adjusts the counter and leaves the paged
+; chunk mapped exactly as the outer caller left it. The single-call
+; (depth 0->1->0) case — every caller before this — is completely
+; unchanged. 2068-Forth pages chunk 5 ($A000-$BFFF), not chunk 6 (the
+; historical bug story above this comment is 2068-Leap's own, from
+; when this sysvar was inherited — kernel/bank/bank.asm's own header
+; has the full writeup on why this project's own choice differs).
+BANK_EXROM_DEPTH:    DEFS 1           ; 1 byte — 0 = chunk 5 currently Home
 
 ; ---- GOSUB/RETURN return-address stack (2026-08-22) ----
 ; Same shape as FOR_STACK below (fixed array + depth counter) — the

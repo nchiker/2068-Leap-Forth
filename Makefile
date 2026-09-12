@@ -1,6 +1,6 @@
-.PHONY: all boot forth-lros forth-smoke forth-smoke-p64 forth-smoke-p65 forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-smoke-p31 forth-smoke-p32 forth-smoke-p33 forth-smoke-p34 forth-smoke-p35 forth-smoke-p36 forth-smoke-p37 forth-smoke-p38 forth-smoke-p40 forth-smoke-p41 forth-smoke-p42 forth-smoke-p43 forth-smoke-p44 forth-smoke-p45 forth-smoke-p46 forth-smoke-p47 forth-smoke-p48 forth-smoke-p49 forth-smoke-p50 forth-smoke-p51 forth-boot forth-demo-blackjack forth-smoke-p52 forth-smoke-p53-realtape forth-smoke-p54 forth-smoke-p55 forth-smoke-p56 forth-smoke-p57 forth-smoke-p58 forth-smoke-p59 forth-smoke-p60 forth-smoke-p61 forth-smoke-p62 forth-smoke-p63 check clean
+.PHONY: all boot forth-lros forth-smoke forth-smoke-p64 forth-smoke-p65 graphics-exrom test-exrom-isolation test-rect forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-smoke-p31 forth-smoke-p32 forth-smoke-p33 forth-smoke-p34 forth-smoke-p35 forth-smoke-p36 forth-smoke-p37 forth-smoke-p38 forth-smoke-p40 forth-smoke-p41 forth-smoke-p42 forth-smoke-p43 forth-smoke-p44 forth-smoke-p45 forth-smoke-p46 forth-smoke-p47 forth-smoke-p48 forth-smoke-p49 forth-smoke-p50 forth-smoke-p51 forth-boot forth-demo-blackjack forth-smoke-p52 forth-smoke-p53-realtape forth-smoke-p54 forth-smoke-p55 forth-smoke-p56 forth-smoke-p57 forth-smoke-p58 forth-smoke-p59 forth-smoke-p60 forth-smoke-p61 forth-smoke-p62 forth-smoke-p63 check clean
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-smoke-p31 forth-smoke-p32 forth-smoke-p33 forth-smoke-p34 forth-smoke-p35 forth-smoke-p36 forth-smoke-p37 forth-smoke-p38 forth-smoke-p40 forth-smoke-p41 forth-smoke-p42 forth-smoke-p43 forth-smoke-p44 forth-smoke-p45 forth-smoke-p46 forth-smoke-p47 forth-smoke-p48 forth-smoke-p49 forth-smoke-p50 forth-smoke-p51 forth-boot forth-demo-blackjack forth-smoke-p52 forth-smoke-p53-realtape forth-smoke-p54 forth-smoke-p55 forth-smoke-p56 forth-smoke-p57 forth-smoke-p58 forth-smoke-p59 forth-smoke-p60 forth-smoke-p61 forth-smoke-p62 forth-smoke-p63 forth-smoke-p64 forth-smoke-p65
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-smoke-p31 forth-smoke-p32 forth-smoke-p33 forth-smoke-p34 forth-smoke-p35 forth-smoke-p36 forth-smoke-p37 forth-smoke-p38 forth-smoke-p40 forth-smoke-p41 forth-smoke-p42 forth-smoke-p43 forth-smoke-p44 forth-smoke-p45 forth-smoke-p46 forth-smoke-p47 forth-smoke-p48 forth-smoke-p49 forth-smoke-p50 forth-smoke-p51 forth-boot forth-demo-blackjack forth-smoke-p52 forth-smoke-p53-realtape forth-smoke-p54 forth-smoke-p55 forth-smoke-p56 forth-smoke-p57 forth-smoke-p58 forth-smoke-p59 forth-smoke-p60 forth-smoke-p61 forth-smoke-p62 forth-smoke-p63 forth-smoke-p64 forth-smoke-p65 graphics-exrom test-exrom-isolation test-rect
 
 # Milestone 0: boot stub only.
 boot:
@@ -549,6 +549,34 @@ forth-smoke-p65:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p65.sym --lst=build/forth_smoke_p65.lst rom/forth_smoke_p65.asm
 	mv forth_smoke_p65_rom0.bin build/forth_smoke_p65_rom0.bin
+
+# EXROM-resident graphics services (chunk 5, $A000-$BFFF) -- RECT today,
+# Polygon draw/fill and Sprites planned next. See rom/graphics_exrom.asm's
+# own header, and docs/PROJECT_PLAN.md's chunk-by-chunk audit for why
+# chunk 5. Standalone 8K image, not concatenated with forth-boot's own
+# source -- combine with build/forth_boot_rom0.bin for ZEsarUX the same
+# way README.md's own "Run in ZEsarUX" section already does for EXROM.
+graphics-exrom:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/graphics_exrom.sym --lst=build/graphics_exrom.lst rom/graphics_exrom.asm
+	mv graphics_exrom.bin build/graphics_exrom.bin
+
+# Fresh chunk-5 EXROM paging isolation test -- see rom/test_exrom_
+# isolation.asm's own header. Confirmed passing (border green) under real
+# ZEsarUX; combine build/test_exrom_isolation_rom0.bin with any real 8K
+# EXROM image filled with $A5 to re-run it.
+test-exrom-isolation:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/test_exrom_isolation.sym --lst=build/test_exrom_isolation.lst rom/test_exrom_isolation.asm
+	mv test_exrom_isolation_rom0.bin build/test_exrom_isolation_rom0.bin
+
+# RECT smoke ROM -- see rom/test_rect.asm's own header. Combine with
+# build/graphics_exrom.bin for the real pass; combine with any wrong/
+# blank EXROM image to confirm the magic/ABI mismatch path instead.
+test-rect: graphics-exrom
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/test_rect.sym --lst=build/test_rect.lst rom/test_rect.asm
+	mv test_rect_rom0.bin build/test_rect_rom0.bin
 
 # LROS cartridge boot stub (EXPERIMENTAL) -- see rom/forth_lros.asm's own
 # header. Deliberately NOT part of `all`: it's a separate, unverified
