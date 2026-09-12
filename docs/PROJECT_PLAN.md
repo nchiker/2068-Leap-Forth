@@ -4306,6 +4306,271 @@ as `WRAP_CALC`/`WRAP_CALC64`, flagged as a real candidate but not
 pursued this pass; it's the live REPL's own core screen-rendering path,
 a bigger and riskier refactor than `WRAP_CALC` was.
 
+## Phase 65 — EXROM chunk-5 graphics subsystem (RECT, POLYGON,
+POLYGON-FILL, SPRITE-DEFINE/SHOW/HIDE)
+
+**Status: implemented, assembles clean across every affected ROM
+(`make check`/`make all`, 0 errors, 0 warnings), all six new/touched
+smoke ROMs (`test-exrom-isolation`, `test-rect`, `test-polygon`,
+`test-sprite`, `test-poly-fill`, plus re-verification of each earlier
+one after every later change in this same phase) confirmed passing
+(border green) under real ZEsarUX.**
+
+Grew out of the same libgpx comparison that produced the `GFX_FILL`
+scanline rewrite above: the user asked for a second, physically real 8K
+ROM bank via the TS2068's EXROM socket, to house new graphics words the
+16K Home ROM no longer had room for on its own (309 bytes free by the
+time this phase started, after the dead-code sweep above) — Rectangle
+Fill, Polygon draw/fill, and Sprites, modeled on the sibling
+`structured-basic-poc` project's own already-proven EXROM pattern.
+
+**Chunk choice, audited not assumed.** The user's own first request
+named chunk 4, "like `structured-basic-poc`'s own EXROM" — checked
+directly rather than taken at face value, and both halves of that
+premise turned out to be wrong: `structured-basic-poc` actually uses
+chunk 1, and chunk 4 in THIS project holds the live Forth/float stacks
+($8000-$9FFF), fatal to page out mid-word. Surfaced to the user rather
+than silently substituted. `kernel/bank/bank.asm` itself was inherited
+from 2068-Leap targeting chunk 6 — hardware-confirmed there, but never
+actually wired into any 2068-Forth ROM (zero callers anywhere in this
+repo before this phase) — and this project's own dictionary ceiling was
+later raised into chunk 6 territory (Phase 44), with `LOADTEXT_BUF`
+(Phase 52) living there too, so the old proof doesn't transfer. When the
+user pushed back directly ("why not use chunk 5?"), a full chunk-by-
+chunk audit (all 8 chunks, pros/cons/show-stoppers) confirmed chunk 5 is
+the one chunk NOTHING in this project's own memory map claims at all —
+not either CPU stack (chunk 4), not video RAM (chunks 2-3), not the
+machine stack (chunk 7), nothing `KBD_ISR_TICK` touches. `kernel/bank/
+bank.asm` retargeted there: a one-bit change to the paging port write
+(`PORT_BANK_HOME`, bit 5 instead of bit 6) and the call target ($A000
+instead of $C000); the trampoline mechanics themselves are unchanged and
+chunk-agnostic. An initial overreaction — treating the Phase-44
+dictionary-ceiling conflict as severe enough to abandon chunk 6 outright
+— was self-corrected before the user had to: EXROM paging is real
+hardware bank-switching, not a RAM-address collision the way `FILL`'s
+old scratch problem was, so the underlying RAM is only briefly made
+invisible, never actually touched, while paged out.
+
+Fresh proof, not assumed continuity from 2068-Leap's own chunk-6 test:
+`rom/test_exrom_isolation.asm` confirms chunk-5 paging under real
+ZEsarUX with four checkpoints — plain RAM works before any paging is
+involved; `BANK_PAGE_EXROM_IN` then reads back a real EXROM marker byte
+($A5, from a placeholder image built with `tools/make_exrom_
+placeholder.sh`'s cousin at $A5 instead of $FF, chosen so it can't be
+mistaken for either RAM's own $00 power-on-adjacent contents or this
+project's other $FF placeholders); chunk 6 stays plain RAM throughout
+(control check, proving the paging is chunk-5-specific, not
+accidentally wider); and `BANK_PAGE_EXROM_OUT` restores the exact
+original byte, proving paging is non-destructive. `BANK_EXROM_DEPTH`
+also confirmed back at 0. This test ROM only re-runs cleanly against
+that specific $A5 placeholder image, not the real `graphics_exrom.bin`
+built later in this phase — expected, not a regression (its own
+checkpoint 2 legitimately reads whatever byte the real EXROM's own
+first byte happens to be, not $A5).
+
+**`rom/graphics_exrom.asm`**: the EXROM payload itself, `ORG $A000`, a
+standalone 8K image assembled completely separately from `rom/
+forth_boot.asm` with no visibility into that build. A fixed,
+append-only 8-slot service table (`GRAPHICS_EXROM_MAX_SLOTS`), each slot
+a 3-byte `JP`, followed by a magic byte ($F0) + ABI version (1) pair a
+Home-side caller must verify before trusting any slot — modeled
+directly on `structured-basic-poc`'s own proven `EXROM_ABI` pattern.
+Two real bugs were caught building this table, both from the same root
+cause (a computed offset that moved underneath an already-shipped
+caller): naively appending POLYGON's own slot right after RECT's shifted
+the magic/ABI trailer, silently breaking `core/rectfill.asm`'s already-
+hardcoded read of that offset — fixed by reserving the full 8 slots
+upfront, so appending a new service moves nothing that already exists.
+A second, related bug survived that fix: the fixed-offset formula
+(`$A000 + 8*3`) still forgot `GRAPHICS_EXROM_UNIMPLEMENTED`'s own 1-byte
+`RET` sitting between the table and the trailer — caught only by
+actually re-running the RECT and POLYGON smoke ROMs under real ZEsarUX
+after the table-sizing fix (border showed checkpoint-1 fail, not
+green), not by re-deriving the arithmetic by eye a second time. Fixed by
+computing `GRAPHICS_EXROM_MAGIC_ADDR` from the table size instead of a
+hand-typed literal, so the two separately-assembled files can't drift
+apart on this again. EXROM-resident code calls back into Home through
+`GRAPHICS_HOME_TABLE`, a small table of fixed `JP` veneers at $0100 in
+`rom/forth_boot.asm` (mirroring 2068-Leap's own inherited
+`EXT_SERVICE_TABLE` shape) — real Home routine addresses move every time
+the dictionary changes, and this file has no visibility into that
+build, so a stable low fixed address is the fix, not a hardcoded
+snapshot. Grew from 3 veneers (`GFX_WRITE_PIXEL`/`GFX_SET_ATTR`/
+`GFX_LINE`) to 5 (adding `GFX_ROW_BASE_ADDR`/`GFX_CELL_ATTR_ADDR` for
+sprite transfers) over the phase.
+
+**RECT ( x0 y0 x1 y1 -- )** (service slot 0, `core/rectfill.asm`): the
+Home-side word pages chunk 5 in, checks the magic/ABI pair, dispatches,
+pages back out; a mismatch silently does nothing, the same convention
+`SOUND`/`STICK`/`FILL`'s own 64-column guard already established.
+`RECT_FILL_IMPL` normalizes the corners itself. Confirmed under real
+ZEsarUX two ways: `rom/test_rect.asm` with corners given both sorted and
+deliberately backwards (proving normalization actually runs, not just
+the seed corner), and separately, the same Home image against a
+deliberately wrong/blank EXROM image correctly refusing to draw at all
+— the magic/ABI gate is real, not decorative. 444 → 309 bytes free in
+the Home ROM (RECT's own bulk logic lives entirely in the separate 8K
+EXROM image).
+
+**POLYGON ( x1 y1 ... xn yn n -- )** (service slot 1, `core/
+polygon.asm`): draws the closed outline through 3-12 given vertices, one
+`GFX_LINE` per edge via the new `GRAPHICS_HOME_LINE` veneer, the last
+edge wrapping back to the first vertex to close the shape. `n` is
+validated BEFORE any vertex is popped — an out-of-range `n` means this
+word has no reliable way to know how many stack cells were meant for it,
+so it refuses immediately rather than guessing (the two service-table
+offset bugs above were both found and fixed during this step — see
+above). Confirmed under real ZEsarUX: a right triangle whose three edges
+are each independently checkable (a horizontal top edge, a vertical left
+edge, and a perfect 45-degree diagonal CLOSING edge — proving the
+closing edge specifically drew, not just the two "forward" ones), and
+`n=2` (below the 3-vertex minimum) correctly draws nothing. 309 → 198
+bytes free.
+
+**SPRITE-DEFINE/SHOW/HIDE ( slot row col -- ) / ( slot row col -- ) /
+( slot -- )** (service slots 2-4, `core/sprite.asm`): four 16x16-pixel
+sprite slots, rounding out the three graphics features scoped at the
+start of this phase. The user gave explicit permission to freely reuse
+or delete the inherited-but-unused 2068-Leap sprite scaffolding
+(`kernel/graphics`'s own `GFX_SPRITE_CAPTURE`/`_DRAW` scratch, and
+BASIC-only `GRAB`/`SHOW`/`HIDE` slot metadata plus 2304 bytes of image/
+background buffers) once confirmed no ROM in this project ever called
+any of it — deleted outright rather than reused as-is or relocated
+around the Phase-44 dictionary-ceiling conflict. Rebuilt fresh and much
+smaller: 4 slots (not 8), 16x16 pixels fixed (not variable up to
+32x32), 36 bytes/slot (not 144) — direct byte-for-byte per-cell copies
+(8 bitmap scanlines + 1 attribute byte) rather than a per-pixel OR/AND
+loop, since `GFX_WRITE_PIXEL`'s OR-only "set" semantics have no way to
+explicitly clear a single pixel, which `SPRITE-HIDE`'s exact restore
+needs and a masked/transparent blit would not have provided. Caught two
+real bugs before/while shipping: all three EXROM smoke ROMs written so
+far in this phase had set `DICT_CHAIN_POINT DEFL H_BORDER` after
+`core/ts2068.asm`, but `H_CLS` is defined AFTER `H_BORDER` in that file
+(confirmed `rom/forth_boot.asm` itself was already correct, using
+`H_CLS`) — silently orphaning `CLS` from the `FIND`-able chain in all
+three test ROMs, latent and harmless in the first two (neither ever
+typed `CLS`) until `rom/test_sprite.asm`'s own checkpoint 1 surfaced it
+immediately as an unknown-word failure; fixed in all three files, and
+flagged as a bug class to watch for specifically (it recurred once more
+later in this same phase — see POLYGON-FILL below). Also caught, before
+ever assembling: `SPRITE_MUL_A_HL`'s own zero-multiplier early return
+left `HL` holding the un-multiplied input instead of 0. Confirmed under
+real ZEsarUX, all four checkpoints: capture/clear/show-elsewhere,
+hide-restores-exactly, a second `SHOW` while already shown correctly
+refuses (verified via a follow-up `HIDE`, since checking the pixel right
+after the second `SHOW` alone can't distinguish "refused" from "ran
+again" — both leave it SET either way), and `HIDE` on a never-defined
+slot refuses without disturbing a different slot's own still-shown
+sprite. 198 → 49 bytes free — a razor-thin margin, flagged in the
+commit as worth keeping in mind for anything added to Home directly
+(as opposed to EXROM) next.
+
+**Trampoline deduplication.** With the Home ROM down to 49 bytes free,
+a real duplication finally mattered enough to fix: `core/rectfill.asm`'s
+`EXROM_CALL_RECT_FILL`, `core/polygon.asm`'s `EXROM_CALL_POLY_DRAW`, and
+`core/sprite.asm`'s `EXROM_CALL_SPRITE` all did the exact same thing —
+page chunk 5 in, verify the magic/ABI pair, call a slot address, page
+back out — differing only in which slot they called (95 bytes of
+near-identical code across three copies). Consolidated into `core/
+rectfill.asm`'s own `EXROM_CALL_SLOT` (the most general of the three
+shapes — takes the slot address in `HL`, already what `core/sprite.asm`'s
+own version did) plus `CALL_HL` (moved from `core/polygon.asm`). Every
+call site now just loads `HL` with its own slot address and calls the
+one shared routine. Re-confirmed RECT, POLYGON, and SPRITE-DEFINE/SHOW/
+HIDE all still pass under real ZEsarUX after the merge — this touches
+every graphics word shipped so far in this phase at once, so
+re-verifying was the whole point of doing it before building anything
+further on top. 49 → 106 bytes free.
+
+**POLYGON-FILL ( x1 y1 ... xn yn n -- )** (service slot 5, added after
+the user asked directly for it once the trampoline dedup above was
+done): fills a polygon's interior using the even-odd rule via an
+active-edge scanline algorithm — build a table of the polygon's own
+non-horizontal edges (skipping horizontal ones, which contribute no
+crossings), then for each scanline from `YMIN` to `YMAX-1` (half-open),
+collect every active edge's current x as a crossing, sort the
+crossings, and fill the spans between each pair (1st-2nd, 3rd-4th, ...).
+Multiply/divide (`x0+(y-y0)*(x1-x0)/(y1-y0)`) was considered and
+rejected before writing any code — the product can reach ~48700,
+overflowing `MATH_MULTIPLY16`'s signed 16-bit result for this
+coordinate range — in favor of Bresenham y-major incremental x-
+stepping, one step per scanline per edge. The error accumulator is 2
+bytes/edge, not 1: checked the real worst case (dy up to 191, dx up to
+255) before writing any Z80 and found it can reach 446 before
+normalization, overflowing an 8-bit field. Verified in Python against an
+exact (real-number) even-odd reference across 6 shapes before any Z80
+was written: convex shapes with integer-ratio edges (right triangle,
+axis-aligned square) matched exactly; concave shapes with non-integer-
+ratio edges showed ~3% single-pixel boundary mismatches, root-caused to
+Bresenham's own inconsistent per-row rounding (floor some rows, nearest
+on others) rather than a structural bug, and accepted as the same class
+of approximation `GFX_LINE`/`GFX_CIRCLE` already carry throughout this
+project (a separate flood-fill-plus-Bresenham-line reference model was
+also tried and found to have its own, unrelated flaw — a 4-connected
+flood fill can leak through a diagonal single-pixel gap in a
+Bresenham-drawn boundary line, a real property of that combination this
+project's own `FILL` already has, but not a defect in this algorithm,
+which computes crossings algebraically and was never exposed to it —
+abandoned in favor of the exact-math reference). The same orphaned-word
+dictionary-chain bug caught once already this phase recurred here:
+`DICT_CHAIN_POINT DEFL H_POLYGON` needed to become `H_POLYGONFILL` in
+both `rom/forth_boot.asm` and `rom/test_sprite.asm` after `core/
+polygon.asm` was refactored to add the new word (`POLY_POP_VERTICES`
+extracted as a subroutine shared by `POLYGON` and `POLYGON-FILL`, since
+both need identical stack-argument validation).
+
+**A real bug found and fixed via real hardware, not just a clean
+assemble**: the first real ZEsarUX run of the concave-chevron smoke test
+showed the shape rendering as jagged horizontal stripes running off the
+edge of the canvas, not the clean arrow shape the Python reference
+predicted — the right-triangle checkpoint (convex, no edge ever needs
+more than a clean 2-per-row step) had already passed, masking the bug
+until a concave shape exercised it. Root-caused with a temporary, not-
+preserved in-ROM debug log (writing each row's own `(Y, NCROSS,
+crossings[0], crossings[1])` into an idle scratch buffer,
+`BLOCK_GFX_SCRATCH`/`SPRITE_SLOT_IMG_BUF`, then reading it back after a
+full run via ZEsarUX's own `read-memory` ZRCP command) rather than
+guesswork: the per-edge Bresenham x-stepper's stopping condition
+compared `2*err` against `dy` using an UNSIGNED `SBC HL,BC`/carry check,
+but `err` legitimately goes negative whenever `dx` isn't an exact
+multiple of `dy` (the normal case) — a negative two's-complement 16-bit
+value looks like a huge unsigned number to that comparison, so the loop
+kept stepping far past where it should and wrapped `x` around. Fixed by
+testing the sign bit of `2*err` first (`bit 7,h`): a negative `2*err`
+can never be `>= dy` since `dy` is always positive, so a negative sign
+means stop, checked before the unsigned compare ever runs. Re-verified
+in Python first (the corrected model produces a clean, monotonic x
+sequence for the exact edge that previously ran away), then in the real
+Z80 under ZEsarUX — the chevron now renders as the correct arrow shape,
+matching the Python reference exactly. Confirmed via `rom/
+test_poly_fill.asm`'s own two checkpoints (a right triangle and the
+concave chevron, using ground-truth interior/exterior points confirmed
+against the exact-math reference), and RECT/POLYGON/SPRITE-DEFINE/SHOW/
+HIDE re-confirmed still passing after the `core/polygon.asm` refactor
+that added `POLY_POP_VERTICES`. Home ROM cost was minimal — the bug and
+its fix both live entirely inside `rom/graphics_exrom.asm`, which
+doesn't compete for the Home ROM budget at all; the small Home-side
+addition (the `POLYGON-FILL` dictionary word itself) took 106 → 66 bytes
+free.
+
+**Net result**: 16K Home ROM at 66 bytes free (down from 521 at the end
+of the ROM-shrink pass above, entirely from this phase's own five new
+graphics words plus their shared trampoline — RECT's/POLYGON's/POLYGON-
+FILL's own bulk logic lives in the separate 8K EXROM image instead, not
+competing for this budget), five working EXROM graphics services
+(`RECT`, `POLYGON`, `POLYGON-FILL`, `SPRITE-DEFINE`, `SPRITE-SHOW`,
+`SPRITE-HIDE` — six words, five service slots since `SPRITE-DEFINE`/
+`SHOW`/`HIDE` share slots 2-4), `make check`/`make all` clean across
+every target both before and after each individual change in this
+phase, not just at the end.
+
+**Left alone, not pursued this phase**: `.github/workflows/build.yml`'s
+own release packaging doesn't yet build or ship the real `graphics_
+exrom.bin` alongside `forth_boot_rom0.bin` — a downloaded release still
+only gets the generic `$FF` EXROM placeholder, which can't actually run
+any of this phase's new words. Needed before RECT/POLYGON/POLYGON-FILL/
+SPRITE-DEFINE/SHOW/HIDE are usable outside a from-source build.
+
 ## Testing discipline
 
 Carry forward the validated order from 2068-Leap, applied to Forth

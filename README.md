@@ -1,4 +1,4 @@
-# 2068-Forth
+# 2068-Leap-Forth
 
 A from-scratch Forth for the Timex Sinclair 2068, built on the hardware
 kernel proven out by **2068-Leap** (structured-BASIC ROM, same author,
@@ -26,7 +26,7 @@ specific commit without waiting for a tagged release.
 - `forth_exrom_eightyone.dck` — EXROM wrapped for EightyOne's cartridge slot and TS-Pico.
 
 No prebuilt binaries are committed into this repository itself — it's the
-source/development repo. This is only 2068-Forth's own product ROM
+source/development repo. This is only 2068-Leap-Forth's own product ROM
 (the "Try it" section below); it doesn't include 2068-Leap's separate
 BASIC ROM or extensions.
 
@@ -371,7 +371,7 @@ instructions.
 - Phase 27 (`core/string.asm` + `rom/forth_smoke_p27.asm`): `S"`,
   `TYPE`, `STRING`, `PLACE`, `COUNT`, `LEN`, `VAL` — real string
   handling, closing the biggest single remaining BASIC-audit gap
-  (2068-Forth had none at all before this: `."` prints a fixed literal,
+  (2068-Leap-Forth had none at all before this: `."` prints a fixed literal,
   but there was no way to store, measure, or convert text). Strings are
   the standard Forth `(addr len)` pair on the stack, plus a counted-
   string representation (1 length byte + data) for mutable `STRING`
@@ -645,7 +645,7 @@ instructions.
 - Phase 38 (`core/interp.asm` + `rom/forth_boot.asm` +
   `rom/forth_smoke_p38.asm`): runtime stack-error detection — asked for
   directly, comparing to 2068-Leap's own line-entry + runtime error
-  handling; 2068-Forth already had the line-entry half
+  handling; 2068-Leap-Forth already had the line-entry half
   (`INTERPRET_UNKNOWN_WORD`, prints `?` and recovers), nothing for
   runtime conditions like a stack underflow silently reading past the
   stack's own boundary. A single `STACK_CHECK` call added to
@@ -891,6 +891,25 @@ instructions.
 - The language core is integer-only by design; see
   `docs/numeric_model.md` for why floating point is a deferred, optional
   addition rather than something the language is built on.
+- Phase 65 (`kernel/bank/bank.asm` + `rom/graphics_exrom.asm` +
+  `core/rectfill.asm` + `core/polygon.asm` + `core/sprite.asm` + six new
+  smoke ROMs): a second, physically real 8K ROM bank via the TS2068's
+  EXROM socket (chunk 5, audited against all 8 chunks — see
+  `docs/PROJECT_PLAN.md` Phase 65 for the full chunk-by-chunk
+  reasoning), housing graphics words the 16K Home ROM no longer has room
+  for on its own: `RECT`, `POLYGON` (outline), `POLYGON-FILL` (even-odd
+  scanline fill), `SPRITE-DEFINE`/`SPRITE-SHOW`/`SPRITE-HIDE` (four
+  16x16 sprite slots). Confirmed under real ZEsarUX across six smoke
+  ROMs, including a real bug found via real hardware, not a clean
+  assemble alone: `POLYGON-FILL`'s Bresenham edge-stepper used an
+  unsigned comparison on a value that legitimately goes negative,
+  causing spans to run off the edge of the canvas on concave shapes —
+  root-caused with a temporary in-ROM debug log read back over ZEsarUX's
+  own remote protocol, then fixed. 16K Home ROM at 66 bytes free (down
+  from 521 before this phase — these words' own bulk logic lives in the
+  separate 8K EXROM image instead). See `docs/PROJECT_PLAN.md` Phase 65
+  for the full story, including two real service-table offset bugs and
+  a since-deleted, never-used inherited sprite subsystem.
 
 ## Layout
 
@@ -927,10 +946,17 @@ core/       language-layer code, not hardware-facing:
                           rom/forth_smoke_p5.asm's own history)
               beep.asm    (Phase 31 — real, semitone/seconds BEEP)
               sound.asm   (Phase 32 — real, register-level SOUND)
+              rectfill.asm (Phase 65 — RECT, EXROM chunk 5; also owns
+                          the shared EXROM_CALL_SLOT trampoline)
+              polygon.asm (Phase 65 — POLYGON/POLYGON-FILL, EXROM chunk 5)
+              sprite.asm  (Phase 65 — SPRITE-DEFINE/SHOW/HIDE, EXROM chunk 5)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank) plus
-            2068-Forth's own addition, mode64/ (recovered, once-shipped
-            2068-Leap code — see that module's own header)
+            2068-Leap-Forth's own addition, mode64/ (recovered, once-shipped
+            2068-Leap code — see that module's own header). bank/bank.asm
+            is 2068-Leap's own EXROM paging trampoline, retargeted from
+            its original chunk 6 to chunk 5 in Phase 65 — see that file's
+            own header for the chunk-by-chunk audit behind the choice.
 include/    hardware/keyboard constants and the inherited kernel API
             contract (include/kernel_api.inc)
 rom/        ROM image assembly:
@@ -983,6 +1009,16 @@ rom/        ROM image assembly:
               forth_smoke_p47.asm Phase 47 smoke ROM (LPRINT/LLIST)
               forth_smoke_p48.asm Phase 48 smoke ROM (ULAPLUS/PALETTE, visual)
               forth_boot.asm      the real, live, bootable product ROM
+              graphics_exrom.asm  Phase 65 — the EXROM chunk-5 payload
+                                  itself (ORG $A000, standalone 8K image,
+                                  assembled separately from forth_boot.asm)
+              test_exrom_isolation.asm  Phase 65 smoke ROM (chunk-5 paging
+                                  proof — needs a real $A5-filled EXROM
+                                  image, not graphics_exrom.bin)
+              test_rect.asm       Phase 65 smoke ROM (RECT)
+              test_polygon.asm    Phase 65 smoke ROM (POLYGON outline)
+              test_sprite.asm     Phase 65 smoke ROM (SPRITE-DEFINE/SHOW/HIDE)
+              test_poly_fill.asm  Phase 65 smoke ROM (POLYGON-FILL)
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
             Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
 docs/       PROJECT_PLAN.md (read this first, project/build-facing),
@@ -1048,6 +1084,14 @@ make forth-smoke-p46  # Phase 46 smoke ROM: ROT/2DUP/2DROP/?DUP/PICK, AND/OR/XOR
 make forth-smoke-p47  # Phase 47 smoke ROM: LPRINT/LLIST
 make forth-smoke-p48  # Phase 48 smoke ROM: ULAPLUS/PALETTE (visual)
 make forth-boot       # the real, live, bootable product ROM
+make graphics-exrom       # Phase 65: the EXROM chunk-5 payload (RECT/
+                          # POLYGON/POLYGON-FILL/SPRITE-DEFINE/SHOW/HIDE),
+                          # a standalone 8K image at build/graphics_exrom.bin
+make test-exrom-isolation # Phase 65 smoke ROM: chunk-5 paging proof
+make test-rect            # Phase 65 smoke ROM: RECT
+make test-polygon         # Phase 65 smoke ROM: POLYGON (outline)
+make test-sprite          # Phase 65 smoke ROM: SPRITE-DEFINE/SHOW/HIDE
+make test-poly-fill       # Phase 65 smoke ROM: POLYGON-FILL
 make check            # static asm checks over core/, kernel/, and rom/
 ```
 
@@ -1081,6 +1125,44 @@ pseudo-random number in `[0, 100)`, `5 ARRAY NUMS 99 3 CELLS NUMS + !
 `S" HELLO WORLD" TYPE` to print a string literal directly, or
 `INPUT .` to type a number and have it printed back, or
 `9.0 FSQRT F.` to see a float square root print `3.0000`.
+
+### RECT, POLYGON, POLYGON-FILL, and sprites (Phase 65)
+
+These five words are dispatched through a second, real EXROM ROM bank
+(chunk 5) instead of living in the 16K Home ROM directly — see
+`docs/PROJECT_PLAN.md` Phase 65 for why. This means the placeholder
+EXROM the "Try it" section above uses is NOT enough for these words —
+`build/stock_shaped_exrom.bin` has no real code in it, so `RECT`/
+`POLYGON`/`POLYGON-FILL`/`SPRITE-DEFINE`/`SPRITE-SHOW`/`SPRITE-HIDE`
+will each silently do nothing (the same magic/ABI mismatch guard every
+other word in this project already uses instead of crashing). Build and
+run the REAL EXROM image instead:
+
+```sh
+make forth-boot graphics-exrom
+cat build/forth_boot_rom0.bin build/graphics_exrom.bin \
+    > build/forth_boot_graphics_combined_24k.bin
+zesarux --noconfigfile --machine TS2068 \
+    --romfile build/forth_boot_graphics_combined_24k.bin
+```
+
+(or, in Fuse: `--rom-ts2068-0 build/forth_boot_rom0.bin
+--rom-ts2068-1 build/graphics_exrom.bin`). At the running prompt, try
+`2 INK 20 20 60 60 RECT` to see a filled red box (the default paper is
+black, so use a real ink color, not `0` — black-on-black draws
+correctly but shows nothing), `4 INK 100 40 140 40 100 80 3 POLYGON` to
+see a green triangle outline, `3 INK 50 50 90 70 50 90 65 70 4
+POLYGON-FILL` to see a filled magenta concave chevron/arrow shape
+(even-odd rule — the notch stays unfilled), or
+`2 INK 40 40 55 55 RECT 0 5 5 SPRITE-DEFINE 0 CLS 0 10 10 SPRITE-SHOW`
+to draw a red 16x16 box exactly at character row/col (5,5), capture it
+into sprite slot 0, clear the screen, and redraw the captured box at
+row/col (10,10) — followed by `0 SPRITE-HIDE` to remove it and restore
+the (now blank) background exactly.
+
+This EXROM image isn't part of the CI-built release yet (see
+`docs/PROJECT_PLAN.md` Phase 65's own "left alone" note) — build it
+from source as shown above.
 
 ## License
 
