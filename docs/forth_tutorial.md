@@ -3510,6 +3510,8 @@ coordinate range. All four are real, working words:
 32COL
 ```
 
+#### A Wider Text Display Too
+
 `64COL` is also a genuinely wider **text** display now: `EMIT`, `.`,
 `."`, and typing at the prompt itself all automatically wrap at column
 64 instead of 32 while `64COL` is active, no separate word needed —
@@ -3522,19 +3524,22 @@ the same 8-pixel font, just drawn across twice the width:
 ." BACK TO THE NORMAL 32-COLUMN WIDTH"
 ```
 
-Typing at the prompt works the same way — a line you're typing wraps
-at 64 columns instead of 32 while `64COL` is active, cursor included.
-One real difference from the normal-width cursor: the 64-column
-cursor is a solid block that stays **on** rather than blinking. Mode 6
-(the hardware mode `64COL` switches to) has no per-cell color memory
-at all — the normal cursor's blink comes from the real ULA hardware's
-own FLASH bit, which lives in that per-cell color byte, so there's
-nothing for a 64-column cursor to hook into. You'll always be able to
-see where it is; it just won't flash.
+- **The Cursor's One Real Difference:** Typing at the prompt works the
+  same way — a line you're typing wraps at 64 columns instead of 32
+  while `64COL` is active, cursor included. One real difference from
+  the normal-width cursor: the 64-column cursor is a solid block that
+  stays **on** rather than blinking. Mode 6 (the hardware mode `64COL`
+  switches to) has no per-cell color memory at all — the normal
+  cursor's blink comes from the real ULA hardware's own FLASH bit,
+  which lives in that per-cell color byte, so there's nothing for a
+  64-column cursor to hook into. You'll always be able to see where it
+  is; it just won't flash.
 
-`INK`/`PAPER` don't apply per-character in `64COL` mode either, for
-the same reason — `PALETTE64` (above) is how `64COL` picks its one
-shared color pair instead.
+- **No Per-Character Color:** `INK`/`PAPER` don't apply per-character
+  in `64COL` mode either, for the same reason — `PALETTE64` (above) is
+  how `64COL` picks its one shared color pair instead.
+
+#### Looping Over `PLOT64`
 
 Because `PLOT64` is an ordinary word once `64COL` has switched modes,
 [section 8](#8-repeating-yourself)'s `DO`/`LOOP` works on it exactly
@@ -3548,11 +3553,11 @@ spaced out across the wider coordinate range this mode gives you:
 32COL
 ```
 
-This is the same `+LOOP`-steps-the-index trick [Drawing and
-sound](#10-drawing-and-sound)'s `DOTS` used, just reaching further along
-the row — ten points, `I` running 20, 60, 100, ... up to 380,
-comfortably inside `PLOT64`'s wider 0-511 range and well past what the
-normal screen's own coordinates could reach.
+- **Reading This Loop:** This is the same `+LOOP`-steps-the-index
+  trick [Drawing and sound](#10-drawing-and-sound)'s `DOTS` used, just
+  reaching further along the row — ten points, `I` running 20, 60,
+  100, ... up to 380, comfortably inside `PLOT64`'s wider 0-511 range
+  and well past what the normal screen's own coordinates could reach.
 
 ### A Caveat on 64-Column Visual Rendering
 
@@ -3566,14 +3571,14 @@ Treat `64COL`'s visual on-screen appearance as **unverified**. However, everythi
 
 ### Summary
 
-A second screen mode, twice as wide. It is both a wider pixel display,
-with x running to 511, and a wider text display, with `EMIT` and the
-prompt itself wrapping at column 64 with no extra word needed. It has
-no per-cell colour memory, so `INK`/`PAPER` don't apply and the cursor
-doesn't blink; one shared colour pair is chosen with `PALETTE64`
-instead.
+- **Core Concepts:** A second screen mode, twice as wide. It is both a
+  wider pixel display, with x running to 511, and a wider text
+  display, with `EMIT` and the prompt itself wrapping at column 64
+  with no extra word needed. It has no per-cell colour memory, so
+  `INK`/`PAPER` don't apply and the cursor doesn't blink; one shared
+  colour pair is chosen with `PALETTE64` instead.
 
-Forth words `64COL`, `32COL`, `PALETTE64`, `PLOT64`.
+- **Forth Words:** `64COL`, `32COL`, `PALETTE64`, `PLOT64`.
 
 ### Exercises
 
