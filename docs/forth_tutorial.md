@@ -896,8 +896,9 @@ A handful of ordinary whole-number words round out the basics:
   quietly returns `0`, the same convention `MOD` above uses (both
   share the same underlying division).
 
-`1+` and `1-` are shorthand and nothing more. `5 1+` does exactly what
-`5 1 +` does, in one word instead of two:
+Two more words shorten a common pattern rather than compute anything
+new: `1+` and `1-`. `5 1+` does exactly what `5 1 +` does, in one word
+instead of two:
 
 ```forth
 5 1+ .          \ prints 6
@@ -907,10 +908,9 @@ A handful of ordinary whole-number words round out the basics:
 - **Why They Exist:** Adding or subtracting one is by far the most
   common arithmetic in real Forth code — stepping to the next memory
   slot, nudging a counter, adjusting an off-by-one — so it earns its
-  own word purely to keep those lines short. `V 1 + C@` from
-  [the next section](#5-reading-and-writing-memory-directly) is
-  equally well written `V 1+ C@`; both spellings appear in real Forth
-  programs, differing only in the number of spaces.
+  own word purely to keep those lines short. [The next
+  section](#5-reading-and-writing-memory-directly) introduces memory
+  addresses, where this exact shorthand appears constantly.
 
 `NEGATE` flips a value's sign, which section 1's `-` can already do the
 long way round:
