@@ -155,6 +155,36 @@ just a blank acknowledgement either way.
    crossings[0], crossings[1])` log written into an idle sprite
    buffer, read back after the fill ran, pinpointed exactly which rows
    went wrong before a single line of the fix was written.
+4. **A single `get-registers` snapshot showing `PC=0038` (the
+   interrupt vector) is not evidence of a hang by itself** — if
+   interrupts fire often relative to how fast the main code loops,
+   sampling once is likely to land mid-ISR by pure chance, and BC/HL/
+   DE at that moment can look exactly like a runaway `LDIR` (a real
+   `LDIR` is genuinely interruptible and resumable) even when nothing
+   is actually wrong. Take at least two or three samples a fraction of
+   a second apart and check whether BC/HL/DE are actually *changing*
+   between them before concluding something is stuck — this project
+   chased a phantom "runaway LDIR" for a while before checking that.
+5. **Give every debug marker its own scratch byte, not one shared
+   offset multiple stages overwrite.** Reusing the same address for
+   "stage 1", "stage 2", "stage 3" markers means a later stage's write
+   erases any evidence that an earlier one ran differently than
+   expected — exactly what cost real time here before switching to
+   one offset per checkpoint (`BLOCK_GFX_SCRATCH+0`, `+1`, `+2`, ...)
+   in the same debug pass.
+6. **In this project specifically, more than one test ROM (`rom/
+   test_rect.asm`, `rom/test_polygon.asm`, `rom/test_sprite.asm`, `rom/
+   test_poly_fill.asm`) each carries its OWN literal copy of the
+   `GRAPHICS_HOME_TABLE` veneer table** (the real product ROM, `rom/
+   forth_boot.asm`, carries the authoritative one). If EXROM-side code
+   starts calling a veneer slot a given test fixture's own copy
+   doesn't yet have, that call silently jumps into whatever code
+   happens to follow the table in THAT fixture (usually `COLD_START`
+   itself) — a real bug hit adding two new veneer calls to `RECT_
+   FILL_IMPL` while `rom/test_rect.asm`'s own table still only had the
+   original three. Check every test fixture's own copy against the
+   real product ROM's whenever an EXROM routine starts depending on a
+   veneer it didn't call before, not just `rom/forth_boot.asm`'s.
 
 ## Cleaning up
 
