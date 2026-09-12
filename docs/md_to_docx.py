@@ -15,6 +15,7 @@ import re
 import sys
 
 from docx import Document
+from docx.enum.section import WD_SECTION
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
@@ -73,6 +74,91 @@ def border_paragraph(par, color="D0D0D0"):
 
 def no_space_after(par):
     par.paragraph_format.space_after = Pt(0)
+
+
+def register_ordered_list_abstract(doc):
+    """Register one new abstract numbering definition (decimal, 1/2/3...,
+    starting over at 1) in numbering.xml and return its abstractNumId.
+    Concrete lists are then created against it with add_num_instance, one
+    per 'Exercises' section, so each section's exercises count 1, 2, 3...
+    independently -- matching the markdown source, where each section's
+    numbered list also starts over at 1."""
+    numbering = doc.part.numbering_part.element
+    abstract_ids = [int(e.get(qn('w:abstractNumId')))
+                    for e in numbering.findall(qn('w:abstractNum'))]
+    new_abstract_id = max(abstract_ids) + 1
+
+    abstract = OxmlElement('w:abstractNum')
+    abstract.set(qn('w:abstractNumId'), str(new_abstract_id))
+    lvl = OxmlElement('w:lvl')
+    lvl.set(qn('w:ilvl'), '0')
+    start = OxmlElement('w:start')
+    start.set(qn('w:val'), '1')
+    num_fmt = OxmlElement('w:numFmt')
+    num_fmt.set(qn('w:val'), 'decimal')
+    lvl_text = OxmlElement('w:lvlText')
+    lvl_text.set(qn('w:val'), '%1.')
+    lvl_jc = OxmlElement('w:lvlJc')
+    lvl_jc.set(qn('w:val'), 'left')
+    ppr = OxmlElement('w:pPr')
+    ind = OxmlElement('w:ind')
+    ind.set(qn('w:left'), '1440')
+    ind.set(qn('w:hanging'), '360')
+    ppr.append(ind)
+    for el in (start, num_fmt, lvl_text, lvl_jc, ppr):
+        lvl.append(el)
+    abstract.append(lvl)
+    numbering.append(abstract)
+
+    return new_abstract_id
+
+
+def add_num_instance(doc, abstract_id):
+    """Create a fresh, independent numId against an abstract numbering
+    definition -- a new list instance that starts counting at 1 on its
+    own, unaffected by any other list using the same abstract definition.
+
+    Carries an explicit <w:lvlOverride>/<w:startOverride val="1"/>. The
+    abstract definition already declares <w:start val="1"/>, which is
+    sufficient for Word, but LibreOffice has been observed to run several
+    numId instances sharing one abstractNum together as a single
+    continuing count unless each instance's restart is spelled out
+    explicitly -- this override makes the restart unambiguous for every
+    reader, not just Word.
+    """
+    numbering = doc.part.numbering_part.element
+    num_ids = [int(e.get(qn('w:numId'))) for e in numbering.findall(qn('w:num'))]
+    new_num_id = max(num_ids) + 1
+
+    num = OxmlElement('w:num')
+    num.set(qn('w:numId'), str(new_num_id))
+    abstract_ref = OxmlElement('w:abstractNumId')
+    abstract_ref.set(qn('w:val'), str(abstract_id))
+    num.append(abstract_ref)
+
+    lvl_override = OxmlElement('w:lvlOverride')
+    lvl_override.set(qn('w:ilvl'), '0')
+    start_override = OxmlElement('w:startOverride')
+    start_override.set(qn('w:val'), '1')
+    lvl_override.append(start_override)
+    num.append(lvl_override)
+    numbering.append(num)
+
+    return new_num_id
+
+
+def set_num_id(par, num_id):
+    """Pin a 'List Number'-styled paragraph to an explicit numId, overriding
+    whatever list instance the style would otherwise default to."""
+    ppr = par._p.get_or_add_pPr()
+    num_pr = OxmlElement('w:numPr')
+    ilvl = OxmlElement('w:ilvl')
+    ilvl.set(qn('w:val'), '0')
+    num_id_el = OxmlElement('w:numId')
+    num_id_el.set(qn('w:val'), str(num_id))
+    num_pr.append(ilvl)
+    num_pr.append(num_id_el)
+    ppr.append(num_pr)
 
 
 def code_run(par, text):
@@ -239,11 +325,14 @@ def build_title_page(doc, title):
     sub = doc.add_paragraph()
     sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
     sub.paragraph_format.space_before = Pt(14)
-    r2 = sub.add_run('A from-scratch tutorial for the 2068-Forth interpreter')
+    r2 = sub.add_run('A from-scratch tutorial for the 2068-Leap-Forth interpreter')
     r2.font.size = Pt(14)
     r2.italic = True
     r2.font.color.rgb = RGBColor(0x50, 0x50, 0x50)
 
+    doc.add_page_break()
+    # a deliberately blank page between the title page and the TOC page
+    doc.add_paragraph()
     doc.add_page_break()
 
 
@@ -272,30 +361,17 @@ def build_toc_page(doc):
     doc.add_page_break()
 
 
-def configure_header_footer(doc, title):
-    """Running header (doc title) + footer (page number) on every page
-    after the title page. Since `different_first_page_header_footer` only
-    suppresses page 1's header/footer, the title page stays clean while the
-    TOC page and every section page onward get both.
+def configure_front_matter(doc):
+    """Footer (page number) starting on the first page after the title
+    page. The front matter (blank page + TOC) deliberately gets no running
+    header: the running header everywhere else is a STYLEREF field that
+    tracks the nearest Heading 1 above it (see start_body_section), and
+    there is no section heading yet for it to find on these pages. Since
+    `different_first_page_header_footer` only suppresses page 1's
+    header/footer, the title page itself stays clean.
     """
     section = doc.sections[0]
     section.different_first_page_header_footer = True
-
-    header_par = section.header.paragraphs[0]
-    header_par.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    header_par.paragraph_format.space_after = Pt(0)
-    hr = header_par.add_run(title)
-    hr.font.size = Pt(9)
-    hr.italic = True
-    hr.font.color.rgb = RGBColor(0x60, 0x60, 0x60)
-    pbdr = OxmlElement('w:pBdr')
-    b = OxmlElement('w:bottom')
-    b.set(qn('w:val'), 'single')
-    b.set(qn('w:sz'), '4')
-    b.set(qn('w:space'), '4')
-    b.set(qn('w:color'), 'BFBFBF')
-    pbdr.append(b)
-    header_par._p.get_or_add_pPr().append(pbdr)
 
     footer_par = section.footer.paragraphs[0]
     footer_par.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -305,6 +381,42 @@ def configure_header_footer(doc, title):
     result_run = add_field(footer_par, 'PAGE', '1')
     result_run.font.size = Pt(9)
     result_run.font.color.rgb = RGBColor(0x60, 0x60, 0x60)
+
+
+def start_body_section(doc, book_title):
+    """Open a new Word section for the body (starting on a fresh page),
+    with its own running header. Unlike a static title, the header shows
+    the CURRENT page's section via a STYLEREF field bound to the Heading 1
+    style -- so it updates itself as the reader moves from section to
+    section instead of only ever showing the book title. The footer (page
+    number) stays linked to the front matter's, so numbering continues
+    rather than restarting.
+    """
+    section = doc.add_section(WD_SECTION.NEW_PAGE)
+    section.header.is_linked_to_previous = False
+
+    header_par = section.header.paragraphs[0]
+    header_par.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    header_par.paragraph_format.space_after = Pt(0)
+    lead = header_par.add_run(book_title + '  —  ')
+    lead.font.size = Pt(9)
+    lead.italic = True
+    lead.font.color.rgb = RGBColor(0x60, 0x60, 0x60)
+    result_run = add_field(header_par, 'STYLEREF "Heading 1"', 'Section title')
+    result_run.font.size = Pt(9)
+    result_run.italic = True
+    result_run.font.color.rgb = RGBColor(0x60, 0x60, 0x60)
+
+    pbdr = OxmlElement('w:pBdr')
+    b = OxmlElement('w:bottom')
+    b.set(qn('w:val'), 'single')
+    b.set(qn('w:sz'), '4')
+    b.set(qn('w:space'), '4')
+    b.set(qn('w:color'), 'BFBFBF')
+    pbdr.append(b)
+    header_par._p.get_or_add_pPr().append(pbdr)
+
+    return section
 
 
 # `w:updateFields` must land in the exact schema position python-docx's own
@@ -357,7 +469,7 @@ def convert(md_path, docx_path):
     # and the running header text, rather than an in-body Heading1 -- the
     # body's own headings (`## N. Section`, `### Subsection`) start counting
     # from Heading1 themselves (see the heading handler below).
-    doc_title = 'Learning Forth on 2068-Forth'
+    doc_title = 'Learning Forth on 2068-Leap-Forth'
     i = 0
     n = len(lines)
     if lines and re.match(r'^#\s+\S', lines[0].strip()):
@@ -367,9 +479,14 @@ def convert(md_path, docx_path):
         i = 1
     build_title_page(doc, doc_title)
     build_toc_page(doc)
+    configure_front_matter(doc)
+    exercises_abstract_id = register_ordered_list_abstract(doc)
 
     para_buf = []
     in_list = False
+    in_exercises = False
+    exercises_num_id = None
+    body_started = False
 
     def flush_paragraph():
         nonlocal para_buf
@@ -421,6 +538,29 @@ def convert(md_path, docx_path):
             # (and `### Subsection`) show up as real, TOC-navigable
             # headings rather than just bold/large text.
             level = max(1, len(m.group(1)) - 1)
+            heading_text = strip_md_inline(m.group(2)).strip()
+            in_exercises = (level == 2 and heading_text == 'Exercises')
+            if in_exercises:
+                # a brand new list instance per Exercises section, so this
+                # section's numbering starts over at 1 -- independent of
+                # every other section's Exercises list.
+                exercises_num_id = add_num_instance(doc, exercises_abstract_id)
+
+            # Each `## N. Section` (level 1 / Heading1) starts on its own
+            # page, so a section never begins partway down the previous
+            # section's last page. The very first one instead opens a new
+            # Word section (start_body_section), so the running header can
+            # switch from the front matter's blank header to a STYLEREF
+            # that tracks the section title -- that section break already
+            # forces a page break, so it isn't doubled up with an explicit
+            # one here.
+            if level == 1:
+                if not body_started:
+                    start_body_section(doc, doc_title)
+                    body_started = True
+                else:
+                    doc.add_page_break()
+
             p = doc.add_heading(level=min(level, 4))
             for r in list(p.runs):
                 r.text = ''
@@ -528,6 +668,11 @@ def convert(md_path, docx_path):
                 item += ' ' + lines[i].strip()
                 i += 1
             p = doc.add_paragraph(style='List Number')
+            if in_exercises:
+                # pinned to this section's own numId, guaranteeing it
+                # starts at 1 regardless of Word's own (unreliable) default
+                # for when a style-only numbered list should restart.
+                set_num_id(p, exercises_num_id)
             add_inline(p, item)
             in_list = True
             continue
@@ -543,7 +688,6 @@ def convert(md_path, docx_path):
 
     flush_paragraph()
 
-    configure_header_footer(doc, doc_title)
     enable_update_fields_on_open(doc)
 
     doc.save(docx_path)

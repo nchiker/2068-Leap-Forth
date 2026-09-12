@@ -18,7 +18,7 @@ replacement for `rom/forth_boot.asm`:
 
 ## Why it's a stub, not the full interpreter
 
-The full 2068-Forth dictionary is a 24K image. A single LROS chunk-0 image
+The full 2068-Leap-Forth dictionary is a 24K image. A single LROS chunk-0 image
 is 8K. Those don't fit together without either (a) chaining multiple DOCK
 chunks under one LROS cartridge, or (b) trimming the dictionary for this
 target specifically — neither has been designed yet. This stub exists
