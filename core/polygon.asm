@@ -16,6 +16,14 @@
 ;             LINE, the last edge closing back to the first vertex,
 ;             all in the current color (CURRENT_ATTR) — via rom/
 ;             graphics_exrom.asm's own POLY_DRAW_IMPL (service slot 1)
+;   POLYGON-FILL ( x1 y1 x2 y2 ... xn yn n -- )   fills the polygon's
+;             interior (even-odd rule) instead of outlining it — via
+;             rom/graphics_exrom.asm's own POLY_FILL_IMPL (service
+;             slot 5). Same vertex argument shape as POLYGON; does NOT
+;             also draw the outline — call POLYGON too (same vertices)
+;             if both are wanted, matching this project's own "small
+;             composable primitives" convention rather than a hidden
+;             combined behavior
 ;
 ; n IS VALIDATED BEFORE ANY VERTEX IS POPPED, deliberately: unlike
 ; FILL/RECT's fixed argument count, POLYGON's own argument count
@@ -24,27 +32,30 @@
 ; many stack cells were actually meant for it — refusing immediately,
 ; leaving the rest of the stack exactly as the caller left it, is the
 ; only safe response; silently popping a guessed number of cells could
-; consume values that belong to something else entirely.
-;
-; NOT YET IMPLEMENTED: filling the polygon's interior (only the
-; outline draws today) — POLYGON-FILL is reserved as service slot 2 in
-; rom/graphics_exrom.asm's own table, a planned follow-on, not
-; forgotten.
+; consume values that belong to something else entirely. POLY_POP_
+; VERTICES below does this validation-and-pop once, shared by both
+; words, rather than each carrying its own copy — the exact class of
+; duplication this project already merged once this session (core/
+; rectfill.asm's own EXROM_CALL_SLOT header has the full story).
 ; ============================================================================
 
     IFNDEF CORE_POLYGON_ASM
     DEFINE CORE_POLYGON_ASM
 
 ; ============================================================================
-; POLYGON ( x1 y1 x2 y2 ... xn yn n -- )
+; POLY_POP_VERTICES (internal — not in kernel_api.inc)
+; Pops n, validates it, then pops that many (x,y) pairs into POLY_
+; VERTS — the shared argument-handling core of POLYGON and POLYGON-
+; FILL below. See this file's own header on why n is checked before
+; anything else is popped.
+; In:  ( x1 y1 x2 y2 ... xn yn n -- ), same stack shape either caller
+;      pops from
+; Out: carry SET if n was out of range (nothing further popped, stack
+;      otherwise untouched); carry CLEAR and POLY_COUNT/POLY_VERTS
+;      staged if n was valid (3-POLY_MAXPTS)
+; Destroys: AF, BC, DE, HL
 ; ============================================================================
-H_POLYGON:
-    DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL,
-                            ; not EQU) to whatever word chain this
-                            ; file should extend, immediately before
-                            ; INCLUDEing this file
-    DB   7, "P", "O", "L", "Y", "G", "O", "N"
-W_POLYGON:
+POLY_POP_VERTICES:
     call DPOP_HL             ; hl = n
     ld   a, l
     cp   3
@@ -78,16 +89,49 @@ W_POLYGON:
     ld   (POLY_IDX), a
     jr   .pop_loop
 .pop_done:
+    or   a                     ; carry clear: success
+    ret
+.invalid:
+    scf
+    ret
+
+; ============================================================================
+; POLYGON ( x1 y1 x2 y2 ... xn yn n -- )
+; ============================================================================
+H_POLYGON:
+    DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL,
+                            ; not EQU) to whatever word chain this
+                            ; file should extend, immediately before
+                            ; INCLUDEing this file
+    DB   7, "P", "O", "L", "Y", "G", "O", "N"
+W_POLYGON:
+    call POLY_POP_VERTICES
+    ret  c                     ; n was out of range: already refused
 
     ld   a, (CURRENT_ATTR)
     ld   (POLY_ATTR), a
     ld   hl, $A000 + (1 * 3)   ; slot 1 = POLY_DRAW_IMPL
     call EXROM_CALL_SLOT
-.invalid:
     ret
 
-DICT_LATEST_INIT_POLYGON EQU H_POLYGON   ; head of the dictionary once
-                                         ; this file's own words are
-                                         ; both included
+; ============================================================================
+; POLYGON-FILL ( x1 y1 x2 y2 ... xn yn n -- )
+; ============================================================================
+H_POLYGONFILL:
+    DW   H_POLYGON
+    DB   12, "P", "O", "L", "Y", "G", "O", "N", "-", "F", "I", "L", "L"
+W_POLYGONFILL:
+    call POLY_POP_VERTICES
+    ret  c
+
+    ld   a, (CURRENT_ATTR)
+    ld   (POLY_ATTR), a
+    ld   hl, $A000 + (5 * 3)   ; slot 5 = POLY_FILL_IMPL
+    call EXROM_CALL_SLOT
+    ret
+
+DICT_LATEST_INIT_POLYGON EQU H_POLYGONFILL   ; head of the dictionary
+                                             ; once this file's own
+                                             ; words are all included
 
     ENDIF

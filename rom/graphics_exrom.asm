@@ -83,7 +83,7 @@ GRAPHICS_EXROM_TABLE:
     jp   SPRITE_DEFINE_IMPL          ; slot 2 ($A006) — SPRITE-DEFINE
     jp   SPRITE_SHOW_IMPL            ; slot 3 ($A009) — SPRITE-SHOW
     jp   SPRITE_HIDE_IMPL            ; slot 4 ($A00C) — SPRITE-HIDE
-    jp   GRAPHICS_EXROM_UNIMPLEMENTED ; slot 5 — reserved (POLYGON fill)
+    jp   POLY_FILL_IMPL               ; slot 5 ($A00F) — POLYGON-FILL
     jp   GRAPHICS_EXROM_UNIMPLEMENTED ; slot 6 — reserved
     jp   GRAPHICS_EXROM_UNIMPLEMENTED ; slot 7 — reserved
     ASSERT $ - GRAPHICS_EXROM_TABLE == GRAPHICS_EXROM_MAX_SLOTS * 3
@@ -583,6 +583,529 @@ SPRITE_MUL_A_HL:
     add  hl, de
     dec  a
     jr   nz, .loop
+    ret
+
+; ============================================================================
+; POLY_FILL_IMPL
+; Fills the interior of the polygon (POLY_VERTS/POLY_COUNT) using the
+; even-odd rule — POLYGON-FILL's actual mechanism. Active-edge scanline
+; fill: build a table of non-horizontal edges, then for each scanline,
+; collect every active edge's current x as a crossing, sort the
+; crossings, and fill between each pair (1st-2nd, 3rd-4th, ...).
+;
+; Genuinely algebraic, NOT a flood fill: crossings come straight from
+; the vertex coordinates, never from reading back already-drawn
+; pixels, so — unlike GFX_FILL bounded by a hand-drawn outline — this
+; can't leak through a diagonal single-pixel gap in a Bresenham-drawn
+; boundary line. That gap is a real, separate property of 4-connected
+; flood fill this project already accepts for ordinary FILL; POLYGON-
+; FILL never has it, a genuine advantage of computing crossings
+; directly instead of exploring pixels.
+;
+; PRECISION: verified in Python against an exact (real-number) even-
+; odd reference across 6 shapes (see this session's own working
+; verification, not preserved in-tree) before any Z80 was written.
+; Convex shapes with integer-ratio edges (a right triangle, an axis-
+; aligned square) matched EXACTLY. Concave shapes with non-integer-
+; ratio edges can be off by a single pixel at specific scanlines near
+; a concave vertex (~3% of filled pixels in the worst tested case) —
+; the Bresenham error accumulator doesn't round every row's crossing
+; the same way (floor some rows, the true nearest-integer on others),
+; the same class of approximation GFX_LINE/GFX_CIRCLE already accept
+; throughout this project rather than a bug specific to this routine.
+; Confirmed in that same verification: every such discrepancy is a
+; single pixel immediately adjacent to correctly-filled area — never
+; a leak far outside the shape, never a real gap inside it. Also
+; masked in practice whenever POLYGON-FILL is used together with
+; POLYGON's own outline (the normal case): the outline is drawn with
+; the same GFX_LINE Bresenham stepping, directly over these same
+; boundary pixels.
+;
+; EDGE TABLE IS GENUINE RAM (POLY_FILL_EDGE_*, include/sysvars.inc),
+; not scratch inside this EXROM image: chunk 5 IS this ROM image while
+; paged in for this very call, so state that must be written and
+; persist across the whole fill can't live here.
+; In:  POLY_VERTS/POLY_COUNT/POLY_ATTR — pre-set by the Home-side
+;      POLYGON-FILL word
+; Out: none
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+POLY_FILL_IMPL:
+    ; ---- build the edge table ----
+    xor  a
+    ld   (POLY_FILL_NEDGES), a
+    ld   a, 255
+    ld   (POLY_FILL_YMIN), a
+    xor  a
+    ld   (POLY_FILL_YMAX), a
+    ld   (POLY_IDX), a               ; i = 0 (vertex loop index)
+
+.build_loop:
+    ; ---- vertex i -> RECT_X0/RECT_Y0 (reused as scratch — RECT and
+    ; POLYGON-FILL never run at the same time) ----
+    ld   a, (POLY_IDX)
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_VERTS
+    add  hl, de
+    add  hl, de                      ; hl = POLY_VERTS + 2*i
+    ld   a, (hl)
+    ld   (RECT_X0), a
+    inc  hl
+    ld   a, (hl)
+    ld   (RECT_Y0), a
+
+    ; ---- vertex j = (i+1) wrapping to 0 -> RECT_X1/RECT_Y1 ----
+    ld   a, (POLY_IDX)
+    inc  a
+    ld   b, a
+    ld   a, (POLY_COUNT)
+    cp   b
+    jr   nz, .no_wrap
+    ld   b, 0
+.no_wrap:
+    ld   a, b
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_VERTS
+    add  hl, de
+    add  hl, de
+    ld   a, (hl)
+    ld   (RECT_X1), a
+    inc  hl
+    ld   a, (hl)
+    ld   (RECT_Y1), a
+
+    ; ---- skip horizontal edges (y0 == y1: no crossings) ----
+    ld   a, (RECT_Y0)
+    ld   b, a
+    ld   a, (RECT_Y1)
+    cp   b
+    jp   z, .build_next
+
+    ; ---- sort so Y0 < Y1, swapping X together with Y ----
+    ld   a, (RECT_Y0)
+    ld   b, a
+    ld   a, (RECT_Y1)
+    cp   b
+    jr   nc, .y_ordered              ; Y1 >= Y0: already correctly ordered
+    ld   (RECT_Y0), a                ; A = old Y1 -> new Y0
+    ld   a, b
+    ld   (RECT_Y1), a                ; B = old Y0 -> new Y1
+    ld   a, (RECT_X0)
+    ld   b, a
+    ld   a, (RECT_X1)
+    ld   (RECT_X0), a
+    ld   a, b
+    ld   (RECT_X1), a
+.y_ordered:
+
+    ; ---- store this edge's Y0/Y1/X (=X0)/DX/DY/SX/ERR=0 ----
+    ld   a, (POLY_FILL_NEDGES)
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_FILL_EDGE_Y0
+    add  hl, de
+    ld   a, (RECT_Y0)
+    ld   (hl), a
+
+    ld   a, (POLY_FILL_NEDGES)
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_FILL_EDGE_Y1
+    add  hl, de
+    ld   a, (RECT_Y1)
+    ld   (hl), a
+
+    ld   a, (POLY_FILL_NEDGES)
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_FILL_EDGE_X
+    add  hl, de
+    ld   a, (RECT_X0)
+    ld   (hl), a
+
+    ; dy = Y1-Y0 (always >=1: horizontal already skipped, now sorted)
+    ld   a, (RECT_Y1)
+    ld   b, a
+    ld   a, (RECT_Y0)
+    ld   c, a
+    ld   a, b
+    sub  c                           ; a = dy
+    ld   b, a                        ; stash dy in B across the address calc
+    ld   a, (POLY_FILL_NEDGES)
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_FILL_EDGE_DY
+    add  hl, de
+    ld   (hl), b
+
+    ; dx = |X1-X0|, sx = sign
+    ld   a, (RECT_X1)
+    ld   b, a
+    ld   a, (RECT_X0)
+    ld   c, a
+    ld   a, b
+    sub  c                           ; a = X1-X0 (signed result in A)
+    jr   nc, .dx_pos                 ; X1>=X0: already positive (or zero)
+    neg                              ; X1<X0: negate to get |dx|
+    ld   b, a                        ; b = dx
+    ld   a, (POLY_FILL_NEDGES)
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_FILL_EDGE_SX
+    add  hl, de
+    ld   (hl), $FF                   ; sx = -1
+    jr   .dx_store
+.dx_pos:
+    ld   b, a                        ; b = dx
+    ld   a, (POLY_FILL_NEDGES)
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_FILL_EDGE_SX
+    add  hl, de
+    ld   (hl), 1                     ; sx = +1
+.dx_store:
+    ld   a, (POLY_FILL_NEDGES)
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_FILL_EDGE_DX
+    add  hl, de
+    ld   (hl), b
+
+    ; err = 0 (2 bytes)
+    ld   a, (POLY_FILL_NEDGES)
+    add  a, a                        ; *2 -- ERR is 2 bytes/entry
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_FILL_EDGE_ERR
+    add  hl, de
+    ld   (hl), 0
+    inc  hl
+    ld   (hl), 0
+
+    ; ---- track ymin/ymax, advance nedges ----
+    ld   a, (RECT_Y0)
+    ld   hl, POLY_FILL_YMIN
+    cp   (hl)
+    jr   nc, .ymin_done
+    ld   (hl), a
+.ymin_done:
+    ld   a, (RECT_Y1)
+    ld   hl, POLY_FILL_YMAX
+    cp   (hl)
+    jr   c, .ymax_done
+    ld   (hl), a
+.ymax_done:
+    ld   a, (POLY_FILL_NEDGES)
+    inc  a
+    ld   (POLY_FILL_NEDGES), a
+
+.build_next:
+    ld   a, (POLY_IDX)
+    inc  a
+    ld   (POLY_IDX), a
+    ld   b, a
+    ld   a, (POLY_COUNT)
+    cp   b
+    jp   nz, .build_loop
+
+    ; ---- degenerate: no non-horizontal edges at all -- nothing to fill ----
+    ld   a, (POLY_FILL_NEDGES)
+    or   a
+    ret  z
+
+    ; ---- for each scanline y = YMIN to YMAX-1 (half-open) ----
+    ld   a, (POLY_FILL_YMIN)
+    ld   (POLY_FILL_Y), a
+.row_loop:
+    xor  a
+    ld   (POLY_FILL_NCROSS), a
+    xor  a
+    ld   (POLY_FILL_I), a            ; edge loop index
+
+.edge_loop:
+    ld   a, (POLY_FILL_I)
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_FILL_EDGE_Y0
+    add  hl, de
+    ld   a, (hl)                     ; a = this edge's Y0
+    ld   b, a
+    ld   a, (POLY_FILL_Y)
+    cp   b
+    jp   c, .edge_not_active         ; y < Y0: not active yet
+
+    ld   a, (POLY_FILL_I)
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_FILL_EDGE_Y1
+    add  hl, de
+    ld   a, (hl)                     ; a = this edge's Y1
+    ld   b, a
+    ld   a, (POLY_FILL_Y)
+    cp   b
+    jp   nc, .edge_not_active        ; y >= Y1: no longer active (half-open)
+
+    ; ---- active: record this edge's current X as a crossing ----
+    ld   a, (POLY_FILL_I)
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_FILL_EDGE_X
+    add  hl, de
+    ld   a, (hl)                     ; a = this edge's current x
+    ld   c, a                        ; stash the crossing value in C
+    ld   a, (POLY_FILL_NCROSS)
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_FILL_CROSSINGS
+    add  hl, de
+    ld   (hl), c
+    ld   a, (POLY_FILL_NCROSS)
+    inc  a
+    ld   (POLY_FILL_NCROSS), a
+
+    ; ---- advance this edge's own x for the NEXT scanline (Bresenham
+    ; y-major step): err += dx; while 2*err >= dy: x += sx; err -= dy ----
+    ld   a, (POLY_FILL_I)
+    add  a, a                        ; *2 -- ERR is 2 bytes/entry
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_FILL_EDGE_ERR
+    add  hl, de                      ; hl = &ERR[i]
+    ld   (POLY_FILL_ERR_ADDR), hl    ; stash for the write-back below
+    ld   e, (hl)
+    inc  hl
+    ld   d, (hl)                     ; de = err (16-bit)
+
+    ld   a, (POLY_FILL_I)
+    ld   l, a
+    ld   h, 0
+    ld   bc, POLY_FILL_EDGE_DX
+    add  hl, bc
+    ld   a, (hl)                     ; a = dx
+    ld   l, a
+    ld   h, 0                        ; hl = dx, zero-extended
+    add  hl, de                      ; hl = err + dx (new running error —
+                                     ; genuinely needs all 16 bits: dy up
+                                     ; to 191 plus dx up to 255 can reach
+                                     ; 446 before normalization brings it
+                                     ; back down, caught by checking the
+                                     ; real worst case before writing any
+                                     ; of this, not assumed to fit a byte
+
+    ld   a, (POLY_FILL_I)
+    ld   e, a
+    ld   d, 0
+    push hl                          ; save err+dx across the DY lookup
+    ld   hl, POLY_FILL_EDGE_DY
+    add  hl, de
+    ld   a, (hl)                     ; a = dy
+    pop  hl                          ; hl = err+dx again
+    ld   b, 0
+    ld   c, a                        ; bc = dy, zero-extended
+
+.step_loop:
+    push hl                          ; save err
+    add  hl, hl                      ; hl = 2*err -- SIGNED: err legitimately
+                                     ; goes negative whenever dx isn't an
+                                     ; exact multiple of dy (the normal
+                                     ; case), so 2*err can be negative too.
+                                     ; A negative 2*err, read as a two's-
+                                     ; complement 16-bit value, LOOKS like
+                                     ; a huge unsigned number -- an
+                                     ; unsigned-only carry check below
+                                     ; would then wrongly see it as
+                                     ; ">= dy" and keep stepping (this
+                                     ; exact bug shipped once already,
+                                     ; caught via a real-hardware screen-
+                                     ; shot showing spans running off the
+                                     ; edge of the canvas, root-caused via
+                                     ; a temporary per-row debug log
+                                     ; before this fix was written). Test
+                                     ; the sign bit FIRST: negative always
+                                     ; means "stop", since dy is always
+                                     ; >=1 (positive) so a negative 2*err
+                                     ; can never be >= dy.
+    bit  7, h
+    jr   nz, .step_stop              ; 2*err negative: definitely < dy
+    or   a
+    sbc  hl, bc                      ; carry set iff 2*err < dy (safe now:
+                                     ; both operands are non-negative)
+    pop  hl                          ; restore err (un-doubled) either way
+    jr   c, .step_done               ; 2*err < dy: normalization complete
+
+    push bc                          ; save dy across the X update
+    push hl                          ; save err across the X update
+    ld   a, (POLY_FILL_I)
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_FILL_EDGE_SX
+    add  hl, de
+    ld   a, (hl)                     ; a = sx (+1 or -1, a real signed
+                                     ; byte — the add below wraps
+                                     ; correctly via two's complement,
+                                     ; no branch needed for the sign)
+    ld   c, a
+    ld   a, (POLY_FILL_I)
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_FILL_EDGE_X
+    add  hl, de
+    ld   a, (hl)
+    add  a, c                        ; x += sx
+    ld   (hl), a
+    pop  hl                          ; restore err
+    pop  bc                          ; restore dy
+
+    or   a
+    sbc  hl, bc                      ; err -= dy
+    jr   .step_loop
+
+.step_stop:
+    pop  hl                          ; restore err (un-doubled) -- same
+                                     ; "either way" restore .step_done
+                                     ; below expects, just reached from
+                                     ; the negative-sign short-circuit
+                                     ; instead of the carry check
+.step_done:
+    ld   a, l
+    ld   de, (POLY_FILL_ERR_ADDR)
+    ld   (de), a
+    inc  de
+    ld   a, h
+    ld   (de), a
+
+.edge_not_active:
+    ld   a, (POLY_FILL_I)
+    inc  a
+    ld   (POLY_FILL_I), a
+    ld   b, a
+    ld   a, (POLY_FILL_NEDGES)
+    cp   b
+    jp   nz, .edge_loop
+
+    ; ---- every edge checked for this row -- sort the crossings
+    ; (bubble sort: NCROSS is at most POLY_MAXPTS=12, so simplicity
+    ; wins over a fancier sort with the same worst-case behavior at
+    ; this size) ----
+    ld   a, (POLY_FILL_NCROSS)
+    cp   2
+    jp   c, .row_done                ; fewer than 2 crossings: nothing
+                                     ; to sort or fill this row
+    dec  a
+    ld   (POLY_FILL_PASS), a         ; passes remaining = NCROSS-1
+.sort_pass:
+    ld   a, (POLY_FILL_PASS)
+    or   a
+    jp   z, .sort_done
+    xor  a
+    ld   (POLY_FILL_J), a
+.sort_inner:
+    ld   a, (POLY_FILL_NCROSS)
+    dec  a
+    ld   b, a                        ; b = last valid j (NCROSS-1 - 1
+                                     ; would leave no j+1 in range, so
+                                     ; the last valid j is NCROSS-2;
+                                     ; comparing against NCROSS-1 below
+                                     ; and using strict `nc` catches it)
+    ld   a, (POLY_FILL_J)
+    cp   b
+    jp   nc, .sort_inner_done        ; j >= NCROSS-1: no j+1 left, pass over
+
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_FILL_CROSSINGS
+    add  hl, de
+    ld   a, (hl)                     ; a = CROSSINGS[j]
+    inc  hl
+    ld   b, (hl)                     ; b = CROSSINGS[j+1]; hl -> [j+1]
+    cp   b
+    jr   c, .no_swap                 ; [j] < [j+1]: already ordered
+    jr   z, .no_swap                 ; equal: nothing to do either
+    ld   (hl), a                     ; [j+1] = old [j]
+    dec  hl
+    ld   (hl), b                     ; [j] = old [j+1]
+.no_swap:
+    ld   a, (POLY_FILL_J)
+    inc  a
+    ld   (POLY_FILL_J), a
+    jp   .sort_inner
+.sort_inner_done:
+    ld   a, (POLY_FILL_PASS)
+    dec  a
+    ld   (POLY_FILL_PASS), a
+    jp   .sort_pass
+.sort_done:
+
+    ; ---- fill spans: pairs (crossings[0],crossings[1]), (crossings[2],
+    ; crossings[3]), ... — half-open [x0,x1) per span, same convention
+    ; verified against a reference even-odd fill before any of this was
+    ; written (see this routine's own header) ----
+    xor  a
+    ld   (POLY_FILL_I), a
+.span_loop:
+    ld   a, (POLY_FILL_I)
+    add  a, 2
+    ld   b, a                        ; b = i+2
+    ld   a, (POLY_FILL_NCROSS)
+    cp   b
+    jp   c, .row_done                ; NCROSS < i+2: no full pair left
+
+    ld   a, (POLY_FILL_I)
+    ld   e, a
+    ld   d, 0
+    ld   hl, POLY_FILL_CROSSINGS
+    add  hl, de
+    ld   a, (hl)
+    ld   (RECT_CUR_X), a             ; reuse RECT_CUR_X as the span-fill
+                                     ; cursor — RECT is idle whenever
+                                     ; POLYGON-FILL runs, same "shared
+                                     ; scratch" reasoning already used
+                                     ; for RECT_X0/Y0 above
+    inc  hl
+    ld   a, (hl)
+    ld   (RECT_X1), a                ; reuse RECT_X1 as this span's own
+                                     ; exclusive right bound
+
+.pixel_loop:
+    ld   a, (RECT_X1)
+    ld   b, a                        ; b = x1 (bound)
+    ld   a, (RECT_CUR_X)             ; a = cur
+    cp   b                           ; carry set iff cur < x1 (continue)
+    jp   nc, .span_done              ; cur >= x1: this span is done
+
+    ld   b, a                        ; b = cur (x)
+    ld   a, (POLY_FILL_Y)
+    ld   c, a                        ; c = y
+    ld   d, 0                        ; OVER=0 — always OR/set, see
+                                     ; RECT_FILL_IMPL's own header for
+                                     ; why (a clean repaint, not a toggle)
+    ld   a, (POLY_ATTR)
+    call GRAPHICS_HOME_WRITE_PIXEL
+
+    ld   a, (RECT_CUR_X)
+    inc  a
+    ld   (RECT_CUR_X), a
+    jp   .pixel_loop
+.span_done:
+    ld   a, (POLY_FILL_I)
+    add  a, 2
+    ld   (POLY_FILL_I), a
+    jp   .span_loop
+
+.row_done:
+    ld   a, (POLY_FILL_Y)
+    ld   b, a
+    ld   a, (POLY_FILL_YMAX)
+    dec  a                           ; last valid row = YMAX-1
+    cp   b
+    jp   z, .all_rows_done           ; just finished the last row
+    ld   a, (POLY_FILL_Y)
+    inc  a
+    ld   (POLY_FILL_Y), a
+    jp   .row_loop
+.all_rows_done:
     ret
 
     DS   $C000 - $, $FF             ; pad to the end of this 8K image

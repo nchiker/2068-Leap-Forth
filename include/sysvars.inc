@@ -1506,6 +1506,70 @@ POLY_ATTR:           DEFS 1           ; 1 byte — CURRENT_ATTR at the
 POLY_IDX:            DEFS 1           ; 1 byte — EXROM-side edge-walk
                                    ; cursor, 0..POLY_COUNT-1
 
+; ---- POLYGON-FILL's own edge table (rom/graphics_exrom.asm, chunk 5
+; EXROM) ---- Genuine RAM, NOT part of chunk 5 itself: chunk 5 IS the
+; EXROM ROM image while paged in for this very call, so scratch state
+; that must persist and be written across the whole fill (one entry
+; per polygon edge, mutated one scanline at a time) has to live
+; somewhere that stays real RAM throughout — chunk 4, same as every
+; other EXROM-side state this project already keeps here (RECT_*/
+; POLY_*/SPRITE_OP_*).
+;
+; Parallel arrays, not a packed struct — matches POLY_VERTS's own
+; convention and this project's established SPRITE_SLOT_DEFINED/SHOWN
+; style. One entry per edge (POLY_MAXPTS - 1 minimum after skipping at
+; least the polygon's own implicit closing consideration, but sized to
+; POLY_MAXPTS to cover the worst case where every edge is non-
+; horizontal): Y0/Y1 (sorted so Y0<Y1), X (current x at this edge,
+; advances by one Bresenham y-major step per scanline processed), DX/
+; DY (the edge's own |x1-x0|/(y1-y0)), SX (+1 or -1, stored as a real
+; signed byte — $01 or $FF — so applying it is a plain 8-bit ADD, no
+; branch needed), ERR (the running Bresenham error term).
+POLY_FILL_EDGE_Y0:   DEFS POLY_MAXPTS   ; 12 bytes
+POLY_FILL_EDGE_Y1:   DEFS POLY_MAXPTS   ; 12 bytes
+POLY_FILL_EDGE_X:    DEFS POLY_MAXPTS   ; 12 bytes
+POLY_FILL_EDGE_DX:   DEFS POLY_MAXPTS   ; 12 bytes
+POLY_FILL_EDGE_DY:   DEFS POLY_MAXPTS   ; 12 bytes
+POLY_FILL_EDGE_SX:   DEFS POLY_MAXPTS   ; 12 bytes
+POLY_FILL_EDGE_ERR:  DEFS POLY_MAXPTS * 2   ; 24 bytes — 2 bytes/edge,
+                                   ; NOT 1: the running error can reach
+                                   ; (dy-1)+dx before each row's own
+                                   ; normalization loop brings it back
+                                   ; under dy, and dy up to 191 plus dx
+                                   ; up to 255 is 446 — a real 8-bit
+                                   ; overflow, caught before any Z80
+                                   ; was written by checking the actual
+                                   ; worst case, not assumed safe
+POLY_FILL_NEDGES:    DEFS 1           ; 1 byte — how many of the above
+                                   ; are actually in use (horizontal
+                                   ; edges are skipped when building
+                                   ; the table, so this can be less
+                                   ; than POLY_COUNT)
+POLY_FILL_YMIN:      DEFS 1           ; 1 byte — lowest y any edge starts at
+POLY_FILL_YMAX:      DEFS 1           ; 1 byte — highest y any edge ends at
+POLY_FILL_Y:         DEFS 1           ; 1 byte — the scanline currently
+                                   ; being processed
+POLY_FILL_CROSSINGS: DEFS POLY_MAXPTS   ; 12 bytes — this row's own
+                                   ; edge-crossing x values, sorted
+                                   ; ascending before spans are filled
+POLY_FILL_NCROSS:    DEFS 1           ; 1 byte — how many of the above
+                                   ; are valid this row
+POLY_FILL_I:         DEFS 1           ; 1 byte — general loop cursor
+POLY_FILL_J:         DEFS 1           ; 1 byte — general loop cursor
+                                   ; (sort's own inner-loop index,
+                                   ; never live at the same time as
+                                   ; POLY_FILL_I's own outer use)
+POLY_FILL_PASS:      DEFS 1           ; 1 byte — bubble-sort passes
+                                   ; remaining, counting down from
+                                   ; NCROSS-1 to 0
+POLY_FILL_ERR_ADDR:  DEFS 2           ; 2 bytes — the CURRENT edge's own
+                                   ; &POLY_FILL_EDGE_ERR[i], stashed
+                                   ; while HL/DE are busy holding the
+                                   ; running error value itself during
+                                   ; its own Bresenham normalization
+                                   ; loop, so the final value can be
+                                   ; written back afterward
+
 ; ---- kernel/editor word-wrap tables ----
 ; Populated by EDITOR_WRAP_CALC (kernel/editor/editor.asm) from a line
 ; buffer's text; consumed by both the multi-row redraw (BASIC_REDRAW_
