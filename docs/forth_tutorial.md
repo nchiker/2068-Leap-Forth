@@ -1080,16 +1080,23 @@ not the boolean `=`/`<`/`>` results covered in
 ## 5. Reading and writing memory directly
 
 Everything so far has lived on the stack, which is a fine place for a
-value you're about to use and a poor one for a value you want to keep.
-The stack is a queue of things in flight; it isn't storage. For storage
-you need memory, and Forth gives you it directly.
+value about to be used and a poor one for a value meant to be kept. The
+stack is a queue of things in flight; it isn't storage. This section
+covers the machine's actual storage: raw memory, the words that read
+and write it, named storage built on top of it, arrays, and strings.
+
+#### The Memory Model
 
 The picture to hold: the machine's memory is one very long street of
 numbered slots — 65,536 of them, numbered 0 to 65535. That number is a
-slot's **address**, exactly like a house number. Each slot holds one
-byte. Two neighbouring slots together hold one of the whole numbers
-you've been putting on the stack, since one byte on its own can only
-count from 0 to 255 and that isn't enough.
+slot's **address**, exactly like a house number.
+
+- **One Byte per Slot:** Each slot holds one byte. Two neighboring
+  slots together hold one of the whole numbers already in use on the
+  stack, since one byte on its own can only count from 0 to 255, and
+  that isn't enough.
+
+#### Fetch and Store: `@` and `!`
 
 Two words reach into that street:
 
@@ -1098,13 +1105,14 @@ Two words reach into that street:
 | `@` (pronounced "fetch") | `( addr -- n )` | Read the value stored at `addr` |
 | `!` (pronounced "store") | `( n addr -- )` | Write `n` to `addr`             |
 
-Watch the order for `!`: the *value* goes on the stack first, then the
-*address*. Read it as "store `n` at `addr`," which matches the order
-the words appear when you write `n addr !`. This trips up nearly
-everyone the first time, and there's no trick to it beyond the
-mnemonic — though one image does help: you're posting a parcel. The
-parcel is the value, and you write the address on top of it. Contents
-first, address last, then hand it over.
+- **Operand Order for `!`:** The *value* goes on the stack first, then
+  the *address*. Read it as "store `n` at `addr`," which matches the
+  order the words appear when writing `n addr !`. One image helps:
+  posting a parcel. The parcel is the value, and the address is
+  written on top of it — contents first, address last, then handed
+  over.
+
+#### `VARIABLE` and `CONSTANT`
 
 That's a much lower-level tool than BASIC's variables — no `DIM`, no
 named storage, just addresses. `VARIABLE` builds named storage out of
@@ -1116,16 +1124,16 @@ VARIABLE SCORE
 SCORE @ .        \ prints 42
 ```
 
-`VARIABLE SCORE` creates a new word, `SCORE`, that pushes the address
-of its own private two-byte storage cell every time you run it — the
-cell starting out zero. You never have to see or remember that address
-as a number; you write `SCORE`, get it, and then use `@`/`!` on it
-exactly as with any other address. Same shape as BASIC's
-`LET SCORE = 42` and `PRINT SCORE`, just spelled with explicit `@`/`!`
-instead of an assignment operator.
+- **What `VARIABLE` Creates:** `VARIABLE SCORE` creates a new word,
+  `SCORE`, that pushes the address of its own private two-byte storage
+  cell every time it runs — the cell starting out zero. The address
+  never needs to be seen or remembered as a number; writing `SCORE`
+  gets it, and `@`/`!` work on it exactly as on any other address. Same
+  shape as BASIC's `LET SCORE = 42` and `PRINT SCORE`, just spelled
+  with explicit `@`/`!` instead of an assignment operator.
 
 `CONSTANT` is `VARIABLE`'s simpler sibling. It fixes a value
-permanently at the moment you define it: no cell, no way to change it
+permanently at the moment it's defined: no cell, no way to change it
 afterward.
 
 ```forth
@@ -1133,28 +1141,28 @@ afterward.
 MAXHEALTH .      \ prints 100, every time, forever
 ```
 
-The difference between them is worth stating plainly, because the two
-look so similar when you define them and behave quite differently when
-you use them. `VARIABLE SCORE` gives you a word that pushes an
-**address** — the value itself is one `@` away. `100 CONSTANT
-MAXHEALTH` gives you a word that pushes the **value** directly, so
-there's no `@` involved and no cell to fetch from:
+- **The Real Difference:** Worth stating plainly, because the two look
+  similar when defined and behave quite differently when used.
+  `VARIABLE SCORE` gives a word that pushes an **address** — the value
+  itself is one `@` away. `100 CONSTANT MAXHEALTH` gives a word that
+  pushes the **value** directly, so no `@` is involved and no cell to
+  fetch from:
 
-```forth
-SCORE @ .        \ the @ is required -- SCORE gave you an address
-MAXHEALTH .      \ no @ -- MAXHEALTH gave you the number itself
-```
+  ```forth
+  SCORE @ .        \ the @ is required -- SCORE gave an address
+  MAXHEALTH .      \ no @ -- MAXHEALTH gave the number itself
+  ```
 
-A stray or missing `@` between these two is a common early mistake, and
-it doesn't announce itself: `SCORE .` will happily print a number, just
-not the one you wanted — it prints where the cell *is*, not what's in
-it.
+- **A Common Mistake:** A stray or missing `@` between these two is a
+  common early error, and it doesn't announce itself: `SCORE .` will
+  happily print a number, just not the one intended — it prints where
+  the cell *is*, not what's in it.
 
 ### Bytes: `C@` and `C!`
 
-`@` and `!` always work on a full two-byte cell, which matches the size
-of the numbers you've been pushing. `C@` and `C!` do the same job one
-*byte* at a time — the natural pair for anything that's genuinely
+`@` and `!` always work on a full two-byte cell, matching the size of
+the numbers already in use on the stack. `C@` and `C!` do the same job
+one *byte* at a time — the natural pair for anything genuinely
 byte-sized, text especially:
 
 | Word | Stack effect       | What it does             |
@@ -1162,7 +1170,7 @@ byte-sized, text especially:
 | `C@` | `( addr -- byte )` | Read one byte at `addr`  |
 | `C!` | `( byte addr -- )` | Write one byte to `addr` |
 
-To see the two-slots-per-number arrangement for real, store a number
+To see the two-slots-per-number arrangement directly, store a number
 whose two halves are easy to tell apart. 258 is 256 + 2, so its two
 bytes are 1 and 2:
 
@@ -1174,65 +1182,68 @@ V C@ .          \ prints 2   -- just the first byte
 V 1 + C@ .      \ prints 1   -- just the second byte
 ```
 
-Two things to take from that. First, `V 1 +` is how you reach the next
-slot along: an address is an ordinary number, so ordinary `+` moves you
-around memory. That idiom comes back constantly. Second, the low half
-of the number is stored *first*, in the lower-numbered slot — which is
-this processor's convention, and occasionally surprising if you expected
-the halves the other way round.
+- **Addresses Are Ordinary Numbers:** `V 1 +` reaches the next slot
+  along: an address is an ordinary number, so ordinary `+` moves
+  through memory. This idiom recurs constantly.
 
-There's no `CELLS`-style helper for single bytes (you'll meet `CELLS`
-under [Arrays](#arrays) shortly), because for bytes the offset and the
-count are already the same number.
+- **Byte Order:** The low half of the number is stored *first*, in the
+  lower-numbered slot — this processor's own convention, and worth
+  noting since it's easy to expect the halves the other way round.
+
+There's no `CELLS`-style helper for single bytes (`CELLS` itself
+appears under [Arrays](#arrays) next), because for bytes the offset and
+the count are already the same number.
 
 `FREE ( -- n )` reports how much room is left for defining new words,
-which is handy before starting a big program — the same spirit as
-BASIC's own `FREE`:
+useful before starting a large program — the same spirit as BASIC's
+own `FREE`:
 
 ```forth
 FREE .      \ prints how many bytes are left for new definitions
 ```
 
-It measures dictionary space specifically, meaning room for new word
-definitions, not total system memory. The stacks, the screen, and the
-system's own working storage sit in separate fixed-size regions that
-never compete with what `FREE` reports.
+- **What `FREE` Measures:** Dictionary space specifically — room for
+  new word definitions, not total system memory. The stacks, the
+  screen, and the system's own working storage sit in separate
+  fixed-size regions that never compete with what `FREE` reports.
 
 ### Arrays
 
 `ARRAY` is `VARIABLE` scaled up: instead of a single storage cell, it
-reserves however many you ask for, all zeroed to start.
+reserves however many are requested, all zeroed to start.
 
 ```forth
 5 ARRAY SCORES
 ```
 
-`SCORES` now pushes the address of the FIRST cell, exactly as
-`VARIABLE` does. To reach any other element, add its index — times the
-size of a cell — to that base address before using `@`/`!`. `CELLS`
-does that multiplication for you:
+- **Indexing:** `SCORES` pushes the address of the FIRST cell, exactly
+  as `VARIABLE` does. To reach any other element, its index — times the
+  size of a cell — is added to that base address before using `@`/`!`.
+  `CELLS` performs that multiplication:
 
-```forth
-99 3 CELLS SCORES + !     \ store 99 in element 3
-3 CELLS SCORES + @ .      \ prints 99
-0 CELLS SCORES + @ .      \ prints 0 -- element 0 is untouched
-```
+  ```forth
+  99 3 CELLS SCORES + !     \ store 99 in element 3
+  3 CELLS SCORES + @ .      \ prints 99
+  0 CELLS SCORES + @ .      \ prints 0 -- element 0 is untouched
+  ```
 
-There's no special array-indexing word; `index CELLS name +` is the
-whole idiom, exactly as real Forth systems handle it. Read it as one
-phrase — "the address `CELLS` past `name`."
+- **No Dedicated Indexing Word:** `index CELLS name +` is the whole
+  idiom, exactly as real Forth systems handle it — read as one phrase,
+  "the address `CELLS` past `name`."
 
-`CELLS` is just `( n -- n*2 )`, and it is easy to talk yourself out of
-bothering with it. Don't. This is the memory street from the start of
-this section again: `SCORES` gives you a plain **byte** address, and
-each element occupies **two** of those byte slots. Writing `3 SCORES +`
-walks three bytes along, not three elements, which lands you halfway
-into element 1 — reading and writing one byte from each of two
-different elements at once. Nothing complains. You just get numbers
-that make no sense.
+`CELLS` is just `( n -- n*2 )`, and it is easy to be tempted to skip
+it. This is the memory street from earlier in this section again:
+`SCORES` gives a plain **byte** address, and each element occupies
+**two** of those byte slots.
+
+- **The `CELLS` Trap:** Writing `3 SCORES +` walks three bytes along,
+  not three elements, landing halfway into element 1 — reading and
+  writing one byte from each of two different elements at once.
+  Nothing raises an error; the result is simply a number that
+  corresponds to nothing at all.
 
 Element 0 lives in byte offsets 0 and 1, element 1 in offsets 2 and 3,
-element 2 in 4 and 5, element 3 in 6 and 7. So:
+element 2 in 4 and 5, element 3 in 6 and 7:
 
 ```
 SCORES             ->  byte offset 0  ->  element 0            (correct)
@@ -1241,11 +1252,8 @@ SCORES             ->  byte offset 0  ->  element 0            (correct)
                                           element 1            (WRONG)
 ```
 
-That last one is the trap. An `@` there reads one byte from element 1
-and one from element 2 and combines them into a single number that
-corresponds to nothing at all. `CELLS` is exactly the `index * 2`
-conversion that turns "element 3" into "six bytes along", and writing
-it every time costs you nothing.
+`CELLS` is exactly the `index * 2` conversion that turns "element 3"
+into "six bytes along," and writing it every time costs nothing.
 
 ### Strings
 
@@ -1257,28 +1265,30 @@ ordinary numbers on the stack: an **address** and a **length**. `S"`
 S" HELLO WORLD" TYPE     \ prints HELLO WORLD
 ```
 
-`S" text"` pushes the address and length of `text`, and prints nothing
-by itself. `TYPE` takes an address and a length and prints exactly
-that many characters. Every other string word in this document works
-on the same address/length pair, so once `S"` has handed you one,
-anything here can consume it.
+- **What `S"` and `TYPE` Do:** `S" text"` pushes the address and length
+  of `text`, printing nothing by itself. `TYPE` takes an address and a
+  length and prints exactly that many characters. Every other string
+  word in this document works on the same address/length pair, so once
+  `S"` has produced one, anything here can consume it.
 
-That "two ordinary numbers" claim is worth taking literally rather than
-as a figure of speech, because it explains most of what follows. After
-`S" HELLO WORLD"` the stack holds exactly two values — an address, and
-the number 11 — and nothing anywhere marks them as being a string. If
-you typed `. .` at that point you'd get 11 and then some address
-printed back at you, in ordinary decimal, as the plain numbers they
-are. Nothing about the pair is special except that certain words agree
-to interpret it that way.
+That "two ordinary numbers" description is literal, not a figure of
+speech, and it explains most of what follows.
 
-This is also why `TYPE` takes *two* arguments and why nearly every
-string word in this section does too. There's no length hidden anywhere
-for them to look up. You carry it.
+- **Nothing Marks a String as Special:** After `S" HELLO WORLD"` the
+  stack holds exactly two values — an address, and the number 11 — and
+  nothing anywhere marks them as a string. Typing `. .` at that point
+  prints 11 and then some address, in ordinary decimal, as the plain
+  numbers they are. Certain words simply agree to interpret the pair
+  that way.
 
-A literal from `S"` is a one-off: it's fine for a piece of text you're
-about to print or measure, and no use at all for something you want to
-keep or change later. `STRING` reserves a real, named, mutable slot for
+- **Why Two Arguments:** This is also why `TYPE` takes *two* arguments,
+  and why nearly every string word in this section does too. There is
+  no length hidden anywhere for them to look up; it travels alongside
+  the address instead.
+
+A literal from `S"` is a one-off: fine for a piece of text about to be
+printed or measured, and no use at all for something meant to be kept
+or changed later. `STRING` reserves a real, named, mutable slot for
 text, just as `VARIABLE` does for a single number:
 
 ```forth
@@ -1293,44 +1303,45 @@ pair — from `S"`, say — and a destination:
 S" ADA" NAME PLACE
 ```
 
-`NAME`'s buffer now holds `"ADA"`. To get it back out as an
-address/length pair, for `TYPE` or anything else, use `COUNT`:
+`NAME`'s buffer now holds `"ADA"`. To retrieve it as an address/length
+pair, for `TYPE` or anything else, use `COUNT`:
 
 ```forth
 NAME COUNT TYPE      \ prints ADA
 ```
 
-`COUNT` is the one word here whose necessity isn't obvious, so it's
-worth seeing why it exists. A `STRING` buffer doesn't store a bare
-address/length pair — it stores its length in a single **count byte**
-at the very front, followed by the characters themselves. `NAME`
-pushes the address of that count byte, not of the text. So the buffer
-made by `20 STRING NAME`, holding `"ADA"`, looks like this in the
-memory street from earlier in this section:
+`COUNT` is the one word here whose necessity isn't immediately obvious,
+so it's worth explaining why it exists.
 
-```
-offset:   0    1    2    3    4  ...  20
-        [ 3 ][ A ][ D ][ A ][ ? ] ... [ ? ]
-          ^     ^
-          |     `-- the characters start here (NAME 1 +)
-          `-- the count byte: how many characters (NAME)
-```
+- **How a `STRING` Buffer Is Laid Out:** A `STRING` buffer doesn't
+  store a bare address/length pair — it stores its length in a single
+  **count byte** at the very front, followed by the characters
+  themselves. `NAME` pushes the address of that count byte, not of the
+  text. So the buffer made by `20 STRING NAME`, holding `"ADA"`, looks
+  like this in the memory street from earlier in this section:
 
-`COUNT ( caddr -- addr len )` is exactly the conversion between the two
-representations: give it the buffer's address, and it hands back "the
-address one byte further along" and "the number it found in the count
-byte" — which is precisely the pair `TYPE` wants. Two representations,
-one bridge between them.
+  ```
+  offset:   0    1    2    3    4  ...  20
+          [ 3 ][ A ][ D ][ A ][ ? ] ... [ ? ]
+            ^     ^
+            |     `-- the characters start here (NAME 1 +)
+            `-- the count byte: how many characters (NAME)
+  ```
 
-That also explains a line you'll see later in this document:
-`NAME 1 +` appears in the [`ACCEPT`](#reading-a-whole-line-accept-and-input)
-example and means "skip the count byte, give me the text area". It's
-the same `+` on the same kind of byte address you used to walk from one
-slot to the next earlier.
+- **What `COUNT` Bridges:** `COUNT ( caddr -- addr len )` is exactly
+  the conversion between the two representations: given the buffer's
+  address, it returns "the address one byte further along" and "the
+  number found in the count byte" — precisely the pair `TYPE` wants.
 
-If all you want is the length of the stored text, `LEN` skips straight
-to it without producing the full pair `COUNT` gives you — it just reads
-that count byte:
+That also explains a line appearing later in this document: `NAME 1 +`
+appears in the [`ACCEPT`](#reading-a-whole-line-accept-and-input)
+example and means "skip the count byte, take the text area." It's the
+same `+` on the same kind of byte address used earlier in this section
+to walk from one slot to the next.
+
+If only the length of the stored text is needed, `LEN` reaches it
+directly without producing the full pair `COUNT` gives — it simply
+reads that count byte:
 
 ```forth
 NAME LEN .            \ prints 3
@@ -1342,23 +1353,23 @@ NAME LEN .            \ prints 3
 S" 1234" VAL .        \ prints 1234
 S" -17" VAL .         \ prints -17
 S" NOTANUMBER" VAL .  \ prints 0 -- not a valid number, no error,
-                      \ just a safe default (the same convention
-                      \ dividing by zero already uses in this project)
+                      \ just a safe default, the same convention
+                      \ dividing by zero uses in this project
 ```
 
-A `STRING` buffer's maximum size is fixed when you create it —
-`20 STRING NAME` above never holds more than 20 characters — the same
-limitation BASIC's own string variables carry.
+- **Fixed Maximum Size:** A `STRING` buffer's maximum size is fixed at
+  creation — `20 STRING NAME` above never holds more than 20
+  characters — the same limitation BASIC's own string variables carry.
 
-### More string words
+### More String Words
 
 A further set covers the everyday BASIC string operations
-(`CHR$`/`STR$`/`UPPER$`/`LOWER$`/`LEFT$`/`RIGHT$`/`INSTR` and friends)
+(`CHR$`/`STR$`/`UPPER$`/`LOWER$`/`LEFT$`/`RIGHT$`/`INSTR` and similar)
 under Forth-standard names, all still working on the same
 address/length pairs:
 
 | Word     | Stack effect                                   | What it does                                     |
-| -------- | ---------------------------------------------- | ------------------------------------------------ |
+| -------- | ----------------------------------------------- | ------------------------------------------------ |
 | `CHR`    | `( code -- addr len )`                         | A one-character string from a character code     |
 | `STR`    | `( n -- addr len )`                            | A number, as a string                            |
 | `UPPER`  | `( addr len -- addr len )`                     | Uppercase, in place                              |
@@ -1378,82 +1389,83 @@ S" HELLO WORLD" 5 LEFT TYPE  \ prints HELLO
 S" HELLO WORLD" 5 RIGHT TYPE \ prints WORLD
 ```
 
-Look closely at `LEFT` and `RIGHT` in that table and you'll notice
-something: neither of them copies anything. `LEFT`'s result keeps the
-same `addr` and merely reports a shorter `len`; `RIGHT`'s keeps the
-same `len` and reports a later `addr`. That falls straight out of the
-"a string is just an address and a length" idea from the start of this
-section — a substring is simply a different *view* of memory you
-already had, so there's nothing to copy. If `n` is bigger than the
-string, both clamp to the whole string rather than reading past its
-end.
+- **`LEFT`/`RIGHT` Copy Nothing:** Neither word copies anything.
+  `LEFT`'s result keeps the same `addr` and reports a shorter `len`;
+  `RIGHT`'s keeps the same `len` and reports a later `addr`. This
+  follows directly from "a string is just an address and a length" —
+  a substring is simply a different *view* of memory already held, so
+  there's nothing to copy. If `n` is larger than the string, both
+  clamp to the whole string rather than reading past its end.
 
-`UPPER` and `LOWER` are the exception in the other direction: they
-change text **in place**. Every other word here only reads its
-`(addr len)`; these two write back into it. Type them at the prompt and
-they work exactly as the examples above show, because a string you type
-in lives in ordinary writable memory. The caveat that matters is for
-text that lives in the machine's permanent, unchangeable storage — text
-built into the ROM itself. A write there is simply discarded: not a
-crash, not an error, just no visible effect, since this hardware has no
-way to signal "that write didn't take." If `UPPER` ever appears to do
-nothing, that's the reason to check first.
+- **`UPPER`/`LOWER` Write in Place:** These two are the exception in
+  the other direction: they change text **in place**. Every other word
+  here only reads its `(addr len)`; these write back into it. Typed at
+  the prompt, they behave exactly as the examples above show, because
+  a string typed in lives in ordinary writable memory. The exception
+  is text living in the machine's permanent, unchangeable storage —
+  text built into the ROM itself. A write there is simply discarded:
+  not a crash, not an error, just no visible effect, since this
+  hardware has no way to signal that a write didn't take. If `UPPER`
+  ever appears to do nothing, this is the first thing to check.
 
 `SEARCH` looks for the second string inside the first and reports
-whether, and where, it found it. It needs two string literals at once,
-which calls for a small precaution — see the note just below — so put
-it in a definition:
+whether, and where, it found it.
+
+- **A Precaution With Two Literals on One Line:** `SEARCH` needs two
+  string literals at once, which calls for care: two `S"` literals
+  typed on the *same line at the prompt* share one piece of scratch
+  memory, so the second one's text lands on top of the first one's,
+  producing a result computed from something other than what was
+  typed. Inside a colon definition, each literal gets its own permanent
+  copy, and the problem doesn't arise. One `S"` per line is fine to
+  type directly; two or more belong in a definition. This is the only
+  place in this document where that matters, but it matters silently,
+  which is why it's worth knowing.
 
 ```forth
 : FOUND?  S" HELLO WORLD" S" WORLD" SEARCH ;
 FOUND? .          \ prints -1 (true) -- found
 ```
 
-**The precaution.** Two `S"` literals typed on the *same line at the
-prompt* share one piece of scratch memory, so the second one's text
-lands on top of the first one's and you get a result computed from
-something you didn't type. Inside a colon definition each literal gets
-its own permanent copy, and the problem doesn't arise. So: one `S"` per
-line is fine to type directly; two or more, put them in a definition.
-This is the only place in this document where that matters, but it
-matters silently, which is why it's worth knowing.
+- **Reading `SEARCH`'s Three Results:** `SEARCH` returns more than a
+  yes/no. `flag` is true if the second string turned up anywhere
+  inside the first. When it did, `addr3 len3` is the **rest of the
+  text starting at the match** — not just the matched part, and not
+  the original string. For `"HELLO WORLD"` searched for `"WORLD"`, the
+  match is at the end, so "the rest from the match onward" happens to
+  be exactly `"WORLD"`; searching for `"LO"` instead would return
+  `"LO WORLD"`. When the flag is false, `addr3 len3` is the original
+  string, unchanged.
 
-`SEARCH`'s three results are worth reading carefully, because it returns
-more than a yes/no. `flag` is true if the second string turned up
-anywhere inside the first. When it did, `addr3 len3` is the **rest of
-the text starting at the match** — not just the matched part, and not
-the original string. For `"HELLO WORLD"` searched for `"WORLD"`, the
-match is at the end, so "the rest from the match onward" happens to be
-exactly `"WORLD"`; had you searched for `"LO"` instead, you'd get back
-`"LO WORLD"`. When the flag is false, `addr3 len3` is the original
-string, unchanged.
-
-So the flag is what you branch on, and the pair underneath it is what
-you carry on searching or printing from:
+The flag is what gets branched on, and the pair underneath it is what
+gets carried on to search or print from:
 
 ```forth
 : SHOWREST  S" HELLO WORLD" S" WORLD" SEARCH DROP TYPE ;
 SHOWREST          \ prints WORLD
 ```
 
-That `DROP` throws away the flag, leaving the `(addr len)` pair for
-`TYPE` — a small illustration of why `DROP` from section 1 turns up so
-often in real code. Two more behaviours, both chosen so you don't have
-to special-case them yourself: an empty search string never matches,
-and a search string longer than the text being searched can't match
-either.
+- **Why the `DROP`:** `DROP` discards the flag, leaving the
+  `(addr len)` pair for `TYPE` — a small illustration of why `DROP`
+  from section 1 turns up so often in real code.
+
+- **Two Edge Cases Handled Automatically:** An empty search string
+  never matches, and a search string longer than the text being
+  searched can't match either — neither case needs to be special-cased
+  by the caller.
 
 ### Summary
 
-Memory as a numbered street of byte-sized slots. Addresses are ordinary
-numbers, so ordinary arithmetic moves you around memory. Cells are two
-bytes; bytes are one. Named storage built on top of raw addresses. A
-string is an address and a length, carried separately.
+- **Core Concepts:** Memory as a numbered street of byte-sized slots.
+  Addresses are ordinary numbers, so ordinary arithmetic moves through
+  memory. Cells are two bytes; bytes are one. Named storage built on
+  top of raw addresses. A string is an address and a length, carried
+  separately.
 
-Forth words `@`, `!`, `C@`, `C!`, `VARIABLE`, `CONSTANT`, `FREE`,
-`ARRAY`, `CELLS`, `S"`, `TYPE`, `STRING`, `PLACE`, `COUNT`, `LEN`,
-`VAL`, `CHR`, `STR`, `UPPER`, `LOWER`, `LEFT`, `RIGHT`, `SEARCH`,
-`CODE`.
+- **Forth Words:** `@`, `!`, `C@`, `C!`, `VARIABLE`, `CONSTANT`,
+  `FREE`, `ARRAY`, `CELLS`, `S"`, `TYPE`, `STRING`, `PLACE`, `COUNT`,
+  `LEN`, `VAL`, `CHR`, `STR`, `UPPER`, `LOWER`, `LEFT`, `RIGHT`,
+  `SEARCH`, `CODE`.
 
 ### Exercises
 
