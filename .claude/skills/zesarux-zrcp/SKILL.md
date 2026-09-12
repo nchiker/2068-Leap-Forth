@@ -27,6 +27,18 @@ disown
 sleep 4
 ```
 
+**Run ONE instance at a time.** Launch, check what you need, send
+`exit-emulator` (or `pkill -9 -f zesarux` if the socket's already gone),
+*then* launch the next ROM — don't launch a second instance on another
+port while the first is still up "for convenience." `setsid` makes
+each instance survive independently across tool calls, which means
+nothing kills a forgotten one for you; stacking instances across
+several ROMs/ports at once was flagged directly during this project's
+own work as an unintended, un-tracked pile-up, not a deliberate
+multiplexing strategy. If a command sequence gets interrupted mid-way,
+run `ps aux | grep zesarux` before doing anything else and clean up any
+orphans (`pkill -9 -f zesarux`) before starting fresh.
+
 **Use `setsid`, not a bare `&`.** A plain background job (even with
 `disown`) can get killed the moment the *launching* Bash tool call's
 own timeout/wrapper exits — `setsid` detaches it into its own session
