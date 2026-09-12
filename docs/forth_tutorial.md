@@ -3625,10 +3625,12 @@ keep running under its own control — trying something risky with a
 planned fallback if it doesn't work out, rather than stopping
 outright.
 
+#### `THROW` and `CATCH`
+
 `THROW` and `CATCH` do exactly that:
 
 | Word    | Stack effect       | What it does                                                                                                      |
-| ------- | ------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| ------- | -------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `CATCH` | `( xt -- 0 \| n )` | Run the word `xt` identifies. `0` if it finished normally; the thrown value `n` if it `THROW`ed instead           |
 | `THROW` | `( n -- )`         | `0` does nothing at all. Any other `n` abandons whatever's currently running and hands `n` to the nearest `CATCH` |
 
@@ -3637,15 +3639,15 @@ outright.
 ' RISKY CATCH .              \ prints 42
 ```
 
-`' RISKY` gets `RISKY`'s own `xt` (see
-[Indirect calls: ' and EXECUTE](#indirect-calls--and-execute) if that
-part looks unfamiliar), and `CATCH` runs it. Since `RISKY` throws
-rather than finishing normally, `CATCH` doesn't push `0` — it pushes
-the thrown value, `42`. Nothing after the `THROW` inside `RISKY` ever
-runs, and neither does anything else that was mid-call underneath it:
-`CATCH` unwinds all of it automatically, restoring the stack to
-exactly how it looked just before `CATCH` started, then adding the
-thrown value on top.
+- **Tracing `RISKY`:** `' RISKY` gets `RISKY`'s own `xt` (see
+  [Indirect calls: ' and EXECUTE](#indirect-calls--and-execute) if
+  that part looks unfamiliar), and `CATCH` runs it. Since `RISKY`
+  throws rather than finishing normally, `CATCH` doesn't push `0` — it
+  pushes the thrown value, `42`. Nothing after the `THROW` inside
+  `RISKY` ever runs, and neither does anything else that was mid-call
+  underneath it: `CATCH` unwinds all of it automatically, restoring
+  the stack to exactly how it looked just before `CATCH` started, then
+  adding the thrown value on top.
 
 A word that finishes normally, with no `THROW` anywhere inside, makes
 `CATCH` push a plain `0`:
@@ -3658,23 +3660,23 @@ DROP              \ SAFE's own result (8) is still sitting there,
                   \ word itself pushed, only whether it THREW
 ```
 
-Which gives the pattern for actually using `CATCH`: check whether the
-top of the stack is `0`, and only then trust whatever the risky word
-left underneath it.
+- **The Pattern for Using `CATCH`:** Check whether the top of the
+  stack is `0`, and only then trust whatever the risky word left
+  underneath it.
 
-```forth
-' RISKY CATCH IF ." SOMETHING WENT WRONG: " . CR
-ELSE DROP ." OK: " . CR
-THEN
-```
+  ```forth
+  ' RISKY CATCH IF ." SOMETHING WENT WRONG: " . CR
+  ELSE DROP ." OK: " . CR
+  THEN
+  ```
 
-### A more realistic example: choosing to reject bad input
+### A More Realistic Example: Choosing to Reject Bad Input
 
 `RISKY` above always throws, which makes the mechanism easy to see but
 isn't how `THROW` gets used in practice. More often, a word throws
 only *sometimes*, guarding against one specific bad case while working
-normally otherwise — the same `IF`-guarded shape [section
-6](#7-making-decisions-if-else-then) built `?PRINT` out of.
+normally otherwise — the same `IF`-guarded shape
+[section 7](#7-making-decisions-if-else-then) built `?PRINT` out of.
 
 Section 4's `SQRT` never complains about a negative input on its own —
 its negative case just silently returns `0`, the same safe-default
@@ -3696,32 +3698,33 @@ that doesn't have it built in, without touching `SQRT` itself:
                  \ have just handed back 0 here instead, no complaint
 ```
 
-`STRICT-SQRT` is the `?PRINT` pattern again: `DUP` makes a spare copy
-of `n` before testing it, so if the test finds nothing wrong, the
-*original* is still sitting there for `SQRT` to use afterward. Only
-when the test fails does anything unusual happen — a `THROW` that
-unwinds straight past the rest of `STRICT-SQRT`, past `SQRT` itself
-(which never runs at all in that case), and lands in `TRY-SQRT`'s
-`CATCH`, exactly the way `CATCH`'s own description above said it
-would.
+- **Reading `STRICT-SQRT`:** `STRICT-SQRT` is the `?PRINT` pattern
+  again: `DUP` makes a spare copy of `n` before testing it, so if the
+  test finds nothing wrong, the *original* is still sitting there for
+  `SQRT` to use afterward. Only when the test fails does anything
+  unusual happen — a `THROW` that unwinds straight past the rest of
+  `STRICT-SQRT`, past `SQRT` itself (which never runs at all in that
+  case), and lands in `TRY-SQRT`'s `CATCH`, exactly the way `CATCH`'s
+  own description above said it would.
 
-`THROW`ing with no `CATCH` anywhere to reach falls back to the reset
-this document already described: both stacks emptied, `STACK?`
-printed, and you're back at a fresh prompt, exactly as with an actual
-stack mistake. `CATCH` doesn't replace that default; it gives a
-program the option to intercept an error *before* it reaches that
-point, for whichever specific problems the program knows how to
-recover from. Anything it doesn't catch still falls through to the
-usual reset, same as always.
+- **What Happens With No `CATCH` to Reach:** `THROW`ing with no
+  `CATCH` anywhere to reach falls back to the reset this document
+  already described: both stacks emptied, `STACK?` printed, and you're
+  back at a fresh prompt, exactly as with an actual stack mistake.
+  `CATCH` doesn't replace that default; it gives a program the option
+  to intercept an error *before* it reaches that point, for whichever
+  specific problems the program knows how to recover from. Anything it
+  doesn't catch still falls through to the usual reset, same as
+  always.
 
-### Giving up on purpose: `ABORT` and `QUIT`
+### Giving Up on Purpose: `ABORT` and `QUIT`
 
 That fallback — abandon everything, come back to a fresh prompt — is
 useful enough that you can ask for it deliberately, without an error
 having happened at all.
 
 | Word    | Stack effect | What it does                                                              |
-| ------- | ------------ | ------------------------------------------------------------------------- |
+| ------- | -------------- | ----------------------------------------------------------------------------- |
 | `ABORT` | `( -- )`     | Abandon everything and return to the prompt, **clearing both stacks**     |
 | `QUIT`  | `( -- )`     | Abandon everything and return to the prompt, **leaving the stacks alone** |
 
@@ -3733,59 +3736,63 @@ you come straight back out to the prompt:
 42 ABORT 99 .     \ the 99 is never pushed and the . never runs
 ```
 
-The single difference between them is what happens to what you'd
-already collected. `ABORT` empties both the ordinary stack and
-[section 4](#4-numbers)'s separate decimal stack, so you're back to
-genuinely nothing:
+- **The One Difference Between Them:** The single difference between
+  them is what happens to what you'd already collected. `ABORT` empties
+  both the ordinary stack and [section 4](#4-numbers)'s separate
+  decimal stack, so you're back to genuinely nothing:
 
-```forth
-42 ABORT      \ afterwards the stack is empty -- the 42 is gone too
-```
+  ```forth
+  42 ABORT      \ afterwards the stack is empty -- the 42 is gone too
+  ```
 
-`QUIT` abandons the same amount of *execution* and none of the *data*:
+  `QUIT` abandons the same amount of *execution* and none of the
+  *data*:
 
-```forth
-42 QUIT       \ afterwards the stack still holds 42
-42 QUIT .     \ the . never runs, so nothing prints -- but type . on
-              \ the next line and you'll get your 42 back
-```
+  ```forth
+  42 QUIT       \ afterwards the stack still holds 42
+  42 QUIT .     \ the . never runs, so nothing prints -- but type . on
+                \ the next line and you'll get your 42 back
+  ```
 
-Which one you want depends on why you're giving up. `ABORT` is the
-bigger hammer, for "this went wrong enough that I don't trust anything I
-was holding" — it's what the automatic reset behind `STACK?` amounts to,
-available as a word. `QUIT` is for stopping cleanly when the data is
-fine and only the *doing* needs to stop.
+  Which one you want depends on why you're giving up. `ABORT` is the
+  bigger hammer, for "this went wrong enough that I don't trust
+  anything I was holding" — it's what the automatic reset behind
+  `STACK?` amounts to, available as a word. `QUIT` is for stopping
+  cleanly when the data is fine and only the *doing* needs to stop.
 
-Neither prints anything, which is worth knowing so you're not left
-waiting for a message. What you'll notice instead is the absence of the
-usual `OK` from [section 3](#3-understanding-system-feedback--errors): a
-line that ended in `ABORT` or `QUIT` didn't finish, so it doesn't get
-told it did. If you want your program to say why it gave up, print
-something yourself just before:
+- **Neither Prints Anything:** Neither prints anything, which is worth
+  knowing so you're not left waiting for a message. What you'll notice
+  instead is the absence of the usual `OK` from
+  [section 3](#3-understanding-system-feedback--errors): a line that
+  ended in `ABORT` or `QUIT` didn't finish, so it doesn't get told it
+  did. If you want your program to say why it gave up, print something
+  yourself just before:
 
-```forth
-: CHECK-AGE  ( n -- n )
-  DUP 0 < IF ." AGE CANNOT BE NEGATIVE" CR ABORT THEN ;
-```
+  ```forth
+  : CHECK-AGE  ( n -- n )
+    DUP 0 < IF ." AGE CANNOT BE NEGATIVE" CR ABORT THEN ;
+  ```
 
-Set that beside `THROW` from earlier in this section, because they
-answer two genuinely different questions. `THROW` gives the *caller* a
-chance to deal with the problem — some `CATCH` further out may know
-exactly what to do and carry on. `ABORT` and `QUIT` don't offer that
-choice to anyone: they go all the way out, past every `CATCH`, and end
-the line. Reach for `THROW` when a problem might be someone else's to
-handle, and for these two when it plainly isn't.
+- **`THROW` vs. `ABORT`/`QUIT`:** Set that beside `THROW` from earlier
+  in this section, because they answer two genuinely different
+  questions. `THROW` gives the *caller* a chance to deal with the
+  problem — some `CATCH` further out may know exactly what to do and
+  carry on. `ABORT` and `QUIT` don't offer that choice to anyone: they
+  go all the way out, past every `CATCH`, and end the line. Reach for
+  `THROW` when a problem might be someone else's to handle, and for
+  these two when it plainly isn't.
 
 ### Summary
 
-A program can intercept its own errors instead of always falling back
-to the interpreter's reset. `CATCH` runs a word given as an execution
-token and reports whether it finished or threw. `THROW` hands a value
-to the nearest `CATCH`, unwinding everything in between; a `THROW` of
-zero does nothing at all. `ABORT` and `QUIT` give up unconditionally,
-past every `CATCH`, and differ only in what happens to your data.
+- **Core Concepts:** A program can intercept its own errors instead of
+  always falling back to the interpreter's reset. `CATCH` runs a word
+  given as an execution token and reports whether it finished or
+  threw. `THROW` hands a value to the nearest `CATCH`, unwinding
+  everything in between; a `THROW` of zero does nothing at all.
+  `ABORT` and `QUIT` give up unconditionally, past every `CATCH`, and
+  differ only in what happens to your data.
 
-Forth words `CATCH`, `THROW`, `ABORT`, `QUIT`.
+- **Forth Words:** `CATCH`, `THROW`, `ABORT`, `QUIT`.
 
 ### Exercises
 
