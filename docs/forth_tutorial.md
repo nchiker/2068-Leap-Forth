@@ -2480,7 +2480,7 @@ direct, single-purpose action, in the same spirit as BASIC's `PLOT`,
 beyond what each word's own arguments say.
 
 | Word       | Stack effect                   | What it does                                                                                                                             |
-| ---------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| ---------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `PLOT`     | `( x y -- )`                   | Set the pixel at `(x, y)`                                                                                                                |
 | `LINE`     | `( x1 y1 x2 y2 -- )`           | Draw a line from `(x1, y1)` to `(x2, y2)`                                                                                                |
 | `CIRCLE`   | `( xc yc r -- )`               | Draw a circle outline centered at `(xc, yc)` with radius `r`                                                                             |
@@ -2512,12 +2512,14 @@ CLS
 
 ![A red, filled circle on a cyan-bordered screen](images/drawing_example.png)
 
-Reading these left to right follows the same postfix habit as
-everything else here: for `LINE`, the coordinates go on the stack in
-the order you'd say them out loud ("from 60,5 to 100,45"), then the
-word that acts on all four at once. Nothing is conceptually new over
-section 1 — these are words, exactly like `+` or `DUP`, that happen to
-affect the screen or the speaker instead of a number.
+- **Reading Order:** Left to right follows the same postfix habit as
+  everything else here: for `LINE`, the coordinates go on the stack in
+  the order you'd say them out loud ("from 60,5 to 100,45"), then the
+  word that acts on all four at once. Nothing here is conceptually new
+  over section 1 — these are words, exactly like `+` or `DUP`, that
+  happen to affect the screen or the speaker instead of a number.
+
+#### Persistent Color State: `INK`, `PAPER`, `BRIGHT`, `FLASH`
 
 `INK` and `PAPER` set state that persists until changed. Every
 `PLOT`/`LINE`/`CIRCLE` after `2 INK 6 PAPER` draws red-on-yellow, not
@@ -2527,57 +2529,62 @@ each touches only its own half of the color. `CLS` honors the current
 `PAPER` as well — clearing the screen fills it with whatever
 background color is set, not always black.
 
-This isn't limited to graphics. `EMIT` (and everything built on it —
-`.`, `."`, `TYPE`) stamps the current `INK`/`PAPER` into each character
-cell as it prints, the same way real Sinclair BASIC's `PRINT` does:
+- **Text Shares the Same State:** This isn't limited to graphics.
+  `EMIT` (and everything built on it — `.`, `."`, `TYPE`) stamps the
+  current `INK`/`PAPER` into each character cell as it prints, the
+  same way real Sinclair BASIC's `PRINT` does:
 
-```forth
-2 INK  6 PAPER
-." RED ON YELLOW"
-0 INK  7 PAPER
-." BACK TO NORMAL"
-```
+  ```forth
+  2 INK  6 PAPER
+  ." RED ON YELLOW"
+  0 INK  7 PAPER
+  ." BACK TO NORMAL"
+  ```
 
-The first line prints in red on yellow; the second reverts to black on
-white. Only the cells actually written to change — printing a shorter
-line over a longer one leaves the old color sitting in whatever cells
-weren't touched, same as it leaves old characters sitting there too.
+  The first line prints in red on yellow; the second reverts to black
+  on white. Only the cells actually written to change — printing a
+  shorter line over a longer one leaves the old color sitting in
+  whatever cells weren't touched, same as it leaves old characters
+  sitting there too.
 
-`BRIGHT` works the same way, as a third piece of state alongside `INK`
-and `PAPER` rather than a color of its own — `1` makes whichever
-`INK`/`PAPER` are currently set draw in their lighter, high-intensity
-shade; `0` returns to the normal, darker shade. Like `INK` and `PAPER`,
-it persists until changed and never disturbs the other two:
+- **`BRIGHT` Is a Third, Independent Piece of State:** `BRIGHT` works
+  the same way, alongside `INK` and `PAPER` rather than a color of its
+  own — `1` makes whichever `INK`/`PAPER` are currently set draw in
+  their lighter, high-intensity shade; `0` returns to the normal,
+  darker shade. Like `INK` and `PAPER`, it persists until changed and
+  never disturbs the other two:
 
-```forth
-2 INK  1 BRIGHT
-." BRIGHT RED"
-0 BRIGHT
-." NORMAL RED"
-```
+  ```forth
+  2 INK  1 BRIGHT
+  ." BRIGHT RED"
+  0 BRIGHT
+  ." NORMAL RED"
+  ```
 
-The first line prints in bright (light) red; the second prints the
-same ink color 2 (red) but back at normal intensity — `BRIGHT`'s own
-change to intensity didn't touch `INK`'s color, exactly as `INK`
-changing color never touches `PAPER`.
+  The first line prints in bright (light) red; the second prints the
+  same ink color 2 (red) but back at normal intensity — `BRIGHT`'s own
+  change to intensity didn't touch `INK`'s color, exactly as `INK`
+  changing color never touches `PAPER`.
 
-`FLASH` works the same way again, as a fourth independent piece of
-state — `1` makes whichever `INK`/`PAPER` are currently set blink
-(the hardware does the actual blinking, in real time, with no CPU
-involvement once set); `0` returns to steady:
+- **`FLASH` Is a Fourth:** `FLASH` works the same way again — `1`
+  makes whichever `INK`/`PAPER` are currently set blink (the hardware
+  does the actual blinking, in real time, with no CPU involvement once
+  set); `0` returns to steady:
 
-```forth
-2 INK  1 FLASH
-." FLASHING RED"
-0 FLASH
-." STEADY RED"
-```
+  ```forth
+  2 INK  1 FLASH
+  ." FLASHING RED"
+  0 FLASH
+  ." STEADY RED"
+  ```
 
-Same shape as the `BRIGHT` example above: only the flash state
-changes between the two lines, not the color. `BRIGHT` and `FLASH`
-can be combined freely with each other and with `INK`/`PAPER`, since
-each occupies its own bit and none of the four words touch any bit
-but its own.
+  Same shape as the `BRIGHT` example above: only the flash state
+  changes between the two lines, not the color. `BRIGHT` and `FLASH`
+  can be combined freely with each other and with `INK`/`PAPER`, since
+  each occupies its own bit and none of the four words touch any bit
+  but its own.
+
+#### Moving the Printing Position: `AT-XY`
 
 `AT-XY ( col row -- )` moves the shared printing position [section
 9](#9-printing) described directly, instead of leaving it wherever the
@@ -2594,7 +2601,7 @@ appears starting at the very top-left corner, even though it's printed
 second — `AT-XY` jumps the position, it doesn't scroll or clear
 anything on the way there.
 
-### Drawing many things at once
+### Drawing Many Things at Once
 
 Nothing here is a new word — it's [section 8](#8-repeating-yourself)'s
 `DO`/`LOOP` counting across `CIRCLE` instead of across `EMIT`. Five
@@ -2606,38 +2613,39 @@ evenly-spaced dots in a row:
 DOTS
 ```
 
-Read the body the way section 8 read `STARS`: this uses section 8's
-own `+LOOP` to step the index by 40 instead of 1, so `I` counts the x
-coordinates directly — 20, 60, 100, 140, 180 — with no arithmetic
-needed to turn it into one (2068-Leap-Forth does have plain integer `*` —
-see [Numbers](#4-numbers) — but `+LOOP`'s own step argument already
-does this particular job more directly). `I` feeds
-straight into `CIRCLE` as the x coordinate; `96` and `8` are a fixed y
-and radius, the same on every pass. `CIRCLE` then draws — `xc yc r`,
-in that order, exactly as the table above lists it. `CIRCLE` itself
-hasn't changed at all between this example and the one just above it;
-it's the loop wrapped around it
-that's new, and it's the identical loop `STARS` used, just feeding a
-different word each pass.
+- **Reading `DOTS`:** Read the body the way section 8 read `STARS`:
+  this uses section 8's own `+LOOP` to step the index by 40 instead of
+  1, so `I` counts the x coordinates directly — 20, 60, 100, 140, 180
+  — with no arithmetic needed to turn it into one (2068-Leap-Forth does
+  have plain integer `*` — see [Numbers](#4-numbers) — but `+LOOP`'s
+  own step argument already does this particular job more directly).
+  `I` feeds straight into `CIRCLE` as the x coordinate; `96` and `8`
+  are a fixed y and radius, the same on every pass. `CIRCLE` then draws
+  — `xc yc r`, in that order, exactly as the table above lists it.
+  `CIRCLE` itself hasn't changed at all between this example and the
+  one just above it; it's the loop wrapped around it that's new, and
+  it's the identical loop `STARS` used, just feeding a different word
+  each pass.
 
-### `RECT`, `POLYGON`, and `POLYGON-FILL`: more shapes, from a second ROM
+### `RECT`, `POLYGON`, and `POLYGON-FILL`: More Shapes, From a Second ROM
 
 `PLOT`/`LINE`/`CIRCLE`/`FILL` above all live in the same 16K Home ROM as
 everything else in this tutorial. Three more shape words — `RECT`,
 `POLYGON`, and `POLYGON-FILL` — exist too, but they're dispatched
 through a SECOND, separate 8K ROM plugged into the TS2068's own EXROM
-socket, not the Home ROM. This matters practically: the placeholder
-EXROM most setups boot with has no real code in it, so these three
-words will each just silently do nothing (the same "refuse quietly
-rather than crash" behavior every word in this project already uses
-when something's missing) unless you've built and loaded the real
-`graphics_exrom.bin` image instead — see the main
-[README](../README.md)'s own "Try it" section for exactly how, or
-[`docs/eightyone_setup.md`](eightyone_setup.md) if you're running on
-EightyOne or TS-Pico.
+socket, not the Home ROM.
+
+- **This Matters Practically:** The placeholder EXROM most setups boot
+  with has no real code in it, so these three words will each just
+  silently do nothing (the same "refuse quietly rather than crash"
+  behavior every word in this project already uses when something's
+  missing) unless you've built and loaded the real `graphics_exrom.bin`
+  image instead — see the main [README](../README.md)'s own "Try it"
+  section for exactly how, or [`docs/eightyone_setup.md`](eightyone_setup.md)
+  if you're running on EightyOne or TS-Pico.
 
 | Word           | Stack effect                     | What it does                                                     |
-| -------------- | --------------------------------- | ----------------------------------------------------------------- |
+| -------------- | ---------------------------------- | ----------------------------------------------------------------- |
 | `RECT`         | `( x0 y0 x1 y1 -- )`               | Draw a FILLED rectangle between two opposite corners              |
 | `POLYGON`      | `( x1 y1 x2 y2 ... xn yn n -- )`   | Draw the OUTLINE of a closed shape through `n` given vertices (3-12), the last edge closing back to the first vertex |
 | `POLYGON-FILL` | `( x1 y1 x2 y2 ... xn yn n -- )`   | Fill that same shape's INTERIOR instead of outlining it (even-odd rule — a concave notch stays unfilled, correctly) |
@@ -2646,10 +2654,11 @@ EightyOne or TS-Pico.
 2 INK 20 20 60 60 RECT
 ```
 
-Like `LINE`, `RECT`'s two corners can be given in any order — sorted,
-backwards, or a mix of the two — and it always fills the same box
-either way; it's the OPPOSITE two corners of the box that matter, not
-which one comes first on the stack.
+- **Corner Order Doesn't Matter:** Like `LINE`, `RECT`'s two corners
+  can be given in any order — sorted, backwards, or a mix of the two —
+  and it always fills the same box either way; it's the OPPOSITE two
+  corners of the box that matter, not which one comes first on the
+  stack.
 
 `POLYGON` and `POLYGON-FILL` share the same argument shape: `n`
 vertices, each an `(x y)` pair, then `n` itself last so the word knows
@@ -2659,11 +2668,12 @@ how many pairs to expect:
 4 INK 100 40 140 40 100 80 3 POLYGON
 ```
 
-draws a red triangle outline through `(100,40)`, `(140,40)`, and
-`(100,80)` — three vertices, then the count `3`. `n` must be between 3
-and 12; giving a count outside that range (including the two you'd
-naturally reach for by mistake, `0` or `1`) draws nothing at all rather
-than guessing which of the remaining stack values were meant for it.
+- **Reading This Example:** Draws a red triangle outline through
+  `(100,40)`, `(140,40)`, and `(100,80)` — three vertices, then the
+  count `3`. `n` must be between 3 and 12; giving a count outside that
+  range (including the two you'd naturally reach for by mistake, `0`
+  or `1`) draws nothing at all rather than guessing which of the
+  remaining stack values were meant for it.
 
 `POLYGON-FILL` takes the exact same arguments and fills the interior
 instead:
@@ -2672,13 +2682,14 @@ instead:
 3 INK 50 50 90 70 50 90 65 70 4 POLYGON-FILL
 ```
 
-fills a concave arrow/chevron shape — the notch cut into its left side
-stays empty, correctly, because the fill uses the even-odd rule rather
-than just "fill everything between the leftmost and rightmost edge on
-each row." `POLYGON-FILL` never draws the outline itself; call
-`POLYGON` too, with the same vertices, if you want both.
+- **Why the Notch Stays Empty:** Fills a concave arrow/chevron shape —
+  the notch cut into its left side stays empty, correctly, because the
+  fill uses the even-odd rule rather than just "fill everything
+  between the leftmost and rightmost edge on each row." `POLYGON-FILL`
+  never draws the outline itself; call `POLYGON` too, with the same
+  vertices, if you want both.
 
-### Sprites: capturing and moving a shape
+### Sprites: Capturing and Moving a Shape
 
 Three more words, from that same second EXROM: `SPRITE-DEFINE`,
 `SPRITE-SHOW`, and `SPRITE-HIDE` — four numbered slots (0-3), each
@@ -2687,7 +2698,7 @@ like where it was last shown, so hiding it again restores the original
 background exactly rather than just erasing to blank.
 
 | Word            | Stack effect          | What it does                                                                                          |
-| --------------- | ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| --------------- | ----------------------- | ------------------------------------------------------------------------------------------------------ |
 | `SPRITE-DEFINE` | `( slot row col -- )`  | Capture the 16x16-pixel block at character row/col into `slot` (0-3)                                   |
 | `SPRITE-SHOW`   | `( slot row col -- )`  | Draw `slot`'s captured image at character row/col, first saving whatever was there so `SPRITE-HIDE` can restore it |
 | `SPRITE-HIDE`   | `( slot -- )`          | Erase `slot`'s currently-shown image, restoring the exact background `SPRITE-SHOW` saved                |
@@ -2700,14 +2711,17 @@ CLS                         \ clear the whole screen
 0 SPRITE-HIDE               \ remove it, restoring the (now blank) background
 ```
 
-Row/col here are the same 0-31/0-22 CHARACTER-cell coordinates
-`AT-XY` uses above, not raw pixels — a sprite is always exactly two
-character cells wide and two tall (16x16 pixels), positioned by its
-own top-left cell. `SPRITE-SHOW`ing a slot that's already showing
-elsewhere, or `SPRITE-HIDE`ing a slot that was never shown, both
-refuse quietly rather than doing anything unexpected — the same
-"silently do nothing on invalid input" convention `FILL`/`SOUND`/
-`STICK` already use elsewhere in this project.
+- **Coordinates Are Character Cells, Not Pixels:** Row/col here are
+  the same 0-31/0-22 CHARACTER-cell coordinates `AT-XY` uses above,
+  not raw pixels — a sprite is always exactly two character cells wide
+  and two tall (16x16 pixels), positioned by its own top-left cell.
+  `SPRITE-SHOW`ing a slot that's already showing elsewhere, or
+  `SPRITE-HIDE`ing a slot that was never shown, both refuse quietly
+  rather than doing anything unexpected — the same "silently do
+  nothing on invalid input" convention `FILL`/`SOUND`/`STICK` already
+  use elsewhere in this project.
+
+#### `BEEP`: Simple Note Playback
 
 `BEEP` takes real musical units, exactly as BASIC's own `BEEP` does:
 an INTEGER number of semitones (0 = middle C, positive up, negative
@@ -2729,17 +2743,17 @@ While `BEEP` handles simple note playback, it operates under a few clear hardwar
 
 - **The 12.9 kHz Ceiling:** There is a strict physical ceiling around 12.9 kHz. Notes pushed past this threshold clamp to the ceiling rather than increasing further, as this represents the maximum toggle speed of the hardware speaker loop.
 
-For ordinary musical use—spanning a few octaves around middle C—these limits are well out of reach.
+For ordinary musical use — spanning a few octaves around middle C — these limits are well out of reach.
 
 ### Direct Register Access: `SOUND`
 
-For anything `BEEP` cannot achieve—such as a sustained tone, simultaneous multi-note playback, or precise volume control—**`SOUND ( register data -- )`** provides direct, register-level access to the machine's AY-3-8912 sound chip, mirroring authentic BASIC commands.
+For anything `BEEP` cannot achieve — such as a sustained tone, simultaneous multi-note playback, or precise volume control — **`SOUND ( register data -- )`** provides direct, register-level access to the machine's AY-3-8912 sound chip, mirroring authentic BASIC commands.
 
 - **Stack Effect:** `( register data -- )`
 
-- **What it does:** Writes a raw byte into one of the chip's registers (`1–16`). Out-of-range values are silently ignored.
+- **What It Does:** Writes a raw byte into one of the chip's registers (`1–16`). Out-of-range values are silently ignored.
 
-Because the chip isolates different properties across separate registers—such as pitch, active channels, and volume—producing a complete tone requires **three coordinated calls** rather than a single all-in-one command.
+Because the chip isolates different properties across separate registers — such as pitch, active channels, and volume — producing a complete tone requires **three coordinated calls** rather than a single all-in-one command.
 
 ```forth
 2 251 SOUND        \ channel B's tone pitch (fine byte)
@@ -2749,16 +2763,19 @@ Because the chip isolates different properties across separate registers—such 
 9   0 SOUND        \ silence it again
 ```
 
-Nothing is audible until that fourth line; the first three only set up
-state the chip remembers, the way `INK`/`PAPER` persist until changed.
-`SOUND` has no idea what a "note" is, unlike `BEEP` — the 251 above is
-a raw chip register value, worked out from the machine's own
-sound-chip clock speed (1,764,000 Hz) and the formula
-`period = clock / (16 * frequency)` for a note near 439 Hz. A
-different pitch means recomputing that period yourself. There's no
-semitone convenience here on purpose: `SOUND` trades convenience for
-direct access to everything the chip can do — three tones, volume
-envelopes, noise — that `BEEP` was never meant to reach.
+- **Why Four Calls Before Anything Sounds:** Nothing is audible until
+  that fourth line; the first three only set up state the chip
+  remembers, the way `INK`/`PAPER` persist until changed. `SOUND` has
+  no idea what a "note" is, unlike `BEEP` — the 251 above is a raw
+  chip register value, worked out from the machine's own sound-chip
+  clock speed (1,764,000 Hz) and the formula
+  `period = clock / (16 * frequency)` for a note near 439 Hz. A
+  different pitch means recomputing that period yourself. There's no
+  semitone convenience here on purpose: `SOUND` trades convenience for
+  direct access to everything the chip can do — three tones, volume
+  envelopes, noise — that `BEEP` was never meant to reach.
+
+#### Shorthand Words: `TONE`, `VOLUME`, `MIXER`, `NOISE`, `ENVELOPE`
 
 `TONE`, `VOLUME`, `MIXER`, `NOISE`, and `ENVELOPE` don't reach
 anything `SOUND` couldn't already reach — they're shorthand for it,
@@ -2766,7 +2783,7 @@ so you don't have to remember which register pair belongs to which
 channel or work out a fine/coarse split by hand every time:
 
 | Word       | Stack effect            | What it does                               |
-| ---------- | ----------------------- | ------------------------------------------ |
+| ---------- | ------------------------ | -------------------------------------------- |
 | `TONE`     | `( channel period -- )` | Set channel 0/1/2 (A/B/C)'s tone pitch     |
 | `VOLUME`   | `( channel level -- )`  | Set channel 0/1/2's volume (0-15, fixed)   |
 | `MIXER`    | `( mask -- )`           | Choose which tones/noise generators are on |
@@ -2782,18 +2799,19 @@ The four-line tone from above becomes:
 1   0 VOLUME    \ silence it again
 ```
 
-One real gap worth knowing before you reach for it: `SOUND` itself
-can never select chip register 0 (channel A's own tone pitch, low
-byte) — its 1-16 numbering, copied faithfully from real BASIC's own
-`SOUND` command, simply has no value that lands there. `TONE` doesn't
-have that gap; `0 period TONE` reaches it directly.
+- **A Real Gap Worth Knowing:** `SOUND` itself can never select chip
+  register 0 (channel A's own tone pitch, low byte) — its 1-16
+  numbering, copied faithfully from real BASIC's own `SOUND` command,
+  simply has no value that lands there. `TONE` doesn't have that gap;
+  `0 period TONE` reaches it directly.
 
-`MIXER`'s mask is the one place these words don't try to be friendlier
-than the chip itself: bit 0 is channel A's tone, bit 1 is B, bit 2 is
-C, bits 3-5 are the three noise generators — and confusingly, on this
-chip, a **0** bit means "on" and a **1** bit means "off." `253` above
-is `$FD`, every bit set except bit 1, which is exactly "everything off
-except channel B's tone."
+- **`MIXER`'s Mask Is Inverted:** `MIXER`'s mask is the one place these
+  words don't try to be friendlier than the chip itself: bit 0 is
+  channel A's tone, bit 1 is B, bit 2 is C, bits 3-5 are the three
+  noise generators — and confusingly, on this chip, a **0** bit means
+  "on" and a **1** bit means "off." `253` above is `$FD`, every bit set
+  except bit 1, which is exactly "everything off except channel B's
+  tone."
 
 `NOISE` sets the pitch of a hissing, unpitched sound shared by all
 three channels — `MIXER` still has to switch it onto one of them
@@ -2842,11 +2860,11 @@ HIRES
 6 INK  10 21 PLOT
 ```
 
-In Normal mode those two `PLOT`s would fight over one shared cell
-attribute — whichever `INK` ran last would silently win, and BOTH
-pixels would end up that color. In `HIRES`, they don't: pixel (10, 20)
-stays ink 1, pixel (10, 21) stays ink 6, because each pixel row now
-carries its own color memory.
+- **Comparing the Two Modes:** In Normal mode those two `PLOT`s would
+  fight over one shared cell attribute — whichever `INK` ran last
+  would silently win, and BOTH pixels would end up that color. In
+  `HIRES`, they don't: pixel (10, 20) stays ink 1, pixel (10, 21) stays
+  ink 6, because each pixel row now carries its own color memory.
 
 `PLOT`, `LINE`, and `CIRCLE` all work exactly as before once `HIRES`
 is active — nothing about calling them changes. `NORMAL` switches back:
@@ -2869,7 +2887,7 @@ worth knowing before you hit them by surprise:
   to, exactly like Normal mode's `CLS` already does for its own 8x8
   cells.
 
-### Talking to the hardware directly: `IN` and `OUT`
+### Talking to the Hardware Directly: `IN` and `OUT`
 
 There's one more level down, and `SOUND` is the perfect way in to it.
 The machine's chips aren't reached through memory addresses like
@@ -2877,13 +2895,14 @@ The machine's chips aren't reached through memory addresses like
 sit on a separate set of numbered **ports**, and two words reach them:
 
 | Word  | Stack effect        | What it does              |
-| ----- | ------------------- | ------------------------- |
+| ----- | --------------------- | ---------------------------- |
 | `IN`  | `( port -- value )` | Read one byte from `port` |
 | `OUT` | `( value port -- )` | Write one byte to `port`  |
 
-Note `OUT`'s order — value first, then port — which is deliberately the
-same shape as `!`'s `( n addr -- )` from section 5, and remembered the
-same way: the parcel first, the address you're sending it to last.
+- **Argument Order:** Note `OUT`'s order — value first, then port —
+  which is deliberately the same shape as `!`'s `( n addr -- )` from
+  section 5, and remembered the same way: the parcel first, the
+  address you're sending it to last.
 
 Every word in the table at the top of this section is ultimately built
 out of these. `SOUND` is barely more than two `OUT`s: the sound chip
@@ -2911,17 +2930,18 @@ all:
 246 IN .       \ prints 12 -- the value really is in the chip
 ```
 
-**These two are the sharpest tools here, and they have no guard rails
-whatsoever.** There's no check on the port number, no list of ports
-that are off limits, and no way to undo a write: whatever the hardware
-does when it sees that byte is what happens. Writing to a port you
-haven't looked up can lock the machine up hard enough to need switching
-off. That's the same deal `@` and `!` already offer for memory, and the
-same one real BASIC's own `IN`/`OUT` offer on this machine — a
-deliberate choice to leave the hardware reachable rather than fenced
-off, on the understanding that you know which port you're poking.
+- **No Guard Rails:** These two are the sharpest tools here, and they
+  have no guard rails whatsoever. There's no check on the port number,
+  no list of ports that are off limits, and no way to undo a write:
+  whatever the hardware does when it sees that byte is what happens.
+  Writing to a port you haven't looked up can lock the machine up hard
+  enough to need switching off. That's the same deal `@` and `!`
+  already offer for memory, and the same one real BASIC's own `IN`/
+  `OUT` offer on this machine — a deliberate choice to leave the
+  hardware reachable rather than fenced off, on the understanding that
+  you know which port you're poking.
 
-### Custom characters: `UDG`
+### Custom Characters: `UDG`
 
 Every character `EMIT` can print — letters, digits, punctuation — is a
 fixed 8x8 pixel shape baked into the ROM. Codes 144 through 164 are
@@ -2948,21 +2968,22 @@ From there it's just `C!`, exactly like any other byte in memory from
 144 EMIT          \ prints an upward-pointing arrow
 ```
 
-Read those eight bytes as bits and the shape falls out: `24` is
-`00011000`, `60` is `00111100`, `126` is `01111110`, `255` is
-`11111111` — a triangle that widens row by row — then four more `24`s
-stack a narrow stem underneath it. Slot `0` maps to character code
-`144`, slot `1` to `145`, and so on up to slot `20` at `164`; once a
-slot is filled in, `EMIT`-ing its code prints it exactly like any
-built-in character, in whatever `INK`/`PAPER` are currently set, with
-no separate "graphics mode" to switch into.
+- **Reading the Bytes as a Shape:** Read those eight bytes as bits and
+  the shape falls out: `24` is `00011000`, `60` is `00111100`, `126` is
+  `01111110`, `255` is `11111111` — a triangle that widens row by row —
+  then four more `24`s stack a narrow stem underneath it. Slot `0` maps
+  to character code `144`, slot `1` to `145`, and so on up to slot `20`
+  at `164`; once a slot is filled in, `EMIT`-ing its code prints it
+  exactly like any built-in character, in whatever `INK`/`PAPER` are
+  currently set, with no separate "graphics mode" to switch into.
 
-There's no check on `n` — asking for slot `25` computes an address past
-the real table and lets you read or write it anyway, the same trusting
-contract `@`/`!`/`C@`/`C!` already keep. Stay inside 0-20 and it's
-exactly as safe as poking any other array this document has shown you.
+- **No Range Check:** There's no check on `n` — asking for slot `25`
+  computes an address past the real table and lets you read or write
+  it anyway, the same trusting contract `@`/`!`/`C@`/`C!` already keep.
+  Stay inside 0-20 and it's exactly as safe as poking any other array
+  this document has shown you.
 
-### Getting input: `KEY`, `KEY?`, and `STICK`
+### Getting Input: `KEY`, `KEY?`, and `STICK`
 
 `KEY` is `EMIT`'s opposite. Instead of printing a character, it waits
 for you to press one key and leaves its code on the stack.
@@ -2971,19 +2992,20 @@ for you to press one key and leaves its code on the stack.
 KEY .     \ waits for a keypress, then prints its character code
 ```
 
-The operative word is **waits**: your program stops until you press
-something. For a game loop that has to keep moving whether or not a
-key is currently down, `KEY? ( -- flag )` checks without waiting,
-leaving a true/false flag instead of a character code:
+- **`KEY?` Checks Without Waiting:** The operative word above is
+  **waits**: your program stops until you press something. For a game
+  loop that has to keep moving whether or not a key is currently down,
+  `KEY? ( -- flag )` checks without waiting, leaving a true/false flag
+  instead of a character code:
 
-```forth
-KEY? IF KEY . THEN     \ only reads (and prints) a key if one's ready
-```
+  ```forth
+  KEY? IF KEY . THEN     \ only reads (and prints) a key if one's ready
+  ```
 
-Checking with `KEY?` never consumes the keypress the way `KEY` does.
-That's what makes this the standard idiom for "read a key only if
-one's waiting" — `KEY?` genuinely just peeks, so a key you check for
-is still there for `KEY` to read afterward.
+  Checking with `KEY?` never consumes the keypress the way `KEY` does.
+  That's what makes this the standard idiom for "read a key only if
+  one's waiting" — `KEY?` genuinely just peeks, so a key you check for
+  is still there for `KEY` to read afterward.
 
 `BREAK? ( -- flag )` checks for one specific combination instead of
 any key: the real Sinclair CAPS SHIFT+SPACE BREAK keys. It's completely
@@ -2996,10 +3018,10 @@ BREAK stops a running BASIC program.
 : COUNT-FOREVER  0 BEGIN 1+ DUP . BREAK? UNTIL ;
 ```
 
-Without the `BREAK?` in its `UNTIL` test, that loop would never stop
-on its own. With it, holding CAPS SHIFT+SPACE ends it on the next
-pass — the loop keeps counting exactly as before, and now has a way
-out.
+- **Why `BREAK?` Belongs in the Test:** Without the `BREAK?` in its
+  `UNTIL` test, that loop would never stop on its own. With it,
+  holding CAPS SHIFT+SPACE ends it on the next pass — the loop keeps
+  counting exactly as before, and now has a way out.
 
 Combine plain `KEY` with [section 8](#8-repeating-yourself)'s
 `BEGIN`/`UNTIL` and you get the standard "wait for a specific key"
@@ -3011,13 +3033,14 @@ idiom — the keyboard equivalent of `COUNTDOWN`'s loop-until-zero:
 WAIT-FOR-Q     \ nothing else happens until you press Q
 ```
 
-`KEY` blocks and hands back one character code each pass; `81` is
-`Q`'s character code (the same code-number idea `65 CHR` used for `A`
-back in [Strings](#5-reading-and-writing-memory-directly)); `=` turns
-that into a flag; and `UNTIL` loops for as long as the flag is false,
-exactly the way it did in `COUNTDOWN`. Only what's driving the loop
-has changed — a keypress instead of arithmetic — the loop machinery
-itself is identical.
+- **Reading `WAIT-FOR-Q`:** `KEY` blocks and hands back one character
+  code each pass; `81` is `Q`'s character code (the same code-number
+  idea `65 CHR` used for `A` back in
+  [Strings](#5-reading-and-writing-memory-directly)); `=` turns that
+  into a flag; and `UNTIL` loops for as long as the flag is false,
+  exactly the way it did in `COUNTDOWN`. Only what's driving the loop
+  has changed — a keypress instead of arithmetic — the loop machinery
+  itself is identical.
 
 `STICK ( device -- value )` reads a joystick, with `device` being 1 or
 2. Device 1 reports a full 4-bit direction (which way, if any, is
@@ -3025,7 +3048,7 @@ pushed); device 2 reports a single on/off bit. With nothing connected
 — true of every setup this has been tested against so far — both
 always read `0`.
 
-### Reading a whole line: `ACCEPT` and `INPUT`
+### Reading a Whole Line: `ACCEPT` and `INPUT`
 
 `KEY` reads one keypress at a time, which is useful for reacting to
 individual keys and tedious for something like "ask the player to type
@@ -3041,11 +3064,12 @@ NAME 1 + 10 ACCEPT NAME C!    \ waits for you to type, echoing as you
 NAME COUNT TYPE               \ prints back whatever you typed
 ```
 
-(`NAME 1 +` is `STRING`'s own data area, skipping past its count byte
-— see [Arrays](#5-reading-and-writing-memory-directly)'s own section
-on memory addresses for why `+` is how you get there.) Delete and
-backspace work while typing, and typing past the buffer's limit is
-simply ignored rather than causing an error.
+- **Where the Buffer Address Comes From:** `NAME 1 +` is `STRING`'s
+  own data area, skipping past its count byte — see
+  [Arrays](#5-reading-and-writing-memory-directly)'s own section on
+  memory addresses for why `+` is how you get there. Delete and
+  backspace work while typing, and typing past the buffer's limit is
+  simply ignored rather than causing an error.
 
 `INPUT` is a shortcut for the most common case, reading a single typed
 number:
@@ -3054,10 +3078,11 @@ number:
 INPUT .    \ waits for you to type a number, then prints it back
 ```
 
-`INPUT` reads a line the way `ACCEPT` does, parses it with `VAL` (see
-[Strings](#5-reading-and-writing-memory-directly)), and leaves the
-result on the stack — exactly BASIC's `INPUT A` for a single numeric
-variable, spelled as a word instead of a statement.
+- **What `INPUT` Does Underneath:** `INPUT` reads a line the way
+  `ACCEPT` does, parses it with `VAL` (see
+  [Strings](#5-reading-and-writing-memory-directly)), and leaves the
+  result on the stack — exactly BASIC's `INPUT A` for a single numeric
+  variable, spelled as a word instead of a statement.
 
 Put both together and you have the standard small-program shape:
 gather some text, gather a number, use both.
@@ -3073,28 +3098,32 @@ NAME 1 + 10 ACCEPT NAME C!
 INPUT 1 + .          \ next year's age
 ```
 
-Nothing in there is new — `STRING`/`ACCEPT`/`COUNT`/`TYPE` are exactly
-the pattern shown just above, and `INPUT` behaves exactly as just
-described. What's new is only the shape: a real program almost always
-alternates asking for something and using what came back, rather than
-gathering all its input up front the way a first, isolated example
-tends to suggest.
+- **What's Actually New Here:** Nothing in there is new — `STRING`/
+  `ACCEPT`/`COUNT`/`TYPE` are exactly the pattern shown just above, and
+  `INPUT` behaves exactly as just described. What's new is only the
+  shape: a real program almost always alternates asking for something
+  and using what came back, rather than gathering all its input up
+  front the way a first, isolated example tends to suggest.
 
 ### Summary
 
-Graphics and sound words are thin, single-purpose actions with no
-drawing state to set up beyond their own arguments — except `INK`,
-`PAPER`, `BRIGHT`, and `FLASH`, which persist until changed and apply
-to printed text as well as to drawing. Four independent screen colour
-mechanisms, each its own bit, none disturbing the others. Ports as a
-separate numbered space from memory, reached with no guard rails at
-all. Characters you define yourself. Reading the keyboard one key at a
-time, without waiting, or a whole line at a time.
+- **Core Concepts:** Graphics and sound words are thin, single-purpose
+  actions with no drawing state to set up beyond their own arguments —
+  except `INK`, `PAPER`, `BRIGHT`, and `FLASH`, which persist until
+  changed and apply to printed text as well as to drawing. Four
+  independent screen colour mechanisms, each its own bit, none
+  disturbing the others. Ports as a separate numbered space from
+  memory, reached with no guard rails at all. Characters you define
+  yourself. Reading the keyboard one key at a time, without waiting,
+  or a whole line at a time.
 
-Forth words `PLOT`, `LINE`, `CIRCLE`, `FILL`, `CLS`, `BORDER`, `INK`,
-`PAPER`, `BRIGHT`, `FLASH`, `AT-XY`, `HIRES`, `NORMAL`, `BEEP`,
-`SOUND`, `TONE`, `VOLUME`, `MIXER`, `NOISE`, `ENVELOPE`, `IN`, `OUT`,
-`UDG`, `KEY`, `KEY?`, `BREAK?`, `STICK`, `ACCEPT`, `INPUT`.
+- **Forth Words:** `PLOT`, `LINE`, `CIRCLE`, `FILL`, `CLS`, `BORDER`,
+  `INK`, `PAPER`, `BRIGHT`, `FLASH`, `AT-XY`, `HIRES`, `NORMAL`,
+  `BEEP`, `SOUND`, `TONE`, `VOLUME`, `MIXER`, `NOISE`, `ENVELOPE`,
+  `IN`, `OUT`, `UDG`, `KEY`, `KEY?`, `BREAK?`, `STICK`, `ACCEPT`,
+  `INPUT`. `RECT`, `POLYGON`, `POLYGON-FILL`, `SPRITE-DEFINE`,
+  `SPRITE-SHOW`, and `SPRITE-HIDE` too, dispatched through the
+  separate EXROM.
 
 ### Exercises
 
