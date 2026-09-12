@@ -137,6 +137,18 @@ COLD_START:
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
+    ; Real hardware and accuracy-oriented emulators don't guarantee RAM
+    ; is zeroed at power-on -- only some emulators happen to pre-zero
+    ; it, which is exactly the class of bug 2068-Leap's own MEM_COLD_
+    ; INIT exists to prevent (see kernel/memory/memory.asm's header).
+    ; Zero the whole dictionary/stack/workspace RAM range ($8000
+    ; through DICT_RAM_CEILING, core/free.asm) before anything below
+    ; reads or writes into it, so nothing here can show leftover
+    ; power-on garbage instead of a clean, empty system.
+    ld   hl, $8000
+    ld   bc, DICT_RAM_CEILING - $8000
+    call MEM_FILL_ZERO
+
     ld   hl, DICT_LATEST_INIT_RECALL   ; the full chain's own head —
                                     ; see this file's own header (Phase
                                     ; 64 -- core/recall.asm's LIST-DEFS/
@@ -160,8 +172,26 @@ COLD_START:
                                    ; bookkeeping -- must start at 0
     ld   (CATCH_DEPTH), a         ; core/throwcatch.asm's own CATCH
                                    ; bookkeeping -- must start at 0
-    ld   a, DEFAULT_ATTR          ; required since Phase 15 -- see
-    ld   (CURRENT_ATTR), a        ; core/ts2068.asm's own header
+    ld   a, ATTR_DEFAULT          ; required since Phase 15 -- see
+    ld   (CURRENT_ATTR), a        ; core/ts2068.asm's own header.
+                                   ; kernel/graphics/graphics.asm's
+                                   ; ATTR_DEFAULT ($44, black paper/
+                                   ; bright green ink), NOT core/
+                                   ; ts2068.asm's own DEFAULT_ATTR ($38,
+                                   ; white paper/black ink) -- GFX_CLS
+                                   ; just cleared the whole screen to
+                                   ; ATTR_DEFAULT above, and EMIT (core/
+                                   ; print.asm) stamps CURRENT_ATTR onto
+                                   ; every printed character, so seeding
+                                   ; it from the stale $38 constant made
+                                   ; the first typed character (and
+                                   ; every one after, until INK/PAPER is
+                                   ; used) render white-paper/black-ink
+                                   ; against the green-on-black screen
+                                   ; GFX_CLS had just painted -- found
+                                   ; live: text appeared black-on-white
+                                   ; instead of the intended green-on-
+                                   ; black terminal look
     ld   a, 1
     ld   (FWRAP_OLD_COUNT), a ; required once at cold start -- see
                                   ; core/editor.asm's own header on this
@@ -431,6 +461,7 @@ RUNTIME_ERROR_MSG: DB "STACK?", 0
 ; ---- kernel + dictionary: included here, after the vector table and
 ; the boot code above, not before ORG $0000. DICT_CHAIN_POINT splices
 ; match rom/forth_smoke_p9.asm's own, already proven under Fuse. ----
+    INCLUDE "kernel/memory/memory.asm"
     INCLUDE "kernel/math/math.asm"
     INCLUDE "kernel/io/io.asm"
     INCLUDE "kernel/interrupt/interrupt.asm"
