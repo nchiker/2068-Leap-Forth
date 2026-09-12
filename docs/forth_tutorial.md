@@ -1528,34 +1528,36 @@ SHOWREST          \ prints WORLD
 
 ## 6. Comparisons and true/false
 
-The next section is about making decisions, and before you can write
-one you need to know what Forth thinks a decision *is*.
+The next section covers making decisions, and before writing one it
+helps to know what Forth considers a decision to *be*.
+
+#### What a Comparison Actually Is
 
 In BASIC, a condition is part of the `IF` statement: `IF X > 3 THEN`
-puts the test and the branch in one piece of grammar. Forth doesn't
-have grammar, so it can't do that. The test has to be an ordinary word
-that runs on its own, leaves an ordinary value on the stack, and
-finishes. Whatever branches later reads that value.
+combines the test and the branch in one piece of grammar. Forth has no
+grammar, so it can't do that. The test has to be an ordinary word that
+runs on its own, leaves an ordinary value on the stack, and finishes.
+Whatever branches later reads that value.
 
-So a comparison isn't special. `>` is a word `( a b -- flag )`, just
-like `+` is a word `( a b -- a+b )`. It takes two numbers off the stack
-and leaves one behind. The only difference is what that one number
-means.
+- **A Comparison Is an Ordinary Word:** `>` is a word `( a b -- flag )`,
+  just like `+` is a word `( a b -- a+b )`. It takes two numbers off
+  the stack and leaves one behind. The only difference is what that
+  one number means.
 
-And what it means is deliberately simple: **zero means false; anything
-else at all means true.** No separate true/false type, no third kind of
-value — just a number on the same stack as all the others. A value used
-this way is called a **flag**.
+- **What a Flag Means:** Zero means false; anything else at all means
+  true. There is no separate true/false type and no third kind of
+  value — just a number on the same stack as all the others. A value
+  used this way is called a **flag**.
 
 | Word | Stack effect      | What it does                              |
-| ---- | ----------------- | ----------------------------------------- |
+| ---- | ----------------- | ------------------------------------------ |
 | `0=` | `( n -- flag )`   | `flag` is true if `n` is exactly `0`      |
 | `=`  | `( a b -- flag )` | `flag` is true if `a` and `b` are equal   |
 | `<`  | `( a b -- flag )` | `flag` is true if `a` is less than `b`    |
 | `>`  | `( a b -- flag )` | `flag` is true if `a` is greater than `b` |
 
-Try them and print the flags, since a flag is a printable number like
-any other:
+A flag is a printable number like any other, so the results can be
+seen directly:
 
 ```forth
 5 3 > .    \ prints -1
@@ -1565,53 +1567,57 @@ any other:
 7 0= .     \ prints 0
 ```
 
-Two things in that output want explaining.
+- **A True Flag Prints as `-1`, Not `1`:** Most languages use `1` for
+  true; Forth's convention is that true means *every bit set*, and a
+  whole number with all sixteen bits set reads, in signed
+  two's-complement, as `-1`. It's the same `-1` produced by `0 INVERT`
+  in [Bitwise and logical operators](#bitwise-and-logical-operators),
+  for the same reason. The number's actual value almost never matters
+  — what matters is that it isn't zero.
 
-**A true flag prints as `-1`, not `1`.** You'd be forgiven for
-expecting `1`; that's what BASIC and most other languages use. Forth's
-convention is that true means *every bit set*, and a whole number with
-all sixteen bits set reads, in signed two's-complement, as `-1`. It's
-the same `-1` you got from `0 INVERT` back in
-[Bitwise and logical operators](#bitwise-and-logical-operators), and
-for exactly the same reason. It is not a bug, and the number's actual
-value almost never matters — what matters is that it isn't zero.
+- **Operand Order on `<` and `>`:** The same convention `-` uses in
+  section 1 applies here. `5 3 >` asks "is 5 greater than 3?" — the
+  deeper value first, the top value second, the order it would be said
+  aloud. `3 5 >` asks the opposite question and correctly answers `0`.
 
-**Watch the operand order on `<` and `>`,** which is the same trap `-`
-sprang in section 1 and for the same reason. `5 3 >` asks "is 5 greater
-than 3?" — the deeper value first, the top value second, exactly the
-order you'd say it aloud. `3 5 >` asks the opposite question and quite
-correctly answers `0`.
+#### `0=`: Testing for Zero and Inverting a Flag
 
-`0=` is the odd one out, and it earns its keep twice over. Read
-literally it tests "is this exactly zero?". But since zero is false and
-everything else is true, testing for zero is *also* the way you invert
-a flag — feed it a true flag and you get false, feed it false and you
-get true. One word, two uses, and both of them come up constantly.
+`0=` is the odd one out in the table above, and it earns its keep
+twice over.
 
-```forth
-5 3 > 0= .    \ prints 0 -- "5 > 3" was true, so "NOT (5 > 3)" is false
-```
+- **Two Uses in One Word:** Read literally, `0=` tests "is this exactly
+  zero?" But since zero is false and everything else is true, testing
+  for zero is *also* how a flag gets inverted — feed it a true flag and
+  the result is false; feed it false and the result is true. Both uses
+  come up constantly:
 
-That's also why `0=` is not spelled `NOT`, and why the bitwise
-`INVERT` from [section 4](#4-numbers) isn't either. They do genuinely
-different jobs: `INVERT` flips all sixteen bits of whatever it's given,
-while `0=` only ever asks one question and answers with a flag. On a
-proper `-1`/`0` flag they happen to agree; on any other number they
-don't. Giving them one shared name would hide that.
+  ```forth
+  5 3 > 0= .    \ prints 0 -- "5 > 3" was true, so "NOT (5 > 3)" is false
+  ```
 
-Finally, a limit worth knowing before you go looking for them: there is
-no `<=` or `>=` in 2068-Leap-Forth, and no `<>`. Build what you need from
-what's here — `<=` is `>` followed by `0=`, for instance, since "not
+- **Why Not Call It `NOT`:** This is also why `0=` isn't spelled `NOT`,
+  and why the bitwise `INVERT` from [section 4](#4-numbers) isn't
+  either. They perform genuinely different jobs: `INVERT` flips all
+  sixteen bits of whatever it's given, while `0=` only ever asks one
+  question and answers with a flag. On a proper `-1`/`0` flag they
+  happen to agree; on any other number they don't. A single shared
+  name would hide that difference.
+
+#### Words Not Provided
+
+A limit worth knowing in advance: there is no `<=` or `>=` in
+2068-Leap-Forth, and no `<>`. Each is built from what's already
+available — `<=` is `>` followed by `0=`, for instance, since "not
 greater than" and "less than or equal" are the same question.
 
 ### Summary
 
-Flags. Zero is false and anything else is true, so a flag is an
-ordinary number on the ordinary stack. A true flag produced by these
-words is `-1`, every bit set. A comparison is a plain word that runs on
-its own and leaves a flag behind.
+- **Core Concepts:** Flags. Zero is false and anything else is true, so
+  a flag is an ordinary number on the ordinary stack. A true flag
+  produced by these words is `-1`, every bit set. A comparison is a
+  plain word that runs on its own and leaves a flag behind.
 
-Forth words `0=`, `=`, `<`, `>`.
+- **Forth Words:** `0=`, `=`, `<`, `>`.
 
 ### Exercises
 
@@ -1652,20 +1658,23 @@ Forth words `0=`, `=`, `<`, `>`.
 
 ## 7. Making decisions: `IF` `ELSE` `THEN`
 
-Every word you've defined so far has been a plain list: run the first
-thing, then the next, then the next, then stop. Useful, but it means
-every one of them does the same thing every time. Real programs need
-words that behave differently in different circumstances.
+Every word defined so far has been a plain list: run the first thing,
+then the next, then the next, then stop. Useful, but it means each one
+does the same thing every time. Real programs need words that behave
+differently in different circumstances.
+
+#### The Basic Shape
 
 `IF`/`ELSE`/`THEN` is Forth's answer to BASIC's `IF...THEN...ELSE`,
 with one difference worth stating up front: the condition comes from
-the stack, computed *before* you reach `IF`, rather than being written
-as part of the `IF` itself. That's the section 6 point restated — a
-test is an ordinary word that leaves a flag; `IF` is a separate
-ordinary word that reads one.
+the stack, computed *before* `IF` is reached, rather than being written
+as part of `IF` itself.
 
-Start with the smallest possible example, where the condition is
-literally handed in:
+- **A Direct Consequence of Section 6:** A test is an ordinary word
+  that leaves a flag; `IF` is a separate ordinary word that reads one.
+
+Starting with the smallest possible example, where the condition is
+handed in directly:
 
 ```forth
 : SIGNTEST  IF 111 ELSE 222 THEN ;
@@ -1674,33 +1683,31 @@ literally handed in:
 0 SIGNTEST .     \ prints 222 -- 0 is false
 ```
 
-Reading `SIGNTEST`: when it runs, whatever's already on top of the
-stack is the condition. `IF` pops it — note that word, **pops**; the
-flag is consumed and gone — and checks it exactly the way section 6's
-comparisons produce it: zero false, anything else true. If true,
-everything up to the matching `ELSE` runs; if false, the part between
-`ELSE` and `THEN` runs instead. Either way, execution carries on after
-`THEN`.
+- **Reading `SIGNTEST`:** When it runs, whatever's already on top of
+  the stack is the condition. `IF` pops it — note that word, **pops**;
+  the flag is consumed and gone — and checks it exactly the way
+  section 6's comparisons produce it: zero false, anything else true.
+  If true, everything up to the matching `ELSE` runs; if false, the
+  part between `ELSE` and `THEN` runs instead. Either way, execution
+  continues after `THEN`.
 
-Set out as a table, since there are only two paths and it's worth
-seeing both:
+Set out as a table, since there are only two paths:
 
 ```
 top of stack is 5  ->  nonzero  ->  IF takes the true path   ->  111
 top of stack is 0  ->  zero     ->  IF takes the false path  ->  222
 ```
 
-**`THEN` is the word that catches everyone**, so it's worth being blunt
-about it. In BASIC, `THEN` introduces the thing to do. In Forth it does
-nothing of the kind: it marks the *end* of the branching, the point
-where the two paths join back up and normal execution resumes. If it
-helps, mentally read it as "and then carry on here". The BASIC habit is
-strong and this is the single most common early confusion, so expect to
-trip on it once or twice before it sticks.
+- **What `THEN` Actually Marks:** In BASIC, `THEN` introduces the thing
+  to do. In Forth it does nothing of the kind: it marks the *end* of
+  the branching, the point where the two paths join back up and normal
+  execution resumes. Reading it as "and then carry on here" captures
+  the intent. This is the single most common early point of confusion,
+  worth expecting in advance.
 
-The `ELSE` is optional. Leave it out when there's nothing to do in the
-false case, and the shape becomes `IF ... THEN` — run this part or
-don't, then carry on either way.
+`ELSE` is optional. Leaving it out, when there is nothing to do in the
+false case, produces the shape `IF ... THEN` — run this part or don't,
+then carry on either way:
 
 ```forth
 : BONUS  IF 100 + THEN ;
@@ -1709,8 +1716,8 @@ don't, then carry on either way.
 50  0 BONUS .   \ prints 50  -- flag was false, nothing happened
 ```
 
-Now the useful version, where the condition is *computed* rather than
-handed in — which is what you'll actually write:
+The more common case is a condition that's *computed* rather than
+handed in directly:
 
 ```forth
 : BIGGER  > IF 111 ELSE 222 THEN ;
@@ -1719,28 +1726,30 @@ handed in — which is what you'll actually write:
 3 5 BIGGER .   \ prints 222 -- 3 5 > is false
 ```
 
-Nothing new happened there. `BIGGER` simply starts with the `>` from
-section 6, which turns the two numbers already on the stack into one
-flag, and from `IF` onward it's `SIGNTEST` again. Building a word by
-gluing a test onto a decision like this is the everyday shape of Forth
-code.
+- **Nothing New Here:** `BIGGER` simply starts with the `>` from
+  section 6, which turns the two numbers already on the stack into one
+  flag, and from `IF` onward it's `SIGNTEST` again. Building a word by
+  attaching a test to a decision this way is the everyday shape of
+  Forth code.
 
-### Printing from a branch: `."`
+### Printing from a Branch: `."`
 
-A branch that leaves a number on the stack is fine, but usually you
-want to *say* something. `."` ("dot-quote") prints a fixed piece of
-text. It's a different thing from `.`, which prints a computed number
-— `.` reads the stack, `."` doesn't touch the stack at all, it just
-emits the characters written into it. ([Printing](#9-printing) covers
-both properly.)
+A branch that leaves a number on the stack is useful, but often the
+goal is to *say* something instead. `."` ("dot-quote") prints a fixed
+piece of text.
 
-Two rules, both easy to break: exactly one space is required right
-after `."`, and the text runs up to but not including the next `"`.
-And `."` only works inside a colon definition, the same restriction
-`IF`/`ELSE`/`THEN` themselves carry — which is the IMMEDIATE business
-from [section 2](#interpreting-vs-compiling-why--is-special) showing
-up in practice, since there has to be a definition under construction
-for these words to build into.
+- **`."` vs. `.`:** `."` is a different word from `.`, which prints a
+  computed number — `.` reads the stack, `."` doesn't touch the stack
+  at all; it emits the characters written directly into it.
+  ([Printing](#9-printing) covers both properly.)
+
+- **Two Syntax Rules:** Exactly one space is required right after `."`,
+  and the text runs up to but not including the next `"`. `."` also
+  only works inside a colon definition, the same restriction
+  `IF`/`ELSE`/`THEN` themselves carry — the IMMEDIATE mechanism from
+  [section 2](#interpreting-vs-compiling-why--is-special) showing up in
+  practice, since a definition must be under construction for these
+  words to build into.
 
 ```forth
 : DESCRIBE  IF ." positive-ish" ELSE ." zero or negative" THEN ;
@@ -1752,14 +1761,13 @@ for these words to build into.
 ### Back to `?DUP`
 
 [Section 1](#rearranging-the-stack) promised that `?DUP` would make
-sense once you'd met `IF`, so here's the payoff. The problem `?DUP`
-solves is this: `IF` consumes the flag it tests, but often the value
-you tested *is* the value you wanted to use.
+sense once `IF` had been covered — here is the payoff. The problem
+`?DUP` solves: `IF` consumes the flag it tests, but often the value
+tested *is* the value meant to be used afterward.
 
-Say you want a word that prints the top of the stack, but only if it
-isn't zero. Written with the tools from this section alone, you'd need
-to make a copy to test, and then clean up the copy on the branch where
-you didn't use it:
+Consider a word that prints the top of the stack, but only if it isn't
+zero. Written with the tools from this section alone, a copy has to be
+made to test, then cleaned up on the branch where it went unused:
 
 ```forth
 : ?PRINT  DUP IF . ELSE DROP THEN ;
@@ -1768,15 +1776,15 @@ you didn't use it:
 0 ?PRINT      \ prints nothing
 ```
 
-Follow the two paths. `DUP` makes `[7, 7]`; `IF` eats one, leaving
-`[7]` for `.` to print. Good. But with `0`: `DUP` makes `[0, 0]`, `IF`
-eats one and takes the false path, and the *other* `0` is still sitting
-there — hence the `DROP`, whose only job is tidying up a copy that
-turned out to be unwanted.
+- **Tracing Both Paths:** `DUP` makes `[7, 7]`; `IF` consumes one,
+  leaving `[7]` for `.` to print. But with `0`: `DUP` makes `[0, 0]`,
+  `IF` consumes one and takes the false path, and the *other* `0` is
+  still sitting there — hence the `DROP`, whose only job is discarding
+  a copy that turned out to be unwanted.
 
-`?DUP` exists to make that whole dance unnecessary. It copies the value
-**only if it's nonzero**, which is exactly the case where the copy will
-be needed:
+`?DUP` exists to make that whole pattern unnecessary. It copies the
+value **only if it's nonzero**, which is exactly the case where the
+copy will be needed:
 
 ```forth
 : ?PRINT  ?DUP IF . THEN ;
@@ -1785,20 +1793,20 @@ be needed:
 0 ?PRINT      \ prints nothing
 ```
 
-With `7`, `?DUP` gives `[7, 7]` and it behaves as before. With `0`,
-`?DUP` leaves `[0]` untouched, `IF` consumes that single zero, takes
-the false path, and there is nothing left over to clean up. The `ELSE
-DROP` disappears. That strange-looking `( n -- 0 | n n )` stack effect
-was describing precisely this, and now it should read as a promise
-rather than a puzzle.
+- **Why This Works:** With `7`, `?DUP` gives `[7, 7]`, behaving as
+  before. With `0`, `?DUP` leaves `[0]` untouched, `IF` consumes that
+  single zero, takes the false path, and nothing is left over to clean
+  up. The `ELSE DROP` disappears entirely. The `( n -- 0 | n n )` stack
+  effect from section 1 was describing precisely this.
 
 ### Summary
 
-Branching on a flag taken from the stack. `THEN` marks where the paths
-rejoin, not where the work begins. `ELSE` is optional. Printing fixed
-text from inside a branch. Why `?DUP` exists.
+- **Core Concepts:** Branching on a flag taken from the stack. `THEN`
+  marks where the paths rejoin, not where the work begins. `ELSE` is
+  optional. Printing fixed text from inside a branch. Why `?DUP`
+  exists.
 
-Forth words `IF`, `ELSE`, `THEN`, `."`.
+- **Forth Words:** `IF`, `ELSE`, `THEN`, `."`.
 
 ### Exercises
 
