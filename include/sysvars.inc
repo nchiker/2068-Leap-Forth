@@ -1384,32 +1384,54 @@ PORT_FF_SHADOW:      DEFS 1          ; 1 byte
 ; Deliberately NOT recursive and NOT unbounded — real hardware has no
 ; call-stack depth to spare, and even an iterative approach needs an
 ; explicit limit since a large enough enclosed region could otherwise
-; grow the stack without bound. Originally 2048 entries (x,y per
-; entry), sized from real peak-stack measurements in Python before any
-; Z80 was written: a "mark on push" 4-connected fill (using the bitmap
-; itself as the already-claimed tracker, via GFX_READ_PIXEL/GFX_WRITE_
-; PIXEL — no separate visited-set needed) peaks at ~2069 stack entries
-; for a filled circle of radius 50 on this screen, ~768 for radius 30
-; — a genuinely naive "mark on pop" version was measured needing MORE
-; stack entries than there are pixels in the fill for a large open
-; area, which is why this project didn't ship that simpler-looking
-; version. If GFX_FILL_STACK does fill up (a very large enclosed
-; region), further expansion from that point silently stops — pixels
-; already queued still get processed and colored correctly, but a
-; genuinely huge fill may not reach its full extent. No crash, no
-; memory corruption — a documented, deliberate limitation.
+; grow the stack without bound. If GFX_FILL_STACK does fill up, further
+; expansion from that point silently stops — spans already queued
+; still get processed and colored correctly, but a genuinely
+; pathological fill may not reach its full extent. No crash, no memory
+; corruption — a documented, deliberate limitation, same as every
+; earlier version of this stack.
 ;
-; RESIZED to 1664 entries for 2068-Forth specifically (Phase 44 — see
-; GFX_FILL_VISITED's own header just above for the full relocation
-; writeup): the idle video-RAM pool this now shares with
-; GFX_FILL_VISITED is 768 bytes smaller than the original $C000-$E7FF
-; span, so this shrinks to fit exactly, ending precisely at $8000 with
-; nothing wasted. This was ALREADY a graceful-degradation, not a hard
-; guarantee, at 2048 entries (the measured radius-50 peak of ~2069
-; already exceeded it) — 1664 starts degrading somewhat earlier for
-; extreme fills, not a new category of risk.
-GFX_FILL_STACK       EQU $7300         ; 3328 bytes (1664 x/y entries)
-GFX_FILL_STACK_END     EQU GFX_FILL_STACK + 3328
+; SCANLINE (SPAN) FILL, replacing the old per-PIXEL algorithm (Phase
+; 44's 1664-entry, 3328-byte stack): the stack now holds one (x,y)
+; SEED per contiguous horizontal RUN still to expand, not one entry
+; per pixel — GFX_FILL fills a whole row-span in one pass per pop,
+; then scans the row above/below (across exactly that span's own
+; width, not one column wider — an earlier draft of this Python
+; verification over-scanned by 1 and leaked across diagonal-only
+; "connections" that fail a real 4-connected reachability check
+; against it) for new unclaimed runs, pushing one seed per run found.
+; Algorithm and stack sizing re-verified in Python against a reference
+; BFS flood fill before any Z80 was written (same standard the
+; original per-pixel version's own header already held itself to):
+; a solid box, a blank enclosed square, a full-screen fill in both
+; directions, a hollow ring, an irregular random blob, and (the
+; specific case this project's own prior stack-sizing comment quoted
+; a ~2069-entry peak for) a SOLID DISC OF RADIUS 50 RECOLORED a new
+; attribute all matched the reference exactly, peaking at just 2
+; stack entries for that same disc — the reason this algorithm needs
+; so much less stack than the old one. Two genuinely adversarial
+; synthetic shapes were also tried specifically to find where this
+; approach still degrades: a fine alternating "comb" pattern (many
+; short spans forced open simultaneously) peaked at 5986 entries, far
+; beyond anything a real PLOT/LINE-bounded paint-bucket region would
+; produce; a tight logarithmic spiral (deliberately built to force
+; many disjoint same-row spans reached from different directions, the
+; case GFX_FILL_VISITED's per-pixel dedup exists to handle correctly)
+; peaked at 452. 512 entries were kept for GFX_FILL_STACK — comfortable
+; headroom over every realistic shape actually tested, while still
+; leaving the comb-pattern class of pathological input to gracefully
+; degrade exactly like every earlier version of this stack already
+; documented, not a new category of risk.
+;
+; GFX_FILL_VISITED (see its own header just above) is UNCHANGED and
+; still required: recoloring an already-solid region (GFX_FILL_TARGET
+; == 1) means a freshly-filled pixel reads back as 1 == target again,
+; so the pixel's own bitmap state alone still can't distinguish
+; "already handled this fill" from "still needs handling" — exactly
+; the trap this project's own header already documented once for the
+; per-pixel version, and just as real for spans.
+GFX_FILL_STACK       EQU $7300         ; 1024 bytes (512 x/y entries)
+GFX_FILL_STACK_END     EQU GFX_FILL_STACK + 1024
 GFX_FILL_SP:         DEFS 2           ; 2 bytes — pointer into GFX_FILL_
                                    ; STACK; == GFX_FILL_STACK means
                                    ; empty, == GFX_FILL_STACK_END means
@@ -1417,16 +1439,32 @@ GFX_FILL_SP:         DEFS 2           ; 2 bytes — pointer into GFX_FILL_
 GFX_FILL_TARGET:     DEFS 1           ; 1 byte — the pixel value (0 or 1)
                                    ; being replaced, read from the seed
 GFX_FILL_ATTR:       DEFS 1           ; 1 byte — fill color
-GFX_FILL_X:          DEFS 1           ; 1 byte — the pixel currently
-                                   ; being expanded (popped from the
-                                   ; stack); NOT reused as scratch by
-                                   ; GFX_FILL_TRY_NEIGHBOR/PUSH/POP —
-                                   ; those work entirely through B/C,
-                                   ; specifically so they can't clobber
-                                   ; this while the outer loop is still
-                                   ; using it to compute all 4
-                                   ; neighbors of the SAME pixel
+GFX_FILL_X:          DEFS 1           ; 1 byte — the seed (x,y) most
+                                   ; recently popped off the stack,
+                                   ; i.e. some point within the row-
+                                   ; span currently being expanded —
+                                   ; NOT reused as scratch by GFX_FILL_
+                                   ; PUSH/POP/GFX_FILL_VISITED_CHECK(_
+                                   ; SET), which work entirely through
+                                   ; B/C, so this survives unclobbered
+                                   ; while the left/right span scan
+                                   ; below runs
 GFX_FILL_Y:          DEFS 1           ; 1 byte
+GFX_FILL_LX:         DEFS 1           ; 1 byte — left edge of the span
+                                   ; currently being expanded (0-255)
+GFX_FILL_RX:         DEFS 1           ; 1 byte — right edge, inclusive
+GFX_FILL_SCAN_X:     DEFS 1           ; 1 byte — loop cursor shared by
+                                   ; the span fill-loop and the row-
+                                   ; above/below scan (never both live
+                                   ; at once, so one cell covers both)
+GFX_FILL_SCAN_Y:     DEFS 1           ; 1 byte — the row (y-1 or y+1)
+                                   ; GFX_FILL_SCAN_ROW the routine is
+                                   ; currently scanning
+GFX_FILL_SCAN_END:   DEFS 1           ; 1 byte — inclusive right bound
+                                   ; of the current row-above/below
+                                   ; scan (always == GFX_FILL_RX — see
+                                   ; that routine's own header for why
+                                   ; the scan is NOT widened by 1)
 
 ; ---- kernel/editor word-wrap tables ----
 ; Populated by EDITOR_WRAP_CALC (kernel/editor/editor.asm) from a line
@@ -1892,16 +1930,12 @@ SPRITE_SLOT_BG_BUF   EQU $EC80         ; 1152 bytes — saved background
 ;
 ; Moved instead into the idle "second display file" video-RAM pool
 ; ($5B00-$7FFF, 9472 bytes — see docs/memory_map.md's own writeup on
-; why this range sits unused in Standard video mode): this is smaller
-; than the original $C000-$E7FF span (10,240 bytes), so GFX_FILL_STACK
-; below is SHRUNK from 2048 to 1664 (x,y) entries to fit exactly, with
-; zero bytes wasted (GFX_FILL_STACK_END lands exactly on $8000, the
-; sysvars block's own ORG). This is a real, deliberate capacity cut,
-; not free: GFX_FILL_STACK's own header already documents graceful,
-; no-crash degradation for very large fills (measured ~2069 peak
-; entries for a radius-50 circle, already exceeding the ORIGINAL
-; 2048-entry capacity) — 1664 entries starts degrading somewhat
-; earlier than before, not a new category of risk.
+; why this range sits unused in Standard video mode). GFX_FILL_STACK
+; below no longer needs to fit this pool exactly (it was SHRUNK to
+; 1664, then to 512, entries specifically because the scanline/span
+; rewrite needs far less stack — see its own header) — $7700-$7FFF
+; (2304 bytes) sits genuinely free within this pool now, not reclaimed
+; for anything else yet.
 ;
 ; HAZARD THIS CREATES, and how it's handled: $6000-$77FF of this same
 ; idle pool is where the Second Display File lives (hardware-fixed, not
@@ -1919,8 +1953,9 @@ SPRITE_SLOT_BG_BUF   EQU $EC80         ; 1152 bytes — saved background
 GFX_FILL_VISITED     EQU $5B00         ; 6144 bytes, through $72FF
 
     ASSERT GFX_FILL_VISITED + 6144 == GFX_FILL_STACK
-    ASSERT GFX_FILL_STACK_END == $8000  ; exactly fills the idle video-RAM
-                                         ; pool with zero bytes wasted —
+    ASSERT GFX_FILL_STACK_END <= $8000  ; must stay inside the idle
+                                         ; video-RAM pool, but no longer
+                                         ; needs to fill it exactly —
                                          ; see this block's own header
     ASSERT GFX_FILL_VISITED >= $5B00    ; never touch the live screen/
                                          ; attribute file below it

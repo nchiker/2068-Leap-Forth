@@ -1702,50 +1702,6 @@ GFX_FILL_POP:
     ret
 
 ; ============================================================================
-; GFX_FILL_TRY_NEIGHBOR (internal — not in kernel_api.inc)
-; Checks whether (nx,ny) still matches GFX_FILL_TARGET AND hasn't
-; already been visited this fill (GFX_FILL_VISITED — see GFX_FILL's
-; header for why a separate bitmap, not the pixel state itself, has
-; to be the visited-tracker); if both pass, marks it visited, colors
-; it, and pushes it for later expansion.
-; Saves/restores BC around every call that might destroy it
-; (GFX_READ_PIXEL/GFX_WRITE_PIXEL both take x/y via B/C) — (nx,ny) has
-; to survive all the way to the final push.
-; In:  B = nx, C = ny (caller has already bounds-checked these)
-; Out: none
-; Destroys: AF, DE, HL
-; ============================================================================
-GFX_FILL_TRY_NEIGHBOR:
-    push bc
-    call GFX_READ_PIXEL             ; A = pixel state at (nx,ny);
-                                     ; destroys BC (its own contract)
-    ld   e, a
-    ld   a, (GFX_FILL_TARGET)
-    cp   e
-    jr   nz, .not_match
-
-    pop  bc
-    push bc                         ; restore real (nx,ny) — GFX_READ_
-                                     ; PIXEL clobbered B/C above.
-                                     ; GFX_FILL_VISITED_CHECK_SET only
-                                     ; READS B/C (never writes them),
-                                     ; so this one restore covers it.
-    call GFX_FILL_VISITED_CHECK_SET ; carry SET if already visited;
-                                     ; else marks it visited now
-    jr   c, .not_match
-
-    pop  bc
-    push bc
-    ld   d, 0                       ; always OR/set — see GFX_FILL's header
-    ld   a, (GFX_FILL_ATTR)
-    call GFX_WRITE_PIXEL
-    pop  bc
-    jr GFX_FILL_PUSH
-.not_match:
-    pop  bc
-    ret
-
-; ============================================================================
 ; GFX_FILL_VISITED_CHECK_SET (internal — not in kernel_api.inc)
 ; Checks GFX_FILL_VISITED (a 6144-byte, 1-bit-per-screen-pixel shadow
 ; bitmap — plain linear row*32+col layout, NOT the real screen's
@@ -1802,14 +1758,165 @@ GFX_FILL_VISITED_CHECK_SET:
     ret
 
 ; ============================================================================
+; GFX_FILL_VISITED_CHECK (internal — not in kernel_api.inc)
+; Read-only sibling of GFX_FILL_VISITED_CHECK_SET above — same bitmap,
+; same addressing, but never claims the bit. Used while merely
+; scanning for new spans (GFX_FILL_SCAN_ROW, and GFX_FILL's own
+; left/right span-edge walk), where finding a match must NOT yet mark
+; it visited: a run discovered this way still gets exactly one seed
+; pushed for it, and that seed's own pop-time re-validation (not this
+; scan) is what actually claims each of its pixels once the whole run
+; is finally expanded — see GFX_FILL's header for why claiming early
+; here would be wrong.
+; In:  B = x (0-255), C = y (0-191)
+; Out: carry SET if already visited; carry CLEAR otherwise. Bitmap
+;      itself is left untouched either way.
+; Destroys: AF, DE, HL
+; ============================================================================
+GFX_FILL_VISITED_CHECK:
+    ld   a, c                       ; y
+    ld   l, a
+    ld   h, 0
+    add  hl, hl
+    add  hl, hl
+    add  hl, hl
+    add  hl, hl
+    add  hl, hl                     ; y*32
+    ld   a, b                       ; x
+    srl  a
+    srl  a
+    srl  a                          ; x>>3 (byte column, 0-31)
+    ld   e, a
+    ld   d, 0
+    add  hl, de
+    ld   de, GFX_FILL_VISITED
+    add  hl, de                     ; HL = GFX_FILL_VISITED + y*32 + x/8
+
+    ld   a, b
+    and  %00000111                  ; bit_in_byte = x & 7
+    ld   e, a
+    ld   d, 0
+    push hl
+    ld   hl, BIT_MASK_TABLE
+    add  hl, de
+    ld   a, (hl)
+    pop  hl
+    ld   e, a                       ; E = mask
+    ld   a, (hl)
+    and  e
+    ret  z                          ; carry already clear from AND
+    scf
+    ret
+
+; ============================================================================
+; GFX_FILL_SCAN_ROW (internal — not in kernel_api.inc)
+; Scans row GFX_FILL_SCAN_ROW across EXACTLY [GFX_FILL_LX, GFX_FILL_RX]
+; (the span GFX_FILL just filled) for runs that still match GFX_FILL_
+; TARGET and haven't been claimed yet, pushing ONE seed per run found
+; (not one per matching pixel — that's what keeps GFX_FILL_STACK small;
+; see its own sysvars.inc header for the measured numbers).
+;
+; Deliberately does NOT widen the scan to [LX-1, RX+1]: 4-connectivity
+; only links (i, row) to (i, GFX_FILL_Y) at the SAME column i, so any
+; run in this row that's genuinely part of the same connected region
+; must overlap [LX, RX] in at least one column — this loop reaches it
+; there. Widening by 1 was tried and rejected during this routine's
+; own Python verification: it admits a column just past the span's own
+; edge whose only relationship to the span is diagonal, which isn't
+; real 4-connectivity and leaked fill into pixels a reference
+; breadth-first flood fill over the same shape never touched.
+;
+; In:  GFX_FILL_SCAN_Y (the row to scan, already range-checked 0-191
+;      by the caller), GFX_FILL_LX/RX (the span just filled)
+; Out: none (any runs found are pushed onto GFX_FILL_STACK)
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+GFX_FILL_SCAN_ROW:
+    ld   a, (GFX_FILL_LX)
+    ld   (GFX_FILL_SCAN_X), a
+    ld   a, (GFX_FILL_RX)
+    ld   (GFX_FILL_SCAN_END), a
+
+.scan:
+    ld   a, (GFX_FILL_SCAN_X)
+    ld   hl, GFX_FILL_SCAN_END
+    cp   (hl)
+    jr   z, .in_range               ; SCAN_X == END: still one more to check
+    jr   nc, .done                  ; SCAN_X > END: finished
+.in_range:
+    ld   b, a
+    ld   a, (GFX_FILL_SCAN_Y)
+    ld   c, a                       ; B,C = (SCAN_X, row)
+    push bc
+    call GFX_READ_PIXEL             ; destroys BC
+    ld   e, a
+    pop  bc
+    ld   a, (GFX_FILL_TARGET)
+    cp   e
+    jr   nz, .advance                ; no match here
+    push bc
+    call GFX_FILL_VISITED_CHECK      ; carry set if already claimed
+    pop  bc
+    jr   c, .advance
+
+    ; found the start of a new, still-unclaimed run: push exactly one
+    ; seed for it, then skip the rest of the run without marking it
+    ; visited (pop-time re-validates and claims it for real — see
+    ; this routine's own header on why widening/early-claiming here
+    ; would be wrong)
+    call GFX_FILL_PUSH
+.skip_run:
+    ld   a, (GFX_FILL_SCAN_X)
+    ld   hl, GFX_FILL_SCAN_END
+    cp   (hl)
+    jr   nc, .done                  ; consumed the whole scan range
+    inc  a
+    ld   (GFX_FILL_SCAN_X), a
+    ld   b, a
+    ld   a, (GFX_FILL_SCAN_Y)
+    ld   c, a
+    push bc
+    call GFX_READ_PIXEL
+    ld   e, a
+    pop  bc
+    ld   a, (GFX_FILL_TARGET)
+    cp   e
+    jr   nz, .scan                   ; run ended here: resume the outer
+                                     ; scan AT this same position, fresh
+    push bc
+    call GFX_FILL_VISITED_CHECK
+    pop  bc
+    jr   c, .scan                    ; run ended (already claimed):
+                                     ; same resume-here logic
+    jr   .skip_run
+
+.advance:
+    ld   a, (GFX_FILL_SCAN_X)
+    ld   hl, GFX_FILL_SCAN_END
+    cp   (hl)
+    jr   nc, .done
+    ld   a, (GFX_FILL_SCAN_X)
+    inc  a
+    ld   (GFX_FILL_SCAN_X), a
+    jr   .scan
+
+.done:
+    ret
+
+; ============================================================================
 ; GFX_FILL
-; Flood fill — FILL's mechanism. 4-connected, using an explicit
-; bounded stack (GFX_FILL_PUSH/POP above) rather than recursion — see
-; sysvars.inc's GFX_FILL_STACK comment for the real numbers behind why
-; 2048 entries. Reuses GFX_READ_PIXEL/GFX_WRITE_PIXEL entirely for the
-; actual pixel work — every touched pixel's covering attribute cell
-; gets colored the normal way, no separate attribute logic needed
-; here.
+; Flood fill — FILL's mechanism. 4-connected. Scanline/span algorithm:
+; each pop from the explicit bounded stack (GFX_FILL_PUSH/POP above)
+; expands and fills a WHOLE contiguous horizontal run in one pass
+; (GFX_FILL_LX/RX), then GFX_FILL_SCAN_ROW looks for new unclaimed
+; runs directly above and below that span — see sysvars.inc's
+; GFX_FILL_STACK header for the real numbers behind why this needs so
+; much less stack than the old per-pixel version, and this routine's
+; own GFX_FILL_SCAN_ROW for why the row-above/below scan is bounded to
+; exactly the span's own width. Reuses GFX_READ_PIXEL/GFX_WRITE_PIXEL
+; entirely for the actual pixel work — every touched pixel's covering
+; attribute cell gets colored the normal way, no separate attribute
+; logic needed here.
 ;
 ; Always writes in OR/"set" mode (never XOR/toggle) — GFX_FILL_TARGET
 ; still picks which pixel state (0 or 1) the flood matches and
@@ -1817,37 +1924,21 @@ GFX_FILL_VISITED_CHECK_SET:
 ; with the new attribute, so recoloring an already-solid region is a
 ; clean repaint rather than an erase.
 ;
-; Visited-tracking is a SEPARATE 6144-byte, 1-bit-per-screen-pixel
-; bitmap (GFX_FILL_VISITED, cleared at the start of every call) —
-; NOT folded into the bitmap write itself. Two earlier versions both
-; shipped wrong, found via real hardware testing 2026-08-20, not
-; caught by the ORIGINAL Python verification (which checked flood-
-; connectivity/stack usage assuming "mark on push" via toggling the
-; bit away from target, and never re-examined once the write mode
-; changed): (1) deriving the OVER flag from the seed's own target
-; value and using XOR when filling an already-set region silently
-; erased the shape's bitmap on recolor, since FILL has no way to
-; request "erase" from BASIC. (2) The first attempt at fixing that
-; used the covering ATTRIBUTE CELL already matching the fill color as
-; the "already visited" test instead — cheap (no extra memory) but
-; wrong: attribute color applies to a whole 8x8 cell at once, so it
-; looks "done" after the FIRST pixel in a cell is touched, but the
-; flood still needs to physically walk every pixel in that cell to
-; reach its far edges and cross into the NEXT cell — cell-granularity
-; dedup stops that walk early and badly under-fills anything bigger
-; than about one cell. A correct fix needs genuine per-PIXEL
-; dedup independent of both the bitmap's own state and the attribute,
-; which is what GFX_FILL_VISITED provides.
+; Visited-tracking is still a SEPARATE 6144-byte, 1-bit-per-screen-
+; pixel bitmap (GFX_FILL_VISITED, cleared at the start of every call),
+; NOT folded into the bitmap write itself, and still required for
+; exactly the reason this project already found the hard way once:
+; recoloring an already-solid region means GFX_FILL_TARGET is 1, and
+; every pixel GFX_FILL writes is unconditionally set to 1 too, so a
+; freshly-filled pixel reads back as target-matching again — the
+; pixel's own state can never distinguish "already handled" from
+; "still needs handling" in that case, span-based or not.
 ;
-; Algorithm re-verified in Python before shipping this version (same
-; standard the original had): a solid 51x51 box (the real failing
-; case), a blank 51x51 enclosed region (the everyday "paint bucket
-; into an empty area" case), and a full 256x192 screen fill against
-; the real 2048-entry stack cap all checked byte-for-byte complete —
-; the last one honestly stress-testing whether the existing stack
-; size (already sized by the original author's own prior Python
-; verification, unchanged here) still holds up under the new dedup
-; scheme, not just asserting it does.
+; Algorithm and stack sizing re-verified in Python against a reference
+; breadth-first flood fill before any Z80 was written (same standard
+; every earlier version of this routine held itself to) — see
+; sysvars.inc's GFX_FILL_STACK header for exactly which shapes were
+; tested and the peak stack depth each one measured.
 ;
 ; In:  GFX_FILL_X/Y (seed point, 0-255/0-191), GFX_FILL_ATTR (fill
 ;      color) — all pre-set by the caller
@@ -1869,85 +1960,142 @@ GFX_FILL:
     ld   a, (GFX_FILL_Y)
     ld   c, a
     call GFX_READ_PIXEL             ; A = pixel state at the seed
-    ld   (GFX_FILL_TARGET), a       ; still picks which state to match
+    ld   (GFX_FILL_TARGET), a       ; picks which state to match
 
     ld   a, (GFX_FILL_X)
     ld   b, a
     ld   a, (GFX_FILL_Y)
     ld   c, a
-    call GFX_FILL_VISITED_CHECK_SET ; claim the seed's own bit — carry
-                                     ; ignored, buffer was just cleared
-                                     ; so it can't already be set
-    ld   a, (GFX_FILL_X)
-    ld   b, a
-    ld   a, (GFX_FILL_Y)
-    ld   c, a
-    ld   d, 0                       ; always OR/set — see header
-    ld   a, (GFX_FILL_ATTR)
-    call GFX_WRITE_PIXEL            ; mark the seed itself filled
-    ld   a, (GFX_FILL_X)
-    ld   b, a
-    ld   a, (GFX_FILL_Y)
-    ld   c, a
-    call GFX_FILL_PUSH
+    call GFX_FILL_PUSH              ; seed the stack -- the main loop
+                                    ; below fills it (and claims it)
+                                    ; the same uniform way as every
+                                    ; other span, no special-casing
 
 .loop:
-    call GFX_FILL_POP
-    ret  c                          ; stack empty: done
+    call GFX_FILL_POP               ; B = x, C = y
+    jp   c, .done                   ; stack empty: done
+
+    ; re-validate: a seed can be stale (superseded by another span
+    ; that already covered it before this one got popped) -- see
+    ; GFX_FILL_SCAN_ROW's own header on why duplicates are possible
+    ; and expected, not a bug
+    push bc
+    call GFX_READ_PIXEL
+    ld   e, a
+    pop  bc
+    ld   a, (GFX_FILL_TARGET)
+    cp   e
+    jr   nz, .loop                  ; no longer matches -- discard
+    push bc
+    call GFX_FILL_VISITED_CHECK
+    pop  bc
+    jr   c, .loop                   ; already claimed -- discard
 
     ld   a, b
-    ld   (GFX_FILL_X), a            ; the pixel currently being
-    ld   a, c                      ; expanded — GFX_FILL_TRY_NEIGHBOR/
-    ld   (GFX_FILL_Y), a            ; PUSH/POP never touch these, only
-                                    ; B/C, specifically so this survives
-                                    ; unclobbered across all 4 checks
-                                    ; below
+    ld   (GFX_FILL_X), a
+    ld   a, c
+    ld   (GFX_FILL_Y), a
 
-    ; (x+1, y)
+    ; ---- find the left edge: walk left while still target/unclaimed ----
     ld   a, (GFX_FILL_X)
-    cp   255
-    jr   z, .skip_right
-    ld   b, a
-    inc  b
-    ld   a, (GFX_FILL_Y)
-    ld   c, a
-    call GFX_FILL_TRY_NEIGHBOR
-.skip_right:
-
-    ; (x-1, y)
-    ld   a, (GFX_FILL_X)
+    ld   (GFX_FILL_LX), a
+.scan_left:
+    ld   a, (GFX_FILL_LX)
     or   a
-    jr   z, .skip_left
+    jr   z, .left_done
+    dec  a
     ld   b, a
-    dec  b
     ld   a, (GFX_FILL_Y)
     ld   c, a
-    call GFX_FILL_TRY_NEIGHBOR
-.skip_left:
+    push bc
+    call GFX_READ_PIXEL
+    ld   e, a
+    pop  bc
+    ld   a, (GFX_FILL_TARGET)
+    cp   e
+    jr   nz, .left_done
+    push bc
+    call GFX_FILL_VISITED_CHECK
+    pop  bc
+    jr   c, .left_done
+    ld   a, b
+    ld   (GFX_FILL_LX), a
+    jr   .scan_left
+.left_done:
 
-    ; (x, y+1)
+    ; ---- find the right edge: walk right the same way ----
+    ld   a, (GFX_FILL_X)
+    ld   (GFX_FILL_RX), a
+.scan_right:
+    ld   a, (GFX_FILL_RX)
+    cp   255
+    jr   z, .right_done
+    inc  a
+    ld   b, a
+    ld   a, (GFX_FILL_Y)
+    ld   c, a
+    push bc
+    call GFX_READ_PIXEL
+    ld   e, a
+    pop  bc
+    ld   a, (GFX_FILL_TARGET)
+    cp   e
+    jr   nz, .right_done
+    push bc
+    call GFX_FILL_VISITED_CHECK
+    pop  bc
+    jr   c, .right_done
+    ld   a, b
+    ld   (GFX_FILL_RX), a
+    jr   .scan_right
+.right_done:
+
+    ; ---- fill the whole span, claiming each pixel as it's painted ----
+    ld   a, (GFX_FILL_LX)
+    ld   (GFX_FILL_SCAN_X), a
+.fill_loop:
+    ld   a, (GFX_FILL_SCAN_X)
+    ld   b, a
+    ld   a, (GFX_FILL_Y)
+    ld   c, a
+    push bc
+    call GFX_FILL_VISITED_CHECK_SET  ; carry ignored -- expected clear
+    pop  bc
+    ld   d, 0                        ; always OR/set -- see header
+    ld   a, (GFX_FILL_ATTR)
+    call GFX_WRITE_PIXEL
+    ld   a, (GFX_FILL_SCAN_X)
+    ld   b, a
+    ld   a, (GFX_FILL_RX)
+    cp   b
+    jr   z, .fill_done
+    ld   a, (GFX_FILL_SCAN_X)
+    inc  a
+    ld   (GFX_FILL_SCAN_X), a
+    jr   .fill_loop
+.fill_done:
+
+    ; ---- scan the row above and below this span for new runs ----
+    ld   a, (GFX_FILL_Y)
+    or   a
+    jr   z, .skip_above
+    dec  a
+    ld   (GFX_FILL_SCAN_Y), a
+    call GFX_FILL_SCAN_ROW
+.skip_above:
+
     ld   a, (GFX_FILL_Y)
     cp   191
-    jr   nc, .skip_down
-    ld   c, a
-    inc  c
-    ld   a, (GFX_FILL_X)
-    ld   b, a
-    call GFX_FILL_TRY_NEIGHBOR
-.skip_down:
+    jr   nc, .skip_below
+    inc  a
+    ld   (GFX_FILL_SCAN_Y), a
+    call GFX_FILL_SCAN_ROW
+.skip_below:
 
-    ; (x, y-1)
-    ld   a, (GFX_FILL_Y)
-    or   a
-    jr   z, .skip_up
-    ld   c, a
-    dec  c
-    ld   a, (GFX_FILL_X)
-    ld   b, a
-    call GFX_FILL_TRY_NEIGHBOR
-.skip_up:
+    jp   .loop
 
-    jr   .loop
+.done:
+    ret
 
 ; ============================================================================
 ; GFX_CIRCLE_PLOT_OFFSET (internal — not in kernel_api.inc)
