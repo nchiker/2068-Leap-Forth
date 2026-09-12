@@ -2,10 +2,13 @@
 ; core/polygon.asm — POLYGON, an outline drawn through EXROM
 ;
 ; Builds on core/dict.asm, core/interp.asm, core/ts2068.asm (needs
-; CURRENT_ATTR), and kernel/bank/bank.asm (needs BANK_PAGE_EXROM_IN/
-; OUT) — all must be INCLUDEd first, same prerequisites core/
-; rectfill.asm already has (this file follows its exact shape). This
-; file's own first header chains through DICT_CHAIN_POINT.
+; CURRENT_ATTR), kernel/bank/bank.asm (needs BANK_PAGE_EXROM_IN/OUT),
+; and core/rectfill.asm specifically — that file owns the actual
+; EXROM_CALL_SLOT trampoline and GRAPHICS_EXROM_MAGIC_ADDR/CALL_HL this
+; file reuses (a real duplicate across this file, core/rectfill.asm,
+; and core/sprite.asm was found and merged there — see that file's own
+; EXROM_CALL_SLOT header). All of the above must be INCLUDEd first.
+; This file's own first header chains through DICT_CHAIN_POINT.
 ;
 ; WHAT THIS ADDS:
 ;   POLYGON ( x1 y1 x2 y2 ... xn yn n -- )   draws the closed outline
@@ -31,57 +34,6 @@
 
     IFNDEF CORE_POLYGON_ASM
     DEFINE CORE_POLYGON_ASM
-
-; ============================================================================
-; EXROM_CALL_POLY_DRAW (internal — not in kernel_api.inc)
-; Pages chunk 5 to EXROM, verifies rom/graphics_exrom.asm's own magic+
-; ABI byte pair (same check core/rectfill.asm's own EXROM_CALL_
-; RECT_FILL already makes — see that routine's own header for why this
-; isn't blind trust), calls service-table slot 1 (POLY_DRAW_IMPL) if
-; and only if that check passes, then always pages back out.
-; In:  POLY_COUNT/POLY_VERTS/POLY_ATTR — pre-set by W_POLYGON below
-; Out: carry SET if the paged image didn't match (nothing was drawn);
-;      carry CLEAR if POLY_DRAW_IMPL actually ran
-; Destroys: AF, BC, DE, HL
-; ============================================================================
-EXROM_CALL_POLY_DRAW:
-    call BANK_PAGE_EXROM_IN
-
-    ld   a, (GRAPHICS_EXROM_MAGIC_ADDR)   ; same computed offset
-    cp   GRAPHICS_EXROM_MAGIC             ; core/rectfill.asm's own
-    jr   nz, .mismatch                    ; EXROM_CALL_RECT_FILL uses —
-    ld   a, (GRAPHICS_EXROM_MAGIC_ADDR + 1) ; see that file's own
-    cp   GRAPHICS_EXROM_ABI               ; comment on why this is
-    jr   nz, .mismatch                    ; computed, not hand-typed
-
-    ld   hl, $A003                   ; slot 1 = POLY_DRAW_IMPL
-    call CALL_HL
-    call BANK_PAGE_EXROM_OUT
-    or   a
-    ret
-
-.mismatch:
-    call BANK_PAGE_EXROM_OUT
-    scf
-    ret
-
-; ============================================================================
-; CALL_HL (internal — not in kernel_api.inc)
-; `call (hl)` isn't a real Z80 instruction — this is the standard
-; workaround (push the target, then RET jumps to it), needed here
-; because EXROM_CALL_POLY_DRAW's own call target (slot 1, $A003) isn't
-; a compile-time constant name the way RECT's own `call $A000` is (it
-; genuinely could be, but spelling it through HL keeps this routine
-; obviously reusable for whichever slot number a future caller in this
-; same file needs, without repeating this same push/ret trick inline
-; each time).
-; In:  HL = address to call
-; Out: whatever the called code returns
-; Destroys: whatever the called code destroys
-; ============================================================================
-CALL_HL:
-    push hl
-    ret
 
 ; ============================================================================
 ; POLYGON ( x1 y1 x2 y2 ... xn yn n -- )
@@ -129,7 +81,8 @@ W_POLYGON:
 
     ld   a, (CURRENT_ATTR)
     ld   (POLY_ATTR), a
-    call EXROM_CALL_POLY_DRAW
+    ld   hl, $A000 + (1 * 3)   ; slot 1 = POLY_DRAW_IMPL
+    call EXROM_CALL_SLOT
 .invalid:
     ret
 

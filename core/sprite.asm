@@ -2,10 +2,12 @@
 ; core/sprite.asm — SPRITE-DEFINE, SPRITE-SHOW, SPRITE-HIDE
 ;
 ; Builds on core/dict.asm, core/interp.asm, kernel/bank/bank.asm, and
-; core/rectfill.asm/core/polygon.asm (needs GRAPHICS_EXROM_MAGIC_ADDR
-; and CALL_HL — both must be INCLUDEd first, same prerequisites those
-; two files already have). This file's own first header chains through
-; DICT_CHAIN_POINT.
+; core/rectfill.asm specifically (needs EXROM_CALL_SLOT/GRAPHICS_
+; EXROM_MAGIC_ADDR/CALL_HL — that file owns all three, reused here
+; rather than each word carrying its own copy of the same trampoline;
+; see that file's own EXROM_CALL_SLOT header for the duplication this
+; replaced). All of the above must be INCLUDEd first. This file's own
+; first header chains through DICT_CHAIN_POINT.
 ;
 ; WHAT THIS ADDS — a small, fixed-size (16x16 pixel, four numbered
 ; slots) sprite system, backed by rom/graphics_exrom.asm's service
@@ -37,48 +39,6 @@
     DEFINE CORE_SPRITE_ASM
 
 ; ============================================================================
-; EXROM_CALL_SPRITE (internal — not in kernel_api.inc)
-; Pages chunk 5 to EXROM, verifies rom/graphics_exrom.asm's own magic+
-; ABI byte pair (same check core/rectfill.asm's own EXROM_CALL_
-; RECT_FILL and core/polygon.asm's own EXROM_CALL_POLY_DRAW already
-; make), calls the given service-table slot if and only if that check
-; passes, then always pages back out.
-; In:  HL = absolute address of the service-table slot to call
-;      ($A000 + slot*3); SPRITE_OP_SLOT/ROW/COL — pre-set by whichever
-;      word below is calling this
-; Out: carry SET if the paged image didn't match (nothing ran); carry
-;      CLEAR if the slot actually ran
-; Destroys: AF, BC, DE, HL
-; ============================================================================
-EXROM_CALL_SPRITE:
-    push hl                          ; the slot address survives the
-                                     ; page-in call (BANK_PAGE_EXROM_IN
-                                     ; only destroys AF per its own
-                                     ; contract, but stack is simplest
-                                     ; and matches this project's own
-                                     ; "don't trust a register to
-                                     ; survive a call" convention)
-    call BANK_PAGE_EXROM_IN
-    pop  hl
-
-    ld   a, (GRAPHICS_EXROM_MAGIC_ADDR)
-    cp   GRAPHICS_EXROM_MAGIC
-    jr   nz, .mismatch
-    ld   a, (GRAPHICS_EXROM_MAGIC_ADDR + 1)
-    cp   GRAPHICS_EXROM_ABI
-    jr   nz, .mismatch
-
-    call CALL_HL                     ; core/polygon.asm's own helper
-    call BANK_PAGE_EXROM_OUT
-    or   a
-    ret
-
-.mismatch:
-    call BANK_PAGE_EXROM_OUT
-    scf
-    ret
-
-; ============================================================================
 ; SPRITE-DEFINE ( slot row col -- )
 ; ============================================================================
 H_SPRITEDEFINE:
@@ -98,7 +58,7 @@ W_SPRITEDEFINE:
     ld   a, l
     ld   (SPRITE_OP_SLOT), a
     ld   hl, $A000 + (2 * 3)   ; slot 2 = SPRITE_DEFINE_IMPL
-    call EXROM_CALL_SPRITE
+    call EXROM_CALL_SLOT
     ret
 
 ; ============================================================================
@@ -118,7 +78,7 @@ W_SPRITESHOW:
     ld   a, l
     ld   (SPRITE_OP_SLOT), a
     ld   hl, $A000 + (3 * 3)   ; slot 3 = SPRITE_SHOW_IMPL
-    call EXROM_CALL_SPRITE
+    call EXROM_CALL_SLOT
     ret
 
 ; ============================================================================
@@ -132,7 +92,7 @@ W_SPRITEHIDE:
     ld   a, l
     ld   (SPRITE_OP_SLOT), a
     ld   hl, $A000 + (4 * 3)   ; slot 4 = SPRITE_HIDE_IMPL
-    call EXROM_CALL_SPRITE
+    call EXROM_CALL_SLOT
     ret
 
 DICT_LATEST_INIT_SPRITE EQU H_SPRITEHIDE   ; head of the dictionary
