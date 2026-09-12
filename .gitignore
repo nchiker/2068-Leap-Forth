@@ -10,7 +10,8 @@
 # Local tool state
 __pycache__/
 *.pyc
-/.claude/
+/.claude/*
+!/.claude/skills/
 /CLAUDE.md
 
 # Fuse memory-dump snapshots (debug.bin) used for live-keyboard
