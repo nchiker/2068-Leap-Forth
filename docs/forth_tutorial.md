@@ -194,6 +194,29 @@ DUP        [5, 5]       -- copy the top card
 +          [10]         -- pop both, push their sum
 ```
 
+`OVER` reaches one level deeper than `DUP`: instead of copying the top value, it copies the *second* value to the top, leaving everything already there untouched underneath it:
+
+```
+you type   stack after
+--------   -----------
+10         [10]            -- push 10
+20         [10, 20]        -- push 20
+OVER       [10, 20, 10]    -- copy the second value (10) to the top
+```
+
+Running it twice in a row — `OVER OVER` — duplicates the entire pair, not just one value out of it:
+
+```
+you type   stack after
+--------   -----------
+10         [10]
+20         [10, 20]
+OVER       [10, 20, 10]
+OVER       [10, 20, 10, 20]  -- the second OVER reaches the (now second) 20
+```
+
+The result, `[10, 20, 10, 20]`, is the original pair sitting on the stack twice — the exact habit worth reaching for whenever a later word is about to consume a value you still need again afterward: make the spare copy *before* it's gone, not after. This pattern comes up often enough that it earns its own name, `2DUP`, in the "Advanced Shuffling" table below.
+
 #### Reading Stack Effect Shorthand
 
 Writing out a card-by-card trace for every command quickly becomes tedious. Instead, Forth manuals use a concise one-line notation: **the stack just before execution, an arrow, and the stack just after**, with the top of the stack always positioned on the far right.
@@ -643,8 +666,17 @@ a later `LIST-DEFS` shows it too.
 
 ## 4. Numbers
 
-Whole numbers — `5`, `-12`, `0` — behave exactly as you'd expect,
-negatives included, via a leading `-`.
+This section covers every kind of number the system understands: whole
+numbers and decimal numbers, the two separate stacks they occupy, the
+words that convert between them, and the numeric operators — signed
+arithmetic, bitwise logic, and randomness — built on top of them.
+
+#### Whole Numbers
+
+Whole numbers — `5`, `-12`, `0` — behave exactly as expected, negatives
+included, via a leading `-`.
+
+#### Decimal Numbers
 
 2068-Leap-Forth also supports **decimal numbers**, written with a `.`:
 
@@ -655,25 +687,26 @@ negatives included, via a leading `-`.
 1.0 4.0 F/ F.       \ prints 0.2500
 ```
 
-Structurally these are exactly the same shape as `5 3 + .` from
-section 1 — ingredients first, action last, then a word to print the
-result. Only the spellings changed.
+- **Familiar Shape:** Structurally these are exactly the same shape as
+  `5 3 + .` from section 1 — ingredients first, action last, then a
+  word to print the result. Only the spellings changed.
 
-### Two stacks, and why
+### Two Stacks, and Why
 
-There's one genuinely new idea here, and it's easy to skim past: a
-number with a `.` in it does **not** go on the stack you've been using.
-It goes on a second, entirely separate stack of its own.
+A number with a `.` in it does **not** go on the stack used so far. It
+goes on a second, entirely separate stack of its own.
 
-So a decimal number and a whole number can never be sitting on top of
-"the stack" at the same time, because they aren't on the same stack.
-That's why decimal arithmetic needs its own words — `F+ F- F* F/`,
-where the `F` prefix is the standard Forth convention for
-"floating-point" — rather than reusing the plain `+`/`-` from
-section 1. `+` looks at the whole-number stack; `F+` looks at the
-decimal one. They will never see each other's values.
+- **Separate Storage:** A decimal number and a whole number can never
+  sit on top of "the stack" at the same time, because they aren't on
+  the same stack.
 
-Traced out, so the separation is visible:
+- **Dedicated Words:** This is why decimal arithmetic needs its own
+  words — `F+ F- F* F/`, where the `F` prefix is the standard Forth
+  convention for "floating-point" — rather than reusing the plain
+  `+`/`-` from section 1. `+` looks at the whole-number stack; `F+`
+  looks at the decimal one. Neither can ever see the other's values.
+
+**Tracing the Separation:**
 
 ```
 you type   whole-number stack   decimal stack
@@ -686,31 +719,32 @@ F.         [5]                  []              -- prints 6.0000
 .          []                   []              -- prints 5
 ```
 
-Notice the `5` sat there patiently through all of it, untouched. `F+`
-and `F.` had no way to reach it even in principle, and the `.` at the
-end found it exactly where it was left.
+The `5` sits untouched through all of it. `F+` and `F.` have no way to
+reach it even in principle, and the `.` at the end finds it exactly
+where it was left.
 
-One consequence worth internalizing early, because the symptom is
-confusing: **using the wrong stack's word is usually not an error you
-see reported.** Typing `3.5 2.5 +` doesn't add anything — the two
-decimals are over on the float stack, and `+` reaches for two
-whole numbers that were never put there. What you'll get is `STACK?`
-if the whole-number stack was empty, or a silently wrong answer
-computed from whatever *was* on it. So when a calculation comes out
-inexplicably wrong, checking that every word in it has the right `F`
-or lack of one is a good first move.
+- **Silent Stack Mismatches:** Using the wrong stack's word is usually
+  not an error that gets reported. Typing `3.5 2.5 +` adds nothing —
+  the two decimals are on the float stack, and `+` reaches for two
+  whole numbers that were never placed there. The result is `STACK?`
+  if the whole-number stack was empty, or a silently wrong answer
+  computed from whatever *was* on it. When a calculation produces an
+  unexpected result, checking that every word in it carries the
+  correct `F` — or correctly lacks one — is the first thing to verify.
 
 Plain integer `*` and `/` exist too (see the table in
 [section 4's numeric words](#a-few-more-useful-numeric-words) below) —
 they live on the whole-number stack, exactly like `+`/`-`, and are a
-completely separate pair of words from `F*`/`F/` here. Use `*` and
-`/` when both your ingredients and your answer are whole numbers;
-reach for `F*`/`F/` only once a `.` (decimal point) is actually involved
-somewhere in the calculation. `F.` prints a decimal result, always with
-exactly 4 digits after the point (`6.0` prints as `"6.0000"`, not
-`"6"`), and rounds toward zero rather than to the nearest digit — so
-very small differences near the 4th digit can look slightly off from
-what a calculator would show for the same expression.
+completely separate pair of words from `F*`/`F/` here. Use `*` and `/`
+when both the ingredients and the answer are whole numbers; reach for
+`F*`/`F/` only once a `.` (decimal point) is actually involved
+somewhere in the calculation.
+
+- **`F.` Precision:** `F.` prints a decimal result with exactly 4
+  digits after the point (`6.0` prints as `"6.0000"`, not `"6"`), and
+  rounds toward zero rather than to the nearest digit — small
+  differences near the 4th digit can differ slightly from what a
+  calculator would show for the same expression.
 
 Decimal literals work inside colon definitions too, compiled in
 exactly the way a whole-number literal would be:
@@ -725,12 +759,15 @@ and standard Forth design — not a limitation particular to this
 implementation. [`numeric_model.md`](numeric_model.md) has the fuller
 reasoning.
 
+#### Square Roots and Trigonometry
+
 `FSQRT` is the decimal counterpart to whole-number `SQRT` (below):
 
 ```forth
 9.0 FSQRT F.        \ prints 3.0000
-2.0 FSQRT F.        \ prints 1.4141 -- an approximation, like any
-                    \ computer's square root of an irrational number
+2.0 FSQRT F.        \ prints 1.4141 -- an approximation, the standard
+                    \ result for the square root of a number that
+                    \ isn't a perfect square
 ```
 
 Trigonometry follows the same pattern. `PI` pushes a decimal
@@ -742,18 +779,18 @@ PI F.               \ prints 3.1416
 2.0 COS F.          \ prints -0.4156
 ```
 
-`SIN` and `COS` come from a lookup table with linear interpolation
-between entries rather than a series expansion, giving about 3-4
-decimal digits of accuracy — which is all `F.` shows anyway. There's
-no `TAN` yet; it wouldn't be hard to build from `SIN`/`COS`, it just
-hasn't come up. Large angles aren't reliable either: roughly beyond
-±1570 radians, a couple hundred full turns, the internal
-range-reduction step gives up silently rather than erroring. Ordinary
-trig usage stays comfortably inside that range.
+- **Accuracy:** `SIN` and `COS` are computed from a lookup table with
+  linear interpolation between entries, giving about 3-4 decimal
+  digits of accuracy — matching the precision `F.` itself displays.
 
-`RAD` and `DEG` convert between the two common angle units, for when
-degrees are the more natural way to say something — a compass heading,
-say:
+- **Valid Range:** Large angles are not reliable: beyond roughly ±1570
+  radians (a couple hundred full turns), the internal range-reduction
+  step no longer guarantees a correct result. Ordinary trigonometric
+  usage stays comfortably inside that range.
+
+`RAD` and `DEG` convert between the two common angle units, for
+situations where degrees are the more natural unit — a compass
+heading, say:
 
 ```forth
 90.0 RAD F.       \ prints 1.5707 -- 90 degrees in radians
@@ -763,16 +800,15 @@ PI 2.0 F/ DEG F.  \ prints 89.9960 -- half of PI back to degrees
                   \ here carries)
 ```
 
-### Crossing between the two stacks
+### Crossing Between the Two Stacks
 
-Now back to the two-stacks idea from the start of this section, because
-sooner or later you'll have a value on the wrong one. Typing a number
-with or without a `.` decides *where it starts*. `S>F` and `F>S` move
+Sooner or later, a value ends up on the wrong stack. Typing a number
+with or without a `.` decides *where it starts*; `S>F` and `F>S` move
 an already-computed value across afterward.
 
-Their stack effects need a moment's explanation, since they're the
+Their stack effects need a moment's explanation, since they are the
 first words in this document that touch both stacks at once, and the
-usual one-line notation can't express that. Two groups are written
+usual one-line notation cannot express that. Two groups are written
 instead — the first for the whole-number stack, the second for the
 decimal one:
 
@@ -782,11 +818,15 @@ decimal one:
 | `F>S`    | `( -- n )`         | `( f -- )`    | Decimal to whole number (see below)      |
 | `FROUND` | —                  | `( f -- f' )` | Round to the nearest whole decimal value |
 
-Read `S>F` as: takes a value off the whole-number stack, leaves one on
-the decimal stack. The name says the same thing — `S` for the standard
-Forth name for the ordinary stack, `>` for "to", `F` for float. `F>S`
-runs the other way. `FROUND` never leaves the decimal stack at all,
-which is why it has an ordinary single-group effect.
+- **Reading `S>F`:** Takes a value off the whole-number stack, leaves
+  one on the decimal stack. The name states the same thing — `S` for
+  the standard Forth name for the ordinary stack, `>` for "to", `F`
+  for float.
+
+- **Reading `F>S`:** Runs the other direction.
+
+- **`FROUND`:** Never leaves the decimal stack at all, which is why it
+  has an ordinary single-group stack effect.
 
 ```forth
 42 S>F F.          \ prints 42.0000
@@ -799,28 +839,26 @@ which is why it has an ordinary single-group effect.
                    \ convert it — the order matters
 ```
 
-Those last two lines deserve a second look, because they're the sort of
-thing that produces a bug you'd stare at for an hour. You might
-reasonably expect `F>S` to just chop the fractional part off and hand
-back the whole-number part — that's what "convert to an integer"
-usually means. It doesn't. It always rounds *downward*, toward negative
-infinity. For positive values those are the same thing, so `3.7 F>S`
-gives `3` either way and nothing looks wrong. For negative values they
-part company: `-0.5 F>S` gives `-1`, not `0`, because `-1` is the whole
-number below `-0.5`.
+- **`F>S` Rounds Downward, Not Toward Zero:** `F>S` might be expected
+  to simply discard the fractional part and hand back the whole-number
+  part — that is what "convert to an integer" usually means elsewhere.
+  It does not. It always rounds *downward*, toward negative infinity.
+  For positive values those are the same operation, so `3.7 F>S` gives
+  `3` either way. For negative values they diverge: `-0.5 F>S` gives
+  `-1`, not `0`, because `-1` is the whole number below `-0.5`.
 
-If what you wanted was ordinary rounding, `FROUND` first and `F>S`
-second gets it, as the third line shows. The order genuinely matters,
-and the two words are doing quite different jobs: `FROUND` decides
-which whole value is *nearest*, and `F>S` merely moves the result to
-the other stack.
+- **Getting Ordinary Rounding:** If ordinary rounding is what's wanted,
+  `FROUND` first and `F>S` second achieves it, as the third line above
+  shows. The order matters, because the two words perform different
+  jobs: `FROUND` decides which whole value is *nearest*, and `F>S`
+  merely moves the result to the other stack.
 
-### A few more useful numeric words
+### A Few More Useful Numeric Words
 
 A handful of ordinary whole-number words round out the basics:
 
 | Word     | Stack effect         | What it does                    |
-| -------- | -------------------- | ------------------------------- |
+| -------- | -------------------- | -------------------------------- |
 | `1+`     | `( n -- n+1 )`       | Add one                         |
 | `1-`     | `( n -- n-1 )`       | Subtract one                    |
 | `NEGATE` | `( n -- -n )`        | Change the sign                 |
@@ -850,11 +888,13 @@ A handful of ordinary whole-number words round out the basics:
                 \ whose square doesn't exceed it
 ```
 
-Both `*` and `/` work only in whole numbers and give a whole-number
-answer — `7 2 /` is `3`, with the remainder simply discarded, not
-`3.5`. Dividing by `0` doesn't raise an error; it quietly returns `0`,
-the same convention `MOD` above already uses (both share the same
-underlying division).
+- **Whole-Number Only:** Both `*` and `/` work only in whole numbers
+  and give a whole-number answer — `7 2 /` is `3`, with the remainder
+  discarded, not `3.5`.
+
+- **Division by Zero:** Dividing by `0` does not raise an error; it
+  quietly returns `0`, the same convention `MOD` above uses (both
+  share the same underlying division).
 
 `1+` and `1-` are shorthand and nothing more. `5 1+` does exactly what
 `5 1 +` does, in one word instead of two:
@@ -864,13 +904,13 @@ underlying division).
 5 1- .          \ prints 4
 ```
 
-Adding or subtracting one turns out to be far and away the commonest
-arithmetic in real Forth code — stepping to the next memory slot,
-nudging a counter, adjusting an off-by-one — so it gets its own word
-purely to keep those lines short. `V 1 + C@` from
-[the next section](#5-reading-and-writing-memory-directly) is equally
-happy written `V 1+ C@`, and both spellings appear in real Forth
-programs. Nothing about them differs but the number of spaces.
+- **Why They Exist:** Adding or subtracting one is by far the most
+  common arithmetic in real Forth code — stepping to the next memory
+  slot, nudging a counter, adjusting an off-by-one — so it earns its
+  own word purely to keep those lines short. `V 1 + C@` from
+  [the next section](#5-reading-and-writing-memory-directly) is
+  equally well written `V 1+ C@`; both spellings appear in real Forth
+  programs, differing only in the number of spaces.
 
 `NEGATE` flips a value's sign, which section 1's `-` can already do the
 long way round:
@@ -881,13 +921,13 @@ long way round:
 0 NEGATE .      \ prints 0
 ```
 
-It's worth setting `NEGATE` beside `INVERT` from just above, since the
-two look superficially similar and are not remotely the same operation.
-`0 NEGATE` is `0`; `0 INVERT` is `-1`. `NEGATE` asks "what's the same
-distance from zero the other way?" and `INVERT` asks "what if every
-single bit were flipped?" — questions that happen to have neighbouring
-answers (`INVERT` gives exactly one less than `NEGATE` for any input)
-and completely different meanings.
+- **`NEGATE` vs. `INVERT`:** Worth placing beside `INVERT` above, since
+  the two look superficially similar and are not the same operation.
+  `0 NEGATE` is `0`; `0 INVERT` is `-1`. `NEGATE` asks "what is the
+  same distance from zero the other way?" and `INVERT` asks "what if
+  every single bit were flipped?" — questions with neighboring answers
+  (`INVERT` gives exactly one less than `NEGATE` for any input) but
+  entirely different meanings.
 
 `MAX` and `MIN` each take two values and keep one:
 
@@ -898,25 +938,25 @@ and completely different meanings.
 -5 -1 MIN .     \ prints -5
 ```
 
-The important word in their description is **signed**. They compare the
-way you'd compare on paper, with negative numbers genuinely smaller than
-positive ones, which is the same convention `<` and `>` use in
-[the next-but-one section](#6-comparisons-and-truefalse) and the same
-one that makes `0 INVERT` print as `-1`. That's worth stating explicitly
-because a comparison that ignored sign would put `-32768` *above*
-`32767` — those two have the largest and second-largest bit patterns
-respectively — and it does not:
+- **Signed Comparison:** The key property is that `MAX`/`MIN` compare
+  the way values compare on paper, with negative numbers genuinely
+  smaller than positive ones — the same convention `<` and `>` use in
+  [the next-but-one section](#6-comparisons-and-truefalse), and the
+  same one that makes `0 INVERT` print as `-1`. This matters because a
+  comparison that ignored sign would rank `-32768` *above* `32767` —
+  those two have the largest and second-largest bit patterns
+  respectively — and it does not:
 
-```forth
-32767 -32768 MAX .   \ prints 32767 -- the positive one, correctly
-```
+  ```forth
+  32767 -32768 MAX .   \ prints 32767 -- the positive one, correctly
+  ```
 
-Unlike `-` and `<`, neither `MAX` nor `MIN` cares which order you hand
-them their two values: `5 3 MAX` and `3 5 MAX` both give `5`. They're in
-the same relaxed category as `+`, which is a small relief after
-section 1's warnings about operand order.
+- **Order-Independent:** Unlike `-` and `<`, neither `MAX` nor `MIN`
+  cares which order the two values are given in: `5 3 MAX` and
+  `3 5 MAX` both give `5` — the same relaxed category as `+`, a
+  contrast with section 1's own warnings about operand order.
 
-`RND` and `RANDOMIZE` give you a pseudo-random whole number:
+`RND` and `RANDOMIZE` give a pseudo-random whole number:
 
 ```forth
 100 RND .          \ prints something in 0..99
@@ -928,11 +968,12 @@ section 1's warnings about operand order.
                    \ hardware timing source on the next RND
 ```
 
-`RND`'s upper bound is exclusive: `100 RND` produces `0` through `99`
-and never `100` itself, matching the "n possible results" convention
-plenty of other BASICs use for their own `RND(n)`.
+- **Exclusive Upper Bound:** `RND`'s upper bound is exclusive:
+  `100 RND` produces `0` through `99` and never `100` itself, matching
+  the "n possible results" convention many BASICs use for their own
+  `RND(n)`.
 
-### Bitwise and logical operators
+### Bitwise and Logical Operators
 
 These act on all 16 bits of a value at once — real bit manipulation,
 not the boolean `=`/`<`/`>` results covered in
@@ -959,22 +1000,23 @@ not the boolean `=`/`<`/`>` results covered in
                 \ Forths)
 ```
 
-`INVERT` is deliberately not called `NOT`. This project's `0=` (next
-section) already performs *logical* negation of a true/false flag, and
-a second, differently-behaved word spelled `NOT` sitting right beside
-it would be a trap rather than a convenience. `INVERT` flips every
-bit; `0=` cares only whether its input was exactly zero.
+- **Not Called `NOT`:** `INVERT` is deliberately not named `NOT`. This
+  project's `0=` (next section) already performs *logical* negation of
+  a true/false flag, and a second, differently-behaved word spelled
+  `NOT` sitting beside it would invite confusion rather than add
+  convenience. `INVERT` flips every bit; `0=` cares only whether its
+  input was exactly zero.
 
 ### Summary
 
-Whole numbers and decimal numbers, and the two separate stacks they
-live on. Signed 16-bit arithmetic. Bitwise operations on all 16 bits at
-once.
+- **Core Concepts:** Whole numbers and decimal numbers, and the two
+  separate stacks they live on. Signed 16-bit arithmetic. Bitwise
+  operations on all 16 bits at once.
 
-Forth words `F+`, `F-`, `F*`, `F/`, `F.`, `FSQRT`, `PI`, `SIN`, `COS`,
-`RAD`, `DEG`, `S>F`, `F>S`, `FROUND`, `1+`, `1-`, `NEGATE`, `*`, `/`,
-`ABS`, `SGN`, `MOD`, `SQRT`, `MAX`, `MIN`, `RND`, `RANDOMIZE`, `AND`,
-`OR`, `XOR`, `INVERT`.
+- **Forth Words:** `F+`, `F-`, `F*`, `F/`, `F.`, `FSQRT`, `PI`, `SIN`,
+  `COS`, `RAD`, `DEG`, `S>F`, `F>S`, `FROUND`, `1+`, `1-`, `NEGATE`,
+  `*`, `/`, `ABS`, `SGN`, `MOD`, `SQRT`, `MAX`, `MIN`, `RND`,
+  `RANDOMIZE`, `AND`, `OR`, `XOR`, `INVERT`.
 
 ### Exercises
 
