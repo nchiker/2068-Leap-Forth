@@ -145,18 +145,4 @@ BANK_PAGE_EXROM_OUT:
     ei
     ret
 
-; ============================================================================
-; BANK_CALL_EXROM
-; Convenience wrapper: pages chunk 5 in, calls its fixed entry point
-; ($A000), pages back out. The EXROM payload itself runs with
-; interrupts enabled throughout — see this file's header.
-; In:  none
-; Out: whatever the EXROM payload's own contract defines
-; Destroys: whatever the EXROM payload's own contract defines, plus AF
-; ============================================================================
-BANK_CALL_EXROM:
-    call BANK_PAGE_EXROM_IN
-    call $A000
-    jr BANK_PAGE_EXROM_OUT
-
     ENDIF
