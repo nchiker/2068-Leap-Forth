@@ -1843,32 +1843,31 @@ copy will be needed:
 
 ## 8. Repeating yourself
 
-Here's a question worth answering before reading on: with everything
-covered so far, can any part of a word's definition run more than once?
+A question worth answering before reading on: with everything covered
+so far, can any part of a word's definition run more than once?
 
 The answer is no. A definition runs strictly forwards, start to finish
 — `IF` and `ELSE` can make it *skip* a stretch, but nothing so far
-sends it backwards. Which means anything you want done ten times, you'd
-have to write out ten times.
+sends it backwards. Anything needed ten times has, so far, had to be
+written out ten times.
 
-This section fixes that. Forth has three loop shapes, covering between
-them the ground BASIC's `FOR`/`NEXT` and `WHILE`/`WEND` cover. All
-three are, like `IF`, IMMEDIATE words that build the loop while you're
-typing the definition, which is why all of them only work inside `:`
-and `;`.
+This section fixes that. Forth has three loop shapes, together
+covering the ground BASIC's `FOR`/`NEXT` and `WHILE`/`WEND` cover. All
+three are, like `IF`, IMMEDIATE words that build the loop during
+compilation, which is why all of them only work inside `:` and `;`.
 
-### `BEGIN` `UNTIL` — the simplest loop
+### `BEGIN` `UNTIL` — the Simplest Loop
 
 `BEGIN ... UNTIL` repeats the code between the two until the condition
-just before `UNTIL` becomes true. Because the check happens at the
-*end*, the body always runs at least once — the same shape as BASIC's
-`REPEAT...UNTIL`, if you've used a dialect with one, or `DO...LOOP
-UNTIL` in some others.
+just before `UNTIL` becomes true.
 
-Everything you need for it is already familiar. `UNTIL` reads a flag
-off the stack exactly the way `IF` did in the last section, and the
-flag gets computed exactly the same way too. The only new idea is the
-jump backwards.
+- **The Body Always Runs at Least Once:** Because the check happens at
+  the *end*, this is the same shape as BASIC's `REPEAT...UNTIL`, where
+  available, or `DO...LOOP UNTIL` in others.
+
+Everything needed for it is already familiar. `UNTIL` reads a flag off
+the stack exactly the way `IF` did in the last section, computed
+exactly the same way too. The only new idea is the jump backwards.
 
 ```forth
 : COUNTDOWN  BEGIN 1 - DUP 0= UNTIL ;
@@ -1876,12 +1875,12 @@ jump backwards.
 5 COUNTDOWN .    \ prints 0
 ```
 
-Trace `COUNTDOWN` with `5` on the stack. `1 -` makes it `4`; `DUP 0=`
-duplicates it and asks "is the duplicate zero?" — no, so false; and
-`UNTIL`, seeing false, loops back to `BEGIN`. That repeats,
-`4→3→2→1→0`, and the moment the value hits `0`, `DUP 0=` finally
-answers true, `UNTIL` stops looping, and the loop's last computed
-value (`0`) is left on the stack.
+- **Tracing `COUNTDOWN` with `5`:** `1 -` makes it `4`; `DUP 0=`
+  duplicates it and asks "is the duplicate zero?" — no, so false; and
+  `UNTIL`, seeing false, loops back to `BEGIN`. That repeats,
+  `4→3→2→1→0`, and the moment the value hits `0`, `DUP 0=` finally
+  answers true, `UNTIL` stops looping, and the loop's last computed
+  value (`0`) is left on the stack.
 
 Pass by pass:
 
@@ -1895,31 +1894,31 @@ pass   stack at BEGIN   after 1 -   after DUP 0=   UNTIL sees
 5      [1]              [0]         [0, -1]        true  -> stop
 ```
 
-Notice the `DUP`. Without it, `0=` would have consumed the very number
-being counted down, and the second pass would have had nothing to
-subtract from. That's section 1's "make a spare copy before consuming
-anything" rule again, and in loops it comes up on nearly every line:
-the value you test is almost always the value you still need.
+- **Why the `DUP` Matters:** Without it, `0=` would consume the very
+  number being counted down, leaving nothing for the second pass to
+  subtract from. This is section 1's "make a spare copy before
+  consuming anything" rule again, and in loops it comes up on nearly
+  every line: the value being tested is almost always the value still
+  needed.
 
-Notice too that `UNTIL` consumes the flag but leaves everything
-underneath it alone, which is how the running value survives from one
-pass to the next. In a Forth loop, the stack *is* your loop variable.
+- **The Stack *Is* the Loop Variable:** `UNTIL` consumes the flag but
+  leaves everything underneath it alone, which is how the running
+  value survives from one pass to the next.
 
-One habit worth noticing early: **`BEGIN`-style Forth loops have no
-built-in counter variable the way BASIC's `FOR I = 1 TO 5` does.** If
-you need to know how many times you've looped, or to count up rather
-than down, you build that yourself out of ordinary stack values — the
-way `COUNTDOWN`'s own value pulls double duty as both the thing being
-counted down *and* the loop's exit test. (`DO`/`LOOP`, further down,
-does keep a counter for you.)
+- **No Built-In Counter:** `BEGIN`-style Forth loops have no built-in
+  counter variable the way BASIC's `FOR I = 1 TO 5` does. Knowing how
+  many times a loop has run, or counting up rather than down, requires
+  building that from ordinary stack values — the way `COUNTDOWN`'s own
+  value pulls double duty as both the thing being counted down *and*
+  the loop's exit test. (`DO`/`LOOP`, further below, does keep a
+  counter automatically.)
 
-### `BEGIN` `WHILE` `REPEAT` — check first, not last
+### `BEGIN` `WHILE` `REPEAT` — Check First, Not Last
 
-`BEGIN`/`UNTIL` has one real weakness, and it's structural rather than
-stylistic: the test sits at the *bottom*, so the body has already run
-by the time anything gets checked. Usually harmless. Occasionally
-wrong — if the answer is "don't do this at all", `BEGIN`/`UNTIL` has no
-way to express it.
+`BEGIN`/`UNTIL` has one structural weakness: the test sits at the
+*bottom*, so the body has already run by the time anything gets
+checked. Usually harmless — occasionally wrong, if the correct answer
+is "don't do this at all," which `BEGIN`/`UNTIL` has no way to express.
 
 `BEGIN ... WHILE ... REPEAT` puts the test in the middle instead, so
 the body can run zero times:
@@ -1933,36 +1932,37 @@ the body can run zero times:
                 \ first check
 ```
 
-`WHILE` pops a flag, computed the same way `IF`'s condition is. False
-exits the loop immediately, skipping everything up to `REPEAT`; true
-falls through into the body, which runs and then jumps back to `BEGIN`
-via `REPEAT`.
+- **How `WHILE` Reads Its Flag:** `WHILE` pops a flag, computed the
+  same way `IF`'s condition is. False exits the loop immediately,
+  skipping everything up to `REPEAT`; true falls through into the
+  body, which runs and then jumps back to `BEGIN` via `REPEAT`.
 
 The two shapes differ in exactly two ways, and both are easy to get
 backwards:
 
 1. **They react to opposite answers.** `UNTIL` stops when it finds
    *true*; `WHILE` stops when it finds *false*. Same flag, opposite
-   meaning. Compare the two definitions above: `COUNTDOWN` tests
+   meaning. Comparing the two definitions above: `COUNTDOWN` tests
    `DUP 0=` ("have we reached zero yet?") while `COUNTDOWN2` tests
    `DUP 0 >` ("is there still something left?") — deliberately opposite
-   tests, to get the same behaviour out of the two shapes.
+   tests, to get the same behavior out of the two shapes.
+
 2. **`WHILE`'s body can be skipped entirely; `UNTIL`'s cannot.** There
    is no test at `BEGIN` for `UNTIL` to consult, so its body has
    already run before any decision gets made.
 
-One naming warning. This is BASIC's `WHILE`/`WEND` shape, and Forth's
-`UNTIL` is the `REPEAT...UNTIL` shape — but Forth spells the *end* of
-the `WHILE` loop `REPEAT`, which is exactly the keyword some BASICs use
-for the other kind. The names cross over. Check against the examples
-rather than reasoning from the keywords.
+- **A Naming Crossover to Watch For:** This is BASIC's `WHILE`/`WEND`
+  shape, and Forth's `UNTIL` is the `REPEAT...UNTIL` shape — but Forth
+  spells the *end* of the `WHILE` loop `REPEAT`, exactly the keyword
+  some BASICs use for the other kind entirely. Checking against the
+  examples rather than reasoning from the keywords avoids the mix-up.
 
-### `DO` `LOOP` `I` — a real counter
+### `DO` `LOOP` `I` — a Real Counter
 
-Both loops above make you keep the count yourself, on the stack, mixed
-in with whatever else you were working with. That gets old fast.
-`DO`/`LOOP` is Forth's answer to BASIC's `FOR`/`NEXT`: it keeps the
-count for you, off to one side, and hands it back whenever you ask.
+Both loops above require keeping the count manually, on the stack,
+mixed in with whatever else is being worked with. `DO`/`LOOP` is
+Forth's answer to BASIC's `FOR`/`NEXT`: it keeps the count off to one
+side, and hands it back on request.
 
 ```forth
 : FIVE  5 0 DO I . LOOP ;
@@ -1972,24 +1972,25 @@ FIVE     \ prints 0 1 2 3 4
 
 Three pieces, taken one at a time.
 
-`limit start DO` starts a loop counting up from `start`, stopping just
-*before* it would reach `limit`. So `5 0 DO` runs for index values `0`
-through `4` — five passes, not six. The limit is where it stops, not
-where it ends up, which is the same "up to but not including"
-convention BASIC's `FOR I = 0 TO 4` writes the other way round.
+- **`limit start DO`:** Starts a loop counting up from `start`,
+  stopping just *before* it would reach `limit`. So `5 0 DO` runs for
+  index values `0` through `4` — five passes, not six. The limit is
+  where it stops, not where it ends up, the same "up to but not
+  including" convention BASIC's `FOR I = 0 TO 4` writes the other way
+  round.
 
-`I` pushes the current index onto the stack. It's an ordinary word with
-an ordinary stack effect, `( -- index )`, and nothing obliges you to
-use it: a loop that just repeats something five times identically never
-mentions `I` at all.
+- **`I`:** Pushes the current index onto the stack. It's an ordinary
+  word with an ordinary stack effect, `( -- index )`, and nothing
+  requires its use: a loop that just repeats something five times
+  identically never mentions `I` at all.
 
-`LOOP` adds one to the index and jumps back to just after `DO`, unless
-the index has reached `limit`, in which case the loop ends.
+- **`LOOP`:** Adds one to the index and jumps back to just after `DO`,
+  unless the index has reached `limit`, in which case the loop ends.
 
-Note the argument order carefully, because it reads backwards from how
-you'd say it: **limit first, start second**. `5 0 DO` means "from 0 up
-to 5", not "from 5 down to 0". This is worth double-checking every time
-you write one; it's the single most common `DO` mistake.
+- **Argument Order:** Worth double-checking every time, since it reads
+  backwards from how it would be said aloud: **limit first, start
+  second**. `5 0 DO` means "from 0 up to 5," not "from 5 down to 0" —
+  the single most common `DO` mistake.
 
 Something to actually watch happen, built the same way section 2 built
 `QUADRUPLE` — a small word, then a word that uses it:
@@ -2002,64 +2003,65 @@ Something to actually watch happen, built the same way section 2 built
 20 STARS      \ prints ********************
 ```
 
-`STAR` prints a single asterisk (42 is `*`'s character code, and `EMIT`
-prints one character — [Printing](#9-printing) has the details).
-`STARS` supplies the `0` start itself and takes the limit from whatever
-you pushed before calling it, so `5 STARS` reaches `DO` with `[5, 0]`
-on the stack: limit 5, start 0. Then it loops, and `CR` at the end
-moves to a fresh line. `STARS` never mentions `I`, because it doesn't
-care which pass it's on.
+- **How `STARS` Works:** `STAR` prints a single asterisk (42 is `*`'s
+  character code, and `EMIT` prints one character —
+  [Printing](#9-printing) has the details). `STARS` supplies the `0`
+  start itself and takes the limit from whatever was pushed before
+  calling it, so `5 STARS` reaches `DO` with `[5, 0]` on the stack:
+  limit 5, start 0. It then loops, and `CR` at the end moves to a
+  fresh line. `STARS` never mentions `I`, since it doesn't care which
+  pass it's on.
 
-**One real trap, worth knowing before it bites**, and `STARS` is
-already standing on it: `DO` does not check whether `start` already
-equals `limit` before running the body the first time. So `0 STARS`
-does not print nothing. It reaches `0 0 DO`, runs the body anyway, and
-then `LOOP` — having just moved the index from `0` to `1` — compares
-against a limit of `0` and doesn't match. It won't match again until
-the index has wrapped all the way around through 65536 values. In
-practice that is an accidental near-infinite loop, and it will look
-like the machine has hung.
+- **A Real Trap:** `DO` does not check whether `start` already equals
+  `limit` before running the body the first time. So `0 STARS` does
+  not print nothing: it reaches `0 0 DO`, runs the body anyway, and
+  then `LOOP` — having just moved the index from `0` to `1` — compares
+  against a limit of `0` and doesn't match. It won't match again until
+  the index has wrapped all the way around through 65536 values. In
+  practice this produces a near-infinite loop that looks like the
+  machine has hung.
 
-So: **never write a `DO` where `start` and `limit` might already be
-equal.** If a count could legitimately be zero, guard it first, using
-the previous section's `IF`:
+- **The Fix:** Never write a `DO` where `start` and `limit` might
+  already be equal. If a count could legitimately be zero, guard it
+  first, using the previous section's `IF`:
 
-```forth
-: STARS   ?DUP IF 0 DO STAR LOOP CR THEN ;
+  ```forth
+  : STARS   ?DUP IF 0 DO STAR LOOP CR THEN ;
 
-5 STARS       \ prints *****
-0 STARS       \ prints nothing, and returns safely
-```
+  5 STARS       \ prints *****
+  0 STARS       \ prints nothing, and returns safely
+  ```
 
-`?DUP` again — and for exactly the reason section 7 gave. The count has
-to be tested, and it's also the value `DO` needs, so copying it only
-when it's nonzero is precisely right. When it *is* zero, `?DUP` leaves
-the single `0`, `IF` eats it, the loop is skipped entirely, and the
-stack is left clean.
+- **Why `?DUP` Again:** For exactly the reason section 7 gave. The
+  count has to be tested, and it's also the value `DO` needs, so
+  copying it only when it's nonzero is precisely right. When it *is*
+  zero, `?DUP` leaves the single `0`, `IF` consumes it, the loop is
+  skipped entirely, and the stack is left clean.
 
-### `LEAVE` — exiting a loop early
+### `LEAVE` — Exiting a Loop Early
 
 `LEAVE`, used inside a `DO` loop's body, ends the loop the moment it
 runs, skipping the rest of the current pass and every remaining one.
-It's almost always written inside an `IF`, since running it
-unconditionally would make the rest of the loop pointless:
 
-```forth
-: FINDTHREE  10 0 DO I . I 3 = IF LEAVE THEN LOOP ;
+- **Usually Written Inside `IF`:** Running `LEAVE` unconditionally
+  would make the rest of the loop pointless:
 
-FINDTHREE     \ prints 0 1 2 3, then stops -- the remaining six
-              \ passes (I = 4 through 9) never run
-```
+  ```forth
+  : FINDTHREE  10 0 DO I . I 3 = IF LEAVE THEN LOOP ;
 
-`LEAVE` exits only the loop it's directly inside. With one `DO` loop
-nested in another, `LEAVE` exits the inner one and the outer loop
-keeps counting normally.
+  FINDTHREE     \ prints 0 1 2 3, then stops -- the remaining six
+                \ passes (I = 4 through 9) never run
+  ```
 
-### `EXIT` — returning from the whole word
+- **Scope:** `LEAVE` exits only the loop it is directly inside. With
+  one `DO` loop nested in another, `LEAVE` exits the inner one and the
+  outer loop keeps counting normally.
+
+### `EXIT` — Returning from the Whole Word
 
 `LEAVE` ends a loop. `EXIT ( -- )` ends the **definition**: it returns
-immediately to whoever called the word, skipping everything after it.
-It's the same relationship BASIC's `RETURN` has to the rest of a
+immediately to whoever called the word, skipping everything after it —
+the same relationship BASIC's `RETURN` has to the rest of a
 subroutine, except that here it can appear anywhere in the body rather
 than only at the end.
 
@@ -2071,12 +2073,13 @@ At its simplest, with no loop involved at all:
 TEXIT1 .      \ prints 1 -- the 2 was compiled, and never runs
 ```
 
-The `2` really is part of the definition; `;` compiled it like anything
-else. It is simply unreachable, because `EXIT` returned before execution
-ever got that far. Like `IF` and `LEAVE`, `EXIT` is one of the IMMEDIATE
-words from [section 2](#interpreting-vs-compiling-why--is-special) and
-only makes sense inside a `:` definition — there's nothing to return
-from at the prompt.
+- **Why the `2` Never Runs:** The `2` really is part of the definition;
+  `;` compiled it like anything else. It is simply unreachable, because
+  `EXIT` returned before execution got that far. Like `IF` and `LEAVE`,
+  `EXIT` is one of the IMMEDIATE words from
+  [section 2](#interpreting-vs-compiling-why--is-special) and only
+  makes sense inside a `:` definition — there's nothing to return from
+  at the prompt.
 
 That makes `EXIT` the natural partner of `IF` for an early bail-out,
 which is nearly always how it gets written:
@@ -2088,53 +2091,54 @@ which is nearly always how it gets written:
 -5 ?PRINT-POS     \ prints nothing, and leaves the stack clean
 ```
 
-That's [section 7](#7-making-decisions-if-else-then)'s `?PRINT` shape
-with the guard turned around: `DUP` copies the value so the test can
-consume one, and when the test finds a negative the word tidies up its
-own copy with `DROP` and gets out. Written without `EXIT` you'd need an
-`ELSE` and the printing would have to move inside it; `EXIT` lets the
-unusual case be dealt with first and forgotten about, leaving the
-normal path unindented at the end.
+- **Comparing With `?PRINT`:** This is
+  [section 7](#7-making-decisions-if-else-then)'s `?PRINT` shape with
+  the guard turned around: `DUP` copies the value so the test can
+  consume one, and when the test finds a negative the word tidies up
+  its own copy with `DROP` and returns. Written without `EXIT`, an
+  `ELSE` would be needed and the printing would have to move inside it;
+  `EXIT` allows the unusual case to be handled first and left behind,
+  leaving the normal path unindented at the end.
 
-`EXIT` also works from inside an open `DO` loop, and this is the part
-worth stating plainly because it would be reasonable to assume
-otherwise. A loop keeps bookkeeping of its own while it runs — the
-counter `I` reads has to live somewhere — and leaving the word from
-inside the loop has to clean that up. `EXIT` does, at every level of
-nesting it happens to be inside:
+- **`EXIT` Inside a `DO` Loop:** `EXIT` also works from inside an open
+  `DO` loop, which is worth stating plainly since the opposite would be
+  a reasonable assumption. A loop keeps bookkeeping of its own while it
+  runs — the counter `I` reads has to live somewhere — and leaving the
+  word from inside the loop has to clean that up. `EXIT` does, at
+  every level of nesting it happens to be inside:
 
-```forth
-: TEXIT2  0 5 0 DO I 3 = IF EXIT THEN 1+ LOOP 999 ;
+  ```forth
+  : TEXIT2  0 5 0 DO I 3 = IF EXIT THEN 1+ LOOP 999 ;
 
-TEXIT2 .      \ prints 3
-```
+  TEXIT2 .      \ prints 3
+  ```
 
-Trace it: `0` starts an accumulator on the stack, then the loop runs
-with `I` counting `0, 1, 2, ...`. Each pass that isn't the one we're
-looking for adds one to the accumulator, so after `I` has been `0`, `1`
-and `2` the accumulator holds `3`. On the pass where `I` is `3`, the
-`IF` fires and `EXIT` returns straight out of `TEXIT2` — before that
-pass's own `1+`, past every remaining pass, and past the trailing `999`,
-which never reaches the stack at all.
+- **Tracing `TEXIT2`:** `0` starts an accumulator on the stack, then
+  the loop runs with `I` counting `0, 1, 2, ...`. Each pass that isn't
+  the one being looked for adds one to the accumulator, so after `I`
+  has been `0`, `1`, and `2` the accumulator holds `3`. On the pass
+  where `I` is `3`, the `IF` fires and `EXIT` returns straight out of
+  `TEXIT2` — before that pass's own `1+`, past every remaining pass,
+  and past the trailing `999`, which never reaches the stack at all.
 
-Compare that with `LEAVE` from just above, since the two are easy to
-confuse and the difference is exactly one word's worth of scope:
-`LEAVE` stops the loop and carries on with the rest of the definition
-after it, so the `999` in `TEXIT2` *would* have been pushed. `EXIT`
-abandons the definition entirely.
+- **`EXIT` vs. `LEAVE`:** The two are easy to confuse, and the
+  difference is exactly one word's worth of scope: `LEAVE` stops the
+  loop and continues with the rest of the definition after it, so the
+  `999` in `TEXIT2` *would* have been pushed. `EXIT` abandons the
+  definition entirely.
 
-### Loops inside loops
+### Loops Inside Loops
 
 Nesting `DO` loops works, and needs no special ceremony — the inner
 loop's counter simply sits on top of the outer one's and is gone again
 by the time the outer `LOOP` looks at anything.
 
-The one thing to be careful of is which index `I` means: **`I` always
-gives you the index of the innermost loop you're currently inside.** In
-the outer loop's own body, before the inner `DO` has started, that's the
-outer index; from the moment the inner `DO` runs, it's the inner one.
+- **Which Index `I` Means:** `I` always gives the index of the
+  innermost loop currently active. In the outer loop's own body, before
+  the inner `DO` has started, that's the outer index; from the moment
+  the inner `DO` runs, it's the inner one.
 
-That's usually all you need, because the inner loop's *limit* gets
+That's usually all that's needed, because the inner loop's *limit* gets
 computed out in the outer body, where `I` is still the outer index:
 
 ```forth
@@ -2161,21 +2165,20 @@ which prints
 *****
 ```
 
-Read the inner `DO` line carefully, since it's the part doing the work:
-`I 1+` takes the outer index and adds one, giving the inner loop a limit
-of 1 on the first row, 2 on the second, and so on. (`1+` is
-[section 4](#4-numbers)'s shorthand for `1 +`; either spelling works.)
-The added one is there because `DO` stops *before* the limit — without
-it, row 0 would ask for `0 0 DO` and hit the near-infinite-loop trap
-described above.
+- **Reading the Inner `DO` Line:** `I 1+` takes the outer index and
+  adds one, giving the inner loop a limit of 1 on the first row, 2 on
+  the second, and so on. (`1+` is [section 4](#4-numbers)'s shorthand
+  for `1 +`; either spelling works.) The added one exists because `DO`
+  stops *before* the limit — without it, row 0 would ask for `0 0 DO`
+  and hit the near-infinite-loop trap described above.
 
-### `J` — the enclosing loop's index
+### `J` — the Enclosing Loop's Index
 
-`TRIANGLE` never needed the outer index once the inner loop was actually
-running. Plenty of things do — a multiplication table, or anything where
-each inner pass has to know which row it's on — and inside the inner
-body `I` has stopped being any help. `J ( -- n )` is the word for that:
-same idea as `I`, one loop further out.
+`TRIANGLE` never needed the outer index once the inner loop was
+actually running. Plenty of things do — a multiplication table, or
+anything where each inner pass has to know which row it's on — and
+inside the inner body `I` has stopped being any help. `J ( -- n )` is
+the word for that: the same idea as `I`, one loop further out.
 
 ```forth
 : DIGITS
@@ -2199,23 +2202,20 @@ which prints
 44444
 ```
 
-`48 + EMIT` is the only unfamiliar part, and it's [section
-8](#9-printing)'s `EMIT` doing exactly what `STAR` did — 48 is the
-character code of `0`, so adding the row number to it gives the code of
-that row's digit, the same code-arithmetic idea `65 EMIT` printing `A`
-already showed. Everything else is `TRIANGLE` unchanged. Swap `J` for
-`I` in there and you'd print `0`, `01`, `012`, ... instead: the inner
-count, not the row.
+- **Reading `48 + EMIT`:** The only unfamiliar part, and it's
+  [section 9](#9-printing)'s `EMIT` doing exactly what `STAR` did — 48
+  is the character code of `0`, so adding the row number to it gives
+  the code of that row's digit, the same code-arithmetic idea
+  `65 EMIT` printing `A` already showed. Everything else is `TRIANGLE`
+  unchanged. Swapping `J` for `I` would print `0`, `01`, `012`, ...
+  instead: the inner count, not the row.
 
-If you've read an earlier version of this document, you may remember
-this example needing a whole extra `VARIABLE` to stash the outer index
-in before the inner loop started. It doesn't any more — `J` reaches it
-directly. One loop out is as far as it goes, though: there's no `K` for
-a third level, so a three-deep nest that needs its outermost index is
-back to saving it in a `VARIABLE` from
-[section 5](#5-reading-and-writing-memory-directly) by hand.
+- **A Real Limit:** `J` reaches one loop out directly; there's no `K`
+  for a third level, so a three-deep nest that needs its outermost
+  index falls back to saving it in a `VARIABLE` from
+  [section 5](#5-reading-and-writing-memory-directly) by hand.
 
-### `+LOOP` — stepping by something other than 1
+### `+LOOP` — Stepping by Something Other Than 1
 
 `LOOP` always counts up by exactly 1. `+LOOP` takes a number off the
 stack and steps by that much each pass — including a negative number,
@@ -2227,43 +2227,47 @@ to count downward:
 EVENS     \ prints 0 2 4 6 8
 ```
 
-Look at where the `2` sits: *inside* the loop body, just before
-`+LOOP`. That's not a formatting choice. `+LOOP` takes its step off the
-stack the same way every other word takes its arguments, which means
-the step has to be pushed on each pass, from inside the loop. Writing
-it outside would push it once and then leave `+LOOP` reaching for a
-value that isn't there on the second pass.
+- **Where the Step Goes:** Look at where the `2` sits: *inside* the
+  loop body, just before `+LOOP`. This isn't a formatting choice.
+  `+LOOP` takes its step off the stack the same way every other word
+  takes its arguments, which means the step has to be pushed on each
+  pass, from inside the loop. Writing it outside would push it once
+  and then leave `+LOOP` reaching for a value that isn't there on the
+  second pass.
 
-A consequence you might not expect: since the step is an ordinary value
-read fresh each time, it doesn't have to be the same value every pass.
-A computed step is perfectly legal, though rarely what you want.
+- **A Consequence Worth Noting:** Since the step is an ordinary value
+  read fresh each time, it doesn't have to be the same value every
+  pass. A computed step is perfectly legal, though rarely what's
+  wanted.
 
-`+LOOP` also has to end the loop differently from `LOOP`, and the
-reason is worth a moment. Plain `LOOP` steps by exactly 1, so it can
-simply ask "did the index land on `limit`?" — with a step of 1 it can
-never skip past. `+LOOP` can. So it ends the loop once a step carries
-the index *at or past* `limit`, even if it jumps clean over it:
+`+LOOP` also has to end the loop differently from `LOOP`.
 
-```forth
-: BY3  10 0 DO I . 3 +LOOP ;
+- **Why the Ending Differs:** Plain `LOOP` steps by exactly 1, so it
+  can simply ask "did the index land on `limit`?" — with a step of 1 it
+  can never skip past. `+LOOP` can. So it ends the loop once a step
+  carries the index *at or past* `limit`, even if it jumps clean over
+  it:
 
-BY3     \ prints 0 3 6 9
-```
+  ```forth
+  : BY3  10 0 DO I . 3 +LOOP ;
 
-After printing `9`, the next step would land on `12` — past `10`,
-without ever equalling it — so the loop stops there. An "exact match"
-test would have sailed straight past and kept going.
+  BY3     \ prints 0 3 6 9
+  ```
+
+  After printing `9`, the next step would land on `12` — past `10`,
+  without ever equaling it — so the loop stops there. An "exact match"
+  test would have sailed straight past and kept going.
 
 ### Summary
 
-Three loop shapes. `BEGIN`/`UNTIL` tests at the bottom, so its body
-always runs once. `BEGIN`/`WHILE`/`REPEAT` tests in the middle, so its
-body can run no times at all. `DO`/`LOOP` keeps a counter for you.
-Leaving a loop early, and leaving the whole word early. Loop indices,
-including one level out.
+- **Core Concepts:** Three loop shapes. `BEGIN`/`UNTIL` tests at the
+  bottom, so its body always runs once. `BEGIN`/`WHILE`/`REPEAT` tests
+  in the middle, so its body can run no times at all. `DO`/`LOOP` keeps
+  a counter automatically. Leaving a loop early, and leaving the whole
+  word early. Loop indices, including one level out.
 
-Forth words `BEGIN`, `UNTIL`, `WHILE`, `REPEAT`, `DO`, `LOOP`, `+LOOP`,
-`I`, `J`, `LEAVE`, `EXIT`.
+- **Forth Words:** `BEGIN`, `UNTIL`, `WHILE`, `REPEAT`, `DO`, `LOOP`,
+  `+LOOP`, `I`, `J`, `LEAVE`, `EXIT`.
 
 ### Exercises
 
