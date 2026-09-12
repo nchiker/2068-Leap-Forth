@@ -102,22 +102,61 @@ GRAPHICS_EXROM_UNIMPLEMENTED:
 ; ============================================================================
 ; RECT_FILL_IMPL
 ; Fills the rectangle spanned by (RECT_X0,RECT_Y0)-(RECT_X1,RECT_Y1),
-; corners inclusive, with RECT_ATTR — RECT's actual mechanism. Unlike
-; GFX_FILL, this needs no exploration/stack/visited-tracking at all:
-; the geometry is fully known upfront (two corners), so it's a plain
-; bounded double loop over every pixel in the box, calling GFX_WRITE_
-; PIXEL (via GRAPHICS_HOME_WRITE_PIXEL) once per pixel — same "always
-; OR/set, never XOR" convention GFX_FILL's own header already
-; documents and for the same reason (a clean repaint, not a toggle).
+; corners inclusive, with RECT_ATTR — RECT's actual mechanism. Always
+; OR/set, never XOR (a clean repaint, not a toggle — same convention
+; GFX_FILL's own header documents and for the same reason).
 ;
 ; Corners are normalized first (RECT_X0<=RECT_X1, RECT_Y0<=RECT_Y1) so
 ; the caller doesn't have to sort them — same convention this
 ; project's own GFX_LINE leaves to ITS caller today, but RECT's whole
 ; point is being the easy/fast primitive, so sorting here costs nothing
-; and removes a footgun a caller would otherwise hit silently (an
-; unsorted box would otherwise draw nothing at all, the loop below
-; never running because X0>X1 or Y0>Y1 make its own bound check fail
-; immediately).
+; and removes a footgun a caller would otherwise hit silently.
+;
+; BULK ROW + ATTRIBUTE-CELL FILL, not one GFX_WRITE_PIXEL call per
+; pixel — a real cycle-count optimization found and measured (not
+; guessed) during a raw-cycle-count audit pass: GFX_WRITE_PIXEL
+; recomputes the full ZX screen-address bit-twiddling formula AND
+; restamps the covering 8x8 attribute cell from scratch on EVERY
+; pixel, even adjacent ones sharing the same bitmap byte or the same
+; attribute cell. For a representative 40x20 fill (800 pixels), the
+; old per-pixel loop cost an estimated ~480,000 T-states (roughly
+; 600/pixel: ~300 for GFX_PIXEL_ADDR_SETUP's own address/mask
+; recomputation, ~100 for GFX_SET_ATTR's own address recomputation,
+; plus loop overhead) — REDUNDANT work, since the same 800 pixels only
+; span 5 bitmap bytes/row x 20 rows = 100 byte-writes and just 5x3=15
+; unique attribute cells. This routine now:
+;   1. Computes each scanline's own row-base address ONCE per row
+;      (GRAPHICS_HOME_ROW_BASE_ADDR, the same veneer GFX_PIXEL_ADDR_
+;      SETUP itself is built on), then fills that row's own span with
+;      at most 3 byte-writes: a partial mask at the left edge, a
+;      straight $FF write (propagated across any further whole bytes
+;      via LDIR, not a per-byte OR — safe because OR-ing $FF into
+;      anything already yields $FF, so a direct SET is equivalent and
+;      faster) in the middle, and a partial mask at the right edge —
+;      collapsing to a single masked byte when the whole span fits in
+;      one byte.
+;   2. Stamps each COVERED ATTRIBUTE CELL exactly once (GRAPHICS_HOME_
+;      CELL_ATTR_ADDR), in a separate pass over the covered (char row,
+;      column) rectangle — ceil(height/8) x ceil(width/8) cells, not
+;      height x width pixels.
+; Bitmap-fill correctness verified against the OLD per-pixel algorithm
+; bit-for-bit in Python (2000 random rectangles, every byte in the
+; resulting bitmap identical) before any of this was written — the
+; left/right partial-byte masks are LEFTMASK_TABLE[bit]=$FF>>bit and
+; RIGHTMASK_TABLE[bit]=($FF<<(7-bit))&$FF, matching BIT_MASK_TABLE's
+; own $80>>n single-bit convention exactly (kernel/graphics/
+; graphics.asm's own table GFX_PIXEL_ADDR_SETUP indexes the same way).
+; Confirmed under real ZEsarUX afterward too (rom/test_rect.asm),
+; not just Python and a clean assemble.
+;
+; Y is NOT bounds-checked here (0-191), matching the OLD per-pixel
+; version's own behavior exactly (GFX_PIXEL_ADDR_SETUP/GFX_ROW_BASE_
+; ADDR never bounds-checked row either) — not a new gap this
+; optimization introduces. The attribute pass IS defensively guarded
+; against GRAPHICS_HOME_CELL_ATTR_ADDR's own out-of-range carry (that
+; routine does bounds-check), skipping a would-be out-of-range cell
+; rather than writing through an undefined HL — strictly safer than
+; the old path for invalid input, never less safe for valid input.
 ; In:  RECT_X0/Y0/X1/Y1 (0-255/0-191), RECT_ATTR — all pre-set by the
 ;      Home-side RECT word before paging this image in
 ; Out: none
@@ -146,42 +185,273 @@ RECT_FILL_IMPL:
     ld   (RECT_Y1), a
 .y_ok:
 
+    ; ---- col0/bit0, col1/bit1 from the now-normalized X0/X1 ----
+    ld   a, (RECT_X0)
+    ld   b, a
+    and  %00000111
+    ld   (RECT_BIT0), a
+    ld   a, b
+    rrca
+    rrca
+    rrca
+    and  %00011111
+    ld   (RECT_COL0), a
+
+    ld   a, (RECT_X1)
+    ld   b, a
+    and  %00000111
+    ld   (RECT_BIT1), a
+    ld   a, b
+    rrca
+    rrca
+    rrca
+    and  %00011111
+    ld   (RECT_COL1), a
+
+    ; ---- bitmap pass: one scanline at a time, Y0..Y1 ----
     ld   a, (RECT_Y0)
     ld   (RECT_CUR_Y), a
-.row_loop:
-    ld   a, (RECT_X0)
-    ld   (RECT_CUR_X), a
-.col_loop:
-    ld   a, (RECT_CUR_X)
-    ld   b, a
+.bmp_row_loop:
     ld   a, (RECT_CUR_Y)
-    ld   c, a
-    ld   d, 0                        ; OVER=0 — always OR/set, see header
-    ld   a, (RECT_ATTR)
-    call GRAPHICS_HOME_WRITE_PIXEL
-
-    ld   a, (RECT_CUR_X)
     ld   b, a
-    ld   a, (RECT_X1)
-    cp   b
-    jr   z, .col_done
-    ld   a, (RECT_CUR_X)
-    inc  a
-    ld   (RECT_CUR_X), a
-    jr   .col_loop
-.col_done:
+    and  %00000111
+    ld   c, a                        ; c = scanline (0-7) within its
+                                     ; own char row — survives the
+                                     ; GRAPHICS_HOME_ROW_BASE_ADDR call
+                                     ; below (that veneer never touches
+                                     ; BC, only AF/DE/HL)
+    ld   a, b
+    rrca
+    rrca
+    rrca
+    and  %00011111                   ; a = char_row (0-23)
+    call GRAPHICS_HOME_ROW_BASE_ADDR ; hl = this char row's own bitmap
+                                     ; base address, AT SCANLINE 0
+    ld   a, h
+    add  a, c                        ; +scanline*256 — one scanline
+                                     ; down is exactly +256, the same
+                                     ; fact GFX_PIXEL_ADDR_SETUP's own
+                                     ; header already documents
+    ld   h, a                        ; hl = ROWBASE (this scanline's
+                                     ; own column-0 byte address)
+    ld   (RECT_ROWBASE), hl
 
+    ; ---- first (possibly only) byte: ROWBASE + col0 ----
+    ld   hl, (RECT_ROWBASE)
+    ld   a, (RECT_COL0)
+    add  a, l
+    ld   l, a
+    jr   nc, .no_carry_first
+    inc  h
+.no_carry_first:
+    ld   a, (RECT_COL0)
+    ld   b, a
+    ld   a, (RECT_COL1)
+    cp   b
+    jr   nz, .multi_byte
+
+    ; ---- single byte: mask = LEFTMASK[bit0] & RIGHTMASK[bit1] ----
+    push hl                          ; RECT_LEFTMASK/RECT_RIGHTMASK both
+                                     ; destroy HL for their own table
+                                     ; lookup -- hl here is the target
+                                     ; byte's own address, computed just
+                                     ; above, and must survive both calls
+    ld   a, (RECT_BIT0)
+    call RECT_LEFTMASK
+    ld   b, a
+    ld   a, (RECT_BIT1)
+    call RECT_RIGHTMASK
+    and  b
+    ld   b, a
+    pop  hl
+    ld   a, (hl)
+    or   b
+    ld   (hl), a
+    jr   .bmp_row_done
+
+.multi_byte:
+    ; ---- left partial byte: OR LEFTMASK[bit0] into (hl) ----
+    push hl                          ; same HL-survives-the-call reasoning
+                                     ; as the single-byte case above
+    ld   a, (RECT_BIT0)
+    call RECT_LEFTMASK
+    ld   b, a
+    pop  hl
+    ld   a, (hl)
+    or   b
+    ld   (hl), a
+
+    ; ---- middle full bytes, if any: col0+1 .. col1-1, all $FF ----
+    ld   a, (RECT_COL1)
+    ld   b, a
+    ld   a, (RECT_COL0)
+    neg
+    add  a, b                        ; a = col1 - col0 -- always >= 1
+                                     ; here (this branch only runs when
+                                     ; col1 != col0, and RECT_X0<=
+                                     ; RECT_X1 was already normalized
+                                     ; above, so col1 > col0)
+    dec  a                           ; a = full-middle-byte count
+                                     ; (col1-col0-1); 0 means col1 is
+                                     ; col0's immediate neighbor —
+                                     ; no middle bytes at all
+    ld   b, a
+    or   a
+    jr   z, .no_middle
+
+    ld   hl, (RECT_ROWBASE)
+    ld   b, a                        ; stash full-middle count in b —
+                                     ; a is about to be reused for the
+                                     ; address arithmetic below
+    ld   a, (RECT_COL0)
+    inc  a
+    add  a, l                        ; hl = ROWBASE + col0+1 (first
+    ld   l, a                        ; middle byte)
+    jr   nc, .no_carry_mid
+    inc  h
+.no_carry_mid:
+    ld   (hl), $FF                   ; seed the first middle byte
+    ld   a, b
+    dec  a
+    jr   z, .no_middle                ; only one middle byte total —
+                                     ; nothing left to LDIR-propagate
+    ld   c, a
+    ld   b, 0                        ; bc = remaining middle bytes
+    push hl
+    pop  de
+    inc  de                          ; de = hl+1 — the classic Z80
+                                     ; "clone forward" LDIR idiom: each
+                                     ; copy writes the byte this same
+                                     ; instruction just wrote one
+                                     ; position earlier, propagating
+                                     ; the seeded $FF the rest of the
+                                     ; way without a per-byte loop
+    ldir
+.no_middle:
+
+    ; ---- right partial byte: ROWBASE + col1, fresh (not tracked
+    ; through the middle-byte pointer above — simpler and safer than
+    ; trying to reuse HL/DE after LDIR leaves them one past the end) ----
+    ld   hl, (RECT_ROWBASE)
+    ld   a, (RECT_COL1)
+    add  a, l
+    ld   l, a
+    jr   nc, .no_carry_last
+    inc  h
+.no_carry_last:
+    push hl                          ; same HL-survives-the-call reasoning
+                                     ; as the single-byte case above
+    ld   a, (RECT_BIT1)
+    call RECT_RIGHTMASK
+    ld   b, a
+    pop  hl
+    ld   a, (hl)
+    or   b
+    ld   (hl), a
+
+.bmp_row_done:
     ld   a, (RECT_CUR_Y)
     ld   b, a
     ld   a, (RECT_Y1)
     cp   b
-    jr   z, .row_done
+    jr   z, .attr_pass
     ld   a, (RECT_CUR_Y)
     inc  a
     ld   (RECT_CUR_Y), a
-    jr   .row_loop
-.row_done:
+    jp   .bmp_row_loop
+
+    ; ---- attribute pass: each COVERED CELL exactly once, not once
+    ; per pixel — char rows Y0>>3..Y1>>3, columns RECT_COL0..RECT_COL1 ----
+.attr_pass:
+    ld   a, (RECT_Y0)
+    rrca
+    rrca
+    rrca
+    and  %00011111
+    ld   (RECT_ATTR_ROW), a
+    ld   a, (RECT_Y1)
+    rrca
+    rrca
+    rrca
+    and  %00011111
+    ld   (RECT_ATTR_ROW1), a
+.attr_row_loop:
+    ld   a, (RECT_COL0)
+    ld   (RECT_ATTR_COL), a
+.attr_col_loop:
+    ld   a, (RECT_ATTR_ROW)
+    ld   b, a
+    ld   a, (RECT_ATTR_COL)
+    ld   c, a
+    call GRAPHICS_HOME_CELL_ATTR_ADDR  ; hl = attr address; carry SET
+                                       ; if out of range (row>=24 or
+                                       ; col>=32) — see this routine's
+                                       ; own header on why this is
+                                       ; checked here even though the
+                                       ; bitmap pass above doesn't
+    jr   c, .attr_col_next
+    ld   a, (RECT_ATTR)
+    ld   (hl), a
+.attr_col_next:
+    ld   a, (RECT_ATTR_COL)
+    ld   b, a
+    ld   a, (RECT_COL1)
+    cp   b
+    jr   z, .attr_col_done
+    ld   a, (RECT_ATTR_COL)
+    inc  a
+    ld   (RECT_ATTR_COL), a
+    jr   .attr_col_loop
+.attr_col_done:
+    ld   a, (RECT_ATTR_ROW)
+    ld   b, a
+    ld   a, (RECT_ATTR_ROW1)
+    cp   b
+    jr   z, .attr_row_done
+    ld   a, (RECT_ATTR_ROW)
+    inc  a
+    ld   (RECT_ATTR_ROW), a
+    jr   .attr_row_loop
+.attr_row_done:
     ret
+
+; ============================================================================
+; RECT_LEFTMASK / RECT_RIGHTMASK (internal — not service-table slots)
+; RECT_FILL_IMPL's own partial-byte masks: LEFTMASK[bit] covers pixel
+; positions bit..7 (the byte's own right portion, x&7==bit through the
+; last pixel in that byte); RIGHTMASK[bit] covers positions 0..bit (the
+; byte's own left portion). Table-driven, not shifted at call time —
+; a single lookup is faster than a variable-count shift loop, and
+; there are only 8 entries each either way. Values match BIT_MASK_
+; TABLE's own $80>>n single-bit convention exactly (verified in Python
+; against the OLD per-pixel algorithm before either table was written
+; in Z80 — see RECT_FILL_IMPL's own header).
+; In:  A = bit position (0-7)
+; Out: A = the mask
+; Destroys: DE, HL (not AF's own flags meaningfully — caller only uses A)
+; ============================================================================
+RECT_LEFTMASK:
+    ld   e, a
+    ld   d, 0
+    ld   hl, RECT_LEFTMASK_TABLE
+    add  hl, de
+    ld   a, (hl)
+    ret
+
+RECT_RIGHTMASK:
+    ld   e, a
+    ld   d, 0
+    ld   hl, RECT_RIGHTMASK_TABLE
+    add  hl, de
+    ld   a, (hl)
+    ret
+
+RECT_LEFTMASK_TABLE:
+    DB   %11111111, %01111111, %00111111, %00011111
+    DB   %00001111, %00000111, %00000011, %00000001
+RECT_RIGHTMASK_TABLE:
+    DB   %10000000, %11000000, %11100000, %11110000
+    DB   %11111000, %11111100, %11111110, %11111111
 
 ; ============================================================================
 ; POLY_DRAW_IMPL

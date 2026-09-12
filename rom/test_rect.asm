@@ -65,6 +65,8 @@ GRAPHICS_HOME_TABLE:
     jp   GFX_WRITE_PIXEL
     jp   GFX_SET_ATTR
     jp   GFX_LINE
+    jp   GFX_ROW_BASE_ADDR
+    jp   GFX_CELL_ATTR_ADDR
 
 ; ============================================================================
 ; COLD_START

@@ -1479,8 +1479,27 @@ RECT_X1:             DEFS 1           ; 1 byte    RECT_FILL_IMPL sorts
 RECT_Y1:             DEFS 1           ; 1 byte    them itself
 RECT_ATTR:           DEFS 1           ; 1 byte — fill color (CURRENT_ATTR
                                    ; at the time RECT was called)
-RECT_CUR_X:          DEFS 1           ; 1 byte — row-fill loop cursor,
-RECT_CUR_Y:          DEFS 1           ; 1 byte    EXROM-side scratch only
+RECT_CUR_X:          DEFS 1           ; 1 byte — POLYGON-FILL's own span-
+RECT_CUR_Y:          DEFS 1           ; 1 byte    fill cursor now (RECT_
+                                   ; FILL_IMPL itself moved to a bulk
+                                   ; row/attribute-cell fill, below, and
+                                   ; no longer needs a per-pixel cursor
+                                   ; — kept for POLY_FILL_IMPL's own
+                                   ; reuse, see that routine's header)
+RECT_COL0:           DEFS 1           ; 1 byte — RECT_X0>>3 (byte column)
+RECT_COL1:           DEFS 1           ; 1 byte — RECT_X1>>3
+RECT_BIT0:           DEFS 1           ; 1 byte — RECT_X0&7 (bit position
+                                   ; within RECT_COL0's own byte)
+RECT_BIT1:           DEFS 1           ; 1 byte — RECT_X1&7
+RECT_ROWBASE:        DEFS 2           ; 2 bytes — this scanline's own
+                                   ; bitmap byte address at column 0,
+                                   ; recomputed once per scanline by
+                                   ; RECT_FILL_IMPL's bulk bitmap pass
+RECT_ATTR_ROW:       DEFS 1           ; 1 byte — attribute-pass row
+RECT_ATTR_ROW1:      DEFS 1           ; 1 byte    iterator + its own end
+RECT_ATTR_COL:       DEFS 1           ; 1 byte — attribute-pass column
+                                   ; iterator (RECT_COL0/COL1 above
+                                   ; double as its own start/end)
 
 ; ---- POLYGON's own state (rom/graphics_exrom.asm, chunk 5 EXROM) ----
 ; Staged by core/polygon.asm's Home-resident POLYGON word before
