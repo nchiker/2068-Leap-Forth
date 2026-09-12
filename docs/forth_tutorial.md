@@ -3348,30 +3348,34 @@ Programs don't have to be retyped every time the machine starts.
 `SAVE-LIB` and `LOAD-LIB` write your definitions to tape and read them
 back.
 
+#### `SAVE-LIB` and `LOAD-LIB`: Saving a Compiled Dictionary Image
+
 ```forth
 : DOUBLER DUP + ;
 SAVE-LIB MYPROG
 ```
 
-`SAVE-LIB` takes the name that follows it — not a word to look up, but
-a name, the same way `:` treats the name right after it as something
-to define rather than run — and writes everything you've defined so
-far to tape under it. Later, even after switching the machine off and
-back on, which forgets everything you defined, you can get it back:
+- **How the Name Works:** `SAVE-LIB` takes the name that follows it —
+  not a word to look up, but a name, the same way `:` treats the name
+  right after it as something to define rather than run — and writes
+  everything you've defined so far to tape under it. Later, even after
+  switching the machine off and back on, which forgets everything you
+  defined, you can get it back:
 
-```forth
-LOAD-LIB MYPROG
-4 DOUBLER
-```
+  ```forth
+  LOAD-LIB MYPROG
+  4 DOUBLER
+  ```
 
-`LOAD-LIB MYPROG` restores your definitions exactly as they were,
-`DOUBLER` included, ready to use immediately as though you'd just
-typed it in again. `LOAD-LIB` with no name at all loads whatever was
-saved most recently, so you don't have to remember or retype the name.
+  `LOAD-LIB MYPROG` restores your definitions exactly as they were,
+  `DOUBLER` included, ready to use immediately as though you'd just
+  typed it in again. `LOAD-LIB` with no name at all loads whatever was
+  saved most recently, so you don't have to remember or retype the
+  name.
 
-There's no partial saving or loading of a single definition —
-`SAVE-LIB` always writes everything defined up to that point, in one
-piece.
+- **Everything, or Nothing:** There's no partial saving or loading of
+  a single definition — `SAVE-LIB` always writes everything defined up
+  to that point, in one piece.
 
 That "up to that point" is worth seeing fail once, since it's obvious
 in hindsight and easy to get bitten by in practice:
@@ -3385,29 +3389,31 @@ SAVE-LIB MYWORDS
 3 TRIPLE .                   \ prints 9 -- works fine, right now
 ```
 
-`TRIPLE` works perfectly well for the rest of this session — nothing
-about defining it after a `SAVE-LIB` stops it running right now. But
-`SAVE-LIB` had already finished by the time you typed it, so `TRIPLE`
-was never written to tape. Switch the machine off, back on, and
-`LOAD-LIB MYWORDS` back, and you'd get `DOUBLE` and `QUADRUPLE` again
-exactly as saved — and no `TRIPLE` at all, because as far as that
-particular tape is concerned, it doesn't exist. If you want your work
-checkpointed at meaningful moments, that's a matter of when you choose
-to run `SAVE-LIB` again — here, after defining `TRIPLE` too — not
-something 2068-Leap-Forth tracks for you.
+- **The Trap:** `TRIPLE` works perfectly well for the rest of this
+  session — nothing about defining it after a `SAVE-LIB` stops it
+  running right now. But `SAVE-LIB` had already finished by the time
+  you typed it, so `TRIPLE` was never written to tape. Switch the
+  machine off, back on, and `LOAD-LIB MYWORDS` back, and you'd get
+  `DOUBLE` and `QUADRUPLE` again exactly as saved — and no `TRIPLE` at
+  all, because as far as that particular tape is concerned, it doesn't
+  exist. If you want your work checkpointed at meaningful moments,
+  that's a matter of when you choose to run `SAVE-LIB` again — here,
+  after defining `TRIPLE` too — not something 2068-Leap-Forth tracks
+  for you.
 
-There's a real ceiling on how much `SAVE-LIB` can write in one piece:
-8,190 bytes of compiled dictionary. Go past it and `SAVE-LIB` throws
-error `-8` (ANS Forth's own standard "dictionary overflow" code —
-see [section 14](#14-error-handling-throw-and-catch) for catching
-errors like this yourself) rather than writing anything at all. That's
-a deliberate, checked refusal, not an arbitrary inconvenience: an
-earlier version of `SAVE-LIB` copied your whole dictionary into a
-fixed-size scratch buffer with no such check, and would have silently
-corrupted nearby memory instead of stopping cleanly, for anyone whose
-programs grew past a much smaller, undocumented limit.
+- **A Real Size Ceiling:** There's a real ceiling on how much
+  `SAVE-LIB` can write in one piece: 8,190 bytes of compiled
+  dictionary. Go past it and `SAVE-LIB` throws error `-8` (ANS Forth's
+  own standard "dictionary overflow" code — see
+  [section 14](#14-error-handling-throw-and-catch) for catching errors
+  like this yourself) rather than writing anything at all. That's a
+  deliberate, checked refusal, not an arbitrary inconvenience: an
+  earlier version of `SAVE-LIB` copied your whole dictionary into a
+  fixed-size scratch buffer with no such check, and would have
+  silently corrupted nearby memory instead of stopping cleanly, for
+  anyone whose programs grew past a much smaller, undocumented limit.
 
-### `SAVE-TEXT` and `LOAD-TEXT`: saving the source itself
+### `SAVE-TEXT` and `LOAD-TEXT`: Saving the Source Itself
 
 `SAVE-LIB`/`LOAD-LIB` save a **compiled dictionary image** — the actual
 bytes `:` produced, tied to the exact ROM that compiled them. That's
@@ -3416,15 +3422,19 @@ promised to load correctly into a different one.
 
 `SAVE-TEXT ( addr len "name" -- )` and `LOAD-TEXT ( "name" -- )` save
 something different: the **plain source text** of a program, exactly
-as you'd type it. Where `SAVE-LIB`/`LOAD-LIB` need no addresses at all
-(they already know where the dictionary lives), `SAVE-TEXT` takes an
-address and length on the stack — wherever your program's source text
-already sits in memory — the same `( addr len -- )` shape
-[section 5](#5-reading-and-writing-memory-directly)'s string words use:
+as you'd type it.
 
-```forth
-S" : DOUBLER DUP + ;" SAVE-TEXT PROGTEXT
-```
+- **Why an Address and Length:** Where `SAVE-LIB`/`LOAD-LIB` need no
+  addresses at all (they already know where the dictionary lives),
+  `SAVE-TEXT` takes an address and length on the stack — wherever your
+  program's source text already sits in memory — the same
+  `( addr len -- )` shape
+  [section 5](#5-reading-and-writing-memory-directly)'s string words
+  use:
+
+  ```forth
+  S" : DOUBLER DUP + ;" SAVE-TEXT PROGTEXT
+  ```
 
 Loading it back doesn't just restore a dictionary snapshot — it
 **re-runs the interpreter over the saved text**, exactly as if you'd
@@ -3435,23 +3445,25 @@ LOAD-TEXT PROGTEXT
 4 DOUBLER .     \ prints 8
 ```
 
-That re-parsing is the whole point: source text has no dependency on
-which exact ROM build produced it, so it survives a rebuild of
-2068-Leap-Forth itself in a way a `SAVE-LIB` image doesn't promise to. The
-trade-off is speed and size — re-parsing and recompiling real source is
-slower than restoring a ready-made binary image — which is why both
-mechanisms exist side by side rather than one replacing the other.
+- **Why Both Mechanisms Exist:** That re-parsing is the whole point:
+  source text has no dependency on which exact ROM build produced it,
+  so it survives a rebuild of 2068-Leap-Forth itself in a way a
+  `SAVE-LIB` image doesn't promise to. The trade-off is speed and
+  size — re-parsing and recompiling real source is slower than
+  restoring a ready-made binary image — which is why both mechanisms
+  exist side by side rather than one replacing the other.
 
 ### Summary
 
-Two different things can be saved to tape: a compiled dictionary image,
-which is fast but tied to the exact ROM that built it, and plain source
-text, which is slower to load but survives a rebuild because loading it
-simply re-runs the interpreter over it. Both take the name that follows
-them rather than a value from the stack. `SAVE-LIB` always writes
-everything defined up to that moment, and never part of it.
+- **Core Concepts:** Two different things can be saved to tape: a
+  compiled dictionary image, which is fast but tied to the exact ROM
+  that built it, and plain source text, which is slower to load but
+  survives a rebuild because loading it simply re-runs the interpreter
+  over it. Both take the name that follows them rather than a value
+  from the stack. `SAVE-LIB` always writes everything defined up to
+  that moment, and never part of it.
 
-Forth words `SAVE-LIB`, `LOAD-LIB`, `SAVE-TEXT`, `LOAD-TEXT`.
+- **Forth Words:** `SAVE-LIB`, `LOAD-LIB`, `SAVE-TEXT`, `LOAD-TEXT`.
 
 ### Exercises
 
