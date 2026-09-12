@@ -4352,7 +4352,7 @@ ZZZ .           \ prints 222
 
 ## 18. A worked example: the Blackjack demo
 
-Everything up to this point has been explored in small, isolated pieces—one new word at a time, each demonstrated with a brief two- or three-line example. **`demos/blackjack.fs`** is the opposite: a complete, fully functional single-deck Blackjack game written in a few hundred lines of ordinary Forth. It plays a full hand against a computer dealer complete with hit/stand logic, correct soft-ace scoring, a real shuffle, and a scored outcome every round.
+Everything up to this point has been explored in small, isolated pieces — one new word at a time, each demonstrated with a brief two- or three-line example. **`demos/blackjack.fs`** is the opposite: a complete, fully functional single-deck Blackjack game written in a few hundred lines of ordinary Forth. It plays a full hand against a computer dealer complete with hit/stand logic, correct soft-ace scoring, a real shuffle, and a scored outcome every round.
 
 Nothing in it is a special case built into the language; it is built entirely from the same words covered throughout this document, composed the way real programs are meant to be written.
 
@@ -4368,13 +4368,13 @@ Reading (or building and running) the demo serves as a comprehensive review, as 
 
 - **Small, single-purpose words** are built from smaller ones and named for what they mean (following Section 3's core design principle).
 
-- **`INK`/`PAPER`/`BORDER`, custom graphics (`UDG`), and `BEEP`/`SOUND`** combine to draw the table and cards and cue each outcome—with card and table colors rendering correctly because `EMIT` respects active color attributes.
+- **`INK`/`PAPER`/`BORDER`, custom graphics (`UDG`), and `BEEP`/`SOUND`** combine to draw the table and cards and cue each outcome — with card and table colors rendering correctly because `EMIT` respects active color attributes.
 
 This composition is not new material. The value of examining the demo now is seeing familiar words asked to do real work together at a scale a single tutorial example cannot reach.
 
 #### Real-World Testing: The `LOAD-TEXT` Test Payload
 
-The game's source code also doubles as the real test payload for **`LOAD-TEXT`** (and `SAVE-TEXT`). Rather than a toy string, it is a full, real-world program round-tripped over the standard tape protocol used by `SAVE-LIB`/`LOAD-LIB`—including verification via a real cassette-tape round trip in the Fuse emulator (distinct from the automated fake-tape hooks used by the test suite; see `tools/run_realtape_test.sh` if you wish to reproduce that proof yourself).
+The game's source code also doubles as the real test payload for **`LOAD-TEXT`** (and `SAVE-TEXT`). Rather than a toy string, it is a full, real-world program round-tripped over the standard tape protocol used by `SAVE-LIB`/`LOAD-LIB` — including verification via a real cassette-tape round trip in the Fuse emulator (distinct from the automated fake-tape hooks used by the test suite; see `tools/run_realtape_test.sh` if you wish to reproduce that proof yourself).
 
 To build the demo and review its instructions:
 
@@ -4421,11 +4421,11 @@ Here is how to load and play the real game directly from a live prompt, bypassin
 
 ### Summary
 
-No new words. A complete program built entirely from the ones this
-document has covered, composed the way real Forth composes them: small
-single-purpose definitions, each checkable by hand, named for what they
-mean, stacked up until the last few read almost like a description of
-the game.
+- **Core Concepts:** No new words. A complete program built entirely
+  from the ones this document has covered, composed the way real
+  Forth composes them: small single-purpose definitions, each
+  checkable by hand, named for what they mean, stacked up until the
+  last few read almost like a description of the game.
 
 ### Exercises
 
@@ -4465,7 +4465,6 @@ These are reading exercises as much as typing ones. Open
    exactly as section 3 promised on its first page.
 
 ---
-
 ## Appendix A: word reference
 
 A quick-lookup table of every word covered in this document, grouped
