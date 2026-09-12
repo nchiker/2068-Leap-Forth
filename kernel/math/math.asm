@@ -276,23 +276,28 @@ MATH_COMPARE16:
     ret
 
 ; ============================================================================
-; MATH_ADD16 / MATH_SUB16 / MATH_NEGATE16 / MATH_ABS16 / MATH_SGN16
+; MATH_NEGATE16 / MATH_ABS16 / MATH_SGN16
 ;
 ; Formalizes arithmetic that basic/'s evaluator (and any future caller)
-; was previously doing as bare inline `ADD HL,DE` / `SBC HL,DE` /
-; hand-rolled two's-complement negation wherever it came up — no
-; behavior change from what already existed ad hoc, just a single
-; documented call site instead of the same few instructions retyped
-; in multiple places (same duplication concern that motivated the
-; KEYWORD_HILITE_TABLE unification).
+; was previously doing as hand-rolled two's-complement negation
+; wherever it came up — no behavior change from what already existed
+; ad hoc, just a single documented call site instead of the same few
+; instructions retyped in multiple places (same duplication concern
+; that motivated the KEYWORD_HILITE_TABLE unification).
 ;
-; All five verified via Python simulation (50,011 values: every edge
-; case — 0, +-1, +-32767, -32768 — plus 50,000 random signed 16-bit
-; values, each ADD/SUB sampled against 3 partners) before any Z80 was
-; written, same discipline as this file's multiply/divide/compare.
-; Truncates on overflow, same as MATH_MULTIPLY16/MATH_DIVIDE16 — no
-; overflow flag, consistent with there being no error-reporting
-; mechanism at this layer.
+; MATH_ADD16/MATH_SUB16 originally lived here too (thin wrappers
+; around a bare `ADD HL,DE`/`SBC HL,DE`), formalized alongside these
+; three for the same reason — but never gained a second call site the
+; way NEGATE16/ABS16/SGN16 did (this project's own `+`/`-` words use
+; the bare instructions directly), so they sat as genuine dead code
+; and were removed.
+;
+; All verified via Python simulation (50,011 values: every edge case —
+; 0, +-1, +-32767, -32768 — plus 50,000 random signed 16-bit values)
+; before any Z80 was written, same discipline as this file's
+; multiply/divide/compare. Truncates on overflow, same as MATH_
+; MULTIPLY16/MATH_DIVIDE16 — no overflow flag, consistent with there
+; being no error-reporting mechanism at this layer.
 ;
 ; The one genuine edge case: NEGATE16(-32768) and ABS16(-32768) both
 ; return -32768 unchanged, NOT 32768 — the positive equivalent has no
@@ -302,27 +307,6 @@ MATH_COMPARE16:
 ; well-known behavior of two's-complement negation everywhere else
 ; (Z80, x86, etc.), not a bug specific to this implementation.
 ; ============================================================================
-
-; ----------------------------------------------------------------------
-; MATH_ADD16
-; In:  HL, DE
-; Out: HL = HL + DE (truncated to 16 bits)
-; Destroys: AF
-; ----------------------------------------------------------------------
-MATH_ADD16:
-    add  hl, de
-    ret
-
-; ----------------------------------------------------------------------
-; MATH_SUB16
-; In:  HL, DE
-; Out: HL = HL - DE (truncated to 16 bits)
-; Destroys: AF
-; ----------------------------------------------------------------------
-MATH_SUB16:
-    or   a
-    sbc  hl, de
-    ret
 
 ; ----------------------------------------------------------------------
 ; MATH_NEGATE16

@@ -514,9 +514,8 @@ IO_DECODE_KEY:
 
 ; ============================================================================
 ; IO_LATCH_AND_CLEAR
-; Shared tail for IO_READ_KEY/IO_READ_KEY_NONBLOCK below: returns the
-; ISR's latched key code and clears KBD_KEYHIT so the next scan starts
-; fresh.
+; Shared tail for IO_READ_KEY below: returns the ISR's latched key code
+; and clears KBD_KEYHIT so the next scan starts fresh.
 ; In:  none
 ; Out: A = KBD_LASTK; KBD_KEYHIT cleared
 ; Destroys: AF
@@ -537,35 +536,14 @@ IO_READ_KEY:
     jr   IO_LATCH_AND_CLEAR
 
 ; ============================================================================
-; IO_READ_KEY_NONBLOCK
-; Non-blocking counterpart to IO_READ_KEY — same "thin consumer of the
-; ISR's latched state" shape, just without the .wait_hit loop: reads
-; KBD_KEYHIT exactly ONCE, returns immediately either way. Backs
-; BASIC's INKEY$ (which must never block — empty result if nothing is
-; currently pressed, not wait for a keypress the way IO_READ_KEY/PAUSE
-; 0 deliberately do).
-; In:  none
-; Out: A = translated code (same meanings as IO_READ_KEY's own Out — see
-;      that routine's header), or 0 if no key is currently latched.
-;      KBD_KEYHIT cleared in either case that a key WAS latched (0
-;      already means nothing to clear).
-; Destroys: AF
-; ============================================================================
-IO_READ_KEY_NONBLOCK:
-    ld   a, (KBD_KEYHIT)
-    or   a
-    ret  z                              ; nothing latched — A already 0
-    jr   IO_LATCH_AND_CLEAR
-
-; ============================================================================
 ; IO_KEY_AVAILABLE
-; TRUE non-destructive lookahead — reads KBD_KEYHIT WITHOUT clearing it,
-; unlike IO_READ_KEY_NONBLOCK (which is a consuming read, matching
-; BASIC's own INKEY$, not standard Forth's KEY?). Backs Forth's own
-; KEY? ( -- flag ), which by definition must leave a pending key
-; available for a SUBSEQUENT IO_READ_KEY/KEY to actually consume — see
-; core/key.asm's own header for why IO_READ_KEY_NONBLOCK itself isn't
-; the right primitive for that word despite the similar name.
+; TRUE non-destructive lookahead — reads KBD_KEYHIT WITHOUT clearing it.
+; Backs Forth's own KEY? ( -- flag ), which by definition must leave a
+; pending key available for a SUBSEQUENT IO_READ_KEY/KEY to actually
+; consume. (An earlier IO_READ_KEY_NONBLOCK, a consuming non-blocking
+; read modeled on BASIC's own INKEY$, was removed as dead code — this
+; project's KEY? was always built on IO_KEY_AVAILABLE instead, since a
+; consuming lookahead is the wrong primitive for it.)
 ; In:  none
 ; Out: A = 0 (nothing latched) or nonzero (a key is waiting);
 ;      KBD_KEYHIT left completely unchanged either way

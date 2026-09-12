@@ -298,41 +298,6 @@ GFX_SCROLL_OUTPUT_UP:
     jp   GFX_CLEAR_ROW
 
 ; ============================================================================
-; GFX_SCROLL_TEXT_DOWN
-; Mirror of GFX_SCROLL_TEXT_UP: scrolls rows 0-22 DOWN by one text row
-; instead — row 0's content becomes row 1's, ... row 21's becomes
-; row 22's. Row 0 itself is left UNTOUCHED for the caller to draw.
-;
-; Row-pair copies are processed in DESCENDING destination order (22,
-; 21, ..., 1) for the same memmove reasoning as GFX_SCROLL_TEXT_UP's
-; own header, mirrored: row 21's content must be read (as the source
-; for dst=22) before it's overwritten (as the destination when
-; dst=21) — "copy backward when dst > src".
-; In:  none
-; Out: none
-; Destroys: AF, BC, DE, HL
-; ============================================================================
-GFX_SCROLL_TEXT_DOWN:
-    call GFX_SPRITE_INVALIDATE
-    ld   hl, ATTR_ADDR + 22*32 - 1   ; last byte of rows 0-21 (source)
-    ld   de, ATTR_ADDR + 23*32 - 1   ; last byte of rows 1-22 (dest) —
-    ld   bc, 22*32                   ; overlapping, dst > src, needs the
-    lddr                             ; backward-copying LDDR, not LDIR
-
-    ld   a, 22
-    ld   (GFX_SCROLL_DST_ROW), a
-.row_loop:
-    ld   a, (GFX_SCROLL_DST_ROW)
-    dec  a
-    ld   (GFX_SCROLL_SRC_ROW), a
-    call GFX_COPY_ROW_BITMAP
-    ld   a, (GFX_SCROLL_DST_ROW)
-    dec  a
-    ld   (GFX_SCROLL_DST_ROW), a
-    jr   nz, .row_loop
-    ret
-
-; ============================================================================
 ; GFX_SET_BORDER
 ; Sets the screen border colour via the ULA port ($FE) — same
 ; Spectrum-family hardware convention every other screen routine in
@@ -568,7 +533,7 @@ GFX_CHAR_TO_FONT_OFFSET:
 
 ; ============================================================================
 ; GFX_CHAR_SETUP (internal — not in kernel_api.inc)
-; Shared address computation for GFX_PUTCHAR and GFX_PUTCHAR_BOLD —
+; Shared address computation for GFX_PUTCHAR and GFX_PUTCHAR_OVER —
 ; written once here rather than duplicated in both, given how much
 ; trouble duplicated addressing logic has already caused in this
 ; project (the GFX_PUTCHAR/GFX_CHAR_TO_FONT_OFFSET row-clobbering bug).
@@ -695,43 +660,6 @@ GFX_PUTCHAR_OVER:
     ret
 
 ; ============================================================================
-; GFX_PUTCHAR_BOLD
-; Plots one character with a synthesized bold effect: each scanline
-; byte is ORed with itself shifted right by one pixel (via RRCA),
-; widening every stroke by a pixel rather than needing a whole second
-; font. Verified numerically against representative font bytes before
-; writing this — separated strokes (like 'A''s legs) stay separated,
-; just each a pixel wider; solid bars extend cleanly; space stays
-; blank. Used for keyword highlighting in the editor.
-; In:  A = ASCII character, B = row (0-23), C = column (0-31)
-; Out: none
-; Destroys: AF, BC, DE, HL
-; ============================================================================
-GFX_PUTCHAR_BOLD:
-    call GFX_CHAR_SETUP
-    ret  c                                 ; out of range — see
-                                          ; GFX_PUTCHAR's own comment
-    ld   b, 8
-.scanline_loop:
-    ld   a, (hl)
-    ld   c, a                    ; C = original byte — B is the scanline
-                                 ; counter here, not the row parameter
-                                 ; anymore (GFX_CHAR_SETUP already
-                                 ; consumed that), so C is free to use
-    rrca                          ; shift right 1, wrapping bit0 into
-                                 ; bit7 — harmless here since font bytes
-                                 ; only use their top 5 bits, bit0 is
-                                 ; always 0 in every glyph we have
-    or   c                         ; OR with the original -> widened stroke
-    ex   de, hl
-    ld   (hl), a
-    inc  h
-    ex   de, hl
-    inc  hl
-    djnz .scanline_loop
-    ret
-
-; ============================================================================
 ; GFX_PRINT_STRING
 ; Prints a null-terminated string starting at a character-grid position,
 ; advancing one column per character. Does not wrap at end of line or
@@ -762,94 +690,11 @@ GFX_PRINT_STRING:
     jr   .loop
 
 ; ============================================================================
-; GFX_PRINT_STRING_ATTR
-; Prints a null-terminated string with BASIC-style attributes. At column 32
-; it wraps; past row 23 it scrolls all 24 output rows and continues on the
-; newly cleared bottom row. It also sets the attribute cell
-; under each character to a given byte — built for basic/'s INK/PAPER/
-; FLASH/INVERSE support, which needs printed text to actually carry
-; the current attribute state, unlike every other caller of
-; GFX_PRINT_STRING (HELP screens, error messages, the editor), which
-; always wants the plain default/inherited attribute and must NOT be
-; affected by this. Kept as a separate routine rather than adding an
-; attribute parameter to GFX_PRINT_STRING itself, so none of those
-; existing callers need to change.
-;
-; The attribute value is stashed in PRINT_ATTR_SCRATCH (a real RAM
-; sysvar, sysvars.inc), not a register — both GFX_PUTCHAR and
-; GFX_SET_ATTR destroy AF/BC/DE/HL per their own contracts, so a bare
-; register holding the attribute would not survive either call. This
-; is the same "value must survive a call -> use memory, not a
-; register" pattern this project has hit repeatedly (see
-; MEM_LINE_FIRST/NEXT's own DE-clobbering history) — BUT NOTE: this
-; scratch value must live in RAM specifically, never in a `DB` byte
-; embedded in this file's own code. A `DB` byte sits in ROM once
-; assembled, and this entire codebase assembles into ROM — writing to
-; a ROM-resident "variable" via `ld (addr), a` is a silent no-op on
-; real hardware, so the byte always reads back its compile-time
-; initial value, never whatever was "written" at runtime. This was a
-; real, shipped bug: an earlier version of this routine used exactly
-; that pattern (a local `.attr_scratch: DB 0`), and every PRINT wrote
-; attribute $00 (black-on-black) regardless of INK/PAPER, found via a
-; real memory dump showing GFX_CLS's own fill elsewhere on screen was
-; correctly $38 while PRINT's own writes were stuck at $00. See
-; docs/programmers_reference.md's "INK / PAPER / FLASH / INVERSE /
-; OVER" section for the full writeup.
-; In:  HL = pointer to null-terminated string, B = row, C = column,
-;      A = attribute byte to set at every printed cell, D = OVER flag
-; Out: B/C = row/column immediately after the final character
-; Destroys: AF, BC, DE, HL
-; ============================================================================
-GFX_PRINT_STRING_ATTR:
-    ld   (PRINT_ATTR_SCRATCH), a
-    ld   a, d
-    ld   (PRINT_OVER_SCRATCH), a
-.loop:
-    ld   a, (hl)
-    or   a
-    ret  z
-    push hl
-    push bc                  ; GFX_PUTCHAR destroys BC entirely
-    ld   a, (PRINT_OVER_SCRATCH)
-    or   a
-    jr   z, .opaque
-    ld   a, (hl)
-    call GFX_PUTCHAR_OVER
-    jr   .glyph_done
-.opaque:
-    ld   a, (hl)
-    call GFX_PUTCHAR
-.glyph_done:
-    pop  bc
-    push bc                  ; GFX_SET_ATTR also destroys BC — needs
-                             ; its own save/restore, same row/column
-    ld   a, (PRINT_ATTR_SCRATCH)
-    call GFX_SET_ATTR
-    pop  bc
-    pop  hl
-    inc  hl
-    inc  c
-    ld   a, c
-    cp   32
-    jr   c, .loop
-    ld   c, 0
-    inc  b
-    ld   a, b
-    cp   24
-    jr   c, .loop
-    push hl
-    call GFX_SCROLL_OUTPUT_UP
-    pop  hl
-    ld   b, 23
-    ld   c, 0
-    jr   .loop
-
-; ============================================================================
 ; GFX_ATTR_SWAP (internal — not in kernel_api.inc)
-; Shared address computation and ink/paper bit-swap for
-; GFX_INVERT_ATTR and GFX_INVERT_ATTR_STATIC — written once here rather
-; than duplicated in both, given how much trouble duplicated addressing
-; logic has already caused in this project. The bit-swap instruction
+; Address computation and ink/paper bit-swap for GFX_INVERT_ATTR,
+; split out as its own routine rather than inlined, given how much
+; trouble duplicated addressing logic has already caused in this
+; project. The bit-swap instruction
 ; sequence was verified numerically against all 256 possible attribute
 ; byte values before being trusted — see docs/programmers_reference.md's
 ; kernel/graphics section.
@@ -873,8 +718,8 @@ GFX_PRINT_STRING_ATTR:
 ; row's own leftover-row cleanup ran earlier in the same redraw pass
 ; (this call happens AFTER that cleanup, re-dirtying the cell it had
 ; just cleared). Fixed with the same bounds check GFX_SET_ATTR already
-; has, returning early with carry SET on out-of-range — both callers
-; below now check `ret c` immediately after this call, before doing
+; has, returning early with carry SET on out-of-range — the caller
+; below now checks `ret c` immediately after this call, before doing
 ; anything else, so an out-of-range request is a clean no-op instead
 ; of a silent corruption, matching this project's now-consistent "clip
 ; rather than corrupt" answer to this class of bug.
@@ -928,14 +773,12 @@ GFX_ATTR_SWAP:
 ; No interrupt or timer code needed on our end (kernel/interrupt doesn't
 ; exist yet, but this doesn't need it) — offloading blink timing to the
 ; ULA is the standard Spectrum-family way to do this. Used as the
-; editor's cursor indicator specifically — for a STATIC inverted
-; highlight that shouldn't blink (e.g. a status bar), use
-; GFX_INVERT_ATTR_STATIC instead. Using this routine for
-; basic/'s new status line by mistake was a real bug: the whole status
-; bar inherited the cursor's blink, which is why it appeared to
-; "flash" — caught from a screenshot and fixed by splitting this
-; routine's address/swap logic out into GFX_ATTR_SWAP so both variants
-; share it rather than duplicating it.
+; editor's cursor indicator specifically. (A GFX_INVERT_ATTR_STATIC
+; sibling once existed for a non-blinking static highlight — inherited
+; from 2068-Leap's status-bar use, which 2068-Forth has no equivalent
+; of; removed as dead code, never called here. The address/swap logic
+; still lives in its own GFX_ATTR_SWAP below rather than inlined here,
+; from when the two shared it.)
 ; In:  B = row (0-23), C = column (0-31)
 ; Out: none
 ; Destroys: AF, BC, DE, HL
@@ -961,30 +804,10 @@ GFX_INVERT_ATTR:
     ret
 
 ; ============================================================================
-; GFX_INVERT_ATTR_STATIC
-; Same ink/paper swap as GFX_INVERT_ATTR, WITHOUT forcing the hardware
-; FLASH bit — a genuinely static inverted highlight, for things like a
-; status bar that should stand out visually but not blink like the
-; cursor does. FLASH is left exactly as it already was at that cell
-; (normally off, since nothing else sets it) rather than forced either
-; way.
-; In:  B = row (0-23), C = column (0-31)
-; Out: none
-; Destroys: AF, BC, DE, HL
-; ============================================================================
-GFX_INVERT_ATTR_STATIC:
-    call GFX_ATTR_SWAP
-    ret  c                                    ; out of range — see
-                                             ; GFX_INVERT_ATTR's own
-                                             ; identical check just above
-    ld   (hl), a
-    ret
-
-; ============================================================================
 ; GFX_SET_ATTR
 ; Sets the attribute byte at one character cell to a specific value
-; outright — unlike GFX_INVERT_ATTR/GFX_INVERT_ATTR_STATIC, which swap
-; ink/paper relative to whatever's already there, this replaces it.
+; outright — unlike GFX_INVERT_ATTR, which swaps ink/paper relative to
+; whatever's already there, this replaces it.
 ; Built for red-highlighted error lines (basic/'s
 ; BASIC_REDRAW_PROGRAM), but deliberately general — any caller that
 ; needs a specific, known color at a specific cell can use this rather
@@ -1005,10 +828,12 @@ GFX_INVERT_ATTR_STATIC:
 ; got fixed for (see that routine's own comment): nothing stopped a
 ; caller from passing an out-of-range column here, and unlike the
 ; bitmap write, there was no separate fix covering this path. Found
-; via a real, reproducible case: GFX_PRINT_STRING_ATTR calls this
-; unconditionally for every character of a string, including ones
-; GFX_PUTCHAR correctly skips once GFX_CHAR_SETUP's own bounds check
-; kicks in past column 31 — so a too-long PRINT string's attribute-
+; via a real, reproducible case: an earlier BASIC-attribute-printing
+; routine (since removed as dead code — see this file's own recent
+; history) called this unconditionally for every character of a
+; string, including ones GFX_PUTCHAR correctly skips once GFX_CHAR_
+; SETUP's own bounds check kicks in past column 31 — so a too-long
+; PRINT string's attribute-
 ; painting kept walking past column 31 even after the bitmap fix
 ; landed, and since attribute memory is a flat row*32+col array,
 ; walking col past 31 spills into the NEXT row's attribute bytes,
@@ -1219,36 +1044,6 @@ GFX_CLEAR_ROW:
     push bc
     ld   a, ATTR_DEFAULT
     call GFX_SET_ATTR
-    pop  bc
-
-    inc  c
-    ld   a, c
-    cp   GFX_COLS
-    jr   c, .loop
-    ret
-
-; ============================================================================
-; GFX_CLEAR_ROW_TEXT
-; Clears one character row's BITMAP ONLY (all 32 columns) — leaves the
-; attribute byte at every cell completely untouched, unlike
-; GFX_CLEAR_ROW, which resets both. Built for basic/'s status bar: it
-; needs to erase old text before drawing new text, but always wants
-; the row inverted, never briefly at the default attribute in between
-; — clearing the attribute too (even just to immediately set it back
-; to inverted afterward) means the row visibly passes through a non-
-; inverted state for the moment in between, which showed up as a
-; smaller, but still-present, flash even after GFX_CLEAR_ROW's own
-; earlier fix for the worse, fully-toggling version of this bug.
-; In:  B = row (0-23)
-; Out: none
-; Destroys: AF, BC, DE, HL
-; ============================================================================
-GFX_CLEAR_ROW_TEXT:
-    ld   c, 0
-.loop:
-    push bc
-    ld   a, " "
-    call GFX_PUTCHAR
     pop  bc
 
     inc  c

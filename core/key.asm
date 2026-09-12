@@ -62,10 +62,10 @@ DICT_LATEST_INIT_KEY EQU H_KEY   ; head of the dictionary as of Phase
 ; otherwise -- crucially, does NOT consume it, so `KEY? IF KEY ... THEN`
 ; is the correct idiom, exactly like every other Forth's KEY?/KEY pair.
 ; Backed by kernel/io's own IO_KEY_AVAILABLE (added alongside this
-; word), NOT the already-existing IO_READ_KEY_NONBLOCK -- that routine
-; consumes whatever it finds (matching BASIC's own INKEY$), which would
-; silently make KEY? swallow the very key a following KEY expects to
-; see. See kernel/io/io.asm's own IO_KEY_AVAILABLE header for the full
+; word) -- a consuming non-blocking read (matching BASIC's own INKEY$)
+; would silently make KEY? swallow the very key a following KEY expects
+; to see, which is exactly why this project never built KEY? on one.
+; See kernel/io/io.asm's own IO_KEY_AVAILABLE header for the full
 ; story.
 ; ============================================================================
 H_KEYQ:
