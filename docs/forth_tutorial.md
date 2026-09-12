@@ -100,7 +100,7 @@ you type   stack after (top is rightmost)
 +          [8]           -- pop 3 and 5, push their sum
 ```
 
-## The Stack *Is* the Grammar
+### The Stack *Is* the Grammar
 
 Because of this stack-based design, Forth needs **no parentheses, no operator precedence rules, and no complex parser**.
 
@@ -140,17 +140,17 @@ None of this changes what Forth actually reads. No matter how many times you ins
 
 - **Execution Breakdown (Tracing `10 11 + 12 + .`):**
   
-  - `10` $\rightarrow$ `[10]` (Pushes initial starting value)
+  - `10` → `[10]` (Pushes initial starting value)
   
-  - `11` $\rightarrow$ `[10, 11]` (Pushes second value)
+  - `11` → `[10, 11]` (Pushes second value)
   
-  - `+` $\rightarrow$ `[21]` (Pops both, adds them, pushes result)
+  - `+` → `[21]` (Pops both, adds them, pushes result)
   
-  - `12` $\rightarrow$ `[21, 12]` (Pushes next value)
+  - `12` → `[21, 12]` (Pushes next value)
   
-  - `+` $\rightarrow$ `[33]` (Pops both, adds them, pushes result)
+  - `+` → `[33]` (Pops both, adds them, pushes result)
   
-  - `.` $\rightarrow$ `[]` (Pops final value, prints it, empties stack)
+  - `.` → `[]` (Pops final value, prints it, empties stack)
 
 - **Key Takeaways:**
   
@@ -301,9 +301,8 @@ Everything in the rest of this document is simply those five mechanics applied t
    a crash, and it doesn't lose any words you've defined; it just
    empties the stack and hands you a fresh prompt. Seeing that once
    now, deliberately, is much nicer than meeting it by accident later.
-   ([Typing and editing at the
-   prompt](#2-typing-and-editing-at-the-prompt) covers the error
-   messages properly.)
+   ([Section 3](#3-understanding-system-feedback--errors) covers the
+   error messages properly.)
 
 4. `ROT` is the one word in the second table above whose effect is hard
    to hold in your head. Push `1 2 3`, run `ROT`, then print all three
@@ -320,7 +319,7 @@ Everything in the rest of this document is simply those five mechanics applied t
 
 ---
 
-## 2 Defining Your Own Words
+## 2. Defining Your Own Words
 
 Here is the part BASIC has no real equivalent for. In BASIC, you write a program, and the language itself remains fixed while you use it. In Forth, defining a word **extends the language**—your new word becomes just as usable as `+` or `DUP`, completely indistinguishable in kind.
 
@@ -409,7 +408,7 @@ A slightly bigger example puts that habit to work: a word that quadruples a numb
 
 - `QUADRUPLE` is defined *using* `DOUBLE`. A definition may use any word that exists at the moment it is compiled, including one you wrote seconds earlier.
 
-- Running `3 QUADRUPLE` pushes `3` (`[3]`), runs `QUADRUPLE`, which invokes `DOUBLE` twice: `[3]` $\rightarrow$ `[6]` $\rightarrow$ `[12]`.
+- Running `3 QUADRUPLE` pushes `3` (`[3]`), runs `QUADRUPLE`, which invokes `DOUBLE` twice: `[3]` → `[6]` → `[12]`.
 
 `QUADRUPLE` never mentions the stack, arithmetic, or how `DOUBLE` works internally; it simply names a sequence of existing words. This is the normal shape of Forth programming: small, easily verifiable words combined into larger ones.
 
@@ -463,8 +462,6 @@ Every word encountered so far is called by typing its name directly. The tick ma
                      \ typing DOUBLE would have
 ```
 
-`
-
 - **`'` (tick):** Looks up a word in the dictionary without running it, pushing a single identifier called an **`xt`** (execution token) onto the stack.
 
 - **`EXECUTE`:** Takes an `xt` off the stack and calls whatever word it represents.
@@ -512,7 +509,7 @@ Splitting finding and calling into two separate steps allows you to store word i
    `' DOUBLE .` on its own — you'll print the execution token itself,
    which is just an ordinary number like any other.
 
-## 3 Understanding System Feedback & Errors
+## 3. Understanding System Feedback & Errors
 
 What happens if you press **Enter** on a word that doesn't exist? A typo like `5 BRODER` instead of `5 BORDER` prints the unrecognized word followed by `?`, then drops you straight back to a fresh prompt:
 
@@ -552,7 +549,7 @@ Because the dictionary is searched newest-first, `VLIST` follows that exact same
 
 - **`LLIST`**: Walks the same chain but stops at the built-in words, sending its output to a physical printer to list *your program*.
 
-## Fixing a typo after you've already pressed Enter: `LIST-DEFS` and `RECALL`
+### Fixing a typo after you've already pressed Enter: `LIST-DEFS` and `RECALL`
 
 Everything above fixes a mistake *before* you press Enter — inserting,
 deleting, moving the cursor. But what about a typo you don't notice
@@ -1685,7 +1682,7 @@ Two rules, both easy to break: exactly one space is required right
 after `."`, and the text runs up to but not including the next `"`.
 And `."` only works inside a colon definition, the same restriction
 `IF`/`ELSE`/`THEN` themselves carry — which is the IMMEDIATE business
-from [section 3](#interpreting-vs-compiling--why--is-special) showing
+from [section 2](#interpreting-vs-compiling-why--is-special) showing
 up in practice, since there has to be a definition under construction
 for these words to build into.
 
@@ -1930,7 +1927,7 @@ you'd say it: **limit first, start second**. `5 0 DO` means "from 0 up
 to 5", not "from 5 down to 0". This is worth double-checking every time
 you write one; it's the single most common `DO` mistake.
 
-Something to actually watch happen, built the same way section 3 built
+Something to actually watch happen, built the same way section 2 built
 `QUADRUPLE` — a small word, then a word that uses it:
 
 ```forth
@@ -2013,7 +2010,7 @@ TEXIT1 .      \ prints 1 -- the 2 was compiled, and never runs
 The `2` really is part of the definition; `;` compiled it like anything
 else. It is simply unreachable, because `EXIT` returned before execution
 ever got that far. Like `IF` and `LEAVE`, `EXIT` is one of the IMMEDIATE
-words from [section 3](#interpreting-vs-compiling--why--is-special) and
+words from [section 2](#interpreting-vs-compiling-why--is-special) and
 only makes sense inside a `:` definition — there's nothing to return
 from at the prompt.
 
@@ -2651,7 +2648,7 @@ durations are naturally fractional):
 -12 0.5 BEEP      \ one octave below middle C, half a second
 ```
 
-## Sound: `BEEP` Limits and Direct Chip Access
+### Sound: `BEEP` Limits and Direct Chip Access
 
 While `BEEP` handles simple note playback, it operates under a few clear hardware boundaries:
 
@@ -3154,7 +3151,7 @@ the three lines above; the second is what you'd actually write.
 
 ### Choosing a word to run at runtime
 
-[Section 3](#3-defining-your-own-words) introduced `'` and `EXECUTE`
+[Section 2](#2-defining-your-own-words) introduced `'` and `EXECUTE`
 with an example that deliberately did nothing more than call `DOUBLE`
 indirectly — the same thing typing `DOUBLE` would have done, just to
 show the mechanism working. Here's the case that actually motivates
@@ -3186,11 +3183,11 @@ is data, decided once (by whatever stores an `xt` into `OP`) and used
 somewhere else entirely (by whatever later runs `OP @ EXECUTE`) — the
 two don't have to be the same word, or even know about each other,
 which is exactly what "pass a word around as a value" was promising
-back in section 3.
+back in section 2.
 
 ### Summary
 
-No new words except a reminder of `'` and `EXECUTE` from section 3.
+No new words except a reminder of `'` and `EXECUTE` from section 2.
 `VARIABLE`, `@`, `!`, `DUP`, `+`, `>`, `MAX` and `IF`/`ELSE`/`THEN` from
 earlier sections, combined the way a real program combines them. The
 habit of copying a value before something consumes it, the habit of
@@ -3430,7 +3427,7 @@ the row — ten points, `I` running 20, 60, 100, ... up to 380,
 comfortably inside `PLOT64`'s wider 0-511 range and well past what the
 normal screen's own coordinates could reach.
 
-## A Caveat on 64-Column Visual Rendering
+### A Caveat on 64-Column Visual Rendering
 
 While `PLOT64`'s underlying logic is completely solid—confirmed byte-for-byte across independent emulators like **Fuse** and **ZEsarUX**, which agree on exactly which bit in memory changes—its on-screen visual appearance comes with one important caveat:
 
@@ -3486,9 +3483,9 @@ Forth words `64COL`, `32COL`, `PALETTE64`, `PLOT64`.
 
 ## 14. Error handling: THROW and CATCH
 
-[Section 2](#2-typing-and-editing-at-the-prompt) covered the defaults
-when something goes wrong: `?` for an unrecognized word, `STACK?` for
-a stack mistake, both
+[Section 3](#3-understanding-system-feedback--errors) covered the
+defaults when something goes wrong: `?` for an unrecognized word,
+`STACK?` for a stack mistake, both
 abandoning the rest of the current line and dropping you at a fresh
 prompt. That's the right behavior while you're typing interactively.
 A real *program*, though, often wants to notice a problem itself and
@@ -3629,7 +3626,7 @@ fine and only the *doing* needs to stop.
 
 Neither prints anything, which is worth knowing so you're not left
 waiting for a message. What you'll notice instead is the absence of the
-usual `OK` from [section 2](#2-typing-and-editing-at-the-prompt): a
+usual `OK` from [section 3](#3-understanding-system-feedback--errors): a
 line that ended in `ABORT` or `QUIT` didn't finish, so it doesn't get
 told it did. If you want your program to say why it gave up, print
 something yourself just before:
@@ -3735,7 +3732,7 @@ LLIST          \ prints TRIPLE, then DOUBLE -- most recently defined
                \ name would find them in
 ```
 
-`VLIST` from [section 2](#2-typing-and-editing-at-the-prompt) is the
+`VLIST` from [section 3](#seeing-what-words-exist-vlist) is the
 same walk sent to the screen instead, and without the stop at the
 built-ins — `LLIST` for a paper record of your program, `VLIST` for a
 look at the whole dictionary while you're working.
@@ -3868,7 +3865,7 @@ These need a ULAplus-capable emulator
 
 ## 17. Growing the dictionary yourself
 
-[Section 3](#3-defining-your-own-words) made a claim worth revisiting
+[Section 2](#2-defining-your-own-words) made a claim worth revisiting
 now that you've used the whole language: defining a word *extends the
 language*, and your words are no different in kind from the ones Forth
 shipped with. Everything since has taken that at face value. This
@@ -4116,7 +4113,7 @@ FORGET B        \ B and C are both gone now; A survives
 ```
 
 There is no way to remove `B` alone. If that matters, `VLIST` from
-[section 2](#2-typing-and-editing-at-the-prompt) is the way to see
+[section 3](#seeing-what-words-exist-vlist) is the way to see
 what you've actually got left afterward.
 
 One real safety behavior, which you'll meet the moment you aim `FORGET`
@@ -4443,9 +4440,9 @@ the same convention applied to the full ANS Forth standard.
 | `CREATE`    | `( "name" -- )` | make a word that pushes its own data address                                                                                       |
 | `DOES>`     | `( -- )`        | give a `CREATE`d word its behavior; the code after it runs with that address on the stack                                          |
 | `FORGET`    | `( "name" -- )` | remove a word and everything defined after it; refuses built-ins                                                                   |
-| `VLIST`     | `( -- )`        | print every word in the dictionary, newest first — see [section 2](#2-typing-and-editing-at-the-prompt)                            |
-| `LIST-DEFS` | `( -- )`        | list every colon definition entered so far, numbered, with a source preview — see [section 2](#2-typing-and-editing-at-the-prompt) |
-| `RECALL`    | `( n -- )`      | copy `LIST-DEFS` entry `n`'s full source onto the input line for editing — see [section 2](#2-typing-and-editing-at-the-prompt)    |
+| `VLIST`     | `( -- )`        | print every word in the dictionary, newest first — see [section 3](#seeing-what-words-exist-vlist)                            |
+| `LIST-DEFS` | `( -- )`        | list every colon definition entered so far, numbered, with a source preview — see [section 3](#fixing-a-typo-after-youve-already-pressed-enter-list-defs-and-recall) |
+| `RECALL`    | `( n -- )`      | copy `LIST-DEFS` entry `n`'s full source onto the input line for editing — see [section 3](#fixing-a-typo-after-youve-already-pressed-enter-list-defs-and-recall)    |
 
 **Error handling** — see [section 14](#14-error-handling-throw-and-catch)
 
