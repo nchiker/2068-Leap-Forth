@@ -3920,9 +3920,11 @@ without changing how
 `INK`/`PAPER`/`PLOT`/`LINE`/`CIRCLE`/`FILL` are used at all.
 
 | Word      | Stack effect         | What it does                                                                |
-| --------- | -------------------- | --------------------------------------------------------------------------- |
+| --------- | ---------------------- | -------------------------------------------------------------------------------- |
 | `ULAPLUS` | `( flag -- )`        | Nonzero enables the extended palette; zero reverts to the standard 8 colors |
 | `PALETTE` | `( index value -- )` | Program palette register `index` (0-63) with color `value`                  |
+
+#### Packing a Palette Value
 
 A palette value packs green, red, and blue into one number,
 `GGGRRRBB` — 3 bits of green, 3 of red, 2 of blue:
@@ -3938,12 +3940,15 @@ A palette value packs green, red, and blue into one number,
 100 100 FILL
 ```
 
-Registers 0 through 7 replace the same 8 colors `INK`/`PAPER`/`BORDER`
-already use, in the same order, so programming register 2 changes what
-color 2 looks like everywhere that number is used — the screen border
-included. This is a genuine, confirmed-working display-time palette
-swap: a shape already drawn with `INK 2` changes color the moment
-`PALETTE 2,...` and `ULAPLUS 1` run, with no need to redraw it.
+- **A Genuine Display-Time Swap:** Registers 0 through 7 replace the
+  same 8 colors `INK`/`PAPER`/`BORDER` already use, in the same order,
+  so programming register 2 changes what color 2 looks like everywhere
+  that number is used — the screen border included. This is a
+  genuine, confirmed-working display-time palette swap: a shape
+  already drawn with `INK 2` changes color the moment
+  `PALETTE 2,...` and `ULAPLUS 1` run, with no need to redraw it.
+
+#### `ULAPLUS` and `PALETTE` Are Independent
 
 `ULAPLUS` and `PALETTE` are also independent of each other in a way
 worth noticing — the same separation [Drawing and
@@ -3962,21 +3967,24 @@ and back on never touches them:
                   \ whether the hardware is currently reading it
 ```
 
+#### Hardware Support
+
 A stock, unmodified Timex Sinclair 2068 does not natively support **ULAplus**. Because ULAplus is a hardware specification rather than a built-in feature, it requires implementation either as a physical replacement chip for an existing ULA, inside an emulator, or via modern FPGA hardware like the ZX Spectrum Next.
 
-Add-on hardware for the TS2068—such as the PicoVideo project—exists precisely because the stock machine lacks native support.
+Add-on hardware for the TS2068 — such as the PicoVideo project — exists precisely because the stock machine lacks native support.
 
 ### Summary
 
-An extension that replaces the fixed eight colours with 64 you choose,
-without changing how any colour word is used. A palette value packs
-green, red and blue into one byte as `GGGRRRBB`. Programming the
-palette and enabling it are independent of each other. Registers 0 to 7
-stand in for the standard eight colours everywhere they are used,
-border included, and the swap happens at display time — already-drawn
-shapes change colour without being redrawn.
+- **Core Concepts:** An extension that replaces the fixed eight
+  colours with 64 you choose, without changing how any colour word is
+  used. A palette value packs green, red and blue into one byte as
+  `GGGRRRBB`. Programming the palette and enabling it are independent
+  of each other. Registers 0 to 7 stand in for the standard eight
+  colours everywhere they are used, border included, and the swap
+  happens at display time — already-drawn shapes change colour without
+  being redrawn.
 
-Forth words `ULAPLUS`, `PALETTE`.
+- **Forth Words:** `ULAPLUS`, `PALETTE`.
 
 ### Exercises
 
