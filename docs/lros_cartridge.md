@@ -15,6 +15,21 @@ header-format reference below is still accurate and worth keeping, but
 `rom/forth_lros.asm` itself has no remaining purpose the real cartridge
 build doesn't already cover better.
 
+## Live keyboard input: confirmed
+
+The PR itself flagged this as the one thing tooling couldn't verify:
+"neither emulator's scripted key injection reached the Forth's
+keyboard scanner." That's a real limit of scripted/synthetic key
+injection specifically (confirmed independently — the same wall was
+hit trying to automate this from a headless AI coding session, via
+both ZEsarUX's own `send-keys-ascii` and raw X11 key events), not a
+limit of the ROM. A real person typing at a live Fuse window running
+`build/forth_boot.dck` (stock ROM, DOCK cartridge, no scripting
+involved) drove a full interactive session — dictionary listing via
+`WORDS`, correct `OK` prompt — with no issues. Live keyboard input
+under the cartridge build works; only *automating* a test of it does
+not.
+
 ## What this was
 
 `rom/forth_lros.asm` was a proof-of-concept boot stub for the TS2068
@@ -114,13 +129,19 @@ Home ROM that boots first and hands off to it.
   PR #1's own Technical-Manual-cited implementation, which actually
   boots (see "Superseded" above). None of this runs real TS2068
   hardware or a physical DOCK connector.
-- **The handoff-state assumption is unverified.** `COLD_START` assumes
-  the stock ROM has already set up a live stack and doesn't touch `SP` —
-  reasonable per the sourced convention (also independently stated by
-  the vendored cartridge-development skill's own `aros-and-basic.md`:
-  "Keep header bit 3 set so OS chunk-3 transfer code and stack remain
-  available during handoff"), but not proven against real handoff
-  behaviour.
+- **The handoff-state assumption is now supported by real interactive
+  use, not just static review.** `COLD_START` assumes the stock ROM has
+  already set up a live stack and doesn't touch `SP` — reasonable per
+  the sourced convention (also independently stated by the vendored
+  cartridge-development skill's own `aros-and-basic.md`: "Keep header
+  bit 3 set so OS chunk-3 transfer code and stack remain available
+  during handoff"). Live keyboard input under `build/forth_boot.dck` in
+  Fuse (a real person typing, not scripted injection — see "Live
+  keyboard input" below) drove the interrupt-driven keyboard ISR
+  through an extended session (`WORDS`-style dictionary listing, `OK`
+  prompt) with no corruption or crash — real evidence the inherited
+  stack survives the handoff, not just a plausible assumption. Still
+  not the same as a physical DOCK connector or real TS-Pico hardware.
 - **The full dictionary now has a path — use `build/forth_boot.dck`,
   not this stub's `build/forth_lros.dck`.** PR #1's `-DCARTRIDGE` build
   is exactly this: the same LROS/DOCK mechanism, but with the complete
