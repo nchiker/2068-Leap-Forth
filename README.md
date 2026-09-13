@@ -235,10 +235,13 @@ GREEN border (full pass) on the real graphics EXROM, correctly BLUE
 ### TS-Pico
 
 The base product (everything except the six graphics words) already
-runs on TS-Pico today, as a plain Home-ROM replacement — no cartridge
-needed. The graphics extension doesn't have a path to TS-Pico yet (it
-has no EXROM slot). See [`docs/ts_pico_setup.md`](docs/ts_pico_setup.md)
-for the corrected, firmware-sourced picture of exactly how TS-Pico's
+runs on TS-Pico today, two independent ways: as a plain Home-ROM
+replacement, or non-destructively as a DOCK cartridge
+(`build/forth_boot.dck`, confirmed booting under Fuse and ZEsarUX with
+the genuine stock ROM — real TS-Pico hardware itself untested so far).
+The graphics extension doesn't have a path to TS-Pico yet (it has no
+EXROM slot). See [`docs/ts_pico_setup.md`](docs/ts_pico_setup.md) for
+the corrected, firmware-sourced picture of exactly how TS-Pico's
 ROM/DOCK loading actually works, and exact load commands.
 
 ## Download

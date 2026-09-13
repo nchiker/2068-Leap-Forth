@@ -26,27 +26,33 @@ and/or the DOCK bank.
 
 ## What this means for 2068-Leap-Forth
 
-- **The base product (143-word dictionary, everything except the six
-  Phase 65 graphics words) is fully usable today**, via the ROM slot —
-  it's a plain 16K Home ROM replacement, exactly what
-  `build/forth_boot_rom0.bin` already is. No LROS, no DOCK cartridge,
-  no new file needed.
-- **The graphics extension (`RECT`/`POLYGON`/`POLYGON-FILL`/
-  `SPRITE-DEFINE`/`SPRITE-SHOW`/`SPRITE-HIDE`) cannot currently reach a
-  real TS-Pico.** This project's own graphics dispatch pages the
-  **EXROM** bank (chunk 5) — a bank TS-Pico has no way to substitute.
-  Making these six words work on TS-Pico would need the graphics code
-  retargeted to run from the **DOCK** bank instead, which is real,
-  unstarted follow-up work, not a docs gap.
-- **The experimental LROS/DOCK boot stub (`rom/forth_lros.asm`,
-  `docs/lros_cartridge.md`) is a DOCK-slot payload**, loadable in
-  principle via `LOAD "tpi:forth_lros.dck"` — its file *format* is now
-  confirmed to match what TS-Pico's firmware actually parses (the same
-  9-byte header, chunk-by-chunk), which was an open question before
-  this research. What's still unconfirmed is everything past the file
-  format: real hardware handoff behavior, and TS-Pico's own DOCK-bank
-  timing/activation quirks — see `docs/lros_cartridge.md`'s own "Open
-  work" section, still open.
+Two independent ways to get the full base dictionary onto TS-Pico
+today, both using files this project already builds:
+
+- **ROM slot — replaces the Home ROM.** Plain 16K, exactly
+  `build/forth_boot_rom0.bin`. Simplest, but it's a real replacement
+  (Flash slots 0/1 are write-protected as a safety default, and a bad
+  switch can hang the machine mid-boot — see "Loading the base
+  product" below).
+- **DCK slot — a DOCK cartridge, non-destructive.** `make
+  forth-boot-cart` (from PR #1) builds `build/forth_boot.dck`: the
+  same full 143-word dictionary, but as an LROS/DOCK cartridge that
+  leaves the stock ROM untouched — the machine boots normally and
+  hands off to it, the same mechanism real Timex Logo/Pascal cartridges
+  would have used. This is confirmed booting under both Fuse and stock
+  ZEsarUX with the genuine factory ROM (see `docs/lros_cartridge.md`);
+  the file format is confirmed structurally compatible with TS-Pico's
+  own DCK parser, but TS-Pico hardware itself hasn't been tried yet —
+  see "Loading the full dictionary as a DOCK cartridge" below.
+
+Either way, **the graphics extension
+(`RECT`/`POLYGON`/`POLYGON-FILL`/`SPRITE-DEFINE`/`SPRITE-SHOW`/`SPRITE-HIDE`)
+cannot currently reach a real TS-Pico.** This project's own graphics
+dispatch pages the **EXROM** bank (chunk 5) — a bank TS-Pico has no way
+to substitute, regardless of which slot the rest of the dictionary uses.
+Making these six words work on TS-Pico would need the graphics code
+retargeted to run from the **DOCK** bank instead, which is real,
+unstarted follow-up work, not a docs gap.
 
 ## Why not LROS for everything
 
@@ -86,25 +92,32 @@ TS-Pico's own documentation notes the ROM can occasionally hang the
 machine mid-switch, with an automatic fallback to the stock ROM on the
 next boot if that happens — a TS Reset (or power cycle) recovers.
 
-## Loading the experimental LROS/DOCK stub
+## Loading the full dictionary as a DOCK cartridge
 
 ```sh
-make forth-lros
-tools/pack_dck.sh build/forth_lros_chunk0.bin build/forth_lros.dck
+make forth-boot-cart
 ```
 
-1. Copy `build/forth_lros.dck` to the SD card.
-2. `LOAD "tpi:forth_lros.dck"`, then follow the prompts (SRAM/Flash,
+This builds `build/forth_boot.dck` — the complete 143-word dictionary
+as an LROS/DOCK cartridge, non-destructive to the stock ROM. Confirmed
+booting to a live Forth prompt under Fuse and stock ZEsarUX with the
+genuine factory TS2068 ROM (see `docs/lros_cartridge.md`) — TS-Pico
+hardware itself is the one thing this hasn't been tried against yet.
+
+1. Copy `build/forth_boot.dck` to the SD card.
+2. `LOAD "tpi:forth_boot.dck"`, then follow the prompts (SRAM/Flash,
    slot) or `SAVE "tpi:memdock" CODE mem,slot` afterward (`mem` 1=SRAM,
    2=Flash, `slot` an even number 0-14).
 3. Per TS-Pico's own documentation, some cartridges activate
    automatically, some need `OUT 244,3`, and some need a physical
    reset — this project has not yet confirmed which applies to
-   `forth_lros.dck` on real hardware.
+   `forth_boot.dck` on real hardware.
 
-Remember this is the **border-cycle smoke-test stub**, not the full
-Forth dictionary — see `docs/lros_cartridge.md` for what it actually
-proves and what's still open.
+The earlier experimental boot stub (`rom/forth_lros.asm`,
+`build/forth_lros.dck`) is now superseded by this — same mechanism, but
+a border-cycle smoke test instead of the real dictionary. See
+`docs/lros_cartridge.md` for why it's kept around (mainly as header-
+format reference) and what's still open about real-hardware handoff.
 
 ## Sources
 
