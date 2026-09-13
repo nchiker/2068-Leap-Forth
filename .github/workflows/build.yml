@@ -7,8 +7,10 @@
 #   2. `make check` and `make all`: every smoke ROM has to assemble
 #      cleanly before anything ships. (These don't *run* the smoke ROMs
 #      -- that still needs Fuse and eyes -- they're a build gate.)
-#   3. `make dist`: the two product ROMs + docs as Markdown/PDF/DOCX,
-#      zipped into dist/2068-Forth-<version>.zip.
+#   3. `make dist`: the two product ROMs, their DOCK-cartridge (LROS)
+#      builds, the graphics EXROM and its EightyOne/TS-Pico .dck
+#      wrapping, the experimental LROS boot stub, and docs as
+#      Markdown/PDF/DOCX, zipped into dist/2068-Forth-<version>.zip.
 #   4. Publishes it:
 #        - every run:            as a workflow artifact (Actions tab).
 #        - every push to master: as the rolling "latest" pre-release, so

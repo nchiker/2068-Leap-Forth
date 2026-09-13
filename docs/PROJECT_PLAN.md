@@ -117,16 +117,107 @@ onward assumes a memory map that's actually this project's own:
    the file is safe to build against as-is (it's git history from a
    working project, not experimental) — just don't treat its untrimmed
    contents as this project's actual RAM map.
-3. Decide what happens to `kernel/memory/memory.asm`'s `MEM_LINE_*`/
-   `MEM_LABEL_*` routines: delete them from this project's copy once the
-   dictionary module (Phase 2) supersedes them, rather than letting dead
-   BASIC-program-model code sit next to the kernel indefinitely.
+3. **Done** (post-Phase-64, prompted by a direct "should we clean up
+   entirely-unused inherited kernel modules?" question): `kernel/
+   memory/memory.asm` deleted outright, along with its now-empty
+   directory. It was never `INCLUDE`d by any ROM in this project (Phase
+   2's dictionary module superseded it from the start — see "What was
+   deliberately left behind" above), and every remaining reference
+   anywhere in the tree was prose/comments, not code — confirmed by
+   grep before deleting, not assumed. `kernel/bank/bank.asm` was
+   considered for the same treatment and deliberately kept instead: it
+   is NOT dead weight the way `kernel/memory` was — it's explicitly
+   reserved for a real, documented future plan (Phase 8's own "Still
+   open" list: "a second dictionary segment in EXROM via the
+   already-proven `kernel/bank` trampoline, if the Home-resident
+   dictionary gets tight"). Currently unused by any ROM here too, but
+   for a different, deliberate reason — don't delete it on the same
+   reasoning that justified removing `kernel/memory`.
 4. Re-run `make check` after each trim and keep it clean (the one
    pre-existing `check_z80_opcodes.py` warning on `GFX_LINE`'s `.loop`
    displacement estimate is inherited unchanged from 2068-Leap itself,
    not introduced by this port — confirmed by running the same checker
    against 2068-Leap's own copy of the file; leave it alone unless that
    routine grows).
+
+**Item 2, full audit results (post-Phase-64, prompted by a direct "is
+there dead RAM now?" question after the Home ROM shrink pass below)**:
+item 2 itself remains undone (no `sysvars.inc` edit made), but it's now
+fully scoped with real evidence instead of the vague "~2,000 lines of
+BASIC-only sysvars" estimate above.
+
+`core/free.asm`'s own Phase 44 header already did HALF of this audit,
+for the `$C000-$FEFF` range only: it found that range full of "sprite
+capture buffers, and BASIC-only state this project never uses: label
+table, UDGs, DEF FN, the loadable-extension registry" — and instead of
+editing `sysvars.inc` (address-shift risk), it just raised
+`DICT_RAM_CEILING` to `$F000`, letting the dictionary grow straight
+through that dead space with zero risk and zero `sysvars.inc` changes.
+That fix already stands; nothing new needed there. (One small drift
+worth naming: that comment calls UDGs dead, which was true in Phase 44
+but stopped being true once Phase 62 added the real `UDG` word — a
+live example of exactly the staleness risk any RAM-map document runs,
+not a bug, just why this project always prefers re-deriving over
+trusting an old writeup.)
+
+This session extended the same method (grep every symbol against every
+caller in `core/`, the seven `kernel/*.asm` files `rom/forth_boot.asm`
+actually includes, and `rom/forth_boot.asm` itself) to the range Phase
+44 never covered: everything below `FORTH_DICT_RAM`'s `$9800` floor.
+Result: **485 dead bytes across 95 of 168 `DEFS`-reserved cells**,
+`$8000`-`~$8270`, confirmed zero references anywhere. They cluster
+cleanly by name into recognizable BASIC-only subsystems, all consistent
+with this file's own "what was deliberately left behind" list above:
+- A full-screen BASIC program editor's state (`LOOKUP_NAME_PTR`/
+  `ADD_POSITION`/`REMOVE_ENTRY_*`/`STORE_*`/`DELRANGE_*`/`TOKEN_BUF`/
+  `HILITE_*`/`ROW_SHADOW_POS`/`ROW_SHADOW_FLAGS`/`CHECK_ERROR_*`/
+  `GOTO_TARGET`) — matches 2068-Leap's own `rom/exrom_editor.asm`,
+  already documented above as deliberately not ported.
+- BASIC's `FOR`/`NEXT` loop stack (`FOR_STACK`, 56 bytes, plus
+  `FOR_TEMP_*`/`FOR_SCAN_*`) — this project uses `DO`/`LOOP` instead.
+- BASIC's array/scalar/string variable pool bookkeeping (`ARRAYS_END`/
+  `VARS_START`/`STR_FUNC_POOL_NEXT`).
+- The sprite-only cells found and their code removed earlier this
+  session (`SPRITE_BUF_PTR`/`_TOP_ROW`/`_TOP_COL`/`_W`/`_H`/
+  `_ROW_IDX`/`_COL_IDX`, plus `SPRITE_SLOT_DEFINED` — referenced only
+  by `kernel/memory/memory.asm`, which is never `INCLUDE`d by any ROM
+  in this project at all, so dead twice over) and `BANK_EXROM_DEPTH`
+  (matching `kernel/bank/bank.asm`, also never `INCLUDE`d anywhere).
+
+Separately, of 25 `EQU`-declared explicit-address buffer symbols in the
+same sysvars block, 21 are also dead — mostly `$E800`-`$F600`
+(`SPRITE_SLOT_IMG_BUF`/`_BG_BUF`, `STR_FUNC_POOL`, `DETOK_BUF`,
+`EDIT_LINE_BUF`, `LABEL_TABLE_TOP`, `PROG_AREA_MAX`, the whole
+`EXTENSION_*`/`EXT_SERVICE_*` loadable-module registry) — already
+covered by Phase 44's ceiling-raise fix above, so no new action needed
+there. Worth flagging as a real (if inert) hazard, not just waste:
+`SPRITE_SLOT_IMG_BUF` (`$E800`) and `SPRITE_SLOT_BG_BUF` (through
+`$F0FF`) both sit *inside* `core/loadtext.asm`'s real, live
+`LOADTEXT_BUF` (`$D000-$EFFF`) — nothing reads or writes through those
+stale labels today, so there's no actual corruption, but they'd
+mislead a future reader into thinking that range is sprite-reserved
+when it's actually live dictionary/text-workspace RAM.
+
+Risk check for item 2's own real hazard (a raw hex address literal
+somewhere bypassing a symbol name, which an address shift wouldn't
+trigger an assembler error for): grepped every `$8000-$8300` and
+`$E800-$F600` literal across `core/`, the seven included `kernel/`
+files, and `rom/forth_boot.asm` — all hits are either comments/prose or
+legitimate references to addresses already confirmed live
+(`DICT_RAM_CEILING`/`$F000`, `GFX_LINE_X0-Y1`/`$F3C4-$F3C7`,
+`LOADTEXT_BUF`'s own `$EFFF` end, `UDG_TABLE`/`$F180`). No hidden raw-
+address hazard found.
+
+**Why item 2 is being left undone rather than executed now**: unlike
+the `$C000-$FEFF` range, this `$8000-$9800` space isn't one contiguous
+dead block that a boundary move can reclaim for free — dead
+`sysvars.inc` cells are interspersed with `core/`'s own live
+"confirmed-idle gap" scratch cells (`EDIT_BUF`, the `FWRAP_*`/
+`RECALL_*`/`LOADTEXT_*` cells, etc.), so an actual trim means real
+`DEFS`-reordering edits carrying the address-shift risk item 2 itself
+already named, for a comparatively modest 485 bytes. Recorded here,
+fully scoped with real numbers, for whenever that tradeoff looks worth
+taking — not pursued this session.
 
 ## Phase 1 — design decisions to lock in early
 
@@ -3957,6 +4048,556 @@ it this phase's own five words plus `AY_WRITE` (unaffected by the
 code between files, not in or out of any given ROM's own build).
 `rom/forth_smoke_p52.asm` uses 16383 of 16384 bytes ($3FFF of $4000),
 1 byte free — confirmed identical to its own pre-Phase-63 baseline.
+
+## Phase 64 — LIST-DEFS, RECALL
+
+**Status: implemented, assembles clean across every affected ROM
+(`make check`/`make all`, 0 errors, 0 warnings across all 68+ targets),
+confirmed passing under real ZEsarUX — both this phase's own new smoke
+ROM AND `rom/forth_smoke_p52.asm`'s full LOAD-TEXT/Blackjack round trip,
+re-run after a real correctness bug this phase introduced and then
+caught (see "A real bug caught mid-phase" below).**
+
+Grew out of a design conversation, not a BASIC-gap audit like most
+earlier phases: the user asked how to fix a typo in a program AFTER
+pressing Enter on it. The honest finding: you can't, for anything typed
+live at the prompt — `core/editor.asm`'s `EDITOR_LOOP_LIVE` hands
+`EDIT_BUF` straight to `INTERPRET_RUN` and never keeps a copy, so the
+source is simply gone once compiled. `LOAD-TEXT`'d programs fare better
+only because `LOADTEXT_BUF` happens to stay resident after a load.
+
+Several heavier designs were considered and rejected in conversation
+before landing here — worth recording why, since they're the reason
+this phase's actual shape looks the way it does:
+- **A full-screen multi-row editor** (the `structured-basic-poc`
+  sibling project's own Phase 8 design, and the Spectrum 128K ROM's
+  own screen editor) was rejected as disproportionate to what 2068-Forth
+  actually needs: Forth's own `:`/`;` structure already gives a natural
+  recall unit without inventing line numbers or a persistent multi-row
+  viewport.
+- **In-place variable-length splice-on-edit** (replacing a definition's
+  old span with its corrected one, shifting everything after it) was
+  designed, costed (~100-150 bytes, the single most expensive and most
+  bug-prone piece of the whole feature), and then dropped in favor of
+  appending the corrected definition to the end of the workspace instead
+  — the same code path a freshly-typed line already uses. The honest
+  tradeoff, stated plainly rather than hidden: the workspace keeps the
+  old, superseded copy sitting in the middle after an edit; recalling
+  that name again shows both, oldest first, same "newest wins"
+  convention the dictionary itself already has. It slowly fills
+  `LOADTEXT_MAX_LEN` (8192 bytes) with stale copies over a long editing
+  session rather than staying compact.
+- **`FORGET`-and-replay the whole program on every edit** (redefine by
+  wiping back to the program's own start and re-running the corrected
+  buffer from scratch) was designed and then rejected outright, not just
+  costed: `FORGET` erases a word *and everything defined after it* — no
+  way to remove just one definition from the middle — so replaying the
+  whole buffer on every edit would also reset every `VARIABLE`/
+  `CONSTANT` back to its as-defined value and re-run any top-level side
+  effects (a `RANDOMIZE`, a game-start loop) the program has. Fixing a
+  typo isn't supposed to also reset your score. Ordinary Forth
+  redefinition — the corrected word simply shadows the old one, same as
+  retyping it live already does — avoids all of that, at the cost of a
+  documented, standard Forth limitation: a word already compiled to call
+  the OLD version doesn't automatically pick up the fix; it needs
+  redefining too.
+
+**What got built**, all in `core/recall.asm` (new file, chained after
+`core/loadtext.asm`, before `core/editor.asm`):
+- `WORKSPACE_APPEND` — appends bytes to the persistent workspace
+  (`core/loadtext.asm`'s own `LOADTEXT_BUF`), inserting exactly one
+  separating space when the workspace is non-empty (so
+  `INTERPRET_RUN`'s own single-space delimiter, per `core/interp.asm`'s
+  own header, doesn't glue two entries' tokens together), and silently
+  refusing to overflow the buffer rather than corrupting dictionary RAM
+  above it.
+- `SCAN_DEFS` — a single-pass byte scanner finding every top-level
+  `":"`..`";"` span in the workspace (Forth doesn't nest colon
+  definitions, so no depth tracking is needed), populating a 16-entry
+  `DEF_TABLE` (offset + length per entry).
+- `LIST-DEFS ( -- )` — re-scans, then prints each entry's index and a
+  20-character source preview.
+- `RECALL ( n -- )` — re-scans, copies entry `n`'s full span into
+  `EDIT_BUF`, and sets a new `RECALL_PENDING` flag.
+- `core/editor.asm`'s `EDITOR_LOOP_LIVE` updated in two places, both
+  gated behind `IFDEF CORE_RECALL_ASM` (see "A real bug caught
+  mid-phase" below on why gating, not an unconditional change, was
+  necessary): it now appends every committed line to the workspace
+  BEFORE running it (so live typing is recoverable the same way a
+  loaded program already was), and it checks `RECALL_PENDING` before its
+  own usual "clear the line for a fresh prompt" reset — otherwise
+  `RECALL`'s own line finishing would immediately wipe out what it just
+  recalled.
+- `core/loadtext.asm`'s `W_LOADTEXT` updated to set `WORKSPACE_END` (a
+  new cell tracking the append cursor) to `LOADTEXT_BUF + DE` after a
+  successful load, gated behind a `TRACK_WORKSPACE_END` flag `rom/
+  forth_boot.asm` DEFINEs right before its own `INCLUDE` of that file —
+  see below on why this had to be opt-in, not automatic.
+
+**ROM budget, measured not estimated**: the feature was scoped, before
+writing any code, against `rom/forth_boot.asm`'s real free space at the
+time (632 bytes, `$3D88` of `$4000`) rather than assumed. First
+implementation landed at 485 bytes (147 free) — well over the ~270-400
+initial estimate. A dedup pass (factoring `SCAN_DEFS`'s three identical
+inline "reached the end of the workspace?" checks into one `AT_END`
+subroutine, and `LIST-DEFS`/`RECALL`'s identical `DEF_TABLE` index
+arithmetic into one `GET_DEF_SPAN` subroutine — reuse over cleverness,
+consistent with `z80-skills:shrink-z80`'s own SAFE-attack-order
+guidance) recovered 17 bytes. Final: 447 bytes used, 163 bytes free
+(`rom/forth_boot.asm` at `$3F5D` of `$4000`) after also converting one
+checker-flagged `jr` (real displacement +126, 1 byte under the +-127
+limit) to `jp`, same practice Phase 62 already established for
+exactly this situation.
+
+**A real bug caught mid-phase, worth recording**: the first working
+version added `W_LOADTEXT`'s `WORKSPACE_END`-tracking code
+UNCONDITIONALLY to `core/loadtext.asm`, which broke two things
+simultaneously, both caught by actually running `make all`/`make check`
+rather than trusting a clean `forth-boot` build alone:
+1. `rom/forth_smoke_p52.asm` (already at 1 byte free, per its own
+   Phase-63 baseline above) overflowed by 5 bytes — it includes
+   `core/loadtext.asm` but not `core/recall.asm`, so it was paying for
+   bookkeeping nothing there ever reads. Fixed by gating the addition
+   behind `TRACK_WORKSPACE_END`, DEFINEd only by `rom/forth_boot.asm`.
+2. While writing that gate, `ld hl, LOADTEXT_BUF` — `INTERPRET_RUN`'s
+   own required source-address argument, needed on EVERY successful
+   `LOAD-TEXT` regardless of whether workspace-tracking is enabled — got
+   pulled inside the `IFDEF TRACK_WORKSPACE_END` block along with the
+   tracking code it was adjacent to. That would have left every ROM
+   WITHOUT `TRACK_WORKSPACE_END` defined (`rom/forth_smoke_p52.asm`
+   included) calling `INTERPRET_RUN` with a stale/wrong `HL` on every
+   `LOAD-TEXT` — silently breaking the exact mechanism `rom/
+   forth_smoke_p52.asm`'s own checkpoint 2 exists to prove (loading and
+   running the full ~60-word Blackjack game from tape). Caught two ways:
+   the freed-byte count came back 3 bytes higher than the gate alone
+   should have produced (a real accounting mismatch, not just "it
+   compiles"), AND by actually re-running `rom/forth_smoke_p52.asm`
+   under real ZEsarUX afterward rather than trusting a clean assemble —
+   border settled to green (`04`) only after `ld hl, LOADTEXT_BUF` was
+   moved back out of the gated block to run unconditionally. Two
+   separate, real, independently-corroborating checks catching the same
+   bug — assembling clean is not the same as being correct, the same
+   lesson `docs/PROJECT_PLAN.md`'s own dictionary-orphaning bug history
+   already established for this project.
+
+**Smoke ROM**: `rom/forth_smoke_p64.asm`, six checkpoints, deliberately
+NOT including `core/loadtext.asm` or `core/editor.asm` (redeclares their
+few needed constants as the same literal values instead, confirmed by
+direct comparison) to avoid pulling in `kernel/storage`'s own fake-tape
+harness and `core/editor.asm`'s live-keyboard dependencies for a test
+that needs neither: `SCAN_DEFS` finds the right spans over a hand-
+indexed two-definition test payload, `GET_DEF_SPAN` reports each span's
+offset/length correctly, `RECALL` copies a span into `EDIT_BUF` and sets
+`EDIT_LEN`/`EDIT_CURSOR`/`RECALL_PENDING` correctly, an out-of-range
+`RECALL` is a confirmed no-op, and `WORKSPACE_APPEND` inserts exactly
+one separator between two appends starting from empty. Confirmed PASS
+(border green, `04`) via real ZEsarUX over ZRCP (`get-io-ports`, "Spectrum
+FE port"), not just a clean assemble.
+
+**The honest gaps, stated plainly, same class as `EDITOR_LOOP_LIVE`'s
+own existing one**: `LIST-DEFS`'s actual screen output (via `PRINT_UDEC16`
+and `W_EMIT`) is reviewed by eye under the real `rom/forth_boot.asm`
+build, not covered by an automated checkpoint — it's text on a screen,
+not a boolean condition, the same gap class as `rom/
+mode64_visual_check.asm`. `EDITOR_LOOP_LIVE`'s own append-on-commit and
+`RECALL_PENDING` handling can't be automated either, for the same
+reason `EDITOR_LOOP_LIVE` itself never has been (needs a live or
+injected keyboard). A definition longer than `EDIT_MAX_LEN` (128 bytes)
+cannot be `RECALL`ed — reported by simply doing nothing, not truncated.
+`DEF_TABLE`'s own 16-entry cap means `LIST-DEFS`/`RECALL` only see the
+first 16 definitions found in a session, oldest first.
+
+## Post-Phase-64 ROM shrink pass
+
+Prompted directly by a question after Phase 64 landed at 163 bytes free
+("any other actions we should take to shrink the HOME ROM?"). Preflight
+(`z80-skills:shrink-z80`, computed from `rom/forth_boot.lst`'s own file
+boundaries, not estimated): `kernel/graphics/graphics.asm` is the single
+biggest module at 2805 bytes (17% of the whole ROM), followed by
+`core/editor.asm` (1109), `core/storage.asm` (974). Two real,
+independently-verified wins, in the order actually pursued:
+
+**1. Dead sprite code removed from `kernel/graphics/graphics.asm`
+(234 bytes; measured 247 free-byte recovery, 163 -> 410).** A full
+inventory of every top-level routine in the seven `kernel/` modules
+`rom/forth_boot.asm` actually includes (100 routines checked against
+every caller in `core/` and `rom/forth_boot.asm` itself) found one
+genuinely dead cluster: `GFX_SPRITE_BOUNDS_CHECK`/`_CELL_ROWCOL`/
+`_CAPTURE`/`_DRAW` plus their own private `GFX_CELL_BITMAP_ADDR` helper
+— a save/restore sprite pair with no Forth word exposing it anywhere
+(confirmed: zero mentions of "sprite" in `docs/forth_tutorial.md` or
+`README.md`). `GFX_SPRITE_INVALIDATE`, despite the similar name, is
+NOT dead — it's called from three other places in the same file
+(screen-clear/scroll paths) and was left alone. `kernel/graphics.asm`
+is explicitly documented elsewhere in this file as staying "exactly as
+inherited" (the Phase 8/mode64 section) — removing provably-unreachable
+code was treated as a deliberate, explicit one-off exception to that
+policy, not a precedent for further edits, and confirmed with the user
+before touching the file. The sprite-only RAM cells in
+`include/sysvars.inc` (`SPRITE_TOP_ROW`/`_TOP_COL`/`_W`/`_H`/
+`_ROW_IDX`/`_COL_IDX`/`_BUF_PTR`) were deliberately left alone — they're
+`DEFS` (RAM reservations above the 16K ROM boundary, zero ROM-byte
+cost either way) in a file whose own trim is already a separate,
+still-open Phase 0 task with real address-shift risk this pass didn't
+take on. Verified beyond a clean assemble: `rom/forth_smoke_p5.asm`
+(PLOT/LINE/CIRCLE pixel-readback, the routines most likely to have
+depended on anything nearby) confirmed passing (border green) under
+real ZEsarUX, and `rom/forth_boot.asm` itself confirmed booting to its
+real banner via a real ZEsarUX `save-screen` screenshot, not just an
+assumption that a clean build meant a working ROM.
+
+Two entire kernel modules, `kernel/bank/bank.asm` and `kernel/memory/
+memory.asm`, were never `INCLUDE`d by any ROM in this project — zero
+ROM-byte cost either way since neither was ever compiled in, but 100%
+dead source relative to 2068-Forth at the time this pass found them.
+`kernel/memory/memory.asm`'s `MEM_LINE_*`/`MEM_LABEL_*` routines were
+already flagged for deletion back in Phase 0 item 3 ("delete them...
+rather than letting dead BASIC-program-model code sit next to the
+kernel indefinitely") — recorded here as still-open at the time, then
+actually deleted in a later follow-up pass (see Phase 0's own item 3
+for the final writeup). `kernel/bank/bank.asm` was deliberately kept,
+not deleted alongside it — see that same follow-up for why (a real,
+documented future plan, not dead weight for the same reason).
+
+**2. `WRAP_CALC`/`WRAP_CALC64` merged into two thin entry stubs sharing
+one body (111 bytes; measured free-byte recovery, 410 -> 521).** The
+two routines were byte-for-byte identical except for their column-width
+constants (32 vs 64) — a real, evidence-confirmed duplication (`diff`
+of the two routines' bodies showed nothing else differed). `core/
+editor.asm`'s own header for `WRAP_CALC64` explicitly documented this
+as A DELIBERATE DECISION, citing `kernel/graphics.asm`'s own
+`GFX_SET_ATTR_EXT` precedent (a full sibling beats parameterizing a
+tested routine, because changing an existing routine's calling contract
+risks every existing call site for a small saving) — that precedent was
+read in full before touching anything, and its actual concern (don't
+force every CALLER to change) doesn't apply to a refactor that leaves
+both entry points, names, and calling conventions completely untouched
+and only merges the internal duplicate body. A new 1-byte scratch cell,
+`FWRAP_WIDTH_MINUS1` ($88F7, in the same confirmed-idle gap as
+`core/recall.asm`'s own `RECALL_PENDING` at $88F6), holds 31 or 63,
+set by each entry stub before falling into the shared `WRAP_CALC_SHARED`
+body via `jp` (not `jr` — no range assumptions made). Every
+width-dependent immediate inside the shared body became a memory read
+instead, real overhead paid once instead of not at all in two separate
+copies — net-positive confirmed by the actual measured byte count, not
+assumed from the size of the removed duplication alone. Verified with
+the two smoke ROMs that exist specifically for this: `rom/
+forth_smoke_p33.asm` (`WRAP_CALC`'s own four checkpoints — word-boundary
+wrap, hard-break wrap, exact capacity cap, overflow rejection, each
+value hand-derived by an independent Python simulation before any Z80
+was written) and `rom/forth_smoke_p58.asm` (the same four checkpoints
+for `WRAP_CALC64`), both confirmed passing (border green) under real
+ZEsarUX after the refactor, plus a final real-ZEsarUX boot-screenshot
+re-confirmation of `rom/forth_boot.asm` itself.
+
+**Net result: `rom/forth_boot.asm` at $3DF7 of $4000, 521 bytes free**
+(up from 163 before this pass), `make check`/`make all` clean across
+every target both before and after each individual change, not just at
+the end.
+
+**Left alone, evidence-based, not pursued this pass**:
+`kernel/graphics/graphics.asm` (2805 bytes, by far the single biggest
+module) — inherited, hardware-proven, shared with the sibling
+`ts2068rom` project; touching it further for size reasons trades
+shared-project risk against a benefit local to this ROM only, and the
+one clear dead-code win it contained is already taken. `EDITOR_REDRAW`/
+`EDITOR_REDRAW64` (~410 bytes combined) — the same duplication pattern
+as `WRAP_CALC`/`WRAP_CALC64`, flagged as a real candidate but not
+pursued this pass; it's the live REPL's own core screen-rendering path,
+a bigger and riskier refactor than `WRAP_CALC` was.
+
+## Phase 65 — EXROM chunk-5 graphics subsystem (RECT, POLYGON,
+POLYGON-FILL, SPRITE-DEFINE/SHOW/HIDE)
+
+**Status: implemented, assembles clean across every affected ROM
+(`make check`/`make all`, 0 errors, 0 warnings), all six new/touched
+smoke ROMs (`test-exrom-isolation`, `test-rect`, `test-polygon`,
+`test-sprite`, `test-poly-fill`, plus re-verification of each earlier
+one after every later change in this same phase) confirmed passing
+(border green) under real ZEsarUX.**
+
+Grew out of the same libgpx comparison that produced the `GFX_FILL`
+scanline rewrite above: the user asked for a second, physically real 8K
+ROM bank via the TS2068's EXROM socket, to house new graphics words the
+16K Home ROM no longer had room for on its own (309 bytes free by the
+time this phase started, after the dead-code sweep above) — Rectangle
+Fill, Polygon draw/fill, and Sprites, modeled on the sibling
+`structured-basic-poc` project's own already-proven EXROM pattern.
+
+**Chunk choice, audited not assumed.** The user's own first request
+named chunk 4, "like `structured-basic-poc`'s own EXROM" — checked
+directly rather than taken at face value, and both halves of that
+premise turned out to be wrong: `structured-basic-poc` actually uses
+chunk 1, and chunk 4 in THIS project holds the live Forth/float stacks
+($8000-$9FFF), fatal to page out mid-word. Surfaced to the user rather
+than silently substituted. `kernel/bank/bank.asm` itself was inherited
+from 2068-Leap targeting chunk 6 — hardware-confirmed there, but never
+actually wired into any 2068-Forth ROM (zero callers anywhere in this
+repo before this phase) — and this project's own dictionary ceiling was
+later raised into chunk 6 territory (Phase 44), with `LOADTEXT_BUF`
+(Phase 52) living there too, so the old proof doesn't transfer. When the
+user pushed back directly ("why not use chunk 5?"), a full chunk-by-
+chunk audit (all 8 chunks, pros/cons/show-stoppers) confirmed chunk 5 is
+the one chunk NOTHING in this project's own memory map claims at all —
+not either CPU stack (chunk 4), not video RAM (chunks 2-3), not the
+machine stack (chunk 7), nothing `KBD_ISR_TICK` touches. `kernel/bank/
+bank.asm` retargeted there: a one-bit change to the paging port write
+(`PORT_BANK_HOME`, bit 5 instead of bit 6) and the call target ($A000
+instead of $C000); the trampoline mechanics themselves are unchanged and
+chunk-agnostic. An initial overreaction — treating the Phase-44
+dictionary-ceiling conflict as severe enough to abandon chunk 6 outright
+— was self-corrected before the user had to: EXROM paging is real
+hardware bank-switching, not a RAM-address collision the way `FILL`'s
+old scratch problem was, so the underlying RAM is only briefly made
+invisible, never actually touched, while paged out.
+
+Fresh proof, not assumed continuity from 2068-Leap's own chunk-6 test:
+`rom/test_exrom_isolation.asm` confirms chunk-5 paging under real
+ZEsarUX with four checkpoints — plain RAM works before any paging is
+involved; `BANK_PAGE_EXROM_IN` then reads back a real EXROM marker byte
+($A5, from a placeholder image built with `tools/make_exrom_
+placeholder.sh`'s cousin at $A5 instead of $FF, chosen so it can't be
+mistaken for either RAM's own $00 power-on-adjacent contents or this
+project's other $FF placeholders); chunk 6 stays plain RAM throughout
+(control check, proving the paging is chunk-5-specific, not
+accidentally wider); and `BANK_PAGE_EXROM_OUT` restores the exact
+original byte, proving paging is non-destructive. `BANK_EXROM_DEPTH`
+also confirmed back at 0. This test ROM only re-runs cleanly against
+that specific $A5 placeholder image, not the real `graphics_exrom.bin`
+built later in this phase — expected, not a regression (its own
+checkpoint 2 legitimately reads whatever byte the real EXROM's own
+first byte happens to be, not $A5).
+
+**`rom/graphics_exrom.asm`**: the EXROM payload itself, `ORG $A000`, a
+standalone 8K image assembled completely separately from `rom/
+forth_boot.asm` with no visibility into that build. A fixed,
+append-only 8-slot service table (`GRAPHICS_EXROM_MAX_SLOTS`), each slot
+a 3-byte `JP`, followed by a magic byte ($F0) + ABI version (1) pair a
+Home-side caller must verify before trusting any slot — modeled
+directly on `structured-basic-poc`'s own proven `EXROM_ABI` pattern.
+Two real bugs were caught building this table, both from the same root
+cause (a computed offset that moved underneath an already-shipped
+caller): naively appending POLYGON's own slot right after RECT's shifted
+the magic/ABI trailer, silently breaking `core/rectfill.asm`'s already-
+hardcoded read of that offset — fixed by reserving the full 8 slots
+upfront, so appending a new service moves nothing that already exists.
+A second, related bug survived that fix: the fixed-offset formula
+(`$A000 + 8*3`) still forgot `GRAPHICS_EXROM_UNIMPLEMENTED`'s own 1-byte
+`RET` sitting between the table and the trailer — caught only by
+actually re-running the RECT and POLYGON smoke ROMs under real ZEsarUX
+after the table-sizing fix (border showed checkpoint-1 fail, not
+green), not by re-deriving the arithmetic by eye a second time. Fixed by
+computing `GRAPHICS_EXROM_MAGIC_ADDR` from the table size instead of a
+hand-typed literal, so the two separately-assembled files can't drift
+apart on this again. EXROM-resident code calls back into Home through
+`GRAPHICS_HOME_TABLE`, a small table of fixed `JP` veneers at $0100 in
+`rom/forth_boot.asm` (mirroring 2068-Leap's own inherited
+`EXT_SERVICE_TABLE` shape) — real Home routine addresses move every time
+the dictionary changes, and this file has no visibility into that
+build, so a stable low fixed address is the fix, not a hardcoded
+snapshot. Grew from 3 veneers (`GFX_WRITE_PIXEL`/`GFX_SET_ATTR`/
+`GFX_LINE`) to 5 (adding `GFX_ROW_BASE_ADDR`/`GFX_CELL_ATTR_ADDR` for
+sprite transfers) over the phase.
+
+**RECT ( x0 y0 x1 y1 -- )** (service slot 0, `core/rectfill.asm`): the
+Home-side word pages chunk 5 in, checks the magic/ABI pair, dispatches,
+pages back out; a mismatch silently does nothing, the same convention
+`SOUND`/`STICK`/`FILL`'s own 64-column guard already established.
+`RECT_FILL_IMPL` normalizes the corners itself. Confirmed under real
+ZEsarUX two ways: `rom/test_rect.asm` with corners given both sorted and
+deliberately backwards (proving normalization actually runs, not just
+the seed corner), and separately, the same Home image against a
+deliberately wrong/blank EXROM image correctly refusing to draw at all
+— the magic/ABI gate is real, not decorative. 444 → 309 bytes free in
+the Home ROM (RECT's own bulk logic lives entirely in the separate 8K
+EXROM image).
+
+**POLYGON ( x1 y1 ... xn yn n -- )** (service slot 1, `core/
+polygon.asm`): draws the closed outline through 3-12 given vertices, one
+`GFX_LINE` per edge via the new `GRAPHICS_HOME_LINE` veneer, the last
+edge wrapping back to the first vertex to close the shape. `n` is
+validated BEFORE any vertex is popped — an out-of-range `n` means this
+word has no reliable way to know how many stack cells were meant for it,
+so it refuses immediately rather than guessing (the two service-table
+offset bugs above were both found and fixed during this step — see
+above). Confirmed under real ZEsarUX: a right triangle whose three edges
+are each independently checkable (a horizontal top edge, a vertical left
+edge, and a perfect 45-degree diagonal CLOSING edge — proving the
+closing edge specifically drew, not just the two "forward" ones), and
+`n=2` (below the 3-vertex minimum) correctly draws nothing. 309 → 198
+bytes free.
+
+**SPRITE-DEFINE/SHOW/HIDE ( slot row col -- ) / ( slot row col -- ) /
+( slot -- )** (service slots 2-4, `core/sprite.asm`): four 16x16-pixel
+sprite slots, rounding out the three graphics features scoped at the
+start of this phase. The user gave explicit permission to freely reuse
+or delete the inherited-but-unused 2068-Leap sprite scaffolding
+(`kernel/graphics`'s own `GFX_SPRITE_CAPTURE`/`_DRAW` scratch, and
+BASIC-only `GRAB`/`SHOW`/`HIDE` slot metadata plus 2304 bytes of image/
+background buffers) once confirmed no ROM in this project ever called
+any of it — deleted outright rather than reused as-is or relocated
+around the Phase-44 dictionary-ceiling conflict. Rebuilt fresh and much
+smaller: 4 slots (not 8), 16x16 pixels fixed (not variable up to
+32x32), 36 bytes/slot (not 144) — direct byte-for-byte per-cell copies
+(8 bitmap scanlines + 1 attribute byte) rather than a per-pixel OR/AND
+loop, since `GFX_WRITE_PIXEL`'s OR-only "set" semantics have no way to
+explicitly clear a single pixel, which `SPRITE-HIDE`'s exact restore
+needs and a masked/transparent blit would not have provided. Caught two
+real bugs before/while shipping: all three EXROM smoke ROMs written so
+far in this phase had set `DICT_CHAIN_POINT DEFL H_BORDER` after
+`core/ts2068.asm`, but `H_CLS` is defined AFTER `H_BORDER` in that file
+(confirmed `rom/forth_boot.asm` itself was already correct, using
+`H_CLS`) — silently orphaning `CLS` from the `FIND`-able chain in all
+three test ROMs, latent and harmless in the first two (neither ever
+typed `CLS`) until `rom/test_sprite.asm`'s own checkpoint 1 surfaced it
+immediately as an unknown-word failure; fixed in all three files, and
+flagged as a bug class to watch for specifically (it recurred once more
+later in this same phase — see POLYGON-FILL below). Also caught, before
+ever assembling: `SPRITE_MUL_A_HL`'s own zero-multiplier early return
+left `HL` holding the un-multiplied input instead of 0. Confirmed under
+real ZEsarUX, all four checkpoints: capture/clear/show-elsewhere,
+hide-restores-exactly, a second `SHOW` while already shown correctly
+refuses (verified via a follow-up `HIDE`, since checking the pixel right
+after the second `SHOW` alone can't distinguish "refused" from "ran
+again" — both leave it SET either way), and `HIDE` on a never-defined
+slot refuses without disturbing a different slot's own still-shown
+sprite. 198 → 49 bytes free — a razor-thin margin, flagged in the
+commit as worth keeping in mind for anything added to Home directly
+(as opposed to EXROM) next.
+
+**Trampoline deduplication.** With the Home ROM down to 49 bytes free,
+a real duplication finally mattered enough to fix: `core/rectfill.asm`'s
+`EXROM_CALL_RECT_FILL`, `core/polygon.asm`'s `EXROM_CALL_POLY_DRAW`, and
+`core/sprite.asm`'s `EXROM_CALL_SPRITE` all did the exact same thing —
+page chunk 5 in, verify the magic/ABI pair, call a slot address, page
+back out — differing only in which slot they called (95 bytes of
+near-identical code across three copies). Consolidated into `core/
+rectfill.asm`'s own `EXROM_CALL_SLOT` (the most general of the three
+shapes — takes the slot address in `HL`, already what `core/sprite.asm`'s
+own version did) plus `CALL_HL` (moved from `core/polygon.asm`). Every
+call site now just loads `HL` with its own slot address and calls the
+one shared routine. Re-confirmed RECT, POLYGON, and SPRITE-DEFINE/SHOW/
+HIDE all still pass under real ZEsarUX after the merge — this touches
+every graphics word shipped so far in this phase at once, so
+re-verifying was the whole point of doing it before building anything
+further on top. 49 → 106 bytes free.
+
+**POLYGON-FILL ( x1 y1 ... xn yn n -- )** (service slot 5, added after
+the user asked directly for it once the trampoline dedup above was
+done): fills a polygon's interior using the even-odd rule via an
+active-edge scanline algorithm — build a table of the polygon's own
+non-horizontal edges (skipping horizontal ones, which contribute no
+crossings), then for each scanline from `YMIN` to `YMAX-1` (half-open),
+collect every active edge's current x as a crossing, sort the
+crossings, and fill the spans between each pair (1st-2nd, 3rd-4th, ...).
+Multiply/divide (`x0+(y-y0)*(x1-x0)/(y1-y0)`) was considered and
+rejected before writing any code — the product can reach ~48700,
+overflowing `MATH_MULTIPLY16`'s signed 16-bit result for this
+coordinate range — in favor of Bresenham y-major incremental x-
+stepping, one step per scanline per edge. The error accumulator is 2
+bytes/edge, not 1: checked the real worst case (dy up to 191, dx up to
+255) before writing any Z80 and found it can reach 446 before
+normalization, overflowing an 8-bit field. Verified in Python against an
+exact (real-number) even-odd reference across 6 shapes before any Z80
+was written: convex shapes with integer-ratio edges (right triangle,
+axis-aligned square) matched exactly; concave shapes with non-integer-
+ratio edges showed ~3% single-pixel boundary mismatches, root-caused to
+Bresenham's own inconsistent per-row rounding (floor some rows, nearest
+on others) rather than a structural bug, and accepted as the same class
+of approximation `GFX_LINE`/`GFX_CIRCLE` already carry throughout this
+project (a separate flood-fill-plus-Bresenham-line reference model was
+also tried and found to have its own, unrelated flaw — a 4-connected
+flood fill can leak through a diagonal single-pixel gap in a
+Bresenham-drawn boundary line, a real property of that combination this
+project's own `FILL` already has, but not a defect in this algorithm,
+which computes crossings algebraically and was never exposed to it —
+abandoned in favor of the exact-math reference). The same orphaned-word
+dictionary-chain bug caught once already this phase recurred here:
+`DICT_CHAIN_POINT DEFL H_POLYGON` needed to become `H_POLYGONFILL` in
+both `rom/forth_boot.asm` and `rom/test_sprite.asm` after `core/
+polygon.asm` was refactored to add the new word (`POLY_POP_VERTICES`
+extracted as a subroutine shared by `POLYGON` and `POLYGON-FILL`, since
+both need identical stack-argument validation).
+
+**A real bug found and fixed via real hardware, not just a clean
+assemble**: the first real ZEsarUX run of the concave-chevron smoke test
+showed the shape rendering as jagged horizontal stripes running off the
+edge of the canvas, not the clean arrow shape the Python reference
+predicted — the right-triangle checkpoint (convex, no edge ever needs
+more than a clean 2-per-row step) had already passed, masking the bug
+until a concave shape exercised it. Root-caused with a temporary, not-
+preserved in-ROM debug log (writing each row's own `(Y, NCROSS,
+crossings[0], crossings[1])` into an idle scratch buffer,
+`BLOCK_GFX_SCRATCH`/`SPRITE_SLOT_IMG_BUF`, then reading it back after a
+full run via ZEsarUX's own `read-memory` ZRCP command) rather than
+guesswork: the per-edge Bresenham x-stepper's stopping condition
+compared `2*err` against `dy` using an UNSIGNED `SBC HL,BC`/carry check,
+but `err` legitimately goes negative whenever `dx` isn't an exact
+multiple of `dy` (the normal case) — a negative two's-complement 16-bit
+value looks like a huge unsigned number to that comparison, so the loop
+kept stepping far past where it should and wrapped `x` around. Fixed by
+testing the sign bit of `2*err` first (`bit 7,h`): a negative `2*err`
+can never be `>= dy` since `dy` is always positive, so a negative sign
+means stop, checked before the unsigned compare ever runs. Re-verified
+in Python first (the corrected model produces a clean, monotonic x
+sequence for the exact edge that previously ran away), then in the real
+Z80 under ZEsarUX — the chevron now renders as the correct arrow shape,
+matching the Python reference exactly. Confirmed via `rom/
+test_poly_fill.asm`'s own two checkpoints (a right triangle and the
+concave chevron, using ground-truth interior/exterior points confirmed
+against the exact-math reference), and RECT/POLYGON/SPRITE-DEFINE/SHOW/
+HIDE re-confirmed still passing after the `core/polygon.asm` refactor
+that added `POLY_POP_VERTICES`. Home ROM cost was minimal — the bug and
+its fix both live entirely inside `rom/graphics_exrom.asm`, which
+doesn't compete for the Home ROM budget at all; the small Home-side
+addition (the `POLYGON-FILL` dictionary word itself) took 106 → 66 bytes
+free.
+
+**Net result**: 16K Home ROM at 66 bytes free (down from 521 at the end
+of the ROM-shrink pass above, entirely from this phase's own five new
+graphics words plus their shared trampoline — RECT's/POLYGON's/POLYGON-
+FILL's own bulk logic lives in the separate 8K EXROM image instead, not
+competing for this budget), five working EXROM graphics services
+(`RECT`, `POLYGON`, `POLYGON-FILL`, `SPRITE-DEFINE`, `SPRITE-SHOW`,
+`SPRITE-HIDE` — six words, five service slots since `SPRITE-DEFINE`/
+`SHOW`/`HIDE` share slots 2-4), `make check`/`make all` clean across
+every target both before and after each individual change in this
+phase, not just at the end.
+
+**Follow-up, done in a later pass**: `.github/workflows/build.yml`'s own
+release packaging was fixed to build and ship the real `graphics_
+exrom.bin` alongside `forth_boot_rom0.bin` — a downloaded release now
+also gets `graphics_exrom.bin` itself, a Home+graphics_exrom.bin
+combined 24K image, and an EightyOne/TS-Pico `.dck` cartridge, so
+RECT/POLYGON/POLYGON-FILL/SPRITE-DEFINE/SHOW/HIDE are usable without a
+from-source build. Found and fixed a real, related bug while doing
+this: `tools/make_eightyone_exrom_dck.sh`'s own cartridge header still
+marked chunk 6 present, a leftover from before this phase's own
+chunk-5 retarget — packaging a real cartridge with that stale header
+would have EightyOne map it into the wrong chunk, the magic/ABI check
+then seeing plain chunk-5 RAM and refusing exactly as if no cartridge
+were loaded at all. Fixed and re-documented in `docs/
+eightyone_setup.md`; this specific fix is logically derived from the
+header's own documented structure, not itself hardware/emulator-
+confirmed.
+
+**Follow-up, done in a later pass**: the hand-copied `GRAPHICS_HOME_*`
+constants in `rom/graphics_exrom.asm` — flagged above as "kept in sync
+by hand until this project builds a real export-symbols tool" — are
+now generated by `tools/export_home_symbols.py` (modeled on the
+sibling `structured-basic-poc` project's own tool of the same name),
+parsing `rom/forth_boot.asm`'s own `GRAPHICS_HOME_TABLE` directly and
+emitting `build/graphics_home_table.inc`, which `rom/graphics_exrom.asm`
+now `INCLUDE`s instead of hand-typing. Wired into the Makefile as a
+dependency of the `graphics-exrom` target, so it regenerates on every
+build rather than needing a manual step; refuses loudly (rather than
+silently generating wrong constants) if the `DS $0100 - $, $FF` pad
+that guarantees the table's own fixed base address ever goes missing.
+Re-verified: the generated constants match the previously hand-typed
+ones byte-for-byte, `graphics_exrom.bin`'s own `.sym` file shows
+identical service addresses to before, and `rom/test_poly_fill.asm`
+re-confirmed passing (border green) under real ZEsarUX after the
+switch.
 
 ## Testing discipline
 

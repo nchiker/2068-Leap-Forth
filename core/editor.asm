@@ -171,6 +171,16 @@ FWRAP_OVERFLOW   EQU $88F5 ; 1 byte: set by WRAP_CALC — 0 normally, 1
                            ; that would never appear in any row's own
                            ; wrap-table entry at all. Ends at $88F6.
 
+FWRAP_WIDTH_MINUS1 EQU $88F7  ; 1 byte: WRAP_CALC_SHARED's own scratch
+                           ; (32-1=31 or 64-1=63) -- set by WRAP_CALC/
+                           ; WRAP_CALC64's own entry stub before falling
+                           ; into the shared body below. $88F6 is
+                           ; core/recall.asm's own RECALL_PENDING (a
+                           ; different file, but a lower address, so no
+                           ; collision) -- confirmed via the same "grep
+                           ; every EQU in this range" method used
+                           ; throughout this project.
+
 ; ============================================================================
 ; INSERT_CHAR ( A = character )
 ; Inserts A at EDIT_CURSOR, shifting everything from EDIT_CURSOR to the
@@ -301,20 +311,53 @@ WRAP_STORE_ROW:
     ret
 
 ; ============================================================================
-; WRAP_CALC ( -- ) — populates FWRAP_COUNT/FWRAP_START/
-; FWRAP_LEN from the CURRENT EDIT_BUF/EDIT_LEN. Each row holds up
-; to 32 characters, breaking at the LAST space at or before column 32
-; (the space itself is consumed but never drawn — matching
-; ts2068rom's own EDITOR_WRAP_CALC exactly) so a word is never split
-; across rows UNLESS a single word alone is too long to fit in one
-; row's own 32-column window at all, in which case (and ONLY then) it
-; hard-breaks at exactly column 32. Stops early, capped at
-; FWRAP_MAX_ROWS, if content would need more rows than that — see
-; EDITOR_PROCESS_KEY's own header for why a committed edit should never
-; actually reach that cap.
+; WRAP_CALC ( -- ) / WRAP_CALC64 ( -- ) — populates FWRAP_COUNT/
+; FWRAP_START/FWRAP_LEN from the CURRENT EDIT_BUF/EDIT_LEN. Each row
+; holds up to 32 (WRAP_CALC) or 64 (WRAP_CALC64) characters, breaking at
+; the LAST space at or before the row's own column limit (the space
+; itself is consumed but never drawn — matching ts2068rom's own
+; EDITOR_WRAP_CALC exactly) so a word is never split across rows UNLESS
+; a single word alone is too long to fit in one row's own window at
+; all, in which case (and ONLY then) it hard-breaks at exactly the
+; width. Stops early, capped at FWRAP_MAX_ROWS, if content would need
+; more rows than that — see EDITOR_PROCESS_KEY's own header for why a
+; committed edit should never actually reach that cap.
+;
+; Two thin entry points sharing one body via FWRAP_WIDTH_MINUS1 (not the
+; "full sibling" shape this project usually prefers for a tested
+; routine, e.g. kernel/graphics's GFX_SET_ATTR_EXT — that precedent is
+; about NOT changing an EXISTING tested routine's own calling contract
+; and forcing every call site to change; here, WRAP_CALC/WRAP_CALC64
+; keep their exact original entry points and calling convention, so no
+; caller anywhere is touched. Only the internal duplicate body merges).
+; The real cost: every width-dependent literal below becomes a memory
+; read instead of an immediate, since the width is now a runtime value
+; — real overhead, paid once in the shared body instead of not at all
+; in two separate copies; verified net-positive by measuring
+; rom/forth_boot.asm's own free-byte count before and after, not
+; assumed. WRAP_CALC64 stays IFDEF-gated (only exists when kernel/
+; mode64/mode64.asm is INCLUDEd), same as before.
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 WRAP_CALC:
+    ld   a, 31
+    ld   (FWRAP_WIDTH_MINUS1), a
+    jp   WRAP_CALC_SHARED
+
+    IFDEF KERNEL_MODE64_ASM         ; real 64-column TEXT mode only
+                                    ; exists once kernel/mode64/mode64.asm
+                                    ; is INCLUDEd -- guarded so this adds
+                                    ; zero bytes to any ROM that doesn't
+                                    ; use it, same convention as
+                                    ; EDITOR_REDRAW64/core/print.asm's
+                                    ; W_EMIT
+WRAP_CALC64:
+    ld   a, 63
+    ld   (FWRAP_WIDTH_MINUS1), a
+    jp   WRAP_CALC_SHARED
+    ENDIF
+
+WRAP_CALC_SHARED:
     xor  a
     ld   (FWRAP_ROW_IDX), a
     ld   (FWRAP_OVERFLOW), a
@@ -323,15 +366,21 @@ WRAP_CALC:
     ld   a, (EDIT_LEN)
     ld   (FWRAP_REMAIN), a
 .row_loop:
+    ld   a, (FWRAP_WIDTH_MINUS1)
+    inc  a                             ; a = WIDTH (32 or 64)
+    ld   c, a
     ld   a, (FWRAP_REMAIN)
-    cp   33
-    jr   c, .last_row              ; remain <= 32 -- this is the last row
-    ; scan this row's own 32-column window (relative positions 31
-    ; down to 1) for the LAST (highest-position) space
+    cp   c
+    jr   c, .last_row                  ; remain < WIDTH
+    jr   z, .last_row                  ; remain == WIDTH -- also last row
+    ; scan this row's own WIDTH-column window (relative positions
+    ; WIDTH-1 down to 1) for the LAST (highest-position) space
+    ld   a, (FWRAP_WIDTH_MINUS1)
     ld   hl, (FWRAP_SCAN_PTR)
-    ld   de, 31
+    ld   e, a
+    ld   d, 0
     add  hl, de
-    ld   b, 31
+    ld   b, a
     ld   a, $FF
     ld   (FWRAP_LAST_SPACE), a
 .scan_loop:
@@ -354,9 +403,11 @@ WRAP_CALC:
     inc  a                            ; consumed = last_space_rel + 1
     jr   .advance
 .hard_break:
-    ld   a, 32
+    ld   a, (FWRAP_WIDTH_MINUS1)
+    inc  a                             ; a = WIDTH
     call WRAP_STORE_ROW
-    ld   a, 32                        ; consumed = 32
+    ld   a, (FWRAP_WIDTH_MINUS1)
+    inc  a                             ; consumed = WIDTH
 .advance:
     ld   b, a                          ; b = consumed
     ld   hl, (FWRAP_SCAN_PTR)
@@ -390,102 +441,6 @@ WRAP_CALC:
     ld   a, (FWRAP_ROW_IDX)
     ld   (FWRAP_COUNT), a
     ret
-
-    IFDEF KERNEL_MODE64_ASM         ; real 64-column TEXT mode only
-                                    ; exists once kernel/mode64/mode64.asm
-                                    ; is INCLUDEd -- guarded so this adds
-                                    ; zero bytes to any ROM that doesn't
-                                    ; use it, same convention as
-                                    ; EDITOR_REDRAW64/core/print.asm's
-                                    ; W_EMIT (confirmed via a binary diff
-                                    ; against an unguarded first draft,
-                                    ; which silently cost every editor.asm
-                                    ; caller real bytes it never asked for)
-; ============================================================================
-; WRAP_CALC64 ( -- ) — WRAP_CALC's own algorithm verbatim, with the
-; 32-column window widened to 64 throughout (33/32/31 -> 65/64/63) --
-; a full sibling rather than a parameterized version of WRAP_CALC,
-; matching this project's own established precedent for exactly this
-; situation (kernel/graphics's own GFX_SET_ATTR_EXT header reasons
-; through why a sibling beats parameterizing a tested routine). Used
-; by EDITOR_REDRAW only when GFX_MODE=2 (core/hires.asm-style mode
-; branch). FWRAP_MAX_ROWS/FWRAP_START/FWRAP_LEN need no changes here --
-; EDIT_MAX_LEN (128) only ever needs 2 of the 4 available row slots at
-; 64 characters/row, well under the existing cap.
-; Destroys: AF, BC, DE, HL
-; ============================================================================
-WRAP_CALC64:
-    xor  a
-    ld   (FWRAP_ROW_IDX), a
-    ld   (FWRAP_OVERFLOW), a
-    ld   hl, EDIT_BUF
-    ld   (FWRAP_SCAN_PTR), hl
-    ld   a, (EDIT_LEN)
-    ld   (FWRAP_REMAIN), a
-.row_loop:
-    ld   a, (FWRAP_REMAIN)
-    cp   65
-    jr   c, .last_row              ; remain <= 64 -- this is the last row
-    ld   hl, (FWRAP_SCAN_PTR)
-    ld   de, 63
-    add  hl, de
-    ld   b, 63
-    ld   a, $FF
-    ld   (FWRAP_LAST_SPACE), a
-.scan_loop:
-    ld   a, (hl)
-    cp   " "
-    jr   nz, .scan_next
-    ld   a, b
-    ld   (FWRAP_LAST_SPACE), a
-    jr   .scan_done
-.scan_next:
-    dec  hl
-    djnz .scan_loop
-.scan_done:
-    ld   a, (FWRAP_LAST_SPACE)
-    cp   $FF
-    jr   z, .hard_break
-    call WRAP_STORE_ROW
-    ld   a, (FWRAP_LAST_SPACE)
-    inc  a
-    jr   .advance
-.hard_break:
-    ld   a, 64
-    call WRAP_STORE_ROW
-    ld   a, 64
-.advance:
-    ld   b, a
-    ld   hl, (FWRAP_SCAN_PTR)
-    ld   d, 0
-    ld   e, b
-    add  hl, de
-    ld   (FWRAP_SCAN_PTR), hl
-    ld   a, (FWRAP_REMAIN)
-    sub  b
-    ld   (FWRAP_REMAIN), a
-    ld   a, (FWRAP_ROW_IDX)
-    inc  a
-    ld   (FWRAP_ROW_IDX), a
-    cp   FWRAP_MAX_ROWS
-    jr   c, .row_loop
-    ld   a, (FWRAP_REMAIN)
-    or   a
-    jr   z, .done
-    ld   a, 1
-    ld   (FWRAP_OVERFLOW), a
-    jr   .done
-.last_row:
-    ld   a, (FWRAP_REMAIN)
-    call WRAP_STORE_ROW
-    ld   a, (FWRAP_ROW_IDX)
-    inc  a
-    ld   (FWRAP_ROW_IDX), a
-.done:
-    ld   a, (FWRAP_ROW_IDX)
-    ld   (FWRAP_COUNT), a
-    ret
-    ENDIF
 
 ; ============================================================================
 ; EDIT_CURSOR_TO_ROWCOL ( -- B=screen row, C=screen column ) — converts
@@ -1060,9 +1015,31 @@ EDITOR_PROCESS_KEY:
 ; RST $0038 -> KBD_ISR_TICK, IM 1, and EI before calling this.
 ; ============================================================================
 EDITOR_LOOP_LIVE:
+    ; Phase 64 (core/recall.asm), gated: only wired in for a ROM that
+    ; actually INCLUDEs core/recall.asm (rom/forth_boot.asm) -- several
+    ; older, narrower smoke ROMs (rom/forth_smoke_p6.asm/p9/p33/p58)
+    ; INCLUDE this file WITHOUT core/recall.asm, and would fail to
+    ; assemble against an unconditional reference to RECALL_PENDING.
+    ; RECALL sets RECALL_PENDING and leaves its own copied text sitting
+    ; in EDIT_BUF/EDIT_LEN/EDIT_CURSOR for the user to edit -- skip the
+    ; usual "clear the line" reset just this once, or RECALL's own line
+    ; finishing would immediately wipe out what it just recalled. See
+    ; core/recall.asm's own header.
+    IFDEF CORE_RECALL_ASM
+    ld   a, (RECALL_PENDING)
+    or   a
+    jr   nz, .skip_clear
+    ENDIF
     xor  a
     ld   (EDIT_LEN), a
     ld   (EDIT_CURSOR), a
+    IFDEF CORE_RECALL_ASM
+    jr   .cleared
+.skip_clear:
+    xor  a
+    ld   (RECALL_PENDING), a
+.cleared:
+    ENDIF
     ; deliberately NOT resetting FWRAP_OLD_COUNT here -- it must
     ; still hold whatever the JUST-SUBMITTED line's own final row count
     ; was, so EDITOR_REDRAW's own shrink-detection (comparing that
@@ -1077,6 +1054,21 @@ EDITOR_LOOP_LIVE:
     call IO_READ_KEY
     call EDITOR_PROCESS_KEY
     jr   nc, .keyloop
+    ; Phase 64 (core/recall.asm), gated -- see this file's own header
+    ; note on EDITOR_LOOP_LIVE above. Appends the just-committed line to
+    ; the persistent workspace BEFORE running it, so it's recoverable via
+    ; RECALL/LIST-DEFS even if INTERPRET_RUN itself never returns
+    ; normally (e.g. a QUIT-triggering error path). See core/recall.asm's
+    ; own header for why this is unconditional (appended regardless of
+    ; whether the line turns out to be a real definition) rather than
+    ; filtered here.
+    IFDEF CORE_RECALL_ASM
+    ld   hl, EDIT_BUF
+    ld   a, (EDIT_LEN)
+    ld   b, a
+    call WORKSPACE_APPEND
+    ENDIF
+
     ld   hl, EDIT_BUF
     ld   a, (EDIT_LEN)
     ld   d, 0

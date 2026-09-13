@@ -44,12 +44,34 @@ for rom in forth_boot forth_demo_blackjack; do
 done
 tools/make_exrom_placeholder.sh
 cp build/stock_shaped_exrom.bin "$stage/roms/"
+cat build/forth_boot_rom0.bin build/stock_shaped_exrom.bin > "$stage/roms/forth_boot_combined_24k.bin"
 
 # --- DOCK cartridge builds ------------------------------------------------
 for rom in forth_boot forth_demo_blackjack; do
   test -f "build/$rom.dck" || { echo "missing build/$rom.dck -- run make cart first" >&2; exit 1; }
   cp "build/$rom.dck" "build/${rom}_cart.bin" "$stage/cartridge/"
 done
+
+# --- graphics EXROM (Phase 65: RECT/POLYGON/POLYGON-FILL/sprites) --------
+# Base dictionary only -- the DOCK cartridge builds above don't include
+# this; see docs/lros_cartridge.md for why there's no cartridge path for
+# it yet. Also wrapped as EightyOne/TS-Pico .dck cartridges (bank $FE,
+# chunk 5), alongside a placeholder wrapping of the same inert EXROM
+# already staged above -- see docs/eightyone_setup.md.
+mkdir -p "$stage/roms" "$stage/eightyone"
+test -f "build/graphics_exrom.bin" || { echo "missing build/graphics_exrom.bin -- run make graphics-exrom first" >&2; exit 1; }
+cp build/graphics_exrom.bin "$stage/roms/"
+cat build/forth_boot_rom0.bin build/graphics_exrom.bin > "$stage/roms/forth_boot_graphics_combined_24k.bin"
+tools/make_eightyone_exrom_dck.sh build/stock_shaped_exrom.bin build/forth_exrom_eightyone.dck
+tools/make_eightyone_exrom_dck.sh build/graphics_exrom.bin build/graphics_exrom_eightyone.dck
+cp build/forth_exrom_eightyone.dck build/graphics_exrom_eightyone.dck "$stage/eightyone/"
+
+# --- experimental LROS/DOCK boot stub ------------------------------------
+# NOT hardware-verified -- see docs/lros_cartridge.md before using.
+mkdir -p "$stage/experimental-lros"
+test -f "build/forth_lros_chunk0.bin" || { echo "missing build/forth_lros_chunk0.bin -- run make forth-lros first" >&2; exit 1; }
+tools/pack_dck.sh build/forth_lros_chunk0.bin build/forth_lros.dck
+cp build/forth_lros_chunk0.bin build/forth_lros.dck "$stage/experimental-lros/"
 
 # --- docs ---------------------------------------------------------------
 cp README.md docs/forth_tutorial.md docs/hardware_notes.md docs/numeric_model.md "$stage/docs/"
@@ -102,6 +124,25 @@ cartridge/forth_demo_blackjack.dck (LROS format, chunks 0-1). Plug in instead
                                    of replacing the home ROM -- see below.
 cartridge/*_cart.bin               The raw 16K LROS images inside those .dck
                                    files, for burning to a cartridge EPROM.
+roms/graphics_exrom.bin            8K EXROM (Phase 65): RECT, POLYGON,
+                                   POLYGON-FILL, SPRITE-DEFINE/SHOW/HIDE.
+                                   Use instead of stock_shaped_exrom.bin as
+                                   --rom-ts2068-1 to get these six words --
+                                   NOT part of either cartridge build above.
+roms/forth_boot_graphics_combined_24k.bin
+                                   forth_boot_rom0.bin + graphics_exrom.bin
+                                   concatenated, for ZEsarUX --romfile.
+roms/forth_boot_combined_24k.bin  forth_boot_rom0.bin + the inert placeholder,
+                                   for ZEsarUX --romfile without graphics.
+eightyone/*.dck                   forth_exrom_eightyone.dck (placeholder) and
+                                   graphics_exrom_eightyone.dck (real graphics),
+                                   EXROM wrapped for EightyOne's cartridge slot
+                                   (bank \$FE, a different slot from the DOCK
+                                   cartridges above) -- see docs/eightyone_setup.md
+                                   for confirmed-working vs. still-broken cases.
+experimental-lros/                EXPERIMENTAL DOCK-cartridge boot stub, NOT
+                                   the full dictionary and NOT hardware-verified
+                                   -- read docs/lros_cartridge.md before using.
 symbols/                           Assembler .sym/.lst listings for both ROMs.
 docs/forth_tutorial.{md,pdf,docx}  Learning Forth on 2068-Forth -- start here.
 docs/README.{md,pdf}               The project README (status, word list).

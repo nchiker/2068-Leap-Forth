@@ -1,23 +1,45 @@
 ; ============================================================================
 ; kernel/bank/bank.asm — EXROM paging trampoline
 ;
-; HARDWARE-CONFIRMED (2026-08-18, isolation test run #2: PASS/PASS on
-; real hardware/Fuse — see rom/test_exrom_isolation.asm's own header
-; and this project's own working memory for the full writeup). This
-; was the first bank-switching code in the project; it's now proven,
-; not just designed — treat rom/test_exrom_isolation.asm's confirmed
-; result as the actual proof, not this file's own doc comments.
+; INHERITED FROM 2068-LEAP, THEN RETARGETED FOR 2068-FORTH'S OWN CHUNK
+; CHOICE (this session): the original file paged chunk 6 ($C000-$DFFF),
+; hardware-confirmed for 2068-Leap's own memory model on real hardware/
+; Fuse via `rom/test_exrom_isolation.asm` — a file that lived in that
+; sibling project, never copied here, and was never actually wired into
+; any 2068-Forth ROM (confirmed by grep: zero callers of BANK_PAGE_
+; EXROM_IN/OUT/BANK_CALL_EXROM anywhere in this repo before this
+; session). Its own chunk-6 choice doesn't transfer cleanly: 2068-
+; Forth's dictionary ceiling (`DICT_RAM_CEILING`, `core/free.asm`) was
+; later raised to $F000, deep into chunk 6, and `LOADTEXT_BUF`
+; (`core/loadtext.asm`) — persistent SAVE-TEXT/LOAD-TEXT workspace
+; `RECALL`/`LIST-DEFS` read from — also lives there.
 ;
-; WHY THIS EXISTS: Home bank is hard-capped at 16K — see the ROM-size
-; crisis writeup in this project's own working memory. EXROM gives 8K
-; more, paged into chunk 6 ($C000-$DFFF) only — see docs/memory_map.md
-; for the full chunk-by-chunk audit (why chunk 6 specifically: general
-; RAM, distant from live sysvar state and the stack, independently
-; corroborated by the stock ROM's own EXTINIT marking that chunk
-; expendable too). That audit, and the interrupt-safety reasoning
-; behind this file's DI/EI placement, are sourced against the real
-; Timex Sinclair 2068 ROM Disassembly (David Anderson, 2023), not
-; guessed — see docs/memory_map.md for the citations.
+; Retargeted to CHUNK 5 ($A000-$BFFF) instead: a full chunk-by-chunk
+; audit (this session) found it's the one chunk with NO competing use
+; at all in 2068-Forth's own memory map — not the machine stack, not
+; either CPU stack (those are chunk 4), not video RAM, not a fixed
+; persistent buffer, nothing `KBD_ISR_TICK` touches. The only thing
+; that can ever live there is dictionary content, and paging is real
+; bank-switched hardware, not a RAM-address collision the way FILL's
+; old scratch was — the underlying RAM is never touched by paging it
+; out, only made briefly invisible, so this holds regardless of how
+; far the dictionary has grown into chunk 5 at the moment of a call.
+; See docs/PROJECT_PLAN.md's chunk-by-chunk audit for the full
+; per-chunk reasoning (why chunks 0/1/2/3/4/7 are each disqualified).
+;
+; The retargeting itself is a one-bit change (chunk N = bit N on
+; PORT_BANK_HOME, confirmed in include/hardware.inc's own citation of
+; the real port $F4 description) — everything else below (the nesting-
+; safe depth counter, the DI/EI discipline, the shadow-preserving
+; PORT_FF_SHADOW read-modify-write) is chunk-agnostic and unchanged
+; from the original, still-sound design. What is NOT yet true: this
+; specific chunk-5 retargeting has NOT been hardware/emulator-confirmed
+; the way chunk 6 once was for 2068-Leap — see rom/test_exrom_
+; isolation.asm (this project's own fresh confirmation, written this
+; session) for that proof, not this file's own doc comments alone.
+;
+; WHY THIS EXISTS: Home bank is hard-capped at 16K. EXROM gives 8K
+; more, paged into chunk 5 ($A000-$BFFF) only.
 ;
 ; INTERRUPT SAFETY — the one thing this file gets right or wrong for
 ; everything built on top of it: interrupts are disabled ONLY across
@@ -28,19 +50,16 @@
 ; (see kernel/interrupt's own history) for anything nontrivial running
 ; from EXROM. It's safe to re-enable immediately because this
 ; project's real interrupt handler, KBD_ISR_TICK, never touches chunk
-; 6 — its own sysvars all live in chunk 4, which stays Home-mapped
-; the entire time chunk 6 is paged to EXROM. If kernel/interrupt ever
-; grows a handler that DOES need chunk-6 data, this reasoning needs
+; 5 — its own sysvars all live in chunk 4, which stays Home-mapped
+; the entire time chunk 5 is paged to EXROM. If kernel/interrupt ever
+; grows a handler that DOES need chunk-5 data, this reasoning needs
 ; re-deriving, not assumed to still hold.
 ;
 ; EXROM's own entry convention: execution starts at the very first
-; byte of the 8K image (i.e. $C000 once paged in), same as a ROM's own
-; reset vector. Only one entry point is needed for now (this
-; project's first EXROM payload is a deliberately trivial isolation
-; test — see rom/exrom_payload.asm); a future payload needing
-; multiple distinct entry points would extend this via its own
-; internal dispatch (e.g. a selector passed in a register before the
-; call), not by changing these paging primitives.
+; byte of the 8K image (i.e. $A000 once paged in), same as a ROM's own
+; reset vector. Multiple services are reached via a fixed service
+; table at that entry point (see rom/graphics_exrom.asm), not by
+; changing these paging primitives.
 ; ============================================================================
 
     IFNDEF KERNEL_BANK_ASM
@@ -48,7 +67,7 @@
 
 ; ============================================================================
 ; BANK_PAGE_EXROM_IN
-; Pages chunk 6 ($C000-$DFFF) to EXROM. Every other chunk stays Home.
+; Pages chunk 5 ($A000-$BFFF) to EXROM. Every other chunk stays Home.
 ; See this file's own header for the DI/EI reasoning — interrupts are
 ; back on before this returns.
 ; In:  none
@@ -58,7 +77,7 @@
 ; Nesting-safe via BANK_EXROM_DEPTH (include/sysvars.inc — see that
 ; sysvar's own comment for the full bug story this fixes, 2026-08-22):
 ; the real port writes only happen on the 0->1 depth transition — a
-; call made while chunk 6 is ALREADY paged to EXROM (i.e. from code
+; call made while chunk 5 is ALREADY paged to EXROM (i.e. from code
 ; that's itself running as a nested call from within EXROM) just bumps
 ; the counter and leaves the paging alone. The single, non-nested case
 ; every caller before this fix used — page in, do one thing, page
@@ -70,7 +89,7 @@ BANK_PAGE_EXROM_IN:
     inc  a
     ld   (BANK_EXROM_DEPTH), a
     cp   1
-    jr   nz, .already_paged_in       ; depth was already >=1 — chunk 6
+    jr   nz, .already_paged_in       ; depth was already >=1 — chunk 5
                                      ; is already EXROM (an outer,
                                      ; still-active caller put it
                                      ; there) — nothing to do
@@ -83,7 +102,7 @@ BANK_PAGE_EXROM_IN:
     ld   (PORT_FF_SHADOW), a
     out  (PORT_SCLD), a
 
-    ld   a, %01000000                ; bit 6 = chunk 6 only; every
+    ld   a, %00100000                ; bit 5 = chunk 5 only; every
                                      ; other chunk's bit stays 0 (Home)
     out  (PORT_BANK_HOME), a
 .already_paged_in:
@@ -92,10 +111,10 @@ BANK_PAGE_EXROM_IN:
 
 ; ============================================================================
 ; BANK_PAGE_EXROM_OUT
-; Restores chunk 6 to Home — but only once BANK_EXROM_DEPTH's nesting
+; Restores chunk 5 to Home — but only once BANK_EXROM_DEPTH's nesting
 ; counter (see BANK_PAGE_EXROM_IN just above, and that sysvar's own
 ; comment) actually reaches back to 0; a nested call just decrements it
-; and leaves chunk 6 paged to EXROM for whichever outer caller is still
+; and leaves chunk 5 paged to EXROM for whichever outer caller is still
 ; using it. PORT_SCLD's bit 7 is deliberately left exactly as BANK_
 ; PAGE_EXROM_IN set it, not cleared — once PORT_BANK_HOME selects Home
 ; for every chunk, bit 7 is moot (nothing reads EXROM/Dock for any
@@ -117,7 +136,7 @@ BANK_PAGE_EXROM_OUT:
     ld   (BANK_EXROM_DEPTH), a
     jr   nz, .still_nested             ; still >=1 after decrementing —
                                        ; an outer caller is still
-                                       ; relying on chunk 6 staying
+                                       ; relying on chunk 5 staying
                                        ; EXROM-mapped
     xor  a
     out  (PORT_BANK_HOME), a         ; all chunks back to Home
@@ -125,19 +144,5 @@ BANK_PAGE_EXROM_OUT:
 .depth_already_zero:
     ei
     ret
-
-; ============================================================================
-; BANK_CALL_EXROM
-; Convenience wrapper: pages chunk 6 in, calls its fixed entry point
-; ($C000), pages back out. The EXROM payload itself runs with
-; interrupts enabled throughout — see this file's header.
-; In:  none
-; Out: whatever the EXROM payload's own contract defines
-; Destroys: whatever the EXROM payload's own contract defines, plus AF
-; ============================================================================
-BANK_CALL_EXROM:
-    call BANK_PAGE_EXROM_IN
-    call $C000
-    jr BANK_PAGE_EXROM_OUT
 
     ENDIF

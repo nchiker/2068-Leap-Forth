@@ -2,7 +2,7 @@
 
 ## Decision
 
-2068-Forth's core language is **16-bit integer**, not floating point.
+2068-Leap-Forth's core language is **16-bit integer**, not floating point.
 Floating point is an optional, later word set layered on top once the
 integer core works — not something the language is "based on." This
 matches Phase 1's cell-size decision in `docs/PROJECT_PLAN.md` and is

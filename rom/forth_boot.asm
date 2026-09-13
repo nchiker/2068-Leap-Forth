@@ -29,7 +29,8 @@
 ; ACCEPT/INPUT, CHR/STR/UPPER/LOWER/LEFT/RIGHT/SEARCH/CODE, EXECUTE,
 ; HERE/,/C,/ALLOT/CREATE/DOES>/IMMEDIATE, FREE, THROW/CATCH,
 ; ROT/2DUP/2DROP/?DUP/PICK, AND/OR/XOR/INVERT, ' (TICK), LPRINT/LLIST,
-; VLIST, ABORT/QUIT, IN/OUT, FORGET, UDG, EXIT — 143 words total.
+; VLIST, ABORT/QUIT, IN/OUT, FORGET, UDG, TONE/VOLUME/MIXER/NOISE/
+; ENVELOPE, LIST-DEFS, RECALL, EXIT — 150 words total.
 ; RE-DERIVED, NOT HAND-COUNTED: this comment's own earlier draft
 ; (claiming 93) had already gone stale twice over — once discovered
 ; during a Phase-24-era consolidation pass (missing the original Phase
@@ -37,20 +38,23 @@
 ; Phase 49/50 with nobody re-deriving it (the comment said so itself,
 ; rather than guess). Both times the number was hand-counted or hand-
 ; incremented from prose. This time (and again for Phase 60/61's
-; BRIGHT/FLASH, and Phase 62's BREAK?) it's the result of actually
-; assembling this file and walking the real dictionary's own LINK
-; chain in the compiled binary, byte for byte, from LATEST's own seed
-; (DICT_LATEST_INIT_LOADTEXT) down to the LINK=0 sentinel — the same
-; class of check that caught two real dictionary-orphaning bugs
-; earlier in this project's history (a chain-point set to the wrong
-; tail marker silently drops every word after it, which eyeballing
-; headers can miss but walking the real chain cannot). 143 unique
-; names, zero duplicates, zero shadowing, chained into one LATEST list
-; via the same DICT_CHAIN_POINT splices rom/forth_smoke_p9.asm
-; introduced and proved. Whoever next adds a phase: re-run this same
-; walk (build this ROM, then follow DICT_LATEST_INIT_LOADTEXT's own
-; LINK chain through the assembled .bin) rather than incrementing this
-; number by eye — that's exactly the habit that let it drift twice.
+; BRIGHT/FLASH, Phase 62's BREAK?, and Phase 64's LIST-DEFS/RECALL —
+; the count had again drifted silently at 148 real words when this
+; comment still said 143, missing Phase 63's own TONE/VOLUME/MIXER/
+; NOISE/ENVELOPE entirely) it's the result of actually assembling this
+; file and walking the real dictionary's own LINK chain in the compiled
+; binary, byte for byte, from LATEST's own seed (DICT_LATEST_INIT_RECALL)
+; down to the LINK=0 sentinel — the same class of check that caught two
+; real dictionary-orphaning bugs earlier in this project's history (a
+; chain-point set to the wrong tail marker silently drops every word
+; after it, which eyeballing headers can miss but walking the real chain
+; cannot). 150 unique names, zero duplicates, zero shadowing, chained
+; into one LATEST list via the same DICT_CHAIN_POINT splices
+; rom/forth_smoke_p9.asm introduced and proved. Whoever next adds a
+; phase: re-run this same walk (build this ROM, then follow
+; DICT_LATEST_INIT_RECALL's own LINK chain through the assembled .bin)
+; rather than incrementing this number by eye — that's exactly the habit
+; that let it drift, repeatedly.
 ; DECIMAL_NUMBER_ENABLED is also DEFINEd here (core/decimal.asm,
 ; Phase 23) — not a dictionary word, a NUMBER/INTERPRET_RUN parsing
 ; capability: typing a literal like `3.5` now pushes a real float
@@ -160,6 +164,28 @@ CART_START:
     DS   $0100 - $, $FF
 
 ; ============================================================================
+; GRAPHICS_HOME_TABLE — fixed-address JP veneers for EXROM-resident
+; graphics code (rom/graphics_exrom.asm) to call into Home through.
+; Real routines like GFX_WRITE_PIXEL move every time this ROM's own
+; dictionary grows or shrinks; code assembled as a separate, standalone
+; EXROM image has no way to track that automatically the way a single
+; concatenated build would. Fixed slots at a fixed, low, never-moving
+; address are the fix — same shape as 2068-Leap's own inherited EXT_
+; SERVICE_TABLE veneers (include/sysvars.inc), reused here for the same
+; reason rather than inventing a different mechanism. Append-only: an
+; existing slot's position must never change once an EXROM image has
+; been built against it.
+; ============================================================================
+GRAPHICS_HOME_TABLE:
+    jp   GFX_WRITE_PIXEL          ; slot 0 — B=x, C=y, A=attr, D=OVER
+    jp   GFX_SET_ATTR             ; slot 1 — A=attr, B=row, C=col
+    jp   GFX_LINE                 ; slot 2 — no register args; reads
+                                  ; GFX_LINE_X0/Y0/X1/Y1/ATTR/OVER
+    jp   GFX_ROW_BASE_ADDR        ; slot 3 — A=row -> HL=that row's
+                                  ; bitmap base address (scanline 0)
+    jp   GFX_CELL_ATTR_ADDR       ; slot 4 — B=row, C=col -> HL=addr
+
+; ============================================================================
 ; COLD_START
 ; ============================================================================
 COLD_START:
@@ -167,12 +193,33 @@ COLD_START:
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
-    ld   hl, DICT_LATEST_INIT_LOADTEXT   ; the full chain's own head —
+    ; Real hardware and accuracy-oriented emulators don't guarantee RAM
+    ; is zeroed at power-on -- only some emulators happen to pre-zero
+    ; it, which is exactly the class of bug 2068-Leap's own MEM_COLD_
+    ; INIT exists to prevent (see kernel/memory/memory.asm's header).
+    ; Zero the whole dictionary/stack/workspace RAM range ($8000
+    ; through DICT_RAM_CEILING, core/free.asm) before anything below
+    ; reads or writes into it, so nothing here can show leftover
+    ; power-on garbage instead of a clean, empty system.
+    ld   hl, $8000
+    ld   bc, DICT_RAM_CEILING - $8000
+    call MEM_FILL_ZERO
+
+    ld   hl, DICT_LATEST_INIT_RECALL   ; the full chain's own head —
                                     ; see this file's own header (Phase
-                                    ; 52 -- core/loadtext.asm's SAVE-TEXT/
-                                    ; LOAD-TEXT -- spliced on after
-                                    ; core/udg.asm's own tail)
+                                    ; 64 -- core/recall.asm's LIST-DEFS/
+                                    ; RECALL -- spliced on after
+                                    ; core/loadtext.asm's own tail)
     ld   (LATEST), hl
+
+    ; Phase 64 (core/recall.asm): WORKSPACE_END starts undefined RAM at
+    ; cold boot -- must be LOADTEXT_BUF (an empty workspace) before the
+    ; first live-typed line's own WORKSPACE_APPEND call (core/editor.asm's
+    ; EDITOR_LOOP_LIVE), or that call reads garbage and can write outside
+    ; LOADTEXT_BUF entirely. A later LOAD-TEXT resets it again to cover
+    ; exactly what it received (core/loadtext.asm's own W_LOADTEXT).
+    ld   hl, LOADTEXT_BUF
+    ld   (WORKSPACE_END), hl
     ld   hl, FORTH_DICT_RAM
     ld   (HERE), hl
     xor  a
@@ -181,8 +228,26 @@ COLD_START:
                                    ; bookkeeping -- must start at 0
     ld   (CATCH_DEPTH), a         ; core/throwcatch.asm's own CATCH
                                    ; bookkeeping -- must start at 0
-    ld   a, DEFAULT_ATTR          ; required since Phase 15 -- see
-    ld   (CURRENT_ATTR), a        ; core/ts2068.asm's own header
+    ld   a, ATTR_DEFAULT          ; required since Phase 15 -- see
+    ld   (CURRENT_ATTR), a        ; core/ts2068.asm's own header.
+                                   ; kernel/graphics/graphics.asm's
+                                   ; ATTR_DEFAULT ($44, black paper/
+                                   ; bright green ink), NOT core/
+                                   ; ts2068.asm's own DEFAULT_ATTR ($38,
+                                   ; white paper/black ink) -- GFX_CLS
+                                   ; just cleared the whole screen to
+                                   ; ATTR_DEFAULT above, and EMIT (core/
+                                   ; print.asm) stamps CURRENT_ATTR onto
+                                   ; every printed character, so seeding
+                                   ; it from the stale $38 constant made
+                                   ; the first typed character (and
+                                   ; every one after, until INK/PAPER is
+                                   ; used) render white-paper/black-ink
+                                   ; against the green-on-black screen
+                                   ; GFX_CLS had just painted -- found
+                                   ; live: text appeared black-on-white
+                                   ; instead of the intended green-on-
+                                   ; black terminal look
     ld   a, 1
     ld   (FWRAP_OLD_COUNT), a ; required once at cold start -- see
                                   ; core/editor.asm's own header on this
@@ -452,6 +517,7 @@ RUNTIME_ERROR_MSG: DB "STACK?", 0
 ; ---- kernel + dictionary: included here, after the vector table and
 ; the boot code above, not before ORG $0000. DICT_CHAIN_POINT splices
 ; match rom/forth_smoke_p9.asm's own, already proven under Fuse. ----
+    INCLUDE "kernel/memory/memory.asm"
     INCLUDE "kernel/math/math.asm"
     INCLUDE "kernel/io/io.asm"
     INCLUDE "kernel/interrupt/interrupt.asm"
@@ -459,6 +525,7 @@ RUNTIME_ERROR_MSG: DB "STACK?", 0
     INCLUDE "kernel/sound/sound.asm"
     INCLUDE "kernel/storage/storage.asm"
     INCLUDE "kernel/mode64/mode64.asm"
+    INCLUDE "kernel/bank/bank.asm"
     INCLUDE "core/dict.asm"
     DEFINE DECIMAL_NUMBER_ENABLED
     DEFINE RUNTIME_ERROR_CHECK_ENABLED
@@ -520,6 +587,12 @@ DICT_CHAIN_POINT DEFL H_J
 DICT_CHAIN_POINT DEFL H_ATXY
     INCLUDE "core/hires.asm"
 DICT_CHAIN_POINT DEFL H_NORMAL
+    INCLUDE "core/rectfill.asm"
+DICT_CHAIN_POINT DEFL H_RECT
+    INCLUDE "core/polygon.asm"
+DICT_CHAIN_POINT DEFL H_POLYGONFILL
+    INCLUDE "core/sprite.asm"
+DICT_CHAIN_POINT DEFL H_SPRITEHIDE
     INCLUDE "core/key.asm"
 DICT_CHAIN_POINT DEFL H_BREAKQ
     INCLUDE "core/mathfn.asm"
@@ -574,6 +647,11 @@ DICT_CHAIN_POINT DEFL H_OUT
 DICT_CHAIN_POINT DEFL H_FORGET
     INCLUDE "core/udg.asm"
 DICT_CHAIN_POINT DEFL H_UDG
+    DEFINE TRACK_WORKSPACE_END   ; opt in to core/loadtext.asm's
+                                 ; WORKSPACE_END tracking -- see that
+                                 ; file's own W_LOADTEXT comment on why
+                                 ; this must be a per-ROM opt-in, not
+                                 ; unconditional
     INCLUDE "core/loadtext.asm"
     ; core/storage.asm's own SAVE_LOAD_TEMP_BUF/SAVE_LOAD_MAX_DICT are
     ; literals that deliberately TIME-SHARE this exact same physical RAM
@@ -587,6 +665,9 @@ DICT_CHAIN_POINT DEFL H_UDG
     ; RAM the two mechanisms were supposed to be safely sharing.
     ASSERT SAVE_LOAD_TEMP_BUF == LOADTEXT_BUF
     ASSERT SAVE_LOAD_MAX_DICT == LOADTEXT_MAX_LEN - 2
+DICT_CHAIN_POINT DEFL H_LOADTEXT
+    INCLUDE "core/recall.asm"
+DICT_CHAIN_POINT DEFL H_RECALL
     INCLUDE "core/editor.asm"
 
     DS   $4000 - $, $FF

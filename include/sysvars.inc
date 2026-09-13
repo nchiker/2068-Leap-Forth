@@ -1384,32 +1384,54 @@ PORT_FF_SHADOW:      DEFS 1          ; 1 byte
 ; Deliberately NOT recursive and NOT unbounded — real hardware has no
 ; call-stack depth to spare, and even an iterative approach needs an
 ; explicit limit since a large enough enclosed region could otherwise
-; grow the stack without bound. Originally 2048 entries (x,y per
-; entry), sized from real peak-stack measurements in Python before any
-; Z80 was written: a "mark on push" 4-connected fill (using the bitmap
-; itself as the already-claimed tracker, via GFX_READ_PIXEL/GFX_WRITE_
-; PIXEL — no separate visited-set needed) peaks at ~2069 stack entries
-; for a filled circle of radius 50 on this screen, ~768 for radius 30
-; — a genuinely naive "mark on pop" version was measured needing MORE
-; stack entries than there are pixels in the fill for a large open
-; area, which is why this project didn't ship that simpler-looking
-; version. If GFX_FILL_STACK does fill up (a very large enclosed
-; region), further expansion from that point silently stops — pixels
-; already queued still get processed and colored correctly, but a
-; genuinely huge fill may not reach its full extent. No crash, no
-; memory corruption — a documented, deliberate limitation.
+; grow the stack without bound. If GFX_FILL_STACK does fill up, further
+; expansion from that point silently stops — spans already queued
+; still get processed and colored correctly, but a genuinely
+; pathological fill may not reach its full extent. No crash, no memory
+; corruption — a documented, deliberate limitation, same as every
+; earlier version of this stack.
 ;
-; RESIZED to 1664 entries for 2068-Forth specifically (Phase 44 — see
-; GFX_FILL_VISITED's own header just above for the full relocation
-; writeup): the idle video-RAM pool this now shares with
-; GFX_FILL_VISITED is 768 bytes smaller than the original $C000-$E7FF
-; span, so this shrinks to fit exactly, ending precisely at $8000 with
-; nothing wasted. This was ALREADY a graceful-degradation, not a hard
-; guarantee, at 2048 entries (the measured radius-50 peak of ~2069
-; already exceeded it) — 1664 starts degrading somewhat earlier for
-; extreme fills, not a new category of risk.
-GFX_FILL_STACK       EQU $7300         ; 3328 bytes (1664 x/y entries)
-GFX_FILL_STACK_END     EQU GFX_FILL_STACK + 3328
+; SCANLINE (SPAN) FILL, replacing the old per-PIXEL algorithm (Phase
+; 44's 1664-entry, 3328-byte stack): the stack now holds one (x,y)
+; SEED per contiguous horizontal RUN still to expand, not one entry
+; per pixel — GFX_FILL fills a whole row-span in one pass per pop,
+; then scans the row above/below (across exactly that span's own
+; width, not one column wider — an earlier draft of this Python
+; verification over-scanned by 1 and leaked across diagonal-only
+; "connections" that fail a real 4-connected reachability check
+; against it) for new unclaimed runs, pushing one seed per run found.
+; Algorithm and stack sizing re-verified in Python against a reference
+; BFS flood fill before any Z80 was written (same standard the
+; original per-pixel version's own header already held itself to):
+; a solid box, a blank enclosed square, a full-screen fill in both
+; directions, a hollow ring, an irregular random blob, and (the
+; specific case this project's own prior stack-sizing comment quoted
+; a ~2069-entry peak for) a SOLID DISC OF RADIUS 50 RECOLORED a new
+; attribute all matched the reference exactly, peaking at just 2
+; stack entries for that same disc — the reason this algorithm needs
+; so much less stack than the old one. Two genuinely adversarial
+; synthetic shapes were also tried specifically to find where this
+; approach still degrades: a fine alternating "comb" pattern (many
+; short spans forced open simultaneously) peaked at 5986 entries, far
+; beyond anything a real PLOT/LINE-bounded paint-bucket region would
+; produce; a tight logarithmic spiral (deliberately built to force
+; many disjoint same-row spans reached from different directions, the
+; case GFX_FILL_VISITED's per-pixel dedup exists to handle correctly)
+; peaked at 452. 512 entries were kept for GFX_FILL_STACK — comfortable
+; headroom over every realistic shape actually tested, while still
+; leaving the comb-pattern class of pathological input to gracefully
+; degrade exactly like every earlier version of this stack already
+; documented, not a new category of risk.
+;
+; GFX_FILL_VISITED (see its own header just above) is UNCHANGED and
+; still required: recoloring an already-solid region (GFX_FILL_TARGET
+; == 1) means a freshly-filled pixel reads back as 1 == target again,
+; so the pixel's own bitmap state alone still can't distinguish
+; "already handled this fill" from "still needs handling" — exactly
+; the trap this project's own header already documented once for the
+; per-pixel version, and just as real for spans.
+GFX_FILL_STACK       EQU $7300         ; 1024 bytes (512 x/y entries)
+GFX_FILL_STACK_END     EQU GFX_FILL_STACK + 1024
 GFX_FILL_SP:         DEFS 2           ; 2 bytes — pointer into GFX_FILL_
                                    ; STACK; == GFX_FILL_STACK means
                                    ; empty, == GFX_FILL_STACK_END means
@@ -1417,16 +1439,155 @@ GFX_FILL_SP:         DEFS 2           ; 2 bytes — pointer into GFX_FILL_
 GFX_FILL_TARGET:     DEFS 1           ; 1 byte — the pixel value (0 or 1)
                                    ; being replaced, read from the seed
 GFX_FILL_ATTR:       DEFS 1           ; 1 byte — fill color
-GFX_FILL_X:          DEFS 1           ; 1 byte — the pixel currently
-                                   ; being expanded (popped from the
-                                   ; stack); NOT reused as scratch by
-                                   ; GFX_FILL_TRY_NEIGHBOR/PUSH/POP —
-                                   ; those work entirely through B/C,
-                                   ; specifically so they can't clobber
-                                   ; this while the outer loop is still
-                                   ; using it to compute all 4
-                                   ; neighbors of the SAME pixel
+GFX_FILL_X:          DEFS 1           ; 1 byte — the seed (x,y) most
+                                   ; recently popped off the stack,
+                                   ; i.e. some point within the row-
+                                   ; span currently being expanded —
+                                   ; NOT reused as scratch by GFX_FILL_
+                                   ; PUSH/POP/GFX_FILL_VISITED_CHECK(_
+                                   ; SET), which work entirely through
+                                   ; B/C, so this survives unclobbered
+                                   ; while the left/right span scan
+                                   ; below runs
 GFX_FILL_Y:          DEFS 1           ; 1 byte
+GFX_FILL_LX:         DEFS 1           ; 1 byte — left edge of the span
+                                   ; currently being expanded (0-255)
+GFX_FILL_RX:         DEFS 1           ; 1 byte — right edge, inclusive
+GFX_FILL_SCAN_X:     DEFS 1           ; 1 byte — loop cursor shared by
+                                   ; the span fill-loop and the row-
+                                   ; above/below scan (never both live
+                                   ; at once, so one cell covers both)
+GFX_FILL_SCAN_Y:     DEFS 1           ; 1 byte — the row (y-1 or y+1)
+                                   ; GFX_FILL_SCAN_ROW the routine is
+                                   ; currently scanning
+GFX_FILL_SCAN_END:   DEFS 1           ; 1 byte — inclusive right bound
+                                   ; of the current row-above/below
+                                   ; scan (always == GFX_FILL_RX — see
+                                   ; that routine's own header for why
+                                   ; the scan is NOT widened by 1)
+
+; ---- RECT's own state (rom/graphics_exrom.asm, chunk 5 EXROM) ----
+; Staged by core/rectfill.asm's Home-resident RECT word before paging
+; chunk 5 in, then read back by the EXROM-resident RECT_FILL_IMPL —
+; plain memory, not registers, the same "value must survive a call
+; that destroys everything -> use memory" pattern GFX_FILL's own state
+; already established, doubly true here since an EXROM page-in/out
+; round trip sits in between.
+RECT_X0:             DEFS 1           ; 1 byte — corners as given, NOT
+RECT_Y0:             DEFS 1           ; 1 byte    pre-normalized —
+RECT_X1:             DEFS 1           ; 1 byte    RECT_FILL_IMPL sorts
+RECT_Y1:             DEFS 1           ; 1 byte    them itself
+RECT_ATTR:           DEFS 1           ; 1 byte — fill color (CURRENT_ATTR
+                                   ; at the time RECT was called)
+RECT_CUR_X:          DEFS 1           ; 1 byte — POLYGON-FILL's own span-
+RECT_CUR_Y:          DEFS 1           ; 1 byte    fill cursor now (RECT_
+                                   ; FILL_IMPL itself moved to a bulk
+                                   ; row/attribute-cell fill, below, and
+                                   ; no longer needs a per-pixel cursor
+                                   ; — kept for POLY_FILL_IMPL's own
+                                   ; reuse, see that routine's header)
+RECT_COL0:           DEFS 1           ; 1 byte — RECT_X0>>3 (byte column)
+RECT_COL1:           DEFS 1           ; 1 byte — RECT_X1>>3
+RECT_BIT0:           DEFS 1           ; 1 byte — RECT_X0&7 (bit position
+                                   ; within RECT_COL0's own byte)
+RECT_BIT1:           DEFS 1           ; 1 byte — RECT_X1&7
+RECT_ROWBASE:        DEFS 2           ; 2 bytes — this scanline's own
+                                   ; bitmap byte address at column 0,
+                                   ; recomputed once per scanline by
+                                   ; RECT_FILL_IMPL's bulk bitmap pass
+RECT_ATTR_ROW:       DEFS 1           ; 1 byte — attribute-pass row
+RECT_ATTR_ROW1:      DEFS 1           ; 1 byte    iterator + its own end
+RECT_ATTR_COL:       DEFS 1           ; 1 byte — attribute-pass column
+                                   ; iterator (RECT_COL0/COL1 above
+                                   ; double as its own start/end)
+
+; ---- POLYGON's own state (rom/graphics_exrom.asm, chunk 5 EXROM) ----
+; Staged by core/polygon.asm's Home-resident POLYGON word before
+; paging chunk 5 in — same "plain memory, not registers" reasoning
+; RECT's own state above already documents.
+POLY_MAXPTS          EQU 12          ; cap chosen to match libgpx's own
+                                   ; MAXPTS convention (this project's
+                                   ; own libgpx comparison, prior
+                                   ; session) — small enough to keep
+                                   ; this RAM modest, generous enough
+                                   ; for any real hand-drawn shape
+POLY_COUNT:          DEFS 1           ; 1 byte — vertex count (3-12);
+                                   ; 0 or out-of-range means POLYGON
+                                   ; draws nothing (same "silently do
+                                   ; nothing on invalid input"
+                                   ; convention SOUND/STICK/FILL/RECT
+                                   ; already established)
+POLY_VERTS:          DEFS POLY_MAXPTS * 2   ; 24 bytes — (x,y) pairs,
+                                   ; 1 byte each (screen coords always
+                                   ; fit in a byte), in the order given
+POLY_ATTR:           DEFS 1           ; 1 byte — CURRENT_ATTR at the
+                                   ; time POLYGON was called
+POLY_IDX:            DEFS 1           ; 1 byte — EXROM-side edge-walk
+                                   ; cursor, 0..POLY_COUNT-1
+
+; ---- POLYGON-FILL's own edge table (rom/graphics_exrom.asm, chunk 5
+; EXROM) ---- Genuine RAM, NOT part of chunk 5 itself: chunk 5 IS the
+; EXROM ROM image while paged in for this very call, so scratch state
+; that must persist and be written across the whole fill (one entry
+; per polygon edge, mutated one scanline at a time) has to live
+; somewhere that stays real RAM throughout — chunk 4, same as every
+; other EXROM-side state this project already keeps here (RECT_*/
+; POLY_*/SPRITE_OP_*).
+;
+; Parallel arrays, not a packed struct — matches POLY_VERTS's own
+; convention and this project's established SPRITE_SLOT_DEFINED/SHOWN
+; style. One entry per edge (POLY_MAXPTS - 1 minimum after skipping at
+; least the polygon's own implicit closing consideration, but sized to
+; POLY_MAXPTS to cover the worst case where every edge is non-
+; horizontal): Y0/Y1 (sorted so Y0<Y1), X (current x at this edge,
+; advances by one Bresenham y-major step per scanline processed), DX/
+; DY (the edge's own |x1-x0|/(y1-y0)), SX (+1 or -1, stored as a real
+; signed byte — $01 or $FF — so applying it is a plain 8-bit ADD, no
+; branch needed), ERR (the running Bresenham error term).
+POLY_FILL_EDGE_Y0:   DEFS POLY_MAXPTS   ; 12 bytes
+POLY_FILL_EDGE_Y1:   DEFS POLY_MAXPTS   ; 12 bytes
+POLY_FILL_EDGE_X:    DEFS POLY_MAXPTS   ; 12 bytes
+POLY_FILL_EDGE_DX:   DEFS POLY_MAXPTS   ; 12 bytes
+POLY_FILL_EDGE_DY:   DEFS POLY_MAXPTS   ; 12 bytes
+POLY_FILL_EDGE_SX:   DEFS POLY_MAXPTS   ; 12 bytes
+POLY_FILL_EDGE_ERR:  DEFS POLY_MAXPTS * 2   ; 24 bytes — 2 bytes/edge,
+                                   ; NOT 1: the running error can reach
+                                   ; (dy-1)+dx before each row's own
+                                   ; normalization loop brings it back
+                                   ; under dy, and dy up to 191 plus dx
+                                   ; up to 255 is 446 — a real 8-bit
+                                   ; overflow, caught before any Z80
+                                   ; was written by checking the actual
+                                   ; worst case, not assumed safe
+POLY_FILL_NEDGES:    DEFS 1           ; 1 byte — how many of the above
+                                   ; are actually in use (horizontal
+                                   ; edges are skipped when building
+                                   ; the table, so this can be less
+                                   ; than POLY_COUNT)
+POLY_FILL_YMIN:      DEFS 1           ; 1 byte — lowest y any edge starts at
+POLY_FILL_YMAX:      DEFS 1           ; 1 byte — highest y any edge ends at
+POLY_FILL_Y:         DEFS 1           ; 1 byte — the scanline currently
+                                   ; being processed
+POLY_FILL_CROSSINGS: DEFS POLY_MAXPTS   ; 12 bytes — this row's own
+                                   ; edge-crossing x values, sorted
+                                   ; ascending before spans are filled
+POLY_FILL_NCROSS:    DEFS 1           ; 1 byte — how many of the above
+                                   ; are valid this row
+POLY_FILL_I:         DEFS 1           ; 1 byte — general loop cursor
+POLY_FILL_J:         DEFS 1           ; 1 byte — general loop cursor
+                                   ; (sort's own inner-loop index,
+                                   ; never live at the same time as
+                                   ; POLY_FILL_I's own outer use)
+POLY_FILL_PASS:      DEFS 1           ; 1 byte — bubble-sort passes
+                                   ; remaining, counting down from
+                                   ; NCROSS-1 to 0
+POLY_FILL_ERR_ADDR:  DEFS 2           ; 2 bytes — the CURRENT edge's own
+                                   ; &POLY_FILL_EDGE_ERR[i], stashed
+                                   ; while HL/DE are busy holding the
+                                   ; running error value itself during
+                                   ; its own Bresenham normalization
+                                   ; loop, so the final value can be
+                                   ; written back afterward
 
 ; ---- kernel/editor word-wrap tables ----
 ; Populated by EDITOR_WRAP_CALC (kernel/editor/editor.asm) from a line
@@ -1780,87 +1941,107 @@ FRAMES:              DEFS 2           ; 2 bytes
                                 ; $01 for the boolean attributes,
                                 ; $1F for TAB)
 
-; ---- GFX_SPRITE_CAPTURE/GFX_SPRITE_DRAW scratch (Sprites feature,
-; 2026-08-19) ----
-; Both routines run the same nested row/col loop over a rectangle of
-; whole 8x8 character cells, and both call out to GFX_CELL_BITMAP_ADDR/
-; GFX_CELL_ATTR_ADDR partway through each cell — routines that destroy
-; AF/DE/HL per their own contracts — so the loop's own live state
-; (which cell, how far through the buffer) has to survive those calls
-; via memory, not registers, same defensive pattern GFX_FILL/GFX_CPLOT
-; already established for their own scratch state.
-SPRITE_BUF_PTR:      DEFS 2           ; 2 bytes — next unwritten (CAPTURE) or
-                                ; unread (DRAW) byte in the caller's
-                                ; buffer; advances by 9 per cell
-SPRITE_TOP_ROW:      DEFS 1           ; 1 byte — the rectangle's own top
-                                ; character row (0-23), fixed for the
-                                ; whole call
-SPRITE_TOP_COL:      DEFS 1           ; 1 byte — same, top column (0-31)
-SPRITE_W:            DEFS 1           ; 1 byte — width in cells (1-32)
-SPRITE_H:            DEFS 1           ; 1 byte — height in cells (1-24)
-SPRITE_ROW_IDX:      DEFS 1           ; 1 byte — 0-based row offset from
-                                ; SPRITE_TOP_ROW, current cell
-SPRITE_COL_IDX:      DEFS 1           ; 1 byte — same, column offset
+; ---- Sprites, rebuilt fresh for 2068-Forth (this session) ----
+; The inherited 2068-Leap sprite scaffolding above this point (GFX_
+; SPRITE_CAPTURE/DRAW scratch, GRAB/SHOW/HIDE's own BASIC-only slot
+; metadata and 2304-byte image/background buffers) was confirmed dead
+; for this project (no core/*.asm file ever called any GFX_SPRITE_*
+; routine — the capture/draw routines themselves were already deleted
+; as dead code in an earlier ROM-shrink pass) and removed outright
+; rather than reused as-is: its own variable W/H (1-4 cells) format
+; needs GFX_CELL_BITMAP_ADDR-style addressing this project never
+; rebuilt after deleting it, and its buffer sizing was never re-
+; reasoned about for THIS project's own needs, just inherited.
+;
+; SPRITE_DEFINE/SPRITE_SHOW/SPRITE_HIDE (core/sprite.asm) instead use
+; a fixed 16x16-pixel (2x2 character cell) sprite size — deliberately
+; smaller than the old 32x32 cap, chosen to keep the whole feature
+; simple and this RAM budget modest rather than matching BASIC's own
+; assumptions. Each cell is stored as a direct, exact byte-for-byte
+; copy of that cell's own 8 bitmap scanlines plus its 1 attribute byte
+; (9 bytes/cell — the same per-cell shape the old, deleted GFX_SPRITE_
+; CAPTURE/DRAW used, chosen again here for the same reason: a straight
+; memory copy needs no per-pixel OR/AND masking at all, and — unlike a
+; masked/transparent sprite — HIDE can restore the exact prior screen
+; content, on AND off bits alike, which GFX_WRITE_PIXEL's own OR-only
+; "set" mode has no way to do one pixel at a time).
+SPRITE_SLOT_MAX      EQU 4           ; number of slots (0-3) — smaller
+                                    ; than the old 8, matching the
+                                    ; smaller per-slot size below; both
+                                    ; numbers can grow later if a real
+                                    ; use ever needs more, nothing here
+                                    ; assumes either is final
+SPRITE_CELLS         EQU 2           ; fixed sprite size: 2x2 cells
+SPRITE_SLOT_BYTES    EQU SPRITE_CELLS * SPRITE_CELLS * 9   ; 36
 
-; ---- BASIC-level sprite slots (2026-08-19) — SPRITE GRAB/SHOW/HIDE ----
-; Fixed slots, not arrays — this project's BASIC has no array/named-
-; buffer support yet (see docs/language design), so a small fixed
-; number of numbered slots is the buildable-now option, same pragmatic
-; choice EXIT FOR made picking classic NEXT over SuperBASIC's END FOR.
-; Each slot is capped at SPRITE_CELL_MAX x SPRITE_CELL_MAX whole 8x8
-; cells (4x4 = 32x32 pixels), fixing every slot's buffer at exactly
-; SPRITE_SLOT_BYTES regardless of what GRAB actually captures (a
-; smaller w/h just leaves the unused tail of the buffer alone).
-SPRITE_SLOT_MAX     EQU 8       ; number of slots (0-7). Doubled from
-                                ; 4 (2026-08-23) — free in ROM terms
-                                ; (the slot-offset math is a `djnz`
-                                ; loop, not unrolled per-slot code, and
-                                ; GRAB/SHOW/HIDE/MOVE/HIT all already
-                                ; take the slot count as a runtime
-                                ; bound, not a compile-time one), so
-                                ; the only real cost is RAM. The large
-                                ; image/background buffers now live at
-                                ; $E800-$F0FF; only the small per-slot
-                                ; metadata remains below PROG_AREA_START.
-SPRITE_SLOT_BYTES   EQU 144     ; SPRITE_CELL_MAX*SPRITE_CELL_MAX*9
-                                ; (GFX_SPRITE_CAPTURE/DRAW's own 9-
-                                ; bytes-per-cell buffer format)
+SPRITE_SLOT_DEFINED: DEFS SPRITE_SLOT_MAX   ; 4 bytes (1/slot) — has
+                                   ; SPRITE-DEFINE been called for this
+                                   ; slot yet (SHOW refuses otherwise)
+SPRITE_SLOT_SHOWN:   DEFS SPRITE_SLOT_MAX   ; 4 bytes (1/slot) —
+                                   ; currently drawn on screen (HIDE
+                                   ; refuses otherwise; SHOW refuses if
+                                   ; already shown — HIDE then SHOW to
+                                   ; reposition a shown sprite)
+SPRITE_SLOT_ROW:     DEFS SPRITE_SLOT_MAX   ; 4 bytes (1/slot) — top-left
+                                   ; character row last SHOWN at,
+                                   ; meaningful only while SHOWN (HIDE
+                                   ; needs this to know where the saved
+                                   ; background goes back)
+SPRITE_SLOT_COL:     DEFS SPRITE_SLOT_MAX   ; 4 bytes (1/slot) — same,
+                                   ; column
 
-SPRITE_SLOT_DEFINED: DEFS 8           ; 8 bytes (1/slot) — has GRAB been
-                                ; called for this slot yet (SHOW
-                                ; refuses otherwise)
-SPRITE_SLOT_SHOWN:   DEFS 8           ; 8 bytes (1/slot) — currently drawn
-                                ; on screen (HIDE/MOVE refuse
-                                ; otherwise; SHOW refuses if already
-                                ; shown — call MOVE, or HIDE then SHOW,
-                                ; to reposition a shown sprite)
-                                ; as given to the slot's own GRAB
-                                ; (1-4)
-                                ; (1-4)
-                                ; row, meaningful only while SHOWN
-                                ; (HIDE/MOVE need this to know where
-                                ; the saved background goes back)
-SPRITE_DISPLAY_DEPTH: DEFS 1          ; number of slots currently shown
-                                ; save-under restoration must pop these
-                                ; in reverse order to preserve overlaps
-; The two large buffers are persistent across EXROM calls, so they live in
-; chunk 7, which this project never pages. This returns 2304 bytes below
-; PROG_AREA_START to BASIC while keeping the buffers visible to the EXROM-
-; resident sprite driver. Their $F100 end leaves $0E00 (3584) bytes before
-; the machine stack at $FF00.
-SPRITE_SLOT_IMG_BUF  EQU $E800         ; 1152 bytes — captured sprite
-                                ; image itself (SPRITE_SLOT_MAX *
-                                ; SPRITE_SLOT_BYTES), filled once per
-                                ; GRAB, read (never written) by every
-                                ; SHOW/MOVE
-SPRITE_SLOT_BG_BUF   EQU $EC80         ; 1152 bytes — saved background
-                                ; under the sprite, captured fresh by
-                                ; each SHOW/MOVE, consumed by the
-                                ; matching HIDE/MOVE
+SPRITE_SLOT_IMG_BUF  EQU $E800         ; 144 bytes — captured sprite
+                                   ; image itself (SPRITE_SLOT_MAX *
+                                   ; SPRITE_SLOT_BYTES), filled once
+                                   ; per SPRITE-DEFINE, read (never
+                                   ; written) by every SHOW
+SPRITE_SLOT_BG_BUF   EQU SPRITE_SLOT_IMG_BUF + (SPRITE_SLOT_MAX * SPRITE_SLOT_BYTES)
+                                   ; 144 bytes — saved background under
+                                   ; the sprite, captured fresh by each
+                                   ; SHOW, consumed by the matching HIDE
 
-    ASSERT SPRITE_SLOT_IMG_BUF + (SPRITE_SLOT_MAX * SPRITE_SLOT_BYTES) == SPRITE_SLOT_BG_BUF
-    ASSERT SPRITE_SLOT_BG_BUF + (SPRITE_SLOT_MAX * SPRITE_SLOT_BYTES) == $F100
-    ASSERT $F100 <= $FF00              ; preserve machine-stack headroom
+    ASSERT SPRITE_SLOT_BG_BUF + (SPRITE_SLOT_MAX * SPRITE_SLOT_BYTES) < $F000
+                                   ; stays comfortably below DICT_RAM_
+                                   ; CEILING (core/free.asm) — same
+                                   ; headroom convention LOADTEXT_BUF
+                                   ; and the extension-registry region
+                                   ; already established, even though
+                                   ; nothing actually enforces that
+                                   ; ceiling against HERE today (core/
+                                   ; dictspace.asm's own header notes
+                                   ; this gap)
+
+; ---- rom/graphics_exrom.asm's own sprite transfer scratch ----
+; Staged by core/sprite.asm's Home-resident words before paging chunk
+; 5 in — same "plain memory, not registers" reasoning RECT/POLYGON's
+; own state above already documents.
+SPRITE_OP_SLOT:      DEFS 1           ; 1 byte — which slot (0-3)
+SPRITE_OP_ROW:       DEFS 1           ; 1 byte — top-left character row
+SPRITE_OP_COL:       DEFS 1           ; 1 byte — top-left character column
+SPRITE_OP_DIR:       DEFS 1           ; 1 byte — 0 = capture (screen ->
+                                   ; buffer), nonzero = blit (buffer ->
+                                   ; screen)
+SPRITE_OP_BUF:       DEFS 2           ; 2 bytes — base address of the
+                                   ; buffer this transfer reads/writes
+                                   ; (IMG_BUF or BG_BUF, slot-offset
+                                   ; already applied) — set by the
+                                   ; Home-side word, not derived
+                                   ; EXROM-side, so core/sprite.asm's
+                                   ; own three words stay the only
+                                   ; place that decides which buffer
+                                   ; a given operation means
+SPRITE_OP_CELL:      DEFS 1           ; 1 byte — which of the 2x2
+                                   ; cells this transfer is on (0-3),
+                                   ; EXROM-side loop cursor only
+SPRITE_OP_PTR:       DEFS 2           ; 2 bytes — next byte in
+                                   ; SPRITE_OP_BUF's own buffer to
+                                   ; transfer, EXROM-side loop cursor
+                                   ; only, advances by 9 per cell
+SPRITE_CELL_ROW:     DEFS 1           ; 1 byte — this cell's own
+                                   ; absolute character row (SPRITE_
+                                   ; OP_ROW + this cell's row offset),
+                                   ; EXROM-side loop cursor only
+SPRITE_CELL_COL:     DEFS 1           ; 1 byte — same, column
 
 ; Parse-time scratch for GRAB/SHOW's own multi-argument grammar (slot,
 ; row, col[, w, h]) — each argument gets evaluated and written here
@@ -1892,16 +2073,12 @@ SPRITE_SLOT_BG_BUF   EQU $EC80         ; 1152 bytes — saved background
 ;
 ; Moved instead into the idle "second display file" video-RAM pool
 ; ($5B00-$7FFF, 9472 bytes — see docs/memory_map.md's own writeup on
-; why this range sits unused in Standard video mode): this is smaller
-; than the original $C000-$E7FF span (10,240 bytes), so GFX_FILL_STACK
-; below is SHRUNK from 2048 to 1664 (x,y) entries to fit exactly, with
-; zero bytes wasted (GFX_FILL_STACK_END lands exactly on $8000, the
-; sysvars block's own ORG). This is a real, deliberate capacity cut,
-; not free: GFX_FILL_STACK's own header already documents graceful,
-; no-crash degradation for very large fills (measured ~2069 peak
-; entries for a radius-50 circle, already exceeding the ORIGINAL
-; 2048-entry capacity) — 1664 entries starts degrading somewhat
-; earlier than before, not a new category of risk.
+; why this range sits unused in Standard video mode). GFX_FILL_STACK
+; below no longer needs to fit this pool exactly (it was SHRUNK to
+; 1664, then to 512, entries specifically because the scanline/span
+; rewrite needs far less stack — see its own header) — $7700-$7FFF
+; (2304 bytes) sits genuinely free within this pool now, not reclaimed
+; for anything else yet.
 ;
 ; HAZARD THIS CREATES, and how it's handled: $6000-$77FF of this same
 ; idle pool is where the Second Display File lives (hardware-fixed, not
@@ -1919,8 +2096,9 @@ SPRITE_SLOT_BG_BUF   EQU $EC80         ; 1152 bytes — saved background
 GFX_FILL_VISITED     EQU $5B00         ; 6144 bytes, through $72FF
 
     ASSERT GFX_FILL_VISITED + 6144 == GFX_FILL_STACK
-    ASSERT GFX_FILL_STACK_END == $8000  ; exactly fills the idle video-RAM
-                                         ; pool with zero bytes wasted —
+    ASSERT GFX_FILL_STACK_END <= $8000  ; must stay inside the idle
+                                         ; video-RAM pool, but no longer
+                                         ; needs to fill it exactly —
                                          ; see this block's own header
     ASSERT GFX_FILL_VISITED >= $5B00    ; never touch the live screen/
                                          ; attribute file below it
@@ -2175,10 +2353,14 @@ GFX_FILL_VISITED     EQU $5B00         ; 6144 bytes, through $72FF
 ; BANK_EXROM_DEPTH makes BANK_PAGE_EXROM_IN/_OUT nesting-safe: IN only
 ; does the real port write when depth was 0 (0->1 transition), OUT
 ; only does the real port write when depth reaches back to 0 — any
-; inner, nested pair just adjusts the counter and leaves chunk 6
-; mapped exactly as the outer caller left it. The single-call (depth
-; 0->1->0) case — every caller before this — is completely unchanged.
-BANK_EXROM_DEPTH:    DEFS 1           ; 1 byte — 0 = chunk 6 currently Home
+; inner, nested pair just adjusts the counter and leaves the paged
+; chunk mapped exactly as the outer caller left it. The single-call
+; (depth 0->1->0) case — every caller before this — is completely
+; unchanged. 2068-Forth pages chunk 5 ($A000-$BFFF), not chunk 6 (the
+; historical bug story above this comment is 2068-Leap's own, from
+; when this sysvar was inherited — kernel/bank/bank.asm's own header
+; has the full writeup on why this project's own choice differs).
+BANK_EXROM_DEPTH:    DEFS 1           ; 1 byte — 0 = chunk 5 currently Home
 
 ; ---- GOSUB/RETURN return-address stack (2026-08-22) ----
 ; Same shape as FOR_STACK below (fixed array + depth counter) — the

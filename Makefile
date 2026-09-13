@@ -1,6 +1,6 @@
-.PHONY: all boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-smoke-p31 forth-smoke-p32 forth-smoke-p33 forth-smoke-p34 forth-smoke-p35 forth-smoke-p36 forth-smoke-p37 forth-smoke-p38 forth-smoke-p40 forth-smoke-p41 forth-smoke-p42 forth-smoke-p43 forth-smoke-p44 forth-smoke-p45 forth-smoke-p46 forth-smoke-p47 forth-smoke-p48 forth-smoke-p49 forth-smoke-p50 forth-smoke-p51 forth-boot forth-demo-blackjack forth-smoke-p52 forth-smoke-p53-realtape forth-smoke-p54 forth-smoke-p55 forth-smoke-p56 forth-smoke-p57 forth-smoke-p58 forth-smoke-p59 forth-smoke-p60 forth-smoke-p61 forth-smoke-p62 forth-smoke-p63 forth-boot-cart forth-demo-blackjack-cart cart product docs dist check clean
+.PHONY: all boot forth-lros forth-smoke forth-smoke-p64 forth-smoke-p65 graphics-exrom test-exrom-isolation test-rect test-polygon test-sprite test-poly-fill forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-smoke-p31 forth-smoke-p32 forth-smoke-p33 forth-smoke-p34 forth-smoke-p35 forth-smoke-p36 forth-smoke-p37 forth-smoke-p38 forth-smoke-p40 forth-smoke-p41 forth-smoke-p42 forth-smoke-p43 forth-smoke-p44 forth-smoke-p45 forth-smoke-p46 forth-smoke-p47 forth-smoke-p48 forth-smoke-p49 forth-smoke-p50 forth-smoke-p51 forth-boot forth-demo-blackjack forth-smoke-p52 forth-smoke-p53-realtape forth-smoke-p54 forth-smoke-p55 forth-smoke-p56 forth-smoke-p57 forth-smoke-p58 forth-smoke-p59 forth-smoke-p60 forth-smoke-p61 forth-smoke-p62 forth-smoke-p63 forth-boot-cart forth-demo-blackjack-cart cart product docs dist check clean
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-smoke-p31 forth-smoke-p32 forth-smoke-p33 forth-smoke-p34 forth-smoke-p35 forth-smoke-p36 forth-smoke-p37 forth-smoke-p38 forth-smoke-p40 forth-smoke-p41 forth-smoke-p42 forth-smoke-p43 forth-smoke-p44 forth-smoke-p45 forth-smoke-p46 forth-smoke-p47 forth-smoke-p48 forth-smoke-p49 forth-smoke-p50 forth-smoke-p51 forth-boot forth-demo-blackjack forth-smoke-p52 forth-smoke-p53-realtape forth-smoke-p54 forth-smoke-p55 forth-smoke-p56 forth-smoke-p57 forth-smoke-p58 forth-smoke-p59 forth-smoke-p60 forth-smoke-p61 forth-smoke-p62 forth-smoke-p63 forth-boot-cart forth-demo-blackjack-cart
+all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-smoke-p31 forth-smoke-p32 forth-smoke-p33 forth-smoke-p34 forth-smoke-p35 forth-smoke-p36 forth-smoke-p37 forth-smoke-p38 forth-smoke-p40 forth-smoke-p41 forth-smoke-p42 forth-smoke-p43 forth-smoke-p44 forth-smoke-p45 forth-smoke-p46 forth-smoke-p47 forth-smoke-p48 forth-smoke-p49 forth-smoke-p50 forth-smoke-p51 forth-boot forth-demo-blackjack forth-smoke-p52 forth-smoke-p53-realtape forth-smoke-p54 forth-smoke-p55 forth-smoke-p56 forth-smoke-p57 forth-smoke-p58 forth-smoke-p59 forth-smoke-p60 forth-smoke-p61 forth-smoke-p62 forth-smoke-p63 forth-smoke-p64 forth-smoke-p65 graphics-exrom test-exrom-isolation test-rect test-polygon test-sprite test-poly-fill forth-boot-cart forth-demo-blackjack-cart
 
 # Milestone 0: boot stub only.
 boot:
@@ -532,6 +532,90 @@ forth-smoke-p63:
 	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p63.sym --lst=build/forth_smoke_p63.lst rom/forth_smoke_p63.asm
 	mv forth_smoke_p63_rom0.bin build/forth_smoke_p63_rom0.bin
 
+# Phase 64: LIST-DEFS/RECALL (core/recall.asm) smoke ROM -- see
+# rom/forth_smoke_p64.asm's own header for the six-checkpoint contract
+# and why it deliberately doesn't INCLUDE core/loadtext.asm or
+# core/editor.asm.
+forth-smoke-p64:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p64.sym --lst=build/forth_smoke_p64.lst rom/forth_smoke_p64.asm
+	mv forth_smoke_p64_rom0.bin build/forth_smoke_p64_rom0.bin
+
+# Smoke ROM for the scanline/span FILL rewrite (kernel/graphics/graphics.asm's
+# GFX_FILL) -- see rom/forth_smoke_p65.asm's own header for the four
+# checkpoints, including the historically tricky "recolor an already-solid
+# region" path. Confirmed passing (border green) under real ZEsarUX.
+forth-smoke-p65:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p65.sym --lst=build/forth_smoke_p65.lst rom/forth_smoke_p65.asm
+	mv forth_smoke_p65_rom0.bin build/forth_smoke_p65_rom0.bin
+
+# Generated from rom/forth_boot.asm's own GRAPHICS_HOME_TABLE -- see
+# tools/export_home_symbols.py's own header and rom/graphics_exrom.asm's.
+# Regenerated on every graphics-exrom build, never hand-edited or
+# committed (build/ is gitignored).
+build/graphics_home_table.inc: rom/forth_boot.asm tools/export_home_symbols.py
+	mkdir -p build
+	python3 tools/export_home_symbols.py rom/forth_boot.asm build/graphics_home_table.inc
+
+# EXROM-resident graphics services (chunk 5, $A000-$BFFF): RECT, POLYGON,
+# POLYGON-FILL, SPRITE-DEFINE/SHOW/HIDE. See rom/graphics_exrom.asm's
+# own header, and docs/PROJECT_PLAN.md's chunk-by-chunk audit for why
+# chunk 5. Standalone 8K image, not concatenated with forth-boot's own
+# source -- combine with build/forth_boot_rom0.bin for ZEsarUX the same
+# way README.md's own "Try it" section already does for EXROM.
+graphics-exrom: build/graphics_home_table.inc
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/graphics_exrom.sym --lst=build/graphics_exrom.lst rom/graphics_exrom.asm
+	mv graphics_exrom.bin build/graphics_exrom.bin
+
+# Fresh chunk-5 EXROM paging isolation test -- see rom/test_exrom_
+# isolation.asm's own header. Confirmed passing (border green) under real
+# ZEsarUX; combine build/test_exrom_isolation_rom0.bin with any real 8K
+# EXROM image filled with $A5 to re-run it.
+test-exrom-isolation:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/test_exrom_isolation.sym --lst=build/test_exrom_isolation.lst rom/test_exrom_isolation.asm
+	mv test_exrom_isolation_rom0.bin build/test_exrom_isolation_rom0.bin
+
+# RECT smoke ROM -- see rom/test_rect.asm's own header. Combine with
+# build/graphics_exrom.bin for the real pass; combine with any wrong/
+# blank EXROM image to confirm the magic/ABI mismatch path instead.
+test-rect: graphics-exrom
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/test_rect.sym --lst=build/test_rect.lst rom/test_rect.asm
+	mv test_rect_rom0.bin build/test_rect_rom0.bin
+
+# POLYGON smoke ROM -- see rom/test_polygon.asm's own header. Combine with
+# build/graphics_exrom.bin for the real pass.
+test-polygon: graphics-exrom
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/test_polygon.sym --lst=build/test_polygon.lst rom/test_polygon.asm
+	mv test_polygon_rom0.bin build/test_polygon_rom0.bin
+
+# SPRITE-DEFINE/SHOW/HIDE smoke ROM -- see rom/test_sprite.asm's own
+# header. Combine with build/graphics_exrom.bin for the real pass.
+test-sprite: graphics-exrom
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/test_sprite.sym --lst=build/test_sprite.lst rom/test_sprite.asm
+	mv test_sprite_rom0.bin build/test_sprite_rom0.bin
+
+# POLYGON-FILL smoke ROM -- see rom/test_poly_fill.asm's own header.
+# Combine with build/graphics_exrom.bin for the real pass.
+test-poly-fill: graphics-exrom
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/test_poly_fill.sym --lst=build/test_poly_fill.lst rom/test_poly_fill.asm
+	mv test_poly_fill_rom0.bin build/test_poly_fill_rom0.bin
+
+# LROS cartridge boot stub (EXPERIMENTAL) -- see rom/forth_lros.asm's own
+# header. Deliberately NOT part of `all`: it's a separate, unverified
+# distribution channel (DOCK cartridge), not a regression-tested phase of
+# the Home-ROM product build. Pack with tools/pack_dck.sh afterward.
+forth-lros:
+	mkdir -p build
+	tools/sjasmplus_strict.sh --sym=build/forth_lros.sym --lst=build/forth_lros.lst rom/forth_lros.asm
+	mv forth_lros_chunk0.bin build/forth_lros_chunk0.bin
+
 # The two ROMs people actually run: the live Forth and the Blackjack demo.
 product: forth-boot forth-demo-blackjack
 
@@ -541,7 +625,9 @@ product: forth-boot forth-demo-blackjack
 # blocks in rom/forth_boot.asm). Every other byte is identical to the
 # home-ROM build. tools/make_dck.py then wraps the raw image as a .dck
 # for Fuse (--dock) and ZEsarUX; the raw *_cart.bin is what goes on an
-# EPROM in a real cartridge.
+# EPROM in a real cartridge. This covers only the base dictionary --
+# RECT/POLYGON/POLYGON-FILL/sprites still need the graphics EXROM,
+# which has no cartridge/DOCK path yet (see docs/lros_cartridge.md).
 forth-boot-cart:
 	mkdir -p build
 	tools/sjasmplus_strict.sh -DCARTRIDGE --sym=build/forth_boot_cart.sym --lst=build/forth_boot_cart.lst rom/forth_boot.asm
@@ -563,10 +649,12 @@ docs:
 	tools/build_docs.sh
 
 # The downloadable bundle -> dist/2068-Forth-<version>.zip: both product
-# ROMs as home-ROM images and as DOCK cartridges (.dck), an EXROM
-# placeholder, symbol listings, and the docs as Markdown, PDF, and DOCX. This is what the GitHub Actions workflow
-# (.github/workflows/build.yml) attaches to every build and release.
-dist: product cart docs
+# ROMs as home-ROM images and as DOCK cartridges (.dck), the graphics
+# EXROM and its EightyOne/TS-Pico .dck wrapping, an EXROM placeholder,
+# symbol listings, and the docs as Markdown, PDF, and DOCX. This is what
+# the GitHub Actions workflow (.github/workflows/build.yml) attaches to
+# every build and release.
+dist: product cart graphics-exrom forth-lros docs
 	tools/package_dist.sh
 
 check:

@@ -124,6 +124,20 @@ LOADTEXT_NAME_BUF  EQU $8A6A   ; 10 bytes: LOAD-TEXT's own scratch — a
                                ; bounded) — ends $8A74, still well inside
                                ; the confirmed-idle gap above
 
+; ---- Phase 64 (core/recall.asm) workspace-end tracking. Placed here,
+; not in core/recall.asm itself, because W_LOADTEXT below is the thing
+; that sets it -- the boundary scanner and RECALL/LIST-DEFS words that
+; READ it live in core/recall.asm, which INCLUDEs after this file, so
+; the backward reference is safe. Same confirmed-idle gap, still with
+; room before FSTACK_LIMIT ($8C00). ----
+WORKSPACE_END EQU $8A74     ; 2 bytes: one past the last valid byte
+                            ; currently in LOADTEXT_BUF -- the append
+                            ; cursor core/recall.asm's WORKSPACE_APPEND
+                            ; advances, and the boundary scanner's own
+                            ; upper limit. Set below, after a successful
+                            ; LOAD-TEXT; left untouched by SAVE-TEXT
+                            ; (which doesn't touch LOADTEXT_BUF at all).
+
 ; ---- the receive buffer itself — see this file's own header for the
 ; full sizing rationale. Reserves the TOP of core/free.asm's own
 ; DICT_RAM_CEILING-bounded dictionary RAM range, not a separate pool. ----
@@ -248,7 +262,25 @@ W_LOADTEXT:
     ; DE already holds the actual received length on success -- exactly
     ; what INTERPRET_RUN's own ( HL = source address, DE = source length )
     ; contract wants, no repackaging needed.
-    ld   hl, LOADTEXT_BUF
+    ;
+    ; TRACK_WORKSPACE_END, gated: only rom/forth_boot.asm DEFINEs this
+    ; (right before its own INCLUDE of this file) -- it's the only ROM
+    ; that also INCLUDEs core/recall.asm, which is the only consumer of
+    ; WORKSPACE_END. Every other ROM including this file (e.g.
+    ; rom/forth_smoke_p52.asm, already right at its own 16K ceiling with
+    ; a large INCBINed test payload) would rather not pay for 9 bytes of
+    ; dead-weight bookkeeping nothing there ever reads. Without this
+    ; flag, WORKSPACE_END simply isn't touched by LOAD-TEXT, same as
+    ; before core/recall.asm existed.
+    ld   hl, LOADTEXT_BUF          ; unconditional -- INTERPRET_RUN's own
+                                    ; source-address argument, needed
+                                    ; regardless of TRACK_WORKSPACE_END
+    IFDEF TRACK_WORKSPACE_END
+    push hl
+    add  hl, de
+    ld   (WORKSPACE_END), hl
+    pop  hl
+    ENDIF
     call INTERPRET_RUN
 .fail:
     ret

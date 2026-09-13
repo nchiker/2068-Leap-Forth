@@ -159,10 +159,20 @@ GFX_PAINT_ATTR:
 
 ; ============================================================================
 ; GFX_SPRITE_INVALIDATE
-; Forget displayed/save-under state before a global screen transformation.
-; Captured images and dimensions remain defined and may be SHOWn again.
+; Forget displayed/save-under state before a global screen transformation
+; (CLS, mode switch) — the screen no longer shows whatever a SHOWn
+; slot's own saved background/position described, so a later SPRITE-
+; HIDE must not try to "restore" it. Captured images (SPRITE_SLOT_
+; DEFINED) remain defined and may be SPRITE-SHOWn again.
+;
+; SPRITE_SLOT_MAX/SPRITE_SLOT_SHOWN are core/sprite.asm's own fresh
+; 2068-Forth design (this session) — smaller (4 slots, not 8) than the
+; inherited 2068-Leap scaffolding this routine originally reset, and
+; that design's own SPRITE_DISPLAY_DEPTH z-order counter has no
+; equivalent here: each slot restores its own single saved background
+; directly, no overlap-ordering stack to unwind.
 ; In: none
-; Out: SPRITE_SLOT_SHOWN[0..7]=0, SPRITE_DISPLAY_DEPTH=0
+; Out: SPRITE_SLOT_SHOWN[0..SPRITE_SLOT_MAX-1] = 0
 ; Destroys: AF, B, HL
 ; ============================================================================
 GFX_SPRITE_INVALIDATE:
@@ -173,7 +183,6 @@ GFX_SPRITE_INVALIDATE:
     ld   (hl), a
     inc  hl
     djnz .loop
-    ld   (SPRITE_DISPLAY_DEPTH), a
     ret
 
 ; ============================================================================
@@ -296,41 +305,6 @@ GFX_SCROLL_OUTPUT_UP:
     ldir
     ld   b, 23
     jp   GFX_CLEAR_ROW
-
-; ============================================================================
-; GFX_SCROLL_TEXT_DOWN
-; Mirror of GFX_SCROLL_TEXT_UP: scrolls rows 0-22 DOWN by one text row
-; instead — row 0's content becomes row 1's, ... row 21's becomes
-; row 22's. Row 0 itself is left UNTOUCHED for the caller to draw.
-;
-; Row-pair copies are processed in DESCENDING destination order (22,
-; 21, ..., 1) for the same memmove reasoning as GFX_SCROLL_TEXT_UP's
-; own header, mirrored: row 21's content must be read (as the source
-; for dst=22) before it's overwritten (as the destination when
-; dst=21) — "copy backward when dst > src".
-; In:  none
-; Out: none
-; Destroys: AF, BC, DE, HL
-; ============================================================================
-GFX_SCROLL_TEXT_DOWN:
-    call GFX_SPRITE_INVALIDATE
-    ld   hl, ATTR_ADDR + 22*32 - 1   ; last byte of rows 0-21 (source)
-    ld   de, ATTR_ADDR + 23*32 - 1   ; last byte of rows 1-22 (dest) —
-    ld   bc, 22*32                   ; overlapping, dst > src, needs the
-    lddr                             ; backward-copying LDDR, not LDIR
-
-    ld   a, 22
-    ld   (GFX_SCROLL_DST_ROW), a
-.row_loop:
-    ld   a, (GFX_SCROLL_DST_ROW)
-    dec  a
-    ld   (GFX_SCROLL_SRC_ROW), a
-    call GFX_COPY_ROW_BITMAP
-    ld   a, (GFX_SCROLL_DST_ROW)
-    dec  a
-    ld   (GFX_SCROLL_DST_ROW), a
-    jr   nz, .row_loop
-    ret
 
 ; ============================================================================
 ; GFX_SET_BORDER
@@ -568,7 +542,7 @@ GFX_CHAR_TO_FONT_OFFSET:
 
 ; ============================================================================
 ; GFX_CHAR_SETUP (internal — not in kernel_api.inc)
-; Shared address computation for GFX_PUTCHAR and GFX_PUTCHAR_BOLD —
+; Shared address computation for GFX_PUTCHAR and GFX_PUTCHAR_OVER —
 ; written once here rather than duplicated in both, given how much
 ; trouble duplicated addressing logic has already caused in this
 ; project (the GFX_PUTCHAR/GFX_CHAR_TO_FONT_OFFSET row-clobbering bug).
@@ -695,43 +669,6 @@ GFX_PUTCHAR_OVER:
     ret
 
 ; ============================================================================
-; GFX_PUTCHAR_BOLD
-; Plots one character with a synthesized bold effect: each scanline
-; byte is ORed with itself shifted right by one pixel (via RRCA),
-; widening every stroke by a pixel rather than needing a whole second
-; font. Verified numerically against representative font bytes before
-; writing this — separated strokes (like 'A''s legs) stay separated,
-; just each a pixel wider; solid bars extend cleanly; space stays
-; blank. Used for keyword highlighting in the editor.
-; In:  A = ASCII character, B = row (0-23), C = column (0-31)
-; Out: none
-; Destroys: AF, BC, DE, HL
-; ============================================================================
-GFX_PUTCHAR_BOLD:
-    call GFX_CHAR_SETUP
-    ret  c                                 ; out of range — see
-                                          ; GFX_PUTCHAR's own comment
-    ld   b, 8
-.scanline_loop:
-    ld   a, (hl)
-    ld   c, a                    ; C = original byte — B is the scanline
-                                 ; counter here, not the row parameter
-                                 ; anymore (GFX_CHAR_SETUP already
-                                 ; consumed that), so C is free to use
-    rrca                          ; shift right 1, wrapping bit0 into
-                                 ; bit7 — harmless here since font bytes
-                                 ; only use their top 5 bits, bit0 is
-                                 ; always 0 in every glyph we have
-    or   c                         ; OR with the original -> widened stroke
-    ex   de, hl
-    ld   (hl), a
-    inc  h
-    ex   de, hl
-    inc  hl
-    djnz .scanline_loop
-    ret
-
-; ============================================================================
 ; GFX_PRINT_STRING
 ; Prints a null-terminated string starting at a character-grid position,
 ; advancing one column per character. Does not wrap at end of line or
@@ -762,94 +699,11 @@ GFX_PRINT_STRING:
     jr   .loop
 
 ; ============================================================================
-; GFX_PRINT_STRING_ATTR
-; Prints a null-terminated string with BASIC-style attributes. At column 32
-; it wraps; past row 23 it scrolls all 24 output rows and continues on the
-; newly cleared bottom row. It also sets the attribute cell
-; under each character to a given byte — built for basic/'s INK/PAPER/
-; FLASH/INVERSE support, which needs printed text to actually carry
-; the current attribute state, unlike every other caller of
-; GFX_PRINT_STRING (HELP screens, error messages, the editor), which
-; always wants the plain default/inherited attribute and must NOT be
-; affected by this. Kept as a separate routine rather than adding an
-; attribute parameter to GFX_PRINT_STRING itself, so none of those
-; existing callers need to change.
-;
-; The attribute value is stashed in PRINT_ATTR_SCRATCH (a real RAM
-; sysvar, sysvars.inc), not a register — both GFX_PUTCHAR and
-; GFX_SET_ATTR destroy AF/BC/DE/HL per their own contracts, so a bare
-; register holding the attribute would not survive either call. This
-; is the same "value must survive a call -> use memory, not a
-; register" pattern this project has hit repeatedly (see
-; MEM_LINE_FIRST/NEXT's own DE-clobbering history) — BUT NOTE: this
-; scratch value must live in RAM specifically, never in a `DB` byte
-; embedded in this file's own code. A `DB` byte sits in ROM once
-; assembled, and this entire codebase assembles into ROM — writing to
-; a ROM-resident "variable" via `ld (addr), a` is a silent no-op on
-; real hardware, so the byte always reads back its compile-time
-; initial value, never whatever was "written" at runtime. This was a
-; real, shipped bug: an earlier version of this routine used exactly
-; that pattern (a local `.attr_scratch: DB 0`), and every PRINT wrote
-; attribute $00 (black-on-black) regardless of INK/PAPER, found via a
-; real memory dump showing GFX_CLS's own fill elsewhere on screen was
-; correctly $38 while PRINT's own writes were stuck at $00. See
-; docs/programmers_reference.md's "INK / PAPER / FLASH / INVERSE /
-; OVER" section for the full writeup.
-; In:  HL = pointer to null-terminated string, B = row, C = column,
-;      A = attribute byte to set at every printed cell, D = OVER flag
-; Out: B/C = row/column immediately after the final character
-; Destroys: AF, BC, DE, HL
-; ============================================================================
-GFX_PRINT_STRING_ATTR:
-    ld   (PRINT_ATTR_SCRATCH), a
-    ld   a, d
-    ld   (PRINT_OVER_SCRATCH), a
-.loop:
-    ld   a, (hl)
-    or   a
-    ret  z
-    push hl
-    push bc                  ; GFX_PUTCHAR destroys BC entirely
-    ld   a, (PRINT_OVER_SCRATCH)
-    or   a
-    jr   z, .opaque
-    ld   a, (hl)
-    call GFX_PUTCHAR_OVER
-    jr   .glyph_done
-.opaque:
-    ld   a, (hl)
-    call GFX_PUTCHAR
-.glyph_done:
-    pop  bc
-    push bc                  ; GFX_SET_ATTR also destroys BC — needs
-                             ; its own save/restore, same row/column
-    ld   a, (PRINT_ATTR_SCRATCH)
-    call GFX_SET_ATTR
-    pop  bc
-    pop  hl
-    inc  hl
-    inc  c
-    ld   a, c
-    cp   32
-    jr   c, .loop
-    ld   c, 0
-    inc  b
-    ld   a, b
-    cp   24
-    jr   c, .loop
-    push hl
-    call GFX_SCROLL_OUTPUT_UP
-    pop  hl
-    ld   b, 23
-    ld   c, 0
-    jr   .loop
-
-; ============================================================================
 ; GFX_ATTR_SWAP (internal — not in kernel_api.inc)
-; Shared address computation and ink/paper bit-swap for
-; GFX_INVERT_ATTR and GFX_INVERT_ATTR_STATIC — written once here rather
-; than duplicated in both, given how much trouble duplicated addressing
-; logic has already caused in this project. The bit-swap instruction
+; Address computation and ink/paper bit-swap for GFX_INVERT_ATTR,
+; split out as its own routine rather than inlined, given how much
+; trouble duplicated addressing logic has already caused in this
+; project. The bit-swap instruction
 ; sequence was verified numerically against all 256 possible attribute
 ; byte values before being trusted — see docs/programmers_reference.md's
 ; kernel/graphics section.
@@ -873,8 +727,8 @@ GFX_PRINT_STRING_ATTR:
 ; row's own leftover-row cleanup ran earlier in the same redraw pass
 ; (this call happens AFTER that cleanup, re-dirtying the cell it had
 ; just cleared). Fixed with the same bounds check GFX_SET_ATTR already
-; has, returning early with carry SET on out-of-range — both callers
-; below now check `ret c` immediately after this call, before doing
+; has, returning early with carry SET on out-of-range — the caller
+; below now checks `ret c` immediately after this call, before doing
 ; anything else, so an out-of-range request is a clean no-op instead
 ; of a silent corruption, matching this project's now-consistent "clip
 ; rather than corrupt" answer to this class of bug.
@@ -928,14 +782,12 @@ GFX_ATTR_SWAP:
 ; No interrupt or timer code needed on our end (kernel/interrupt doesn't
 ; exist yet, but this doesn't need it) — offloading blink timing to the
 ; ULA is the standard Spectrum-family way to do this. Used as the
-; editor's cursor indicator specifically — for a STATIC inverted
-; highlight that shouldn't blink (e.g. a status bar), use
-; GFX_INVERT_ATTR_STATIC instead. Using this routine for
-; basic/'s new status line by mistake was a real bug: the whole status
-; bar inherited the cursor's blink, which is why it appeared to
-; "flash" — caught from a screenshot and fixed by splitting this
-; routine's address/swap logic out into GFX_ATTR_SWAP so both variants
-; share it rather than duplicating it.
+; editor's cursor indicator specifically. (A GFX_INVERT_ATTR_STATIC
+; sibling once existed for a non-blinking static highlight — inherited
+; from 2068-Leap's status-bar use, which 2068-Forth has no equivalent
+; of; removed as dead code, never called here. The address/swap logic
+; still lives in its own GFX_ATTR_SWAP below rather than inlined here,
+; from when the two shared it.)
 ; In:  B = row (0-23), C = column (0-31)
 ; Out: none
 ; Destroys: AF, BC, DE, HL
@@ -961,30 +813,10 @@ GFX_INVERT_ATTR:
     ret
 
 ; ============================================================================
-; GFX_INVERT_ATTR_STATIC
-; Same ink/paper swap as GFX_INVERT_ATTR, WITHOUT forcing the hardware
-; FLASH bit — a genuinely static inverted highlight, for things like a
-; status bar that should stand out visually but not blink like the
-; cursor does. FLASH is left exactly as it already was at that cell
-; (normally off, since nothing else sets it) rather than forced either
-; way.
-; In:  B = row (0-23), C = column (0-31)
-; Out: none
-; Destroys: AF, BC, DE, HL
-; ============================================================================
-GFX_INVERT_ATTR_STATIC:
-    call GFX_ATTR_SWAP
-    ret  c                                    ; out of range — see
-                                             ; GFX_INVERT_ATTR's own
-                                             ; identical check just above
-    ld   (hl), a
-    ret
-
-; ============================================================================
 ; GFX_SET_ATTR
 ; Sets the attribute byte at one character cell to a specific value
-; outright — unlike GFX_INVERT_ATTR/GFX_INVERT_ATTR_STATIC, which swap
-; ink/paper relative to whatever's already there, this replaces it.
+; outright — unlike GFX_INVERT_ATTR, which swaps ink/paper relative to
+; whatever's already there, this replaces it.
 ; Built for red-highlighted error lines (basic/'s
 ; BASIC_REDRAW_PROGRAM), but deliberately general — any caller that
 ; needs a specific, known color at a specific cell can use this rather
@@ -1005,10 +837,12 @@ GFX_INVERT_ATTR_STATIC:
 ; got fixed for (see that routine's own comment): nothing stopped a
 ; caller from passing an out-of-range column here, and unlike the
 ; bitmap write, there was no separate fix covering this path. Found
-; via a real, reproducible case: GFX_PRINT_STRING_ATTR calls this
-; unconditionally for every character of a string, including ones
-; GFX_PUTCHAR correctly skips once GFX_CHAR_SETUP's own bounds check
-; kicks in past column 31 — so a too-long PRINT string's attribute-
+; via a real, reproducible case: an earlier BASIC-attribute-printing
+; routine (since removed as dead code — see this file's own recent
+; history) called this unconditionally for every character of a
+; string, including ones GFX_PUTCHAR correctly skips once GFX_CHAR_
+; SETUP's own bounds check kicks in past column 31 — so a too-long
+; PRINT string's attribute-
 ; painting kept walking past column 31 even after the bitmap fix
 ; landed, and since attribute memory is a flat row*32+col array,
 ; walking col past 31 spills into the NEXT row's attribute bytes,
@@ -1219,36 +1053,6 @@ GFX_CLEAR_ROW:
     push bc
     ld   a, ATTR_DEFAULT
     call GFX_SET_ATTR
-    pop  bc
-
-    inc  c
-    ld   a, c
-    cp   GFX_COLS
-    jr   c, .loop
-    ret
-
-; ============================================================================
-; GFX_CLEAR_ROW_TEXT
-; Clears one character row's BITMAP ONLY (all 32 columns) — leaves the
-; attribute byte at every cell completely untouched, unlike
-; GFX_CLEAR_ROW, which resets both. Built for basic/'s status bar: it
-; needs to erase old text before drawing new text, but always wants
-; the row inverted, never briefly at the default attribute in between
-; — clearing the attribute too (even just to immediately set it back
-; to inverted afterward) means the row visibly passes through a non-
-; inverted state for the moment in between, which showed up as a
-; smaller, but still-present, flash even after GFX_CLEAR_ROW's own
-; earlier fix for the worse, fully-toggling version of this bug.
-; In:  B = row (0-23)
-; Out: none
-; Destroys: AF, BC, DE, HL
-; ============================================================================
-GFX_CLEAR_ROW_TEXT:
-    ld   c, 0
-.loop:
-    push bc
-    ld   a, " "
-    call GFX_PUTCHAR
     pop  bc
 
     inc  c
@@ -1702,50 +1506,6 @@ GFX_FILL_POP:
     ret
 
 ; ============================================================================
-; GFX_FILL_TRY_NEIGHBOR (internal — not in kernel_api.inc)
-; Checks whether (nx,ny) still matches GFX_FILL_TARGET AND hasn't
-; already been visited this fill (GFX_FILL_VISITED — see GFX_FILL's
-; header for why a separate bitmap, not the pixel state itself, has
-; to be the visited-tracker); if both pass, marks it visited, colors
-; it, and pushes it for later expansion.
-; Saves/restores BC around every call that might destroy it
-; (GFX_READ_PIXEL/GFX_WRITE_PIXEL both take x/y via B/C) — (nx,ny) has
-; to survive all the way to the final push.
-; In:  B = nx, C = ny (caller has already bounds-checked these)
-; Out: none
-; Destroys: AF, DE, HL
-; ============================================================================
-GFX_FILL_TRY_NEIGHBOR:
-    push bc
-    call GFX_READ_PIXEL             ; A = pixel state at (nx,ny);
-                                     ; destroys BC (its own contract)
-    ld   e, a
-    ld   a, (GFX_FILL_TARGET)
-    cp   e
-    jr   nz, .not_match
-
-    pop  bc
-    push bc                         ; restore real (nx,ny) — GFX_READ_
-                                     ; PIXEL clobbered B/C above.
-                                     ; GFX_FILL_VISITED_CHECK_SET only
-                                     ; READS B/C (never writes them),
-                                     ; so this one restore covers it.
-    call GFX_FILL_VISITED_CHECK_SET ; carry SET if already visited;
-                                     ; else marks it visited now
-    jr   c, .not_match
-
-    pop  bc
-    push bc
-    ld   d, 0                       ; always OR/set — see GFX_FILL's header
-    ld   a, (GFX_FILL_ATTR)
-    call GFX_WRITE_PIXEL
-    pop  bc
-    jr GFX_FILL_PUSH
-.not_match:
-    pop  bc
-    ret
-
-; ============================================================================
 ; GFX_FILL_VISITED_CHECK_SET (internal — not in kernel_api.inc)
 ; Checks GFX_FILL_VISITED (a 6144-byte, 1-bit-per-screen-pixel shadow
 ; bitmap — plain linear row*32+col layout, NOT the real screen's
@@ -1802,14 +1562,165 @@ GFX_FILL_VISITED_CHECK_SET:
     ret
 
 ; ============================================================================
+; GFX_FILL_VISITED_CHECK (internal — not in kernel_api.inc)
+; Read-only sibling of GFX_FILL_VISITED_CHECK_SET above — same bitmap,
+; same addressing, but never claims the bit. Used while merely
+; scanning for new spans (GFX_FILL_SCAN_ROW, and GFX_FILL's own
+; left/right span-edge walk), where finding a match must NOT yet mark
+; it visited: a run discovered this way still gets exactly one seed
+; pushed for it, and that seed's own pop-time re-validation (not this
+; scan) is what actually claims each of its pixels once the whole run
+; is finally expanded — see GFX_FILL's header for why claiming early
+; here would be wrong.
+; In:  B = x (0-255), C = y (0-191)
+; Out: carry SET if already visited; carry CLEAR otherwise. Bitmap
+;      itself is left untouched either way.
+; Destroys: AF, DE, HL
+; ============================================================================
+GFX_FILL_VISITED_CHECK:
+    ld   a, c                       ; y
+    ld   l, a
+    ld   h, 0
+    add  hl, hl
+    add  hl, hl
+    add  hl, hl
+    add  hl, hl
+    add  hl, hl                     ; y*32
+    ld   a, b                       ; x
+    srl  a
+    srl  a
+    srl  a                          ; x>>3 (byte column, 0-31)
+    ld   e, a
+    ld   d, 0
+    add  hl, de
+    ld   de, GFX_FILL_VISITED
+    add  hl, de                     ; HL = GFX_FILL_VISITED + y*32 + x/8
+
+    ld   a, b
+    and  %00000111                  ; bit_in_byte = x & 7
+    ld   e, a
+    ld   d, 0
+    push hl
+    ld   hl, BIT_MASK_TABLE
+    add  hl, de
+    ld   a, (hl)
+    pop  hl
+    ld   e, a                       ; E = mask
+    ld   a, (hl)
+    and  e
+    ret  z                          ; carry already clear from AND
+    scf
+    ret
+
+; ============================================================================
+; GFX_FILL_SCAN_ROW (internal — not in kernel_api.inc)
+; Scans row GFX_FILL_SCAN_ROW across EXACTLY [GFX_FILL_LX, GFX_FILL_RX]
+; (the span GFX_FILL just filled) for runs that still match GFX_FILL_
+; TARGET and haven't been claimed yet, pushing ONE seed per run found
+; (not one per matching pixel — that's what keeps GFX_FILL_STACK small;
+; see its own sysvars.inc header for the measured numbers).
+;
+; Deliberately does NOT widen the scan to [LX-1, RX+1]: 4-connectivity
+; only links (i, row) to (i, GFX_FILL_Y) at the SAME column i, so any
+; run in this row that's genuinely part of the same connected region
+; must overlap [LX, RX] in at least one column — this loop reaches it
+; there. Widening by 1 was tried and rejected during this routine's
+; own Python verification: it admits a column just past the span's own
+; edge whose only relationship to the span is diagonal, which isn't
+; real 4-connectivity and leaked fill into pixels a reference
+; breadth-first flood fill over the same shape never touched.
+;
+; In:  GFX_FILL_SCAN_Y (the row to scan, already range-checked 0-191
+;      by the caller), GFX_FILL_LX/RX (the span just filled)
+; Out: none (any runs found are pushed onto GFX_FILL_STACK)
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+GFX_FILL_SCAN_ROW:
+    ld   a, (GFX_FILL_LX)
+    ld   (GFX_FILL_SCAN_X), a
+    ld   a, (GFX_FILL_RX)
+    ld   (GFX_FILL_SCAN_END), a
+
+.scan:
+    ld   a, (GFX_FILL_SCAN_X)
+    ld   hl, GFX_FILL_SCAN_END
+    cp   (hl)
+    jr   z, .in_range               ; SCAN_X == END: still one more to check
+    jr   nc, .done                  ; SCAN_X > END: finished
+.in_range:
+    ld   b, a
+    ld   a, (GFX_FILL_SCAN_Y)
+    ld   c, a                       ; B,C = (SCAN_X, row)
+    push bc
+    call GFX_READ_PIXEL             ; destroys BC
+    ld   e, a
+    pop  bc
+    ld   a, (GFX_FILL_TARGET)
+    cp   e
+    jr   nz, .advance                ; no match here
+    push bc
+    call GFX_FILL_VISITED_CHECK      ; carry set if already claimed
+    pop  bc
+    jr   c, .advance
+
+    ; found the start of a new, still-unclaimed run: push exactly one
+    ; seed for it, then skip the rest of the run without marking it
+    ; visited (pop-time re-validates and claims it for real — see
+    ; this routine's own header on why widening/early-claiming here
+    ; would be wrong)
+    call GFX_FILL_PUSH
+.skip_run:
+    ld   a, (GFX_FILL_SCAN_X)
+    ld   hl, GFX_FILL_SCAN_END
+    cp   (hl)
+    jr   nc, .done                  ; consumed the whole scan range
+    inc  a
+    ld   (GFX_FILL_SCAN_X), a
+    ld   b, a
+    ld   a, (GFX_FILL_SCAN_Y)
+    ld   c, a
+    push bc
+    call GFX_READ_PIXEL
+    ld   e, a
+    pop  bc
+    ld   a, (GFX_FILL_TARGET)
+    cp   e
+    jr   nz, .scan                   ; run ended here: resume the outer
+                                     ; scan AT this same position, fresh
+    push bc
+    call GFX_FILL_VISITED_CHECK
+    pop  bc
+    jr   c, .scan                    ; run ended (already claimed):
+                                     ; same resume-here logic
+    jr   .skip_run
+
+.advance:
+    ld   a, (GFX_FILL_SCAN_X)
+    ld   hl, GFX_FILL_SCAN_END
+    cp   (hl)
+    jr   nc, .done
+    ld   a, (GFX_FILL_SCAN_X)
+    inc  a
+    ld   (GFX_FILL_SCAN_X), a
+    jr   .scan
+
+.done:
+    ret
+
+; ============================================================================
 ; GFX_FILL
-; Flood fill — FILL's mechanism. 4-connected, using an explicit
-; bounded stack (GFX_FILL_PUSH/POP above) rather than recursion — see
-; sysvars.inc's GFX_FILL_STACK comment for the real numbers behind why
-; 2048 entries. Reuses GFX_READ_PIXEL/GFX_WRITE_PIXEL entirely for the
-; actual pixel work — every touched pixel's covering attribute cell
-; gets colored the normal way, no separate attribute logic needed
-; here.
+; Flood fill — FILL's mechanism. 4-connected. Scanline/span algorithm:
+; each pop from the explicit bounded stack (GFX_FILL_PUSH/POP above)
+; expands and fills a WHOLE contiguous horizontal run in one pass
+; (GFX_FILL_LX/RX), then GFX_FILL_SCAN_ROW looks for new unclaimed
+; runs directly above and below that span — see sysvars.inc's
+; GFX_FILL_STACK header for the real numbers behind why this needs so
+; much less stack than the old per-pixel version, and this routine's
+; own GFX_FILL_SCAN_ROW for why the row-above/below scan is bounded to
+; exactly the span's own width. Reuses GFX_READ_PIXEL/GFX_WRITE_PIXEL
+; entirely for the actual pixel work — every touched pixel's covering
+; attribute cell gets colored the normal way, no separate attribute
+; logic needed here.
 ;
 ; Always writes in OR/"set" mode (never XOR/toggle) — GFX_FILL_TARGET
 ; still picks which pixel state (0 or 1) the flood matches and
@@ -1817,37 +1728,21 @@ GFX_FILL_VISITED_CHECK_SET:
 ; with the new attribute, so recoloring an already-solid region is a
 ; clean repaint rather than an erase.
 ;
-; Visited-tracking is a SEPARATE 6144-byte, 1-bit-per-screen-pixel
-; bitmap (GFX_FILL_VISITED, cleared at the start of every call) —
-; NOT folded into the bitmap write itself. Two earlier versions both
-; shipped wrong, found via real hardware testing 2026-08-20, not
-; caught by the ORIGINAL Python verification (which checked flood-
-; connectivity/stack usage assuming "mark on push" via toggling the
-; bit away from target, and never re-examined once the write mode
-; changed): (1) deriving the OVER flag from the seed's own target
-; value and using XOR when filling an already-set region silently
-; erased the shape's bitmap on recolor, since FILL has no way to
-; request "erase" from BASIC. (2) The first attempt at fixing that
-; used the covering ATTRIBUTE CELL already matching the fill color as
-; the "already visited" test instead — cheap (no extra memory) but
-; wrong: attribute color applies to a whole 8x8 cell at once, so it
-; looks "done" after the FIRST pixel in a cell is touched, but the
-; flood still needs to physically walk every pixel in that cell to
-; reach its far edges and cross into the NEXT cell — cell-granularity
-; dedup stops that walk early and badly under-fills anything bigger
-; than about one cell. A correct fix needs genuine per-PIXEL
-; dedup independent of both the bitmap's own state and the attribute,
-; which is what GFX_FILL_VISITED provides.
+; Visited-tracking is still a SEPARATE 6144-byte, 1-bit-per-screen-
+; pixel bitmap (GFX_FILL_VISITED, cleared at the start of every call),
+; NOT folded into the bitmap write itself, and still required for
+; exactly the reason this project already found the hard way once:
+; recoloring an already-solid region means GFX_FILL_TARGET is 1, and
+; every pixel GFX_FILL writes is unconditionally set to 1 too, so a
+; freshly-filled pixel reads back as target-matching again — the
+; pixel's own state can never distinguish "already handled" from
+; "still needs handling" in that case, span-based or not.
 ;
-; Algorithm re-verified in Python before shipping this version (same
-; standard the original had): a solid 51x51 box (the real failing
-; case), a blank 51x51 enclosed region (the everyday "paint bucket
-; into an empty area" case), and a full 256x192 screen fill against
-; the real 2048-entry stack cap all checked byte-for-byte complete —
-; the last one honestly stress-testing whether the existing stack
-; size (already sized by the original author's own prior Python
-; verification, unchanged here) still holds up under the new dedup
-; scheme, not just asserting it does.
+; Algorithm and stack sizing re-verified in Python against a reference
+; breadth-first flood fill before any Z80 was written (same standard
+; every earlier version of this routine held itself to) — see
+; sysvars.inc's GFX_FILL_STACK header for exactly which shapes were
+; tested and the peak stack depth each one measured.
 ;
 ; In:  GFX_FILL_X/Y (seed point, 0-255/0-191), GFX_FILL_ATTR (fill
 ;      color) — all pre-set by the caller
@@ -1869,85 +1764,142 @@ GFX_FILL:
     ld   a, (GFX_FILL_Y)
     ld   c, a
     call GFX_READ_PIXEL             ; A = pixel state at the seed
-    ld   (GFX_FILL_TARGET), a       ; still picks which state to match
+    ld   (GFX_FILL_TARGET), a       ; picks which state to match
 
     ld   a, (GFX_FILL_X)
     ld   b, a
     ld   a, (GFX_FILL_Y)
     ld   c, a
-    call GFX_FILL_VISITED_CHECK_SET ; claim the seed's own bit — carry
-                                     ; ignored, buffer was just cleared
-                                     ; so it can't already be set
-    ld   a, (GFX_FILL_X)
-    ld   b, a
-    ld   a, (GFX_FILL_Y)
-    ld   c, a
-    ld   d, 0                       ; always OR/set — see header
-    ld   a, (GFX_FILL_ATTR)
-    call GFX_WRITE_PIXEL            ; mark the seed itself filled
-    ld   a, (GFX_FILL_X)
-    ld   b, a
-    ld   a, (GFX_FILL_Y)
-    ld   c, a
-    call GFX_FILL_PUSH
+    call GFX_FILL_PUSH              ; seed the stack -- the main loop
+                                    ; below fills it (and claims it)
+                                    ; the same uniform way as every
+                                    ; other span, no special-casing
 
 .loop:
-    call GFX_FILL_POP
-    ret  c                          ; stack empty: done
+    call GFX_FILL_POP               ; B = x, C = y
+    jp   c, .done                   ; stack empty: done
+
+    ; re-validate: a seed can be stale (superseded by another span
+    ; that already covered it before this one got popped) -- see
+    ; GFX_FILL_SCAN_ROW's own header on why duplicates are possible
+    ; and expected, not a bug
+    push bc
+    call GFX_READ_PIXEL
+    ld   e, a
+    pop  bc
+    ld   a, (GFX_FILL_TARGET)
+    cp   e
+    jr   nz, .loop                  ; no longer matches -- discard
+    push bc
+    call GFX_FILL_VISITED_CHECK
+    pop  bc
+    jr   c, .loop                   ; already claimed -- discard
 
     ld   a, b
-    ld   (GFX_FILL_X), a            ; the pixel currently being
-    ld   a, c                      ; expanded — GFX_FILL_TRY_NEIGHBOR/
-    ld   (GFX_FILL_Y), a            ; PUSH/POP never touch these, only
-                                    ; B/C, specifically so this survives
-                                    ; unclobbered across all 4 checks
-                                    ; below
+    ld   (GFX_FILL_X), a
+    ld   a, c
+    ld   (GFX_FILL_Y), a
 
-    ; (x+1, y)
+    ; ---- find the left edge: walk left while still target/unclaimed ----
     ld   a, (GFX_FILL_X)
-    cp   255
-    jr   z, .skip_right
-    ld   b, a
-    inc  b
-    ld   a, (GFX_FILL_Y)
-    ld   c, a
-    call GFX_FILL_TRY_NEIGHBOR
-.skip_right:
-
-    ; (x-1, y)
-    ld   a, (GFX_FILL_X)
+    ld   (GFX_FILL_LX), a
+.scan_left:
+    ld   a, (GFX_FILL_LX)
     or   a
-    jr   z, .skip_left
+    jr   z, .left_done
+    dec  a
     ld   b, a
-    dec  b
     ld   a, (GFX_FILL_Y)
     ld   c, a
-    call GFX_FILL_TRY_NEIGHBOR
-.skip_left:
+    push bc
+    call GFX_READ_PIXEL
+    ld   e, a
+    pop  bc
+    ld   a, (GFX_FILL_TARGET)
+    cp   e
+    jr   nz, .left_done
+    push bc
+    call GFX_FILL_VISITED_CHECK
+    pop  bc
+    jr   c, .left_done
+    ld   a, b
+    ld   (GFX_FILL_LX), a
+    jr   .scan_left
+.left_done:
 
-    ; (x, y+1)
+    ; ---- find the right edge: walk right the same way ----
+    ld   a, (GFX_FILL_X)
+    ld   (GFX_FILL_RX), a
+.scan_right:
+    ld   a, (GFX_FILL_RX)
+    cp   255
+    jr   z, .right_done
+    inc  a
+    ld   b, a
+    ld   a, (GFX_FILL_Y)
+    ld   c, a
+    push bc
+    call GFX_READ_PIXEL
+    ld   e, a
+    pop  bc
+    ld   a, (GFX_FILL_TARGET)
+    cp   e
+    jr   nz, .right_done
+    push bc
+    call GFX_FILL_VISITED_CHECK
+    pop  bc
+    jr   c, .right_done
+    ld   a, b
+    ld   (GFX_FILL_RX), a
+    jr   .scan_right
+.right_done:
+
+    ; ---- fill the whole span, claiming each pixel as it's painted ----
+    ld   a, (GFX_FILL_LX)
+    ld   (GFX_FILL_SCAN_X), a
+.fill_loop:
+    ld   a, (GFX_FILL_SCAN_X)
+    ld   b, a
+    ld   a, (GFX_FILL_Y)
+    ld   c, a
+    push bc
+    call GFX_FILL_VISITED_CHECK_SET  ; carry ignored -- expected clear
+    pop  bc
+    ld   d, 0                        ; always OR/set -- see header
+    ld   a, (GFX_FILL_ATTR)
+    call GFX_WRITE_PIXEL
+    ld   a, (GFX_FILL_SCAN_X)
+    ld   b, a
+    ld   a, (GFX_FILL_RX)
+    cp   b
+    jr   z, .fill_done
+    ld   a, (GFX_FILL_SCAN_X)
+    inc  a
+    ld   (GFX_FILL_SCAN_X), a
+    jr   .fill_loop
+.fill_done:
+
+    ; ---- scan the row above and below this span for new runs ----
+    ld   a, (GFX_FILL_Y)
+    or   a
+    jr   z, .skip_above
+    dec  a
+    ld   (GFX_FILL_SCAN_Y), a
+    call GFX_FILL_SCAN_ROW
+.skip_above:
+
     ld   a, (GFX_FILL_Y)
     cp   191
-    jr   nc, .skip_down
-    ld   c, a
-    inc  c
-    ld   a, (GFX_FILL_X)
-    ld   b, a
-    call GFX_FILL_TRY_NEIGHBOR
-.skip_down:
+    jr   nc, .skip_below
+    inc  a
+    ld   (GFX_FILL_SCAN_Y), a
+    call GFX_FILL_SCAN_ROW
+.skip_below:
 
-    ; (x, y-1)
-    ld   a, (GFX_FILL_Y)
-    or   a
-    jr   z, .skip_up
-    ld   c, a
-    dec  c
-    ld   a, (GFX_FILL_X)
-    ld   b, a
-    call GFX_FILL_TRY_NEIGHBOR
-.skip_up:
+    jp   .loop
 
-    jr   .loop
+.done:
+    ret
 
 ; ============================================================================
 ; GFX_CIRCLE_PLOT_OFFSET (internal — not in kernel_api.inc)
@@ -2493,64 +2445,6 @@ FONT_TABLE:
     DB   $70, $88, $08, $10, $20, $00, $20, $00
 
 ; ============================================================================
-; Sprites — GFX_SPRITE_CAPTURE / GFX_SPRITE_DRAW (2026-08-19)
-;
-; A save/restore pair for a rectangular region of the screen (bitmap +
-; attributes), on top of the same screen-addressing math GFX_CHAR_SETUP/
-; GFX_SET_ATTR already use and have hardware-confirmed. Together these
-; two also implement a generic screen-to-screen COPY (capture from one
-; position, draw at another) — matching this project's own deferred
-; design note ("COPY/sprite save-restore") with one reusable pair
-; rather than two separate mechanisms.
-;
-; Deliberately CELL-ALIGNED ONLY: the rectangle's top-left and size are
-; always whole 8x8 character cells (row 0-23, col 0-31), never
-; arbitrary pixel positions. This is the same "coarse but correct"
-; scoping precedent GFX_CPLOT's own quadrant granularity already set —
-; and here it's not just simplicity, it sidesteps a real ambiguity:
-; a screen attribute belongs to a whole 8x8 cell, so a pixel-unaligned
-; sprite would have no single well-defined attribute to capture at its
-; own edges. Smooth pixel-level sprite movement is real future work,
-; not attempted here — moving a sprite means capture-background/
-; restore-background/draw-again, one 8-pixel step at a time.
-;
-; Buffer format: one 9-byte record per cell, row-major (top-left to
-; bottom-right, rows outer) — 8 bitmap scanline bytes (top to bottom)
-; followed by 1 attribute byte. Total buffer size needed = width_cells
-; * height_cells * 9 bytes. The caller owns this buffer (no dynamic
-; allocation exists in this project) — typically one "sprite" buffer
-; and one "background save" buffer per on-screen sprite, sized for
-; whatever cell rectangle that sprite uses.
-; ============================================================================
-
-; ============================================================================
-; GFX_CELL_BITMAP_ADDR
-; Row/col -> bitmap screen address, scanline 0 of that cell. Exactly
-; the same ROW_BASE_TABLE[row]+col math GFX_CHAR_SETUP already uses and
-; has hardware-confirmed (see that routine) — factored out here as its
-; own small routine rather than reused directly, matching this file's
-; own established precedent of small parallel address-math routines
-; for contexts that don't need GFX_CHAR_SETUP's other half (font
-; lookup) — GFX_CPLOT's own ROW_BASE_TABLE use is the same pattern.
-; In:  B = row (0-23), C = col (0-31) — NOT bounds-checked here; callers
-;      in this file always validate via GFX_SPRITE_BOUNDS_CHECK first
-; Out: HL = bitmap address (scanline 0 of the cell)
-; Destroys: AF, DE
-; ============================================================================
-GFX_CELL_BITMAP_ADDR:
-    ld   a, b
-    call GFX_ROW_BASE_ADDR
-    ex   de, hl                       ; DE = row_base
-    ld   a, c
-    add  a, e
-    ld   e, a
-    jr   nc, .no_carry
-    inc  d
-.no_carry:
-    ex   de, hl                        ; HL = row_base + col
-    ret
-
-; ============================================================================
 ; GFX_CELL_ATTR_ADDR
 ; Row/col -> attribute byte address. Shared by GFX_ATTR_SWAP, GFX_SET_ATTR,
 ; and the sprite paths so the bounds and address formula have one owner.
@@ -2582,258 +2476,3 @@ GFX_CELL_ATTR_ADDR:
     scf
     ret
 
-; ============================================================================
-; GFX_SPRITE_BOUNDS_CHECK
-; Shared by GFX_SPRITE_CAPTURE and GFX_SPRITE_DRAW — both need the
-; identical "does this whole rectangle fit on the 32x24 cell grid"
-; check before touching anything.
-; In:  B = top row, C = top col, D = width cells, E = height cells
-; Out: carry clear if the whole rectangle fits; carry set otherwise
-;      (width or height 0, or top+size overflowing the 32x24 grid) —
-;      REJECTED outright rather than clipped, unlike GFX_PLOT_CLIPPED's
-;      own convention: clipping here would silently leave the caller's
-;      fixed-size buffer mismatched against what actually got
-;      written/read, corrupting its own internal layout rather than
-;      just drawing less on screen.
-; Destroys: AF
-; ============================================================================
-GFX_SPRITE_BOUNDS_CHECK:
-    ld   a, d
-    or   a
-    jr   z, .fail                      ; width 0 is invalid
-    ld   a, e
-    or   a
-    jr   z, .fail                      ; height 0 is invalid
-
-    ld   a, b
-    add  a, e
-    jr   c, .fail
-    cp   25
-    jr   nc, .fail                     ; top_row + height > 24
-
-    ld   a, c
-    add  a, d
-    jr   c, .fail
-    cp   33
-    jr   nc, .fail                     ; top_col + width > 32
-
-    or   a
-    ret
-.fail:
-    scf
-    ret
-
-; ============================================================================
-; GFX_SPRITE_CELL_ROWCOL
-; SPRITE_TOP_ROW/COL + SPRITE_ROW_IDX/COL_IDX -> the real screen cell
-; for CAPTURE/DRAW's current loop iteration. Small enough it could be
-; inlined at both call sites, but it's called twice per cell in both
-; routines (once for the bitmap address, again for the attribute
-; address, since the scanline-copy loop between them clobbers B/C) —
-; worth the one shared definition.
-; In:  none (reads SPRITE_TOP_ROW/TOP_COL/ROW_IDX/COL_IDX)
-; Out: B = real row, C = real col
-; Destroys: AF, HL
-; ============================================================================
-GFX_SPRITE_CELL_ROWCOL:
-    ld   a, (SPRITE_TOP_ROW)
-    ld   hl, SPRITE_ROW_IDX
-    add  a, (hl)
-    ld   b, a
-    ld   a, (SPRITE_TOP_COL)
-    ld   hl, SPRITE_COL_IDX
-    add  a, (hl)
-    ld   c, a
-    ret
-
-; ============================================================================
-; GFX_SPRITE_CAPTURE
-; Captures a rectangular region of the screen (bitmap + attributes)
-; into a caller-provided buffer — the "save" half of a save/restore
-; sprite pair (GFX_SPRITE_DRAW is the "restore/show" half). See this
-; section's own header above for the buffer format and cell-alignment
-; scoping.
-; In:  B = top row (0-23), C = top col (0-31), D = width cells (1-32),
-;      E = height cells (1-24), HL = buffer address
-; Out: carry clear on success (buffer filled); carry set + buffer
-;      untouched if the rectangle doesn't fit (GFX_SPRITE_BOUNDS_CHECK)
-; Destroys: AF, BC, DE, HL
-; ============================================================================
-GFX_SPRITE_CAPTURE:
-    call GFX_SPRITE_BOUNDS_CHECK
-    ret  c
-
-    ld   (SPRITE_BUF_PTR), hl
-    ld   a, b
-    ld   (SPRITE_TOP_ROW), a
-    ld   a, c
-    ld   (SPRITE_TOP_COL), a
-    ld   a, d
-    ld   (SPRITE_W), a
-    ld   a, e
-    ld   (SPRITE_H), a
-    xor  a
-    ld   (SPRITE_ROW_IDX), a
-
-.row_loop:
-    xor  a
-    ld   (SPRITE_COL_IDX), a
-.col_loop:
-    call GFX_SPRITE_CELL_ROWCOL         ; B = real row, C = real col
-    call GFX_CELL_BITMAP_ADDR           ; HL = screen bitmap addr
-                                        ; (scanline 0) — B/C untouched
-                                        ; by this call (see its own
-                                        ; header)
-    ld   de, (SPRITE_BUF_PTR)           ; DE = buffer write pointer
-
-    ld   b, 8
-.scan_loop:
-    ld   a, (hl)
-    ld   (de), a
-    inc  de
-    ld   a, h
-    add  a, 1                          ; next scanline: +256 to the
-                                       ; address (same non-linear
-                                       ; screen layout GFX_PUTCHAR/
-                                       ; GFX_CPLOT already step through
-                                       ; this same way)
-    ld   h, a
-    djnz .scan_loop
-
-    ; B/C were clobbered by the DJNZ loop above — recompute before the
-    ; attribute address call, same "reload from memory, don't trust a
-    ; register survived a destructive call" discipline as GFX_CPLOT's
-    ; own scratch handling
-    ;
-    ; REAL BUG FOUND (2026-08-19, z80sim, not caught by inspection or
-    ; check_asm.py): DE holds the buffer's attribute-slot address at
-    ; this point (buf_ptr+8) — but GFX_CELL_ATTR_ADDR's own documented
-    ; contract destroys DE (it uses DE as scratch internally, same as
-    ; GFX_SET_ATTR's proven address math it mirrors). The original
-    ; version called GFX_SPRITE_CELL_ROWCOL/GFX_CELL_ATTR_ADDR here
-    ; with no protection, silently clobbering DE before the `ld (de),a`
-    ; below ever ran — exactly lesson 1's register-survival bug class,
-    ; this time self-inflicted rather than inherited. z80sim caught it
-    ; immediately (buffer contents correct for 8 bitmap bytes, garbage
-    ; after) where static inspection hadn't. Fix: stash DE across both
-    ; calls, same push/pop-around-a-destructive-call pattern GFX_
-    ; SPRITE_DRAW's own `push af`/`pop af` below already uses for
-    ; exactly this reason.
-    push de
-    call GFX_SPRITE_CELL_ROWCOL
-    call GFX_CELL_ATTR_ADDR             ; HL = screen attr addr
-    ld   a, (hl)
-    pop  de                             ; DE = buffer's attribute slot,
-                                        ; restored
-    ld   (de), a
-    inc  de
-    ld   (SPRITE_BUF_PTR), de           ; advance past this cell's 9
-                                        ; bytes total
-
-    ld   a, (SPRITE_COL_IDX)
-    inc  a
-    ld   (SPRITE_COL_IDX), a
-    ld   hl, SPRITE_W
-    cp   (hl)
-    jr   c, .col_loop
-
-    ld   a, (SPRITE_ROW_IDX)
-    inc  a
-    ld   (SPRITE_ROW_IDX), a
-    ld   hl, SPRITE_H
-    cp   (hl)
-    jr   c, .row_loop
-
-    or   a                              ; success
-    ret
-
-; ============================================================================
-; GFX_SPRITE_DRAW
-; Draws a buffer previously filled by GFX_SPRITE_CAPTURE back onto the
-; screen at a (possibly different) cell position — the "restore/show"
-; half of the pair. A straight overwrite (bitmap + attribute both
-; replaced outright), not an OR/XOR blend — this is the classic "save-
-; under" sprite technique: showing a sprite means capturing the
-; background first, then drawing the sprite buffer; hiding/moving it
-; means drawing the saved background buffer back, exactly this same
-; routine either way. No XOR-drawing is used anywhere, deliberately —
-; on attribute-clash hardware, XOR-plotting individual sprite pixels
-; can't cleanly erase against a background of different colors, while
-; save-under works uniformly regardless of what's underneath.
-; In:  B = top row (0-23), C = top col (0-31), D = width cells (1-32),
-;      E = height cells (1-24), HL = buffer address (must have been
-;      filled by a prior GFX_SPRITE_CAPTURE call with the SAME width/
-;      height — this routine has no way to verify that)
-; Out: carry clear on success (screen updated); carry set + screen
-;      untouched if the rectangle doesn't fit (GFX_SPRITE_BOUNDS_CHECK)
-; Destroys: AF, BC, DE, HL
-; ============================================================================
-GFX_SPRITE_DRAW:
-    call GFX_SPRITE_BOUNDS_CHECK
-    ret  c
-
-    ld   (SPRITE_BUF_PTR), hl
-    ld   a, b
-    ld   (SPRITE_TOP_ROW), a
-    ld   a, c
-    ld   (SPRITE_TOP_COL), a
-    ld   a, d
-    ld   (SPRITE_W), a
-    ld   a, e
-    ld   (SPRITE_H), a
-    xor  a
-    ld   (SPRITE_ROW_IDX), a
-
-.row_loop:
-    xor  a
-    ld   (SPRITE_COL_IDX), a
-.col_loop:
-    call GFX_SPRITE_CELL_ROWCOL         ; B = real row, C = real col
-    call GFX_CELL_BITMAP_ADDR           ; HL = screen bitmap addr
-                                        ; (scanline 0)
-    ex   de, hl                         ; DE = screen dest addr now
-    ld   hl, (SPRITE_BUF_PTR)           ; HL = buffer read pointer
-
-    ld   b, 8
-.scan_loop:
-    ld   a, (hl)
-    ld   (de), a
-    inc  hl
-    ld   a, d
-    add  a, 1                          ; next scanline: +256 to the
-                                       ; SCREEN address (DE this time,
-                                       ; not HL — source/dest swapped
-                                       ; from CAPTURE)
-    ld   d, a
-    djnz .scan_loop
-
-    ; HL now points at this cell's attribute byte in the buffer
-    ld   a, (hl)
-    inc  hl
-    ld   (SPRITE_BUF_PTR), hl           ; advance past this cell's 9
-                                        ; bytes total
-    push af                             ; stash the attribute byte —
-                                        ; GFX_SPRITE_CELL_ROWCOL/
-                                        ; GFX_CELL_ATTR_ADDR both
-                                        ; destroy A
-    call GFX_SPRITE_CELL_ROWCOL
-    call GFX_CELL_ATTR_ADDR             ; HL = screen attr addr
-    pop  af
-    ld   (hl), a
-
-    ld   a, (SPRITE_COL_IDX)
-    inc  a
-    ld   (SPRITE_COL_IDX), a
-    ld   hl, SPRITE_W
-    cp   (hl)
-    jr   c, .col_loop
-
-    ld   a, (SPRITE_ROW_IDX)
-    inc  a
-    ld   (SPRITE_ROW_IDX), a
-    ld   hl, SPRITE_H
-    cp   (hl)
-    jr   c, .row_loop
-
-    or   a                              ; success
-    ret
