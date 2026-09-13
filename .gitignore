@@ -15,6 +15,14 @@ __pycache__/
 !/.claude/skills/
 /CLAUDE.md
 
+# Vendored from github.com/jon0x0/AISkill_TS2068, which has no license
+# (its own audio-tools bundle explicitly says "Confirm the project's
+# license and source provenance before public distribution") -- kept
+# available locally for AI-assisted development, not committed/published.
+/.claude/skills/ts2068-cartridge-development/
+/.claude/skills/ts2068-audio-development/
+/.claude/skills/ts2068-tsrun-web-demo/
+
 # Fuse memory-dump snapshots (debug.bin) used for live-keyboard
 # debugging sessions -- see docs/PROJECT_PLAN.md's Phase 9 section
 /debug/
