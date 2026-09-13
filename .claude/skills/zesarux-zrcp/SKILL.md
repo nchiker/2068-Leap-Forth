@@ -28,7 +28,8 @@ sleep 4
 ```
 
 **Run ONE instance at a time.** Launch, check what you need, send
-`exit-emulator` (or `pkill -9 -f zesarux` if the socket's already gone),
+`exit-emulator` (or kill it directly if the socket's already gone —
+see "Cleaning up" for the exact command and why not `pkill -f`),
 *then* launch the next ROM — don't launch a second instance on another
 port while the first is still up "for convenience." `setsid` makes
 each instance survive independently across tool calls, which means
@@ -37,7 +38,7 @@ several ROMs/ports at once was flagged directly during this project's
 own work as an unintended, un-tracked pile-up, not a deliberate
 multiplexing strategy. If a command sequence gets interrupted mid-way,
 run `ps aux | grep zesarux` before doing anything else and clean up any
-orphans (`pkill -9 -f zesarux`) before starting fresh.
+orphans before starting fresh.
 
 **Use `setsid`, not a bare `&`.** A plain background job (even with
 `disown`) can get killed the moment the *launching* Bash tool call's
@@ -46,7 +47,7 @@ so it survives across separate tool calls. Always `sleep ~4s` after
 launch before connecting; ZEsarUX needs a moment to bind the ZRCP
 port. Pick a fresh `<PORT>` per emulator instance if more than one
 might be running (leftover instances from a previous attempt are easy
-to accumulate — `pkill -9 -f zesarux` cleans them all up, or send
+to accumulate — see "Cleaning up" to clear them all, or send
 `exit-emulator` over ZRCP to one specific instance first).
 
 For a ROM with no EXROM at all, just pass the plain Home ROM binary as
@@ -188,7 +189,25 @@ just a blank acknowledgement either way.
 
 ## Cleaning up
 
-Always send `exit-emulator` over ZRCP (or `pkill -9 -f zesarux` if a
-socket is already gone) when done with an instance — leftover
-headless ZEsarUX processes accumulate quickly across a session of
-repeated launches and hold their ZRCP ports open.
+Always send `exit-emulator` over ZRCP when done with an instance, or
+if the socket's already gone, kill it directly:
+
+```sh
+ps aux | grep -i zesarux | grep -v grep | awk '{print $2}' | xargs -r kill -9
+```
+
+**Do not use `pkill -f zesarux` (or `pgrep -f zesarux`) for this.**
+Every command run by the agent's own Bash tool executes as `bash -c
+'<the whole command text>'` — so the literal string `zesarux` is
+present in *that wrapping shell's own command line* the moment it
+appears anywhere in the command you're running (including inside the
+`pkill -f zesarux` invocation itself). `pkill -f` matches against
+*full* command lines and only excludes its own PID, not its parent —
+so it matches and kills the wrapping shell that's still running your
+command, mid-script, before later commands in the same call get a
+chance to execute. This was confirmed directly: `pkill -9 -f zesarux`
+followed by a plain `echo` in the same call reproducibly killed the
+shell before the `echo` ran, surfacing as a bare "Exit code 1" with no
+output at all — easy to mistake for the emulator itself being the
+problem. The `ps | awk | xargs kill` form above only ever targets real
+`zesarux` processes by PID, never the invoking shell.
