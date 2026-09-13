@@ -149,15 +149,13 @@ NMI_ENTRY:
 ; ---- LROS entry point (DOCK cartridge build only). The stock ROM
 ; hands over with IM 1 set and interrupts ENABLED, so RST_38 above
 ; could fire before KBD_ISR_INIT has run; a cold home-ROM boot never
-; has this problem because the Z80 resets with interrupts off. Also
-; establish a known DECR (port $FF) shadow: bit 7 = 0 keeps the DOCK
-; bank selected -- the one thing that must never change while this
-; ROM is executing from it. Then fall into the ordinary cold start. ----
+; has this problem because the Z80 resets with interrupts off. The
+; DECR (port $FF) baseline -- bit 7 = 0, keeping DOCK selected, the
+; one thing that must never change while this ROM runs from it -- is
+; now established in COLD_START itself, not here, so both builds get
+; it uniformly. ----
 CART_START:
     di
-    xor  a
-    ld   (PORT_FF_SHADOW), a
-    out  (PORT_SCLD), a
     jp   COLD_START
     ENDIF
 
@@ -192,6 +190,21 @@ COLD_START:
     ld   sp, $FF00
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
+
+    ; Establish a known DECR (port $FF) baseline before anything reads
+    ; or read-modify-writes PORT_FF_SHADOW (kernel/graphics, kernel/
+    ; mode64, kernel/bank all do). The MEM_FILL_ZERO call below happens
+    ; to zero PORT_FF_SHADOW's own RAM byte too ($81C7 falls in its
+    ; $8000-DICT_RAM_CEILING range), but that only fixes the shadow --
+    ; real hardware's actual port $FF is a hardware register with its
+    ; own arbitrary power-on state, not RAM, and nothing else in this
+    ; build ever OUTs a known value to it. Do that explicitly rather
+    ; than relying on an emulator happening to power up port $FF at 0
+    ; (real bug, found reviewing PR #1's CART_START, which already got
+    ; this right for the cartridge build -- see docs/PROJECT_PLAN.md).
+    xor  a
+    ld   (PORT_FF_SHADOW), a
+    out  (PORT_SCLD), a
 
     ; Real hardware and accuracy-oriented emulators don't guarantee RAM
     ; is zeroed at power-on -- only some emulators happen to pre-zero
