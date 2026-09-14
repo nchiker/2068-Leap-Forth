@@ -56,6 +56,10 @@ TARGETS = {
         'build/forth_demo_blackjack_cart.sym',
         'build/forth_demo_blackjack.dck',
     ],
+    'forth-demo-gallery': [
+        'build/forth_demo_gallery_rom0.bin',
+        'build/forth_demo_gallery.sym',
+    ],
     'graphics-exrom': [
         'build/graphics_exrom.bin',
         'build/graphics_exrom.sym',
