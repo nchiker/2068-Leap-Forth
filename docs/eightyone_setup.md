@@ -30,15 +30,24 @@ etc.) — editing it directly and relaunching `wine EightyOne.exe` is a
 faster way to swap ROM images than clicking through the dialogs below
 each time, and is how the confirmation above was actually done.
 
-**The graphics EXROM cartridge (`RECT`/`POLYGON`/`POLYGON-FILL`/
-sprites) does not load correctly through EightyOne 1.41's DCK
-mechanism — and this is now a confirmed EightyOne-specific problem,
-not an unverified guess or a headless-sandbox artifact.** All eight
-possible chunk-flag byte positions in the 9-byte header were tried
-against `rom/test_rect.asm` + `build/graphics_exrom.bin` under
-Wine/EightyOne 1.41, and none produced a passing (green) border — the
-project's own author independently confirmed the same failure on a
-real interactive Windows install, ruling out the headless-Wine theory.
+**Update (2026-09-14): now confirmed WORKING**, per EightyOne's own
+developer, John Stroebel — see "Summary of confirmed status" below for
+the details and evidence. The paragraphs immediately below describe the
+*earlier* "confirmed NOT working" finding, kept for the record rather
+than deleted, since it's what prompted the upstream report that led to
+the fix; do not act on the "does not load correctly" claim in this
+paragraph as still current.
+
+**[SUPERSEDED, see above] The graphics EXROM cartridge (`RECT`/
+`POLYGON`/`POLYGON-FILL`/sprites) does not load correctly through
+EightyOne 1.41's DCK mechanism — and this is now a confirmed
+EightyOne-specific problem, not an unverified guess or a
+headless-sandbox artifact.** All eight possible chunk-flag byte
+positions in the 9-byte header were tried against `rom/test_rect.asm` +
+`build/graphics_exrom.bin` under Wine/EightyOne 1.41, and none produced
+a passing (green) border — the project's own author independently
+confirmed the same failure on a real interactive Windows install,
+ruling out the headless-Wine theory.
 
 What rules out the `.dck` file itself being wrong: the exact same
 `build/graphics_exrom_eightyone.dck` — byte-for-byte, no changes —
@@ -157,12 +166,54 @@ since TS-Pico doesn't have one).
   confirmed, both under Wine on Linux (this project) and on Windows
   (project author).
 - **Graphics cartridge (`graphics_exrom_eightyone.dck`, chunk 5)** —
-  confirmed NOT working on real EightyOne 1.41 (Wine and Windows both),
-  while the identical file is confirmed correct by two other DCK
-  consumers (TSRun, ZEsarUX/Fuse via non-DCK loading) — see "Using the
-  real graphics EXROM" above for the full cross-check. This is now
-  understood as an EightyOne-specific issue worth reporting upstream,
-  not an open question about this project's own header byte position.
+  **now confirmed WORKING, independently, twice:**
+  1. Reported 2026-09-14 by John Stroebel (EightyOne's own developer),
+     who ran the RECT visual test this doc recommends (`20 20 80 80
+     RECT` at the `OK` prompt) against `forth_boot_rom0.bin` +
+     `graphics_exrom_eightyone.dck` and sent a screenshot of a solid
+     green block on screen.
+  2. Reproduced the same session by this project's own author, on this
+     project's own Wine/EightyOne install (`~/81.sh`), same two files,
+     same test — screenshot: `images/eightyone_wine_rect_confirmed.png`.
+     `EightyOne.ini`'s `[HARDWARE]` section was pointed at
+     `build/forth_boot_rom0.bin` (`ROMTS2068`/`RomFile`) and
+     `build/graphics_exrom_eightyone.dck` (`Dock`/`RomCartridgeFile`/
+     `SinclairRomCartridgeFile`/`TS1510RomCartridgeFile`/
+     `TC2068RomCartridgeFile`/`TS2068RomCartridgeFile`) directly, then
+     `wine EightyOne.exe` relaunched — the same faster INI-edit
+     workflow "Running on Linux via Wine" above already documents. The
+     `2068-FORTH` / `OK` prompt appeared, `20 20 80 80 RECT` was typed,
+     and the solid green block appeared exactly as expected:
+
+     ![RECT working on this project's own Wine/EightyOne install](images/eightyone_wine_rect_confirmed.png)
+
+  Two independent runs, one of them this project's own, leave little
+  doubt this is now genuinely fixed rather than a one-off. The exact
+  EightyOne version/build and whether anything changed on EightyOne's
+  own side versus the 1.41 tested earlier is still not confirmed from
+  either report — this project's own Wine install was not itself
+  updated between the earlier failing runs and this one, so if this
+  install's own EightyOne.exe binary is unchanged, the difference may
+  be in the `.dck`/ROM files themselves (both were freshly rebuilt from
+  current sources before this test) rather than EightyOne. Worth noting
+  for anyone revisiting this, not yet root-caused.
+
+  [SUPERSEDED, kept for the record — see the update note earlier in
+  this doc] Previously (before this date): confirmed NOT working on
+  real EightyOne 1.41 (Wine and Windows both), while the identical file
+  was confirmed correct by two other DCK consumers (TSRun, ZEsarUX/Fuse
+  via non-DCK loading) — see "Using the real graphics EXROM" above for
+  that original cross-check, and the report this prompted to
+  EightyOne's own developer.
+- **DOCK/LROS cartridges on EightyOne** (`forth_boot.dck`,
+  `forth_demo_blackjack.dck`, `forth_demo_blackjack_cart.bin` as a
+  direct ROM File) — also reported working by John Stroebel in the same
+  exchange (2026-09-13), including the blackjack demo actually playable
+  after loading. This project's own earlier notes had flagged DOCK/LROS
+  as looping rather than settling on EightyOne 1.41; that appears
+  resolved too, per this same real-user report, though again not yet
+  re-confirmed against a specific pinned EightyOne version on this
+  project's own side.
 
 This is unrelated to `docs/lros_cartridge.md`'s DOCK/LROS cartridge work:
 that targets bank id `$0` (DOCK) with chunk 0 populated, a different
