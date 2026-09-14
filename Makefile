@@ -110,6 +110,7 @@ forth-boot:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_boot.sym --lst=build/forth_boot.lst rom/forth_boot.asm
 	mv forth_boot_rom0.bin build/forth_boot_rom0.bin
+	python3 tools/build_stamp.py --write --target forth-boot
 
 # Phase 10: EMIT and . (print) smoke ROM. Five checkpoints: EMIT draws
 # a real pixel and advances the print cursor; . prints positive,
@@ -420,6 +421,7 @@ forth-demo-blackjack:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_demo_blackjack.sym --lst=build/forth_demo_blackjack.lst rom/forth_demo_blackjack.asm
 	mv forth_demo_blackjack_rom0.bin build/forth_demo_blackjack_rom0.bin
+	python3 tools/build_stamp.py --write --target forth-demo-blackjack
 
 # Phase 52: SAVE-TEXT/LOAD-TEXT (core/loadtext.asm) smoke ROM. Two
 # checkpoints: a small DOUBLER round trip, then the Blackjack demo's own
@@ -568,6 +570,7 @@ graphics-exrom: build/graphics_home_table.inc
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/graphics_exrom.sym --lst=build/graphics_exrom.lst rom/graphics_exrom.asm
 	mv graphics_exrom.bin build/graphics_exrom.bin
+	python3 tools/build_stamp.py --write --target graphics-exrom
 
 # Fresh chunk-5 EXROM paging isolation test -- see rom/test_exrom_
 # isolation.asm's own header. Confirmed passing (border green) under real
@@ -615,6 +618,7 @@ forth-lros:
 	mkdir -p build
 	tools/sjasmplus_strict.sh --sym=build/forth_lros.sym --lst=build/forth_lros.lst rom/forth_lros.asm
 	mv forth_lros_chunk0.bin build/forth_lros_chunk0.bin
+	python3 tools/build_stamp.py --write --target forth-lros
 
 # The two ROMs people actually run: the live Forth and the Blackjack demo.
 product: forth-boot forth-demo-blackjack
@@ -633,12 +637,14 @@ forth-boot-cart:
 	tools/sjasmplus_strict.sh -DCARTRIDGE --sym=build/forth_boot_cart.sym --lst=build/forth_boot_cart.lst rom/forth_boot.asm
 	mv forth_boot_cart.bin build/forth_boot_cart.bin
 	python3 tools/make_dck.py build/forth_boot_cart.bin build/forth_boot.dck
+	python3 tools/build_stamp.py --write --target forth-boot-cart
 
 forth-demo-blackjack-cart:
 	mkdir -p build
 	tools/sjasmplus_strict.sh -DCARTRIDGE --sym=build/forth_demo_blackjack_cart.sym --lst=build/forth_demo_blackjack_cart.lst rom/forth_demo_blackjack.asm
 	mv forth_demo_blackjack_cart.bin build/forth_demo_blackjack_cart.bin
 	python3 tools/make_dck.py build/forth_demo_blackjack_cart.bin build/forth_demo_blackjack.dck
+	python3 tools/build_stamp.py --write --target forth-demo-blackjack-cart
 
 cart: forth-boot-cart forth-demo-blackjack-cart
 
