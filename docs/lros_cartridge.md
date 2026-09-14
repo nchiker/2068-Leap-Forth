@@ -158,6 +158,33 @@ Home ROM that boots first and hands off to it.
   handoff behavior and DOCK-bank timing/activation quirks. The graphics
   extension still can't reach TS-Pico either way — it pages the EXROM
   bank, which TS-Pico has no way to substitute.
+- **RECT/POLYGON-FILL/SPRITE-* are deliberately absent from the
+  `-DCARTRIDGE` build (fixed 2026-09-13).** `kernel/bank/bank.asm`'s
+  `BANK_PAGE_EXROM_IN` pages chunk 5 to EXROM by first flipping port
+  `$FF` bit 7 (DOCK vs EXROM — a GLOBAL select for every chunk port
+  `$F4` already marks non-Home) and only then narrowing that to chunk
+  5 via `$F4`. In this build, chunks 0-1 are non-Home for the entire
+  run (the cartridge itself lives there) and that very routine, plus
+  RECT's own `EXROM_CALL_SLOT` trampoline, are IN chunk 0/1 — so the
+  bit-7 write swaps the running cartridge code out from under the CPU
+  before the narrowing write ever executes. Reproduced directly (not
+  just reviewed by eye): TSRun's real core, run headless under Node
+  (`github.com/josef-jelinek/TSRun`, see the `tsrun-headless` skill),
+  booted `build/forth_boot.dck` against the genuine stock ROM, typed
+  `10 10 30 30 RECT`, and the machine's screen reverted to an exact
+  byte-for-byte match of the pristine post-boot banner after one more
+  keypress — consistent with a crash/restart, not a returned RECT call
+  — while an identical control run using a harmless non-EXROM command
+  on the same build stayed responsive and kept echoing normally. `rom/
+  forth_boot.asm` now guards the three `INCLUDE`s behind `IFNDEF
+  CARTRIDGE`, so the cartridge build's dictionary simply doesn't have
+  these words rather than crashing on first use; the normal (non-
+  cartridge) ROM build is unaffected, since every one of its chunks
+  0-3 IS Home, so `$F4` never marks the code calling `BANK_PAGE_EXROM_
+  IN` as non-Home to begin with. A real fix — a paging trampoline and
+  return path living in RAM guaranteed to stay Home-mapped regardless
+  of `$F4`/`$FF` (chunk 4 is the candidate; see `kernel/bank/bank.asm`'s
+  own header for why it's otherwise unused) — is still open.
 
 Treat everything above the "Source of the format" citations as reviewed-
 by-eye only, in keeping with this project's own standard for hardware

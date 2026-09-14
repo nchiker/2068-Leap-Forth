@@ -600,12 +600,44 @@ DICT_CHAIN_POINT DEFL H_J
 DICT_CHAIN_POINT DEFL H_ATXY
     INCLUDE "core/hires.asm"
 DICT_CHAIN_POINT DEFL H_NORMAL
+    IFNDEF CARTRIDGE
+; ---- RECT/POLYGON-FILL/SPRITE-* all reach their EXROM-resident impl
+; through kernel/bank/bank.asm's BANK_PAGE_EXROM_IN, which pages chunk
+; 5 by writing PORT_SCLD (port $FF) bit 7 -- DOCK vs EXROM -- before
+; PORT_BANK_HOME (port $F4) narrows that to chunk 5 alone. Port $FF's
+; bit 7 is a GLOBAL DOCK/EXROM select shared by every chunk $F4 already
+; marks non-Home, not a per-chunk one. In the -DCARTRIDGE build, chunks
+; 0-1 are non-Home for the entire run (the LROS header's own chunk spec
+; keeps the cartridge itself mapped there) and this very routine, plus
+; RECT's EXROM_CALL_SLOT trampoline, live inside chunk 0/1. The bit-7
+; write therefore swaps the code that's *currently executing* out from
+; under the CPU before the second, narrowing write ever runs.
+;
+; Confirmed by direct reproduction (2026-09-13, TSRun's real core
+; headless under Node, github.com/josef-jelinek/TSRun, insertDock +
+; forth_boot.dck + stock ts2068.rom): typing `10 10 30 30 RECT` under
+; the cartridge build corrupts the screen and leaves the machine
+; unresponsive to further input -- a control run with a harmless,
+; non-EXROM command on the same build stayed responsive throughout.
+; See NOTES_FROM_STRUCTURED_BASIC.md item 1 for the original review
+; that flagged this before it was reproduced.
+;
+; Until BANK_PAGE_EXROM_IN/OUT get a real fix (a trampoline and return
+; path living in RAM that's guaranteed to stay Home-mapped regardless
+; of $F4/$FF, e.g. chunk 4 -- see that file's own header on why chunk 4
+; is otherwise unused -- copied there and called through instead of
+; jumping to it directly from Dock), fail closed: the -DCARTRIDGE build
+; omits these words entirely rather than ship a build that crashes on
+; first use. The normal (non-cartridge) ROM build is unaffected --
+; every one of its chunks 0-3 IS Home, so $F4 never marks the code
+; that's calling BANK_PAGE_EXROM_IN as non-Home in the first place.
     INCLUDE "core/rectfill.asm"
 DICT_CHAIN_POINT DEFL H_RECT
     INCLUDE "core/polygon.asm"
 DICT_CHAIN_POINT DEFL H_POLYGONFILL
     INCLUDE "core/sprite.asm"
 DICT_CHAIN_POINT DEFL H_SPRITEHIDE
+    ENDIF
     INCLUDE "core/key.asm"
 DICT_CHAIN_POINT DEFL H_BREAKQ
     INCLUDE "core/mathfn.asm"
