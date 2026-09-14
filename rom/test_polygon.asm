@@ -62,6 +62,18 @@ GRAPHICS_HOME_TABLE:
     jp   GFX_WRITE_PIXEL
     jp   GFX_SET_ATTR
     jp   GFX_LINE
+    jp   GFX_ROW_BASE_ADDR        ; slots 3-4: core/rectfill.asm's own RECT
+    jp   GFX_CELL_ATTR_ADDR       ; is a required prerequisite include for
+                                  ; this file's EXROM_CALL_SLOT/CALL_HL
+                                  ; machinery (see core/polygon.asm's own
+                                  ; header), so it's a real, callable word
+                                  ; here too, even though this smoke test's
+                                  ; own fixed source never invokes it. A
+                                  ; 3-slot table left RECT reachable but
+                                  ; crash-prone (tools/audit_layout.py
+                                  ; caught this: RECT_FILL_IMPL needs
+                                  ; exactly these two slots) -- see
+                                  ; NOTES_FROM_STRUCTURED_BASIC.md item 3.
 
 ; ============================================================================
 ; COLD_START

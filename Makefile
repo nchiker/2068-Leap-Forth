@@ -666,6 +666,7 @@ dist: product cart graphics-exrom forth-lros docs
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm
 	python3 tools/check_z80_opcodes.py core/*.asm kernel/*/*.asm rom/*.asm
+	python3 tools/audit_layout.py
 
 clean:
 	rm -rf build dist
