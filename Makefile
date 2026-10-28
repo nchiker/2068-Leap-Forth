@@ -88,7 +88,7 @@ ALL_IMAGES := build/forth_rom0.bin $(SMOKE_BINS) $(VISUAL_BINS) $(TEST_BINS) \
               build/forth_demo_gallery_rom0.bin build/graphics_exrom.bin \
               build/forth_boot.dck build/forth_demo_blackjack.dck
 
-.PHONY: all product cart docs dist check clean test roms-for-test $(ALIASES)
+.PHONY: all product cart docs dist check clean test roms-for-test repro $(ALIASES)
 
 all: $(ALL_IMAGES)
 
@@ -235,6 +235,9 @@ build/exrom_a5.bin: | build
 
 test: roms-for-test
 	tools/run_rom_tests.sh
+
+repro:
+	tools/check_repro.sh
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm
