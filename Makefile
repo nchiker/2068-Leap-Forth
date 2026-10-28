@@ -300,6 +300,7 @@ check: $(CHECK_IMAGES)
 	# not found in FORTH_STOCK_ROMS or ~/fuse-build/roms, scan skipped and said so)
 	python3 -I tools/provenance.py; r=$$?; [ $$r -eq 0 ] || [ $$r -eq 2 ]
 	python3 -I tools/check_upstream.py
+	python3 -I tools/tapes.py --selftest
 	# the product ROMs carry their own ROM_IDENTITY (STORAGE_SPEC.md D3)
 	python3 -I tools/rom_identity.py --verify build/forth_boot_rom0.bin build/forth_boot.sym \
 	    build/forth_boot_cart.bin build/forth_boot_cart.sym

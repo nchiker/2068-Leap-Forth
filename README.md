@@ -48,9 +48,13 @@ Highlights:
   printed on an unrecognized word with a prompt that recovers cleanly
   instead of hanging.
 - **Tape storage**, Jupiter-Ace-style: `SAVE-LIB`/`LOAD-LIB` round-trip
-  a whole dictionary image through the documented public tape-transport
-  contract — deliberately never reaching into the transport's own
-  internals, so it stays compatible with real emulator/hardware LOAD.
+  a whole dictionary image (CRC-checked, tied to the exact ROM that
+  saved it), `SAVE-TEXT`/`LOAD-TEXT` the portable source text, and
+  `VERIFY-LIB`/`VERIFY-TEXT` compare a tape with memory. Failures are
+  `THROW`n (`-28` for SPACE, `-37` for any other tape failure, `-8` if
+  an image doesn't fit), so a program can `CATCH` them. The tape blocks
+  use the standard Sinclair format, sent and received by 2068-Leap-C's
+  clean-room block I/O (`kernel/storage/tapeblock.asm`).
 - **Printer support** — `LPRINT`/`LLIST` send Forth's own listings and
   output to a real TS2068 printer interface.
 - Arrays (`ARRAY`/`CELLS`), string handling (`S" TYPE STRING PLACE
@@ -371,7 +375,11 @@ core/       language-layer code, not hardware-facing:
               control.asm (Phase 4 — IF/ELSE/THEN, BEGIN/UNTIL)
               ts2068.asm  (Phase 5 — PLOT/LINE/CIRCLE/BORDER)
               editor.asm  (Phase 6 — line editing)
-              storage.asm (Phase 7 — SAVE-LIB/LOAD-LIB)
+              storage.asm (Phase 7 — SAVE-LIB/VERIFY-LIB/LOAD-LIB; rebuilt
+                          in audit step S)
+              tapeword.asm (audit step S — what the six tape words share:
+                          name parsing, THROW on failure)
+              loadtext.asm (Phase 52 — SAVE-TEXT/VERIFY-TEXT/LOAD-TEXT)
               float.asm   (Phase 8 stretch — F+/F-)
               mode64.asm  (Phase 8 stretch — 64COL/32COL/PALETTE64/PLOT64)
               print.asm   (Phase 10 — EMIT/.)

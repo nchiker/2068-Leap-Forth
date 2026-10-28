@@ -163,6 +163,8 @@ HOME is short, at the cost of the cartridge build until R1.
 **Open item.** Tape I/O is emulator-verified only in all three projects; real cassette remains a
 Phase 16 item.
 
+**Done in step S**, against `docs/V2/STORAGE_SPEC.md`; results in section 6.10.
+
 ### 4.2 Float (rebuild F)
 
 **Today** [M sizes, source facts from `core/float.asm`]: 3-byte float (16-bit signed mantissa,
@@ -588,6 +590,74 @@ never written. `kernel/bank/bank.asm` has the two variants under `IFDEF CARTRIDG
   An EPROM cartridge needs the 8K chunk-5 image burned at DOCK `$A000` as well (`cartridge/forth_boot_chunk5.bin` in the
   dist package); without it the six words do nothing.
 
+### 6.10 Step S results (2026-10-28, branch `v2/step-s-storage`, from `v2/step-r1-cartridge-exrom`)
+
+Spec first: `docs/V2/STORAGE_SPEC.md`. Oracle before code: `make tapetest` (15 cases on ZEsarUX, tapes played with
+ZRCP `realtape-open`, SAVE captured from breakpoint actions on the sender's `out ($FE),a`) and `make tapetol`
+(Leap-C's 71 distorted tapes), both run on the old build first (`e7f0bae`).
+
+- **Block I/O [M]: Leap-C's clean-room `tapeblock.asm`, code unchanged** (`kernel/storage/tapeblock.asm`, Leap-C
+  `d31d785`; `kernel/storage/UPSTREAM.md`, `tools/check_upstream.py` in `make check`). It is 316 B, Leap-C's own
+  figure, against the old 327 B. It was adopted rather than rewritten because everyone working on this tree had read
+  both the old bodies and Leap-C's code, so a rewrite could not claim Leap-C's clean-room independence (spec D1).
+  The provenance allow-list is empty, and NOTICE 3a is rewritten.
+- **Header layer and words rebuilt** (spec 4-6):
+  - SAVE stops after a header SPACE stopped and sends no data block. A 1 s gap separates header and data.
+  - The header search ends on SPACE.
+  - SAVE-LIB images are header type 3 carrying `ROM_IDENTITY` and LATEST. Their data is the dictionary plus a
+    CRC-16, saved and loaded in place; the `$D000` copy and its 8,190-byte limit are gone.
+  - `ROM_IDENTITY` is `$8000 |` the CRC-16 of the ROM image, patched in after assembly by `tools/rom_identity.py`
+    and verified by `make check`.
+  - LOAD-LIB refuses another ROM's image, a V1 image (owner decision 6: rejection, which costs no code) and a length
+    outside 2..ceiling, all before any data arrives.
+  - A failure after writing empties the dictionary.
+  - New words: VERIFY-LIB and VERIFY-TEXT.
+  - Failures THROW -28 (SPACE) or -37 (any other); before this step they were silent.
+  - Removed: the progress hook (never set), the type-4 path and the V1 cells.
+- **Bytes [M].**
+  - Storage 1,141 → 983 B: block I/O 316, header layer 181 (was 393), words 484 (was 421, with two words more).
+  - HOME 469 → 627 free (+158), cartridge 478 → 636 (+158). Floors raised to 627 / 636.
+  - Demos and EXROM unchanged: Blackjack and Gallery include no storage.
+  - RAM: the V1 SAVE/LOAD cells are free. 7 sysvars are now unused but kept, so no later sysvar moves.
+- **Oracle on the old build [M]:** tapetest PASS 3, FAIL 12 (`docs/V2/evidence/s_tapetest_old_build.txt`), the
+  defects of spec section 1:
+  - A wrong flag or a dropout is reported as success.
+  - A V1 tape with header length 1 hangs the machine after changing 9,787 RAM bytes.
+  - SPACE during a wildcard LOAD-LIB crashes it: the "successful" zeroed header gives length 0 and a 64 KB `LDIR`.
+  - A SAVE stopped by SPACE still sends the data block.
+  - tapetol accepts 49 of 71.
+- **Oracle on this build [M]:**
+  - tapetest PASS 15, FAIL 0, plus the extra SPACE-in-LOAD-LIB case (`s_tapetest_new_build.txt`); self-test 3 of 3
+    mutations reported.
+  - tapetol accepts 66 of 71, nothing narrower than the old build (`s_tapetol_old_vs_new.txt`). The 5 refused:
+    jitter 30%, pilot-missing-end and the three data dropouts, which must fail.
+  - The figures are not comparable with Leap-C's 54 → 67 on Fuse: ZEsarUX plays TZX `$15` blocks 54× too slow, so
+    the sweep uses `.rwa` at 224 T per sample.
+- **What the oracle caught in the new code, before commit [M]:**
+  1. The spec's first rule "a timeout ends the header search" made tapetol refuse all 71 cases. A user presses play
+     after typing the command, more than 8.6 s later; reverted to V1's 15 attempts.
+  2. Without a gap, the data pilot followed the header's closing edge by about 2,400 T and the decoder merged the
+     blocks; fixed with the 1 s gap (+8 B).
+  3. Two harness false positives: the recall workspace at `$D000` records each typed line, and VERIFY-LIB's CRC
+     bytes at HERE were not allowed for. Fixed in the harness, not the ROM.
+- **Other checks [M]:**
+  - `make test` 70 PASS, 0 FAIL, 1 SKIP; POWERON 7/7.
+  - `make check` passes.
+  - `make repro`: 266 files identical.
+  - `make bench` within ±0.04% of the Phase 2 baseline.
+  - `make cartdiff`: 26 of 26 case/emulator pairs identical (the cartridge build carries the new storage too).
+  - p53's Blackjack load now runs headless as tapetest case 2. The ROM itself stays Fuse-only (`skip`).
+- **Verification limits.** There is no hardware.
+  - Tapes are ZEsarUX's real-tape input sampling the ROM's receiver, and SAVE is decoded from the ROM's own MIC
+    edges. Nothing is recorded to audio.
+  - The 1 s gap is 50 frames: 1 s on ZEsarUX's 50 Hz, 0.83 s at the real machine's 60 Hz.
+  - TSRun cannot play a tape into a custom loader, so ZEsarUX is the only emulator here.
+  - Cassette decks are outside what this step shows.
+- **Deferred:** a static storage-contract check (Leap V2 `check_storage_contract.py`); an independent decode with
+  fuse-utils `audio2tape` of a WAV made from a capture; an old-ROM ↔ new-ROM TEXT cross-load (the format is
+  unchanged and case 1 loads a V1-format text tape, but no tape saved by the V1 ROM itself was played into the new
+  one).
+
 **Not recommended:** full platform vendoring (`platform/MANIFEST` + `deltas/*.patch`). Leap's kernel
 changes since the fork are mostly BASIC-specific or shrink work; this ledger is the one-time record
 of what was judged. A full package ABI is also not needed now: Forth already has
@@ -657,13 +727,14 @@ E and K.
 | **R0** Recover | `b16011a` test_blockgfx, `7e7c461` O2, `de5d735` O11, `684065f` O8, `2dc9cf6` O9, `6ddb8c9` bench seed, `bcf45ac` O12 | 174 [M] (cartridge 486; Blackjack 522, Gallery 527) | 6,682 [M] | HOME 68 → 174 free (+106): O2 −12, O11 −64, O8 −2, O9 −8, O12 −20 (estimate was −80-110). **Floors raised to 174 HOME / 486 cart / 522, 522, 527 demos / 6,682 EXROM**; HOME is 26 B short of the 200 B target | O8: a paging loop kept 62% of frames before and 100% after (ZEsarUX). `make bench`: every figure within ±0.04% of the Phase 2 baseline; pixel's seed fixed (RESULT stays 159) | `make test`: 70 PASS, 0 FAIL, 1 SKIP, POWERON 7/7 [M]; `make check`, `make repro` (260 files) pass |
 | **A** AY BEEP | `5f4678f` BEEP, `6086ecc` chime wait; spec `docs/V2/AY_BEEP_SPEC.md` | 469 [M] (cartridge 781; Blackjack 797, Gallery 802) | 6,682 [M] | HOME 174 → 469 free (+295): `core/beep.asm` ~439 → 219 B (+220), `SOUND_BEEP` left out of the product and bench ROMs (+55), chime wait inline (+20). **Floors raised to 469 HOME / 781 cart / 797, 797, 802 demos / 6,682 EXROM**; HOME now exceeds the 200 B target by 269 B | Boot to the prompt 4,442,252 → 4,442,116 T (same frame count). A note no longer holds interrupts off; `make bench` within ±0.04% of the Phase 2 baseline | `make test`: 70 PASS, 0 FAIL, 1 SKIP, POWERON 7/7 [M]; `make check`, `make repro` pass |
 | **R1** Cartridge EXROM paging | `ce1579d`; spec `docs/V2/CARTRIDGE_EXROM_SPEC.md` | 469 [M] (cartridge 478; Blackjack 797, Gallery 802) | 6,682 [M] | Cartridge 781 → 478 free (-303): the six graphics words and the one-`OUT` paging variant (estimate -312). Home images unchanged. **Floors: cart lowered to 478** (ledger row for the lowered floor); others unchanged | Home build's code unchanged; `make bench` not affected | `make test`: 70 PASS, 0 FAIL, 1 SKIP [M]; `make cartdiff`: 26/26 identical, old build 26/26 fail, selftest 7/7 checks; `make repro` pass |
+| **S** Storage rebuild | `dcdc9ce` S1, `08c7ce6` S2, `9c42346` + `c39f674` S2 fixes, the docs/floors/ledger commit after them; spec `docs/V2/STORAGE_SPEC.md`, oracle `e7f0bae` | 627 [M] (cartridge 636; Blackjack 797, Gallery 802) | 6,682 [M] | Storage 1,141 → 983 B (−158): block I/O 327 → 316 (Leap-C clean-room, adopted), header layer 393 → 181, words 421 → 484 (+VERIFY-LIB, VERIFY-TEXT). **Floors raised to 627 HOME / 636 cart**; others unchanged | `make bench` within ±0.04%; a LIB SAVE/LOAD adds a CRC pass (~400 T/byte) | `make test` 70 PASS 0 FAIL 1 SKIP, POWERON 7/7 [M]; `make tapetest` 15/15 (old build 3/15); `make tapetol` 66/71, old 49/71, nothing narrower; `make repro`, `make check` pass; cartdiff 26/26 |
 | | | | | | | |
 
 ---
 
 ## 10. Owner decisions needed
 
-Decided 2026-10-28 (owner): 1, 2, 4, 5. Open: 3, 6.
+Decided 2026-10-28 (owner): 1, 2, 4, 5, 6. Open: 3.
 
 1. **Reserve target**: adopt 200 B HOME / 150 B EXROM as provisional? **Decided: yes, as a ratchet.**
    The T4 guard floors each section at its current free space (HOME 68, EXROM 6,682) so it blocks
@@ -679,4 +750,6 @@ Decided 2026-10-28 (owner): 1, 2, 4, 5. Open: 3, 6.
 5. **Disassembly-informed files** (`core/printer.asm`, `kernel/sound`, `kernel/mode64`,
    `core/stick.asm`): accept as clean, or schedule clean-room rewrites? **Decided: accept for now;**
    schedule a rewrite only for a file the T5 scan flags.
-6. **Legacy tapes**: accept unstamped `SAVE-LIB` images from V1 with a warning, or refuse them?
+6. **Legacy tapes**: accept unstamped `SAVE-LIB` images from V1 with a warning, or refuse them? **Decided
+   (2026-10-28): whatever takes the least code.** Applied in step S as rejection: V1 SAVE-LIB tapes are header type
+   0, which LOAD-LIB (type 3) never matches, at no code cost. V1 SAVE-TEXT tapes still load.

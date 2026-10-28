@@ -21,7 +21,7 @@
 # WHY --detect-loader is passed explicitly: this machine's own
 # ~/.fuserc has `<detectloader>0</detectloader>` saved, which means the
 # emulated tape deck never starts playing on its own -- STORAGE_LOAD's
-# own real LD-BYTES-derived routine then just burns its whole
+# own block receiver then just burns its whole
 # STORAGE_ENTRY_RETRY_MAX budget over and over finding pure silence,
 # never completing. Confirmed via a `breakpoint event tape:play`/
 # `tape:stop` diagnostic: with detect-loader off, neither event ever

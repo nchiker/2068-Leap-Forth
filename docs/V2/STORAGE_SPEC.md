@@ -224,6 +224,10 @@ and stays true. The docs say to call it from the prompt.
 | Words + headers (4 → 6) | 421 | 330-400 |
 | **Total** | **1,141** | **956-1,086 (−185 to −55)** |
 
+**Measured after the step [M]:** block I/O 316 B, header layer 181 B (with the CRC and the 1 s gap), words 484 B
+(`core/storage.asm` + `core/tapeword.asm` 322, `core/loadtext.asm` 162): **983 B, −158 B**. HOME 469 → 627 free,
+cartridge 478 → 636. Audit section 6.10.
+
 The ledger row records the measured figure. HOME floor: raised to whatever HOME free space is after the step; if
 the step costs bytes instead, the floor is lowered with a ledger row, as R1 did for the cartridge.
 

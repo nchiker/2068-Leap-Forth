@@ -1,0 +1,61 @@
+# make tapetest on the step S build (final tree)
+tools/sjasmplus_strict.sh --outprefix=build/ --sym=build/forth_boot.sym --lst=build/forth_boot.lst rom/forth_boot.asm
+SjASMPlus Z80 Cross-Assembler v1.23.1 (https://github.com/z00m128/sjasmplus)
+rom_identity: build/forth_boot_rom0.bin: ROM_IDENTITY ($11CD) = $F521
+tools/sjasmplus_strict.sh --outprefix=build/ --sym=build/graphics_exrom.sym --lst=build/graphics_exrom.lst rom/graphics_exrom.asm
+SjASMPlus Z80 Cross-Assembler v1.23.1 (https://github.com/z00m128/sjasmplus)
+  [1 done in 22 s]
+  [3 done in 42 s]
+  [5 done in 25 s]
+  [4 done in 47 s]
+  [8 done in 26 s]
+  [7 done in 30 s]
+  [2 done in 85 s]
+  [11 done in 9 s]
+  [9 done in 28 s]
+  [10 done in 27 s]
+  [12 done in 12 s]
+  [13 done in 36 s]
+  [11L done in 9 s]
+  [6 done in 151 s]
+  [11a done in 112 s]
+  [14 done in 156 s]
+tapetest: build s-impl/build (ROM_IDENTITY $F521)
+case 1 text_doubler: PASS
+    obs: loaded in 13.0 s emulated; screen ['2068-FORTH', '42 OK']
+case 2 blackjack_p53: PASS
+    obs: 66 s emulated; screen ['YOU WIN!', 'THANKS FOR PLAYING!    OK']
+case 3 savetext_roundtrip: PASS
+    obs: 11984 edges, 2 blocks, 7.3 s emulated
+case 4 savelib_roundtrip: PASS
+    obs: 12272 edges, dictionary 38 B, header type 3
+case 5 foreign_identity: PASS
+    obs: foreign identity: code -37, 10.3 s emulated, HERE 9809->9809 LATEST 9800->9800
+case 6 v1_lib_tape: PASS
+    obs: V1 type-0 lib tape: code -37, 119.3 s emulated, HERE 9809->9809 LATEST 9800->9800
+case 7 crc_mismatch: PASS
+    obs: CRC mismatch (XOR fixed up): code -37, 14.5 s emulated, HERE 9809->9800 LATEST 9800->395F
+case 8 header_length_0_1: PASS
+    obs: header length 0 and 1: code -37, 10.8 s emulated, HERE 9809->9809 LATEST 9800->9800
+case 9 wrong_flag: PASS
+    obs: data block with the wrong flag: code -37, 13.9 s emulated, HERE 9809->9809 LATEST 9800->9800
+case 10 dropout: PASS
+    obs: dropout in the data block: code -37, 14.0 s emulated, HERE 9809->9800 LATEST 9800->395F
+case 11 space_in_search: PASS
+    obs: code -28, 0.105 s emulated from SPACE to the prompt, idle True, screen ['2068-FORTH', 'OK', 'OK']
+case 11a no_tape: PASS
+    obs: code -37, 130.9 s emulated from ENTER to the prompt; dictionary RAM bytes changed: 11
+case 12 space_in_save: PASS
+    obs: code -28; 8083 edges, decoded blocks (bytes, checksum ok) [(1, True)], about 1 further edges (a pilot that was cut short); SPACE down after 4266 edges (1.5 s into the header)
+case 13 two_headers: PASS
+    obs: 23.4 s emulated
+case 14 verify: PASS
+    obs: VERIFY-LIB match: code 0
+    obs: VERIFY-LIB one byte differs: code -37
+    obs: VERIFY-TEXT match: code 0
+    obs: VERIFY-TEXT one byte differs: code -37
+case 11L space_in_search_loadlib: PASS
+    obs: code -28, 0.050 s emulated from SPACE to the prompt, idle True, screen ['2068-FORTH', 'OK', 'OK']
+TAPETEST: PASS 15 FAIL 0
+extras (not in the tally): PASS 1 FAIL 0
+wall 271 s

@@ -980,15 +980,16 @@ PORT_FE_SHADOW:      DEFS 1           ; 1 byte — fits the 5-byte gap
                                  ; PENDING_DELETE_POS above; 4 bytes
                                  ; remain ($60C4-$60C7)
 
-; ---- kernel/storage — tape SAVE/LOAD, ported from the real TS2068
-; ROM's own cassette routines (2026-08-24) ----
+; ---- kernel/storage — tape SAVE/LOAD, standard Sinclair block
+; protocol (2026-08-24; block layer replaced in audit step S) ----
 ; This project's SAVE/LOAD previously used a from-scratch protocol
 ; (many small checksummed blocks with a bitmap) that kept finding
 ; genuine real-signal timing bugs with no ground truth to calibrate
-; against. Replaced with a direct port of the real ROM's own SA-BYTES/
-; LD-BYTES protocol — see kernel/storage/storage.asm's own header for
-; the full design writeup and kernel/storage/archive/README.md for why
-; the old design was abandoned. The new protocol needs far less state:
+; against. Replaced with the standard Sinclair block protocol (since
+; audit step S, Leap-C's clean-room kernel/storage/tapeblock.asm) — see
+; kernel/storage/storage.asm's own header for the design writeup and
+; kernel/storage/archive/README.md for why the old design was
+; abandoned. The new protocol needs far less state:
 ; exactly two blocks (header + one data block, no chunking), no bitmap,
 ; no per-chunk retry bookkeeping.
 ; STEP S (docs/V2/STORAGE_SPEC.md): the tape code now uses only STORAGE_HEADER_BUF,

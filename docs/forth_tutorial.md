@@ -3352,9 +3352,10 @@ VARIABLE OP
 
 Programs don't have to be retyped every time the machine starts.
 `SAVE-LIB` and `LOAD-LIB` write your definitions to tape and read them
-back.
+back, and `VERIFY-LIB` checks a tape against what's in memory without
+changing anything.
 
-#### `SAVE-LIB` and `LOAD-LIB`: Saving a Compiled Dictionary Image
+#### `SAVE-LIB`, `LOAD-LIB` and `VERIFY-LIB`: Saving a Compiled Dictionary Image
 
 ```forth
 : DOUBLER DUP + ;
@@ -3364,9 +3365,9 @@ SAVE-LIB MYPROG
 - **How the Name Works:** `SAVE-LIB` takes the name that follows it —
   not a word to look up, but a name, the same way `:` treats the name
   right after it as something to define rather than run — and writes
-  everything you've defined so far to tape under it. Later, even after
-  switching the machine off and back on, which forgets everything you
-  defined, you can get it back:
+  everything you've defined so far to tape under it. The name can be
+  up to 10 characters. Later, even after switching the machine off and
+  back on, which forgets everything you defined, you can get it back:
 
   ```forth
   LOAD-LIB MYPROG
@@ -3375,13 +3376,17 @@ SAVE-LIB MYPROG
 
   `LOAD-LIB MYPROG` restores your definitions exactly as they were,
   `DOUBLER` included, ready to use immediately as though you'd just
-  typed it in again. `LOAD-LIB` with no name at all loads whatever was
-  saved most recently, so you don't have to remember or retype the
-  name.
+  typed it in again. `LOAD-LIB` with no name at all loads the first
+  dictionary image it finds on the tape, so you don't have to remember
+  or retype the name. Tapes of other kinds, and images under other
+  names, are skipped over on the way.
 
 - **Everything, or Nothing:** There's no partial saving or loading of
   a single definition — `SAVE-LIB` always writes everything defined up
-  to that point, in one piece.
+  to that point, in one piece. `LOAD-LIB` is the same in reverse: it
+  **replaces** the whole user dictionary with the image on the tape.
+  Anything you defined since the last cold start, and didn't save, is
+  gone once the load finishes.
 
 That "up to that point" is worth seeing fail once, since it's obvious
 in hindsight and easy to get bitten by in practice:
@@ -3407,28 +3412,71 @@ SAVE-LIB MYWORDS
   after defining `TRIPLE` too — not something 2068-Leap-Forth tracks
   for you.
 
-- **A Real Size Ceiling:** There's a real ceiling on how much
-  `SAVE-LIB` can write in one piece: 8,190 bytes of compiled
-  dictionary. Go past it and `SAVE-LIB` throws error `-8` (ANS Forth's
-  own standard "dictionary overflow" code — see
-  [section 14](#14-error-handling-throw-and-catch) for catching errors
-  like this yourself) rather than writing anything at all. That's a
-  deliberate, checked refusal, not an arbitrary inconvenience: an
-  earlier version of `SAVE-LIB` copied your whole dictionary into a
-  fixed-size scratch buffer with no such check, and would have
-  silently corrupted nearby memory instead of stopping cleanly, for
-  anyone whose programs grew past a much smaller, undocumented limit.
+- **Type `LOAD-LIB` at the Prompt:** Call `LOAD-LIB` from the prompt,
+  not from inside a word you've defined. A colon definition lives in
+  the dictionary, and `LOAD-LIB` overwrites the dictionary — including
+  the very code it would have returned into.
 
-### `SAVE-TEXT` and `LOAD-TEXT`: Saving the Source Itself
+- **Checking a Tape: `VERIFY-LIB`:** `VERIFY-LIB ( "name" -- )` reads
+  the tape the way `LOAD-LIB` does, but instead of storing what it
+  reads, it compares it with the dictionary you have now. Nothing is
+  changed (apart from two spare bytes just past the end of the
+  dictionary, which it uses to hold a checksum of what's in memory). If
+  the tape matches, `VERIFY-LIB` simply finishes; if not, it throws an
+  error (see below). Run it straight after `SAVE-LIB`, before you
+  define anything else, to find out whether the tape you just made is
+  readable:
+
+  ```forth
+  : DOUBLER DUP + ;
+  SAVE-LIB MYPROG
+  \ rewind the tape, press play
+  VERIFY-LIB MYPROG
+  ```
+
+  The comparison covers the whole image, so a dictionary that has
+  grown since the save no longer matches its tape.
+
+- **How Big an Image Can Be:** The limit is the dictionary itself.
+  `SAVE-LIB` writes the image straight out of memory, so any
+  dictionary that fits can be saved. If there isn't even room for the
+  two checksum bytes that follow the image — the dictionary has run
+  all the way up to its ceiling — `SAVE-LIB` throws error `-8` (ANS
+  Forth's own standard "dictionary overflow" code) and sends nothing.
+  Earlier versions limited an image to 8,190 bytes; that limit is
+  gone.
+
+- **Tied to One ROM:** A compiled image holds the actual addresses of
+  the ROM's own routines, so it only makes sense for the exact ROM that
+  saved it. Every `SAVE-LIB` tape is stamped with an identity derived
+  from the ROM image, and `LOAD-LIB` and `VERIFY-LIB` refuse a tape
+  stamped by any other ROM before reading a single byte of data: the
+  dictionary is left untouched and the error below is thrown. In
+  practice that means every new release of the ROM makes older
+  `SAVE-LIB` tapes unloadable. Tapes saved by the very first
+  versions of `SAVE-LIB` (before the tape storage rebuild) are not
+  loaded either. If you need a tape to outlive a ROM upgrade, use
+  `SAVE-TEXT`, below.
+
+- **If a Load Fails Part-Way:** If `LOAD-LIB` refuses before it reads
+  the data — wrong name, wrong ROM identity, an image that can't fit —
+  your dictionary is unchanged. But if the tape starts loading and
+  then breaks (a dropout, a bad checksum), part of the old dictionary
+  has already been overwritten, so `LOAD-LIB` leaves the user
+  dictionary **empty**, as it is after a cold start, rather than
+  half-new and half-old. Your own words are gone in that case; the ROM's
+  built-in words are unaffected. Load again from the start of the tape.
+
+### `SAVE-TEXT`, `LOAD-TEXT` and `VERIFY-TEXT`: Saving the Source Itself
 
 `SAVE-LIB`/`LOAD-LIB` save a **compiled dictionary image** — the actual
 bytes `:` produced, tied to the exact ROM that compiled them. That's
-fast, but it means a tape saved by one build of 2068-Leap-Forth isn't
-promised to load correctly into a different one.
+fast, but it means a tape saved by one release of 2068-Leap-Forth
+won't load into a different one.
 
-`SAVE-TEXT ( addr len "name" -- )` and `LOAD-TEXT ( "name" -- )` save
-something different: the **plain source text** of a program, exactly
-as you'd type it.
+`SAVE-TEXT ( addr len "name" -- )`, `LOAD-TEXT ( "name" -- )` and
+`VERIFY-TEXT ( addr len "name" -- )` work with something different:
+the **plain source text** of a program, exactly as you'd type it.
 
 - **Why an Address and Length:** Where `SAVE-LIB`/`LOAD-LIB` need no
   addresses at all (they already know where the dictionary lives),
@@ -3451,25 +3499,93 @@ LOAD-TEXT PROGTEXT
 4 DOUBLER .     \ prints 8
 ```
 
-- **Why Both Mechanisms Exist:** That re-parsing is the whole point:
-  source text has no dependency on which exact ROM build produced it,
-  so it survives a rebuild of 2068-Leap-Forth itself in a way a
-  `SAVE-LIB` image doesn't promise to. The trade-off is speed and
-  size — re-parsing and recompiling real source is slower than
-  restoring a ready-made binary image — which is why both mechanisms
-  exist side by side rather than one replacing the other.
+- **Why Both Mechanisms Exist, and Which to Keep:** That re-parsing is
+  the whole point: source text has no dependency on which exact ROM
+  produced it, so **`SAVE-TEXT` is the portable format** — a text tape
+  loads into any release, including text tapes saved by the earliest
+  versions and ones made by `tools/tape_gen_forth.py`. A `SAVE-LIB`
+  image is the quick one, good for the ROM you have in the machine
+  today. The trade-off is speed and size — re-parsing and recompiling
+  real source is slower than restoring a ready-made binary image —
+  which is why both mechanisms exist side by side rather than one
+  replacing the other. Keep your source as text if you want to keep it
+  for good.
+
+- **Checking a Text Tape: `VERIFY-TEXT`:** Give `VERIFY-TEXT` the same
+  address and length you saved, and the same name, and it compares the
+  tape with that text without changing anything:
+
+  ```forth
+  S" : DOUBLER DUP + ;" 2DUP SAVE-TEXT PROGTEXT
+  \ rewind the tape, press play
+  VERIFY-TEXT PROGTEXT
+  ```
+
+  `SAVE-TEXT` uses up the address and length it is given, so the
+  `2DUP` above keeps a second copy for the verify. The text must match
+  exactly and have exactly the same length; a single differing byte, or
+  a longer or shorter text, fails the verify.
+
+### When the Tape Goes Wrong: Errors from the Tape Words
+
+All six tape words report failure with `THROW`, so a program can notice
+and recover with `CATCH` (see
+[section 14](#14-error-handling-throw-and-catch)):
+
+| Code  | Meaning                                                                      |
+| ----- | ---------------------------------------------------------------------------- |
+| `-28` | You stopped it: SPACE was held down during the transfer                      |
+| `-37` | Any other tape failure: bad checksum, no matching file, a tape this ROM won't accept, a verify that doesn't match, or no tape signal at all |
+| `-8`  | `SAVE-LIB` only: the image doesn't fit (the dictionary has reached its ceiling) |
+
+Left alone, an error just reaches the same fallback section 14
+describes for any uncaught `THROW`. (Before the tape storage rebuild,
+a failed `LOAD-LIB` or `LOAD-TEXT` said nothing at all; it now always
+reports.) To get the code instead, run the word under `CATCH`. The
+tape name is read from the line *after* `CATCH`, because that's where
+the word runs, so type the name there:
+
+```forth
+: DOUBLER DUP + ;
+: CHECKIT  VERIFY-LIB ;
+SAVE-LIB MYPROG
+\ rewind the tape, press play
+' CHECKIT CATCH MYPROG .     \ prints 0 if the tape matches, -37 if not
+```
+
+- **Tracing `CHECKIT`:** `CHECKIT` is defined *before* the `SAVE-LIB`
+  so that it is part of the image being checked. `' CHECKIT CATCH`
+  runs it under `CATCH`, and `VERIFY-LIB` takes `MYPROG` from the
+  input that follows. `.` prints what `CATCH` left: `0` for a clean
+  verify, `-37` for a mismatch or a damaged tape. This example uses
+  `VERIFY-LIB` rather than `LOAD-LIB` because `VERIFY-LIB` changes
+  nothing, so it is safe to wrap in a word.
+
+- **SPACE and Waiting:** SPACE stops a transfer promptly. Holding it
+  down while saving stops the save without sending the data block, and
+  holding it while a load is looking for a header gives up the search
+  within a fraction of a second; both throw `-28`. With no tape playing,
+  a load keeps looking for about two minutes and then throws `-37`.
+  When saving, you will notice a one-second silence between the header
+  and the data, just as on a stock Sinclair tape.
 
 ### Summary
 
 - **Core Concepts:** Two different things can be saved to tape: a
   compiled dictionary image, which is fast but tied to the exact ROM
-  that built it, and plain source text, which is slower to load but
-  survives a rebuild because loading it simply re-runs the interpreter
-  over it. Both take the name that follows them rather than a value
-  from the stack. `SAVE-LIB` always writes everything defined up to
-  that moment, and never part of it.
+  that built it (a new ROM release makes older images unloadable), and
+  plain source text, which is slower to load but portable because
+  loading it simply re-runs the interpreter over it. Both take the name
+  that follows them rather than a value from the stack. `SAVE-LIB`
+  always writes everything defined up to that moment, and never part of
+  it; `LOAD-LIB` replaces the user dictionary and, if the tape breaks
+  mid-load, leaves it empty. Each kind has a `VERIFY` word that compares
+  a tape with memory and changes nothing. Failures are `THROW`n: `-28`
+  for SPACE, `-37` for any other tape failure, `-8` for an image that
+  doesn't fit.
 
-- **Forth Words:** `SAVE-LIB`, `LOAD-LIB`, `SAVE-TEXT`, `LOAD-TEXT`.
+- **Forth Words:** `SAVE-LIB`, `LOAD-LIB`, `VERIFY-LIB`, `SAVE-TEXT`,
+  `LOAD-TEXT`, `VERIFY-TEXT`.
 
 ### Exercises
 
@@ -3479,8 +3595,8 @@ LOAD-TEXT PROGTEXT
    one word. Loading either one tells you exactly what "everything
    defined up to that point" means.
 
-2. `LOAD-LIB` with no name at all loads whatever was saved most
-   recently. Try it, having saved something a moment before, and
+2. `LOAD-LIB` with no name at all loads the first dictionary image on
+   the tape. Try it, having saved something a moment before, and
    confirm you get your definitions back without retyping the name.
 
 3. `SAVE-TEXT` saves whatever address and length you hand it, and a
@@ -3498,6 +3614,11 @@ LOAD-TEXT PROGTEXT
 4. Run `FREE .` from section 5 before and after a `LOAD-LIB`. The
    number changes, and by roughly the size of what you loaded — which
    is a useful sanity check that a load actually did something.
+
+5. Save an image with `SAVE-LIB`, then define `CHECKIT` as shown above
+   *after* the save, and run `' CHECKIT CATCH` with your tape's name
+   and a `.`. Predict the result before you run it: the dictionary has
+   grown since the tape was made, so what should the verify say?
 
 ---
 
@@ -4686,12 +4807,14 @@ loaded, not the placeholder EXROM
 
 **Storage**
 
-| Word        | Stack effect             | Notes                                          |
-| ----------- | ------------------------ | ---------------------------------------------- |
-| `SAVE-LIB`  | `( "name" -- )`          | save the compiled dictionary as a binary image |
-| `LOAD-LIB`  | `( "name" -- )`          | load a dictionary image back                   |
-| `SAVE-TEXT` | `( addr len "name" -- )` | save plain Forth source text                   |
-| `LOAD-TEXT` | `( "name" -- )`          | load and re-run saved source text              |
+| Word          | Stack effect             | Notes                                                             |
+| ------------- | ------------------------ | ----------------------------------------------------------------- |
+| `SAVE-LIB`    | `( "name" -- )`          | save the compiled dictionary as a binary image (tied to this ROM) |
+| `LOAD-LIB`    | `( "name" -- )`          | load a dictionary image back, replacing the user dictionary       |
+| `VERIFY-LIB`  | `( "name" -- )`          | compare a dictionary image on tape with memory                    |
+| `SAVE-TEXT`   | `( addr len "name" -- )` | save plain Forth source text (portable)                           |
+| `LOAD-TEXT`   | `( "name" -- )`          | load and re-run saved source text                                 |
+| `VERIFY-TEXT` | `( addr len "name" -- )` | compare a text tape with the text at addr len                     |
 
 **Printer** — see [section 15](#15-printing-to-a-real-printer-lprint-and-llist)
 

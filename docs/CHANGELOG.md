@@ -862,4 +862,29 @@ this is the condensed one-paragraph-per-phase version.
   separate 8K EXROM image instead). See `docs/PROJECT_PLAN.md` Phase 65
   for the full story, including two real service-table offset bugs and
   a since-deleted, never-used inherited sprite subsystem.
-
+- V2 step S (tape storage rebuild; `docs/V2/STORAGE_SPEC.md`,
+  `kernel/storage/tapeblock.asm` + `kernel/storage/storage.asm` +
+  `core/storage.asm` + `core/loadtext.asm` + `core/tapeword.asm`): the
+  block I/O is now 2068-Leap-C's clean-room `tapeblock.asm` (adopted
+  unchanged; the standard Sinclair wire format, as before), with the
+  header layer and the tape words rebuilt above it. User-visible:
+  `VERIFY-LIB` and `VERIFY-TEXT` are new (compare a tape with memory,
+  change nothing). Tape failures are now `THROW`n instead of silent:
+  `-28` if SPACE stopped the transfer, `-37` for any other failure, `-8`
+  if `SAVE-LIB`'s image doesn't fit; uncaught they print the ROM's usual
+  runtime error, and `CATCH` gives the code. `SAVE-LIB` no longer copies
+  through a `$D000` buffer, so the 8,190-byte limit is gone (the image
+  must satisfy `HERE + 2 <= DICT_RAM_CEILING`), and the image carries a
+  CRC-16 trailer. A `SAVE-LIB` tape now carries the identity of the ROM
+  that saved it (a CRC of the ROM image): a new ROM release makes older
+  `SAVE-LIB` tapes unloadable (`LOAD-LIB` refuses with `-37` before
+  reading the data) and pre-step-S `SAVE-LIB` tapes are not loaded;
+  `SAVE-TEXT` is the portable format, and text tapes from before step S
+  and from `tools/tape_gen_forth.py` still load. A `LOAD-LIB` that fails
+  after part of the image has arrived leaves the user dictionary empty
+  (as after a cold start); one that refuses before the data leaves it
+  unchanged. SPACE now stops `SAVE` (no data block after a stopped
+  header) and the header search within a fraction of a second; with no
+  tape, `LOAD` gives up after about two minutes; `SAVE` leaves a one
+  second gap between header and data, as a stock tape does. Checked
+  under ZEsarUX by `tools/tapetest.py` (15 cases); no hardware.

@@ -12,10 +12,10 @@
 ; done. This file is exactly that: UNLIKE rom/forth_smoke_p52.asm, this
 ; file does NOT define STORAGE_TEST_FAKE_SEND/STORAGE_TEST_FAKE_RECEIVE
 ; at all — kernel/storage/storage.asm's own real STORAGE_RECEIVE_BLOCK
-; (the byte-for-byte port of the real ROM's LD-BYTES, toggling and
-; sampling the real ULA port) is what runs here, against a real tape
-; file built by tools/tape_gen_forth.py and played back by Fuse's own
-; standard tape engine — see that tool's own header for why a plain
+; (TAPE_RECV_BLOCK in Leap-C's clean-room kernel/storage/tapeblock.asm,
+; toggling and sampling the real ULA port) is what runs here, against a
+; real tape file built by tools/tape_gen_forth.py and played back by
+; Fuse's own standard tape engine — see that tool's own header for why a plain
 ; .TAP file is already this project's exact real wire format (this
 ; project's protocol IS the stock Sinclair one, unlike ts2068rom's own
 ; from-scratch format, which needed a hand-built Direct Recording).
@@ -30,8 +30,10 @@
 ; command equivalent, and automating it was judged not worth the
 ; fragility for what it would additionally prove — STORAGE_SEND_BLOCK's
 ; own port-toggle logic is comparatively low-risk (no receiver-side
-; timing ambiguity) and is already verified byte-for-byte against the
-; real ROM's own SA-BYTES (see kernel/storage/storage.asm's own header).
+; timing ambiguity). Since audit step S the block layer is Leap-C's
+; clean-room kernel/storage/tapeblock.asm (the wire format is still the
+; standard one), and SAVE is checked by tools/tapetest.py, which decodes
+; the ROM's own MIC edges under ZEsarUX.
 ; The receive side — genuinely ambiguous, timing-sensitive, and the
 ; actual source of every real SAVE/LOAD bug this project has ever hit —
 ; is what a real round trip needs to prove, and this file proves it.
