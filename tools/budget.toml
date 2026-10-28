@@ -24,31 +24,31 @@ pad = 0xFF
 [[image]]
 file   = "forth_boot_rom0.bin"
 title  = "HOME ROM (Forth)"
-floor  = 146
+floor  = 154
 target = 200
 
 [[image]]
 file   = "forth_boot_cart.bin"
 title  = "HOME, DOCK cartridge build (Forth)"
-floor  = 458
+floor  = 466
 target = 200
 
 [[image]]
 file   = "forth_demo_blackjack_rom0.bin"
 title  = "HOME ROM (Blackjack demo)"
-floor  = 515
+floor  = 517
 target = 200
 
 [[image]]
 file   = "forth_demo_blackjack_cart.bin"
 title  = "HOME, DOCK cartridge build (Blackjack demo)"
-floor  = 515
+floor  = 517
 target = 200
 
 [[image]]
 file   = "forth_demo_gallery_rom0.bin"
 title  = "HOME ROM (Shooting Gallery demo)"
-floor  = 525
+floor  = 527
 target = 200
 
 [[image]]

@@ -2799,11 +2799,11 @@ The four-line tone from above becomes:
 1   0 VOLUME    \ silence it again
 ```
 
-- **A Real Gap Worth Knowing:** `SOUND` itself can never select chip
-  register 0 (channel A's own tone pitch, low byte) — its 1-16
-  numbering, copied faithfully from real BASIC's own `SOUND` command,
-  simply has no value that lands there. `TONE` doesn't have that gap;
-  `0 period TONE` reaches it directly.
+- **`SOUND` Reaches Register 0:** `SOUND` takes chip registers 0-16 (17
+  and above are ignored, as before). Register 0 is channel A's own tone
+  pitch, low byte; older ROMs refused it, so `0 n SOUND` did nothing there.
+  `TONE` is still the easier way in: it splits a period into the fine and
+  coarse registers for you, and `0 period TONE` sets channel A's pitch.
 
 - **`MIXER`'s Mask Is Inverted:** `MIXER`'s mask is the one place these
   words don't try to be friendlier than the chip itself: bit 0 is

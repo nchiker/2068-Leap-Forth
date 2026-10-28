@@ -31,22 +31,19 @@
 ; the AY-3-8912's own well-documented register map — no new design, no
 ; note/frequency tables, no sequencing: they're strictly shorthand for
 ; register writes `SOUND` could already do by hand. What they buy you:
-; `SOUND` alone can't reach chip register 0 (Channel A's own
-; tone-period FINE byte — see core/sound.asm's own header), and every
-; caller otherwise has to remember the fine/coarse split, which
-; channel maps to which register pair, and which bits in a given
-; register mean what. These don't.
+; every caller of `SOUND` otherwise has to remember the fine/coarse
+; split, which channel maps to which register pair, and which bits in a
+; given register mean what. These don't.
 ;
 ; NOT a shared internal routine with SOUND_WRITE, deliberately: that
-; routine's own 1-16 numbering is a straight port of the real BASIC
-; ROM's own `SOUND` command semantics, and (confirmed in core/
-; sound.asm's own header) can NEVER select chip register 0 through any
-; input value. Wrapper words that need genuine full-register reach
-; route through their own native 0-15 AY_WRITE instead — matching the
-; sibling `~/ts2068rom` project's own precedent exactly: it keeps the
-; identical two-layer split, its BASIC-compatible `SOUND_EXROM` (1-16,
-; rom/exrom_sound.asm) alongside a separate native-numbered `AYREG`
-; extension (0-15, rom/extensions/ayreg.asm) for exactly this reason.
+; routine's numbering is `SOUND`'s own, a straight port of the real BASIC
+; ROM's command (0-16 since step R0; it rejected 0 before, see core/
+; sound.asm's own header). Wrapper words that need genuine full-register
+; reach route through their own native 0-15 AY_WRITE instead — matching
+; the sibling `~/ts2068rom` project's own precedent: it keeps the
+; identical two-layer split, its BASIC-compatible `SOUND_EXROM` alongside
+; a separate native-numbered `AYREG` extension (0-15,
+; rom/extensions/ayreg.asm).
 ;
 ; AY-3-8912 register map used below (standard for this chip, not
 ; project-specific): 0/1 = Channel A tone period fine/coarse, 2/3 =
@@ -92,8 +89,8 @@ AY_WRITE:
 ; fine byte to register channel*2, coarse nibble (period's top 4 bits
 ; only -- the rest of that register is meaningless on real hardware,
 ; masked off here rather than left to chance) to register channel*2+1.
-; Reaches chip register 0 (Channel A's tone-period fine byte), which
-; `SOUND` itself never can.
+; Reaches chip register 0 (Channel A's tone-period fine byte) for any
+; channel by number.
 ; ============================================================================
 H_TONE:
     DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL,

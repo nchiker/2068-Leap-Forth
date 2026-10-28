@@ -8,8 +8,9 @@
 ;   1. A valid register/data pair (8, 15 — the real ROM's own
 ;      documented example) runs to completion and leaves a sentinel
 ;      value correctly in place.
-;   2. Register 0 (the real ROM's own low boundary — rejected) is
-;      silently ignored; sentinel survives.
+;   2. Register 0 (rejected until step R0, accepted now: see core/sound.asm
+;      and rom/test_sound_reg0.asm, which reads the chip back) leaves the
+;      data stack balanced; sentinel survives.
 ;   3. Register 17 (the real ROM's own high boundary — rejected) is
 ;      silently ignored; sentinel survives.
 ;
@@ -72,7 +73,7 @@ COLD_START:
     call CHECK_TOP
     call W_DROP
 
-; ---- checkpoint 2: register 0 (rejected, low boundary) ----
+; ---- checkpoint 2: register 0 (stack hygiene; accepted since step R0) ----
     ld   a, 2
     ld   (CHECKPOINT_NUM), a
     ld   hl, 4242

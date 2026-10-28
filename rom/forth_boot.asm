@@ -327,20 +327,10 @@ COLD_CLEAR_END EQU UDG_TABLE + UDG_COUNT * 8
 ; Channel A rings first, then B, then C roll in on top of it (like an
 ; actual bell chime), rather than all three hitting at once.
 ;
-; Channel A's tone-period FINE byte is chip register 0 — and
-; core/sound.asm's own SOUND_WRITE (faithfully matching the real ROM's
-; SOUND command) refuses register 0 as out-of-range, since SOUND's own
-; documented range is 1-16 and can never reach it (see that file's own
-; header). That restriction exists to keep SOUND itself authentic to
-; the real ROM; it doesn't bind this boot code, which is free to write
-; the AY ports directly for that one otherwise-unreachable register.
+; Channel A's tone-period FINE byte is chip register 0; SOUND_WRITE
+; reaches it since step R0 (O9), so it is simply the first table entry.
 ; ============================================================================
 STARTUP_CHIME:
-    ld   a, 0                       ; Channel A tone period, fine --
-    out  (PORT_AY_REG), a           ; chip register 0, unreachable via
-    ld   a, 165                     ; SOUND_WRITE/SOUND (see header
-    out  (PORT_AY_DATA), a          ; above) -- written directly instead
-
     ; Table-driven: every remaining event is either a SOUND_WRITE
     ; (register, value) pair or a CHIME_DELAY (tick count), walked from
     ; CHIME_TABLE below rather than unrolled inline -- byte-identical
@@ -348,8 +338,8 @@ STARTUP_CHIME:
     ; repeated `ld b,N:ld c,N:call SOUND_WRITE` / 11 repeated
     ; `ld b,N:call CHIME_DELAY` blocks. $FF as the first byte of a pair
     ; means "the second byte is a CHIME_DELAY tick count, not a
-    ; register" -- safe, since SOUND_WRITE's own real register range is
-    ; 1-16 (see its own header) and never reaches 255. $FE marks the
+    ; register" -- safe, since SOUND_WRITE's own register range is
+    ; 0-16 (see its own header) and never reaches 255. $FE marks the
     ; table's end.
     ld   hl, CHIME_TABLE
 .loop:
@@ -375,12 +365,13 @@ STARTUP_CHIME:
     jr   .loop
 
 CHIME_TABLE:
-    ; Channel A tone period coarse (period 421, C4 ~262 Hz); Channel B
+    ; Channel A tone period fine (165) and coarse (period 421, C4 ~262
+    ; Hz); Channel B
     ; tone period fine/coarse (period 334, E4 ~330 Hz); Channel C tone
     ; period fine/coarse (period 281, G4 ~392 Hz); mixer (all three
     ; tones on, all noise off); all three channels silent until their
     ; own staggered attack below.
-    DB   1,1,  2,78,  3,1,  4,25,  5,1,  7,248,  8,0,  9,0,  10,0
+    DB   0,165, 1,1,  2,78,  3,1,  4,25,  5,1,  7,248,  8,0,  9,0,  10,0
     ; ---- staggered, ramped attack: A rolls in first, then B, then C,
     ; each fading up over 3 steps instead of snapping to full volume --
     ; a $FF,3 pair is CHIME_DELAY 3 ticks, same gap used throughout ----
