@@ -879,8 +879,9 @@ this is the condensed one-paragraph-per-phase version.
   that saved it (a CRC of the ROM image): a new ROM release makes older
   `SAVE-LIB` tapes unloadable (`LOAD-LIB` refuses with `-37` before
   reading the data) and pre-step-S `SAVE-LIB` tapes are not loaded;
-  `SAVE-TEXT` is the portable format, and text tapes from before step S
-  and from `tools/tape_gen_forth.py` still load. A `LOAD-LIB` that fails
+  `SAVE-TEXT` is the portable format and
+  `tools/tape_gen_forth.py` tapes load (compatibility with V1 tapes is
+  not a requirement). A `LOAD-LIB` that fails
   after part of the image has arrived leaves the user dictionary empty
   (as after a cold start); one that refuses before the data leaves it
   unchanged. SPACE now stops `SAVE` (no data block after a stopped

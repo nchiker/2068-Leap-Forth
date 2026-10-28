@@ -4,8 +4,8 @@
 ; Rebuilt in audit step S against docs/V2/STORAGE_SPEC.md (section 6). Source text is the
 ; portable format: it is re-parsed and compiled when loaded, so a tape loads into any ROM, unlike
 ; a LIB image (core/storage.asm). On tape (spec section 4): a type-0 header (parameter 1 =
-; STORAGE_NO_AUTOSTART, parameter 2 = the length), then the text bytes, unchanged from V1, so V1
-; text tapes and tools/tape_gen_forth.py's tapes load.
+; STORAGE_NO_AUTOSTART, parameter 2 = the length), then the text bytes (the format V1 used, which is
+; not a requirement: spec D2) and the format tools/tape_gen_forth.py writes.
 ;
 ; LOAD-TEXT receives into LOADTEXT_BUF (the top LOADTEXT_MAX_LEN bytes below DICT_RAM_CEILING),
 ; which stays resident afterwards as core/recall.asm's workspace, and interprets it.

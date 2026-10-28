@@ -10,8 +10,8 @@
 ;   STORAGE_FIND       the header search: the first header of a type (and name) on the tape
 ;   STORAGE_LOAD_DATA  the data block after a found header, loaded or verified
 ;   STORAGE_CRC        CRC-16/CCITT-FALSE, for the LIB image's trailer (spec D4)
-; The wire format is the standard one, so tapes made by the stock ROM's routines and by
-; Forth V1 still read. The words are in core/storage.asm (LIB) and core/loadtext.asm (TEXT).
+; The wire format is the standard one, so tapes made by the stock ROM's routines still read
+; (V1 compatibility is not a requirement, spec D2). The words are in core/storage.asm (LIB) and core/loadtext.asm (TEXT).
 ;
 ; Every routine here leaves interrupts off (the block I/O's `di`) except STORAGE_SAVE, which
 ; enables them; the words' common tail (STORAGE_END, core/storage.asm) enables them.

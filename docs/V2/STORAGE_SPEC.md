@@ -67,8 +67,10 @@ before any data byte is received. The identity is enforced in both directions:
 
 - **V1 tapes are rejected (owner decision 6).** V1 `SAVE-LIB` tapes are type 0, so `LOAD-LIB` never matches them,
   at zero code. This is the least-code option the owner allowed.
-- **Old SAVE-TEXT tapes still load.** Text is not tied to ROM addresses, so text tapes (including
-  `tools/tape_gen_forth.py` output) carry no identity and V1 ones keep loading.
+- **V1 compatibility is not a requirement** (owner, 2026-10-28). Text is not tied to ROM addresses, so text tapes
+  carry no identity, and V1 `SAVE-TEXT` tapes happen to load because the TEXT format did not change. Nothing
+  guarantees that; a later step may change the TEXT format without keeping it. `tools/tape_gen_forth.py` writes
+  the current format and must follow any change.
 - **A new LIB tape on a V1 ROM** is a type-3 header there, which the V1 LOAD-LIB also skips.
 
 **D3. `ROM_IDENTITY` is a CRC of the ROM image, patched in after assembly.** `ROM_IDENTITY` is a 2-byte cell
@@ -122,8 +124,8 @@ of it; the Blackjack and Gallery demos include no storage, before and after.
 | Stack | 2 B | 8 B |
 
 Signal: pilot 2,168 T, syncs 667 / 735 T, bits as two equal half-pulses of 855 T (0) or 1,710 T (1), MSB first, XOR
-checksum, one closing half-pulse after a whole block. These are the standard figures, so old Forth tapes and stock
-tapes stay readable (TAPE_SIGNAL_SPEC R12).
+checksum, one closing half-pulse after a whole block. These are the standard figures, so stock tools (Fuse, fuse-utils,
+`tools/tape_gen_forth.py`) read and write these tapes (TAPE_SIGNAL_SPEC R12).
 
 The receiver returns while SPACE is still down, so the caller can tell an abort from a failure by re-reading the
 keyboard (`ld a,$7F / in a,($FE) / rra`: carry clear = SPACE down).
@@ -143,7 +145,7 @@ Header block: flag `$00`, 17-byte payload, as today.
 | 13-14 | param 1 | `$8000` | `ROM_IDENTITY` |
 | 15-16 | param 2 | text length (as today) | LATEST |
 
-TEXT data block: the text bytes, unchanged from today, so V1 text tapes load. `SAVE-TEXT` writes param 1 = `$8000`
+TEXT data block: the text bytes, unchanged from V1 (not a requirement, D2). `SAVE-TEXT` writes param 1 = `$8000`
 (today it is whatever the header buffer held), matching `tools/tape_gen_forth.py`.
 
 LIB data block: dictionary bytes, then CRC-16 low byte, high byte (D4).
