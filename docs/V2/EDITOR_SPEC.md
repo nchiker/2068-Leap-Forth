@@ -199,6 +199,11 @@ it runs; the first line that raises an error stops this, with the error's usual 
 the remaining marks are cleared without interpreting. Then `PRINT_ROW`/`PRINT_COL` are reset and the console
 prompt returns.
 
+**Oracle hooks.** The oracle observes the view through the screen (row 23 shows `LINE n/m` while it is open) and the
+store's bytes, and needs two symbols: `STORE_END` (the cell; the old build's `WORKSPACE_END`) and `VIEW_REDRAW_ALL`,
+an EXROM routine that redraws rows 0-23 from the view's state and returns (the EXROM is paged in for the whole
+session, so the oracle calls it directly at the view's key wait).
+
 **Redraw.** A key that changes only the cursor line redraws that line's rows; one that changes the set of lines on
 screen (scroll, insert, delete, a line changing its row count) redraws from the cursor line down, or the whole view
 when it scrolls. After every key the screen equals a full view redraw from the same state (N9).
@@ -256,7 +261,7 @@ Cases E adds (written and run on the old build with the next commit; expected re
 | N1 | `store-lines` | committed lines are CR-ended in `$D000`, `STORE_END` exact; an empty ENTER appends nothing | (fails: space-separated) |
 | N2 | `store-full` | an append that does not fit prints `STORE FULL`, the line still runs, nothing at or above `$F000` changes | (fails: overrun) |
 | N3 | `cr-whitespace` | source with CR (and TAB) between words interprets as with spaces, through `INTERPRET_RUN` and `LOAD-TEXT`; a tape without a final CR gets one | (fails: CR is part of a word) |
-| N4 | `text-tape-roundtrip` | `SAVE-TEXT` captured, decoded, played back, `LOAD-TEXT`: store byte-identical (reuses `tools/tapetest.py`) | (passes, space-separated) |
+| N4 | `text-tape-roundtrip` | in `tools/tapetest.py` (its case 3 extended): a store of several CR-ended lines saved, decoded, played back, `LOAD-TEXT`: store byte-identical and the program runs | (passes with its space-separated text) |
 | N5 | `dict-ceiling` | definitions in a loop, and a large `ALLOT`, THROW -8 before `HERE` passes `$D000` - 256; the store is untouched (E2a) | (fails: store overwritten) |
 | N6 | `edit-open` | `EDIT SQ` shows the view on the last `: SQ` line (case-insensitive), status `LINE n/m`; `EDIT` alone opens a new line after the last | (fails: no `EDIT`) |
 | N7 | `edit-keys` | every row of the key table in section 5, store and screen checked after each key | (fails) |
