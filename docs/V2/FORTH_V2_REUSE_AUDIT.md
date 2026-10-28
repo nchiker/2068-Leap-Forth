@@ -120,7 +120,7 @@ Known dead code [L, from the audit's unreferenced-symbol scan; re-verify at rebu
 
 ---
 
-## 4. Rebuild plans for the three primary sections
+## 4. Rebuild plans: the three primary sections (4.1-4.3), then the size pass (4.4)
 
 ### 4.1 Storage (rebuild S)
 
@@ -259,6 +259,58 @@ BASIC-bound `rom/test_editor_auto.asm` or `rom/test_v2_editor_integration.asm`.
 
 **Risks.** HOME budget; cartridge build without EXROM (R1); dictionary growth into $D000; the
 127-character line limit; EXROM code is position-dependent at $A000.
+
+### 4.4 Size pass over the code that stays (step Z, added 2026-10-28 by the owner)
+
+**Why.** No other step shrinks the code the rebuild keeps. Section 3 marks Strings, Interpreter, DO/LOOP,
+64-column mode, Printer, Errors, the dictionary/compile/control words and the remaining core words "4 Retain,
+Measure only": about 4.1 KB at baseline before the unitemised core words. The graphics kernel (2,624 B) is
+touched only by D (one routine, for speed), kernel math (411 B) only by O10 (speed), the keyboard (519 B) only
+by K (which adds). Step R0 was a whole-ROM sweep, not a review of each section: dead code −64, `jp` → `jr` −20,
+glyph builder −12.
+
+**When.** After E and F: they rewrite the console and the float code, so shrinking those first would be wasted.
+K, D and B may land before or after Z; Z measures whatever is current. If D has not run, Z leaves
+`GFX_CLEAR_ROW` to D.
+
+**Scope.** Every HOME section that S, E and F did not rebuild, and the EXROM graphics services (RECT, POLYGON,
+sprites: not audited, section 7). It does not include the tape block I/O (`kernel/storage/tapeblock.asm`): that is
+Leap-C's code, unchanged, under `tools/check_upstream.py`. Changing it is a separate decision, which the owner
+allows if needed.
+
+**Method.**
+- Behaviour unchanged, every change a source transformation: the rules of section 1, and `shrink-z80`'s
+  `references/hard-contract.md`.
+- Re-measure each section from the current listing first, in the format of section 3.
+- One change per commit, with its measured bytes for every image: HOME, cartridge, both demos, EXROM. Use
+  `make check` (budget floors raised as space is recovered), `make test`, `make repro`, `make cartdiff`.
+- `make bench` must not slow down. A change that trades speed for bytes needs the owner's approval.
+- The provenance scan must stay clean.
+- No estimate until the measurement exists. As a precedent only: 2068-Leap's R10.5 shrink milestone
+  (`docs/R10_5_SHRINK.md` there) recovered 291 B HOME from a different code base, with no behaviour change.
+
+**Tools.** These come from the z80-skills repo (`~/z80-skills`, github.com/nchiker/z80-skills):
+- **`shrink-z80` skill** (`skills/shrink-z80/SKILL.md`). Read-only, evidence-first size analysis, invoked by
+  the user as `/z80-skills:shrink-z80`.
+  - Modes: `preflight`, `scan`, and the focused `deadcode`, `dedup`, `micro`, `data`, `refactor`, `reserve`.
+  - References: `high-impact.md` (attack order), `asm-micro.md`, `size-blackbook.md`, `z80-byte-evidence.md`.
+- **Its scripts**, in `skills/shrink-z80/scripts/`. Run them as `python3 <path>`, not `python3 -I`, because
+  they import `scan_common` from their own directory.
+  - `production_reachability.py` walks the label graph of the shipped images' sjasmplus listings, ignoring
+    false conditional blocks.
+  - `z80_pattern_scan.py`, `deadcode_scan.py`, `literal_dup_scan.py`, `generated_helper_scan.py`,
+    `map_summary.py`, `artifact_freshness.py`, `preflight_scan.py`.
+  - Smoke run, 2026-10-28: `production_reachability.py --roots-below 0x0100 --root-prefix H_
+    build/forth_boot.lst` reports 4 unreachable bytes, `INT_GET_FRAMES`. This is a candidate, not checked.
+- **`tools/shrink-agent`** is the applying loop: one routine at a time, with build, size, test and independent
+  review gates, on its own branch. It cannot be used here as it is: it parses z88dk linker maps (`mapfile.py`),
+  and it bills the Claude API from `~/.z80-skills/.env`. Porting it to sjasmplus `.sym`/`.lst` is separate
+  tooling work and needs the owner's approval.
+- **Also:** 2068-Leap-C `tools/relax_jumps.py` (used for O12 in R0) and 2068-Leap `docs/R10_5_SHRINK.md` (its
+  techniques).
+
+**Deliverables.** A section ledger (section 3 format) before and after; one commit per change with its bytes; a
+ledger row in section 9; the candidates rejected, with the reason for each.
 
 ---
 
@@ -706,6 +758,7 @@ measured ledger row (§9).
 | **S** Storage rebuild | §4.1 items 1-5; T14 | −11 then +40-70 | +~60 | R0 |
 | **E** Console + editor rebuild | §4.3; line store first, then engine evaluation, then view; T11, T12 | −370 to +80 | +2,200-2,600 | S (in-place save), R1, T11 |
 | **F** Float rebuild | §4.2; T13 | ~0 (±150) | 0 to +600 | R0, T11, T13 |
+| **Z** Size pass on retained code | §4.4; tools: z80-skills `shrink-z80` and its scripts | − (measure first; no estimate) | − | E, F |
 | **K** Keys and glyphs | O3 plus `[']`, `[CHAR]`, `\`, `[ ]` | +~100 | 0 | R0 or E savings |
 | **D** Display speed | O4 | ≤0 | 0 | — |
 | **B** BREAK and timing | O6, O7 | +~35 | 0 | T8 benchmarks |
