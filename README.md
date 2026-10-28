@@ -387,9 +387,11 @@ core/       language-layer code, not hardware-facing:
               input.asm   (Phase 28 — ACCEPT/INPUT)
               floatsqrt.asm (Phase 29 — FSQRT)
               floattrig.asm (Phase 30 — PI/SIN/COS)
-              rawbeep.asm (Phase 5's original raw-units BEEP, kept for
-                          rom/forth_smoke_p5.asm's own history)
-              beep.asm    (Phase 31 — real, semitone/seconds BEEP)
+              rawbeep.asm (Phase 5's original raw-units loudspeaker BEEP, an
+                          optional package: not in the product ROMs, kept
+                          for rom/forth_smoke_p5.asm)
+              beep.asm    (Phase 31 — semitone/seconds BEEP, on the AY
+                          chip since audit step A)
               sound.asm   (Phase 32 — real, register-level SOUND)
               rectfill.asm (Phase 65 — RECT, EXROM chunk 5; also owns
                           the shared EXROM_CALL_SLOT trampoline)

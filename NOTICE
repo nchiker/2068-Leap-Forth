@@ -37,11 +37,14 @@ tools/poweron.py follow the design of the scripts of the same names in 2068-Leap
 fill logic of provenance.py is ported from it.
 
 Source comments cite, without reproducing them: the "Timex Sinclair 2068 ROM Disassembly" (David Anderson,
-2023) and the stock ROM's routine names. The files whose comments mention the disassembly are: core/beep.asm,
-core/printer.asm, core/sound.asm, core/stick.asm, include/hardware.inc, include/sysvars.inc,
-kernel/graphics/graphics.asm, kernel/interrupt/interrupt.asm, kernel/io/io.asm, kernel/mode64/mode64.asm,
-kernel/sound/sound.asm and kernel/storage/storage.asm (grep, 2026-10-28). A comment that cites the
+2023) and the stock ROM's routine names. The files whose comments mention the disassembly are: core/printer.asm,
+core/sound.asm, core/stick.asm, include/hardware.inc, include/sysvars.inc, kernel/graphics/graphics.asm,
+kernel/interrupt/interrupt.asm, kernel/io/io.asm, kernel/mode64/mode64.asm, kernel/sound/sound.asm and
+kernel/storage/storage.asm (grep, updated in step A: core/beep.asm no longer mentions it). A comment that cites the
 disassembly does not by itself show that the code was copied or not copied; section 3 is the measurement.
+
+core/beep.asm (since step A) takes its period table and shift-and-round scheme from 2068-Leap's rom/v2_ay_beep.asm
+(MIT, same copyright holder), rebuilt against docs/V2/AY_BEEP_SPEC.md.
 
 
 3. Byte comparison with the stock ROMs (tools/provenance.py, run by make check)
@@ -102,5 +105,5 @@ Both positions are conditional on the scan and are recorded here as conditions, 
   only for one of them that the scan flags. The scan flags none of them. That is a measurement at one
   commit, not a permanent clearance; it is re-run by make check whenever the stock ROMs are available.
   The audit's list names four files; section 2 lists others whose comments cite the disassembly (for example
-  core/sound.asm, core/beep.asm and kernel/io/io.asm). Decision 5 does not mention them, and the scan flags
+  core/sound.asm and kernel/io/io.asm). Decision 5 does not mention them, and the scan flags
   none of them.

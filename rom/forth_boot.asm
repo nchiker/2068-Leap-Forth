@@ -535,7 +535,6 @@ RUNTIME_ERROR_MSG: DB "STACK?", 0
     INCLUDE "kernel/io/io.asm"
     INCLUDE "kernel/interrupt/interrupt.asm"
     INCLUDE "kernel/graphics/graphics.asm"
-    INCLUDE "kernel/sound/sound.asm"
     INCLUDE "kernel/storage/storage.asm"
     INCLUDE "kernel/mode64/mode64.asm"
     INCLUDE "kernel/bank/bank.asm"

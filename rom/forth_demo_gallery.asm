@@ -285,7 +285,6 @@ BUG_MSG: DB "BUG", 0
     INCLUDE "kernel/io/io.asm"
     INCLUDE "kernel/interrupt/interrupt.asm"
     INCLUDE "kernel/graphics/graphics.asm"
-    INCLUDE "kernel/sound/sound.asm"
     INCLUDE "kernel/bank/bank.asm"
     INCLUDE "core/dict.asm"
     DEFINE DECIMAL_NUMBER_ENABLED

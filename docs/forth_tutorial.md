@@ -2737,13 +2737,19 @@ durations are naturally fractional):
 
 ### Sound: `BEEP` Limits and Direct Chip Access
 
-While `BEEP` handles simple note playback, it operates under a few clear hardware boundaries:
+`BEEP` plays its note on the sound chip's channel A, so you hear it through the AY output, and it works within a few clear boundaries:
 
 - **Whole Semitones Only:** Unlike BASIC's `BEEP`, which accepts fractional pitches, this implementation supports whole semitones exclusively.
 
-- **The 12.9 kHz Ceiling:** There is a strict physical ceiling around 12.9 kHz. Notes pushed past this threshold clamp to the ceiling rather than increasing further, as this represents the maximum toggle speed of the hardware speaker loop.
+- **Range:** -60 to 69 semitones around middle C, as in BASIC. The chip cannot go below 27.5 Hz, so -60 to -40 all play the lowest note, A0. A pitch outside -60..69, or a duration shorter than half a display frame (1/120 s) or negative, does nothing, no sound and no wait.
 
-For ordinary musical use — spanning a few octaves around middle C — these limits are well out of reach.
+- **Durations are whole display frames** (1/60 s), rounded to the nearest, up to about 546 seconds.
+
+- **The keyboard and the clock keep running** while a note sounds: `BEEP` waits one frame at a time rather than holding interrupts off.
+
+- **Channel A is taken:** during the note and afterwards, channel A holds the note's pitch and is silent. Channels B and C, the noise and the envelope are not touched, so `SOUND` or `TONE` music on B or C carries on under a `BEEP`. If you use channel A yourself, set it up again after a `BEEP`.
+
+For ordinary musical use — spanning a few octaves around middle C — these limits are well out of reach. (The first `BEEP` drove the loudspeaker and ran with interrupts off for the whole note; that code is kept as an optional package, `kernel/sound/sound.asm` and `core/rawbeep.asm`, and is not in the product ROMs.)
 
 ### Direct Register Access: `SOUND`
 
