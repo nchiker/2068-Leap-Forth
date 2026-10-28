@@ -268,7 +268,7 @@ BASIC-bound `rom/test_editor_auto.asm` or `rom/test_v2_editor_integration.asm`.
 | O2 | Stock-ROM bytes in the block-graphics glyph builder (two 12-byte PO-GR-2 runs) | 2 | Leap-C D21, Leap `c2415f8` | `kernel/graphics/graphics.asm` ~467 | −12 B | Licensing. **Done in step R0 (`7e7c461`), −12 B [M]**: body of Leap-C D21, scan no longer finds it, §6.7 |
 | O3 | Missing characters `[ ] \ { } \| ~ ^` and backtick: no glyphs, no keys, so no `[']`, `[CHAR]`, `\` comments, `[ ] LITERAL` | 2 | Leap-C D7, D8; Leap `8a52ab9` (72 B glyphs), `0b35b68` (direct glyph table, −38 B) | `kernel/io/io.asm`, `kernel/graphics/graphics.asm`, new words | ~+100 B + words | Significant Forth-standard gap |
 | O4 | `GFX_CLEAR_ROW` writes attributes per character via `GFX_SET_ATTR` | 2 | Leap `kernel/graphics/graphics.asm` (back-port 4.1, 5.8; `22b4999`) | `kernel/graphics/graphics.asm` ~1045 | smaller | 24,786 → 6,498 T per row [L]; runs on every scroll |
-| O5 | AY BEEP; current BEEP runs with interrupts off for the whole note | 3 | Leap `rom/v2_ay_beep.asm` (`6493615`); speaker kept as optional package | `core/beep.asm`, `kernel/sound/sound.asm` | −350-400 B | Owner decision: speaker → AY |
+| O5 | AY BEEP; current BEEP runs with interrupts off for the whole note | 3 | Leap `rom/v2_ay_beep.asm` (`6493615`); speaker kept as optional package | `core/beep.asm`, `kernel/sound/sound.asm` | −350-400 B | Owner decision: speaker → AY. **Done in step A (`5f4678f`, `6086ecc`), −295 B [M]** (estimate −350-400 [E]), §6.8 |
 | O6 | BREAK latch in the ISR so runaway loops can be stopped | 2 | Leap `8ee4f1a`, `fa8e5b9` | `kernel/interrupt`, loop words, `THROW` | +~14 B + polls | Measure loop cost (Phase 15 gate) |
 | O7 | No pause/timing word | 2 | Leap `AY_WAIT_FRAMES` (HALT counting, frame-wrap safe, 7 B) | new word `MS` or `PAUSE` | ~+20 B | `CHIME_DELAY` has the same wrap class, harmless at boot |
 | O8 | `di` in `BANK_PAGE_EXROM_IN/OUT` drops frame interrupts | 2 | Leap-C D14 (47/11,232 frames lost [L]) | `kernel/bank/bank.asm` | −2 B | Low impact today (graphics EXROM only). **Done in step R0 (`684065f`), −2 B [M]**; frames lost 38% → 0 in a paging loop, §6.7 |
@@ -507,6 +507,38 @@ not byte-identical images; every image that includes the changed files moves.
 - **Left for later.** HOME is 26 B short of the 200 B target; step A (AY BEEP, −350-400 B) is next.
   `KEY_NEXT_ERROR`/`KEY_PREV_ERROR` and `EDIR_*` constants are now unused in `include/` (no bytes).
 
+### 6.8 Step A results (2026-10-28, branch `v2/step-a-ay-beep`, from `v2/step-r0-recover`)
+
+O5 done as approved (owner decision 2): `BEEP` plays on the AY chip. HOME free **174 → 469 B [M]**
+(cartridge 486 → 781); EXROM unchanged. The estimate was −350-400 B [E]; the measured −295 B is lower because
+`SOUND_BEEP` was 55 B, not the audit's larger share, and the float routines `BEEP` borrowed (`FSTAR`, `F_UDIV32BY16`,
+`F_SHRA`) are used by other words and stay.
+
+- **Spec first.** `docs/V2/AY_BEEP_SPEC.md` was written before the code: contract, ranges, channel policy, what
+  changes and the oracle. The period table and shift-and-round scheme follow 2068-Leap's `rom/v2_ay_beep.asm`
+  (the same 12 numbers; the code is rebuilt, and checked below against the formula, not against that table).
+- **Oracle.** `rom/forth_smoke_p31.asm` was rewritten (its old checkpoints tested the removed float maths): all
+  130 notes within 1 count of `round(110250 / (261.6256 · 2^(max(n,-39)/12)))`, R7/R8 read back from the chip, the
+  FRAMES delta for nine durations, out-of-range pitches, channels B/C and the other mixer bits untouched,
+  interrupts on after a `BEEP` called with them off, stacks balanced. **Mutation-checked:** seven deliberate faults
+  (frame constant, a table entry, no `EI`, a clobbered R10, a wrong R7 mask, an extra push, a widened range) each
+  turn it red. The mutation run found a flaw in the oracle first: checkpoint 4 failed with border 4, the pass
+  colour, so it could not have failed; failure colours are now 1, 2, 3, 5, 6.
+- **Behaviour changes** (all in the spec and the tutorial): the sound comes from the AY, not the loudspeaker;
+  interrupts and the keyboard run during a note; channel A is taken (silent afterwards, period left in R0/R1);
+  durations are whole frames (1/60 s), rounded, up to 546 s; pitch −60..69 with −60..−40 playing A0; out-of-range
+  input does nothing; the 12.9 kHz clamp is gone.
+- **Speaker beeper kept as an optional package**, as decided: `kernel/sound/sound.asm` and `core/rawbeep.asm` stay
+  (`forth_smoke_p5` still tests them) but the product and bench ROMs no longer include `SOUND_BEEP`. No user-facing
+  speaker word was added.
+- **Chime.** Its FRAMES-polling `CHIME_DELAY` became an inline `HALT` loop (−20 B). Boot to the prompt is
+  4,442,252 T before and 4,442,116 after: a 136 T difference in the last frame's tail, not a frame (69,888 T), so
+  every wait lasts the same number of frames. The register writes were not traced one by one.
+- **Not done / for the owner.** Nothing was listened to: only registers and timing were checked, under ZEsarUX,
+  whose frames run at 50 Hz against the real machine's 60 Hz (so a note is 20% longer there, as Leap's study found).
+  The hardware checklist should add: a scale through the TV sound, the AY level 15 next to the old beeper, and STICK
+  after the chime. `0 RANDOMIZE`-style seeding in the Blackjack demo is untouched.
+
 **Not recommended:** full platform vendoring (`platform/MANIFEST` + `deltas/*.patch`). Leap's kernel
 changes since the fork are mostly BASIC-specific or shrink work; this ledger is the one-time record
 of what was judged. A full package ABI is also not needed now: Forth already has
@@ -574,6 +606,7 @@ E and K.
 | T follow-up: p36 | `6de13c3` | 68 [M] | 6,682 [M] | 0 → 0 (only p36's own images change) | — | `make test`: 68 PASS, 0 FAIL, 1 SKIP [M] |
 | **G** Guards | `8670a4f` T4, `d17d5e4` T5, `e25c803` NOTICE, `6263919` T9, `861a823` O1 | 68 [M] (cartridge 380) | 6,682 [M] | Cold start: 0 B → 0 B. The one `MEM_FILL_ZERO` now runs to the end of `UDG_TABLE` (`ld bc` immediate `$7000` → `$7228`); [E] was +8 B for a separate fill. **Floors set at 68 HOME / 380 cart / 449, 449, 457 demos / 6,682 EXROM; none lowered.** Targets 200 / 150 (HOME is 132 B short, EXROM met) | Boot to the prompt is 4,442,252 T-states with and without O1 (frame-synced chime wait absorbs the 552 extra bytes cleared); `make bench` unchanged (bench ROMs have their own cold start) | `make test`: 68 PASS, 0 FAIL, 1 SKIP, and POWERON 7/7 [M] |
 | **R0** Recover | `b16011a` test_blockgfx, `7e7c461` O2, `de5d735` O11, `684065f` O8, `2dc9cf6` O9, `6ddb8c9` bench seed, `bcf45ac` O12 | 174 [M] (cartridge 486; Blackjack 522, Gallery 527) | 6,682 [M] | HOME 68 → 174 free (+106): O2 −12, O11 −64, O8 −2, O9 −8, O12 −20 (estimate was −80-110). **Floors raised to 174 HOME / 486 cart / 522, 522, 527 demos / 6,682 EXROM**; HOME is 26 B short of the 200 B target | O8: a paging loop kept 62% of frames before and 100% after (ZEsarUX). `make bench`: every figure within ±0.04% of the Phase 2 baseline; pixel's seed fixed (RESULT stays 159) | `make test`: 70 PASS, 0 FAIL, 1 SKIP, POWERON 7/7 [M]; `make check`, `make repro` (260 files) pass |
+| **A** AY BEEP | `5f4678f` BEEP, `6086ecc` chime wait; spec `docs/V2/AY_BEEP_SPEC.md` | 469 [M] (cartridge 781; Blackjack 797, Gallery 802) | 6,682 [M] | HOME 174 → 469 free (+295): `core/beep.asm` ~439 → 219 B (+220), `SOUND_BEEP` left out of the product and bench ROMs (+55), chime wait inline (+20). **Floors raised to 469 HOME / 781 cart / 797, 797, 802 demos / 6,682 EXROM**; HOME now exceeds the 200 B target by 269 B | Boot to the prompt 4,442,252 → 4,442,116 T (same frame count). A note no longer holds interrupts off; `make bench` within ±0.04% of the Phase 2 baseline | `make test`: 70 PASS, 0 FAIL, 1 SKIP, POWERON 7/7 [M]; `make check`, `make repro` pass |
 | | | | | | | |
 
 ---

@@ -3,7 +3,7 @@
 ;
 ;   BEEP ( n-semitones fduration -- )   n = semitones from middle C (0 = middle C), fduration = seconds
 ;
-; The specification is docs/V2/AY_BEEP_SPEC.md; the oracle is rom/test_ay_beep.asm. In short: the note sounds
+; The specification is docs/V2/AY_BEEP_SPEC.md; the oracle is rom/forth_smoke_p31.asm. In short: the note sounds
 ; on AY channel A (R0/R1 = period, R7 tone A on / noise A off, R8 = 15), lasts round(60 * seconds) display
 ; frames waited with HALT (interrupts stay on, so FRAMES and the keyboard keep running), and ends with R8 = 0.
 ; Channels B and C, the noise period, the envelope and the I/O ports are not touched. Pitch -60..69 (below -39 plays

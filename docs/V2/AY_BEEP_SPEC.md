@@ -31,7 +31,7 @@ whole frames. The loudspeaker code is not deleted: `kernel/sound/sound.asm` (`SO
 `core/rawbeep.asm` stay in the tree as an optional package (the raw-units word, still tested by
 `rom/forth_smoke_p5.asm`), left out of the product ROMs.
 
-## Oracle (`rom/test_ay_beep.asm`)
+## Oracle (`rom/forth_smoke_p31.asm`)
 
 Independent of the table in the code, it checks against the formula:
 1. every n in -60..69: R0/R1 after `n BEEP` are within 1 count of `round(110250 / (261.6256 * 2^(max(n,-39)/12)))`,
