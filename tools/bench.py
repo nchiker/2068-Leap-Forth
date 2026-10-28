@@ -66,7 +66,7 @@ BENCHES = ("sieve", "pixel", "float", "string")
 # (N, RESULT) printed by the ROM, from ~/2068-rom-benchmarks/benchmarks/forth/*.fs headers.
 EXPECTED = {
     "sieve": ("10", "551"),      # pi(4003)-1
-    "pixel": ("3000", "159"),    # seeded by `0 RANDOMIZE`, screenshot-confirmed
+    "pixel": ("3000", "159"),    # seeded by `26725 RANDOMIZE` (was `0 RANDOMIZE`: see rom/bench/bench_pixel.asm)
     "float": ("300", "-0.6523"),
     "string": ("400", "15"),
 }
@@ -169,8 +169,8 @@ def run_once(name, build_dir, port, max_instr, Ts2068Debug, terminate_emulator, 
             raise BenchError(f"reset did not land on PC=0000: {regs.raw!r}")
         # ZRCP reset-cpu only sets PC/SP/AF: BC/DE/HL/IX/IY and the refresh register R keep whatever
         # the free-running boot left behind (R and the frame phase differ run to run).  The pixel
-        # benchmark seeds RND from R (`0 RANDOMIZE`), so without this its work, RESULT and T-states
-        # change from run to run.  Pin them to a fixed state.
+        # benchmark used to seed RND from R (`0 RANDOMIZE`; it now passes a fixed seed), so without this
+        # its work, RESULT and T-states changed from run to run.  Pin them to a fixed state.
         for reg in ("R", "BC", "DE", "HL", "IX", "IY"):
             z.command(f"set-register {reg}=0H")
         z.command("reset-tstates-partial")

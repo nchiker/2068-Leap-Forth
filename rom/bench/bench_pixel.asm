@@ -177,7 +177,11 @@ SRC_BENCH:
     DB "DUP CELLS YV + @ BY @ + 2 / BY ! "
     DB "1+ INK AX @ BY @ PLOT "
     DB "LOOP ; "
-    DB "0 RANDOMIZE SETUP CLS "
+    ; A fixed seed, not `0 RANDOMIZE`: 0 makes the first RND read the R register, so RESULT (and the
+    ; T-states) changed with every edit that changed how many instructions ran before it (step R0
+    ; found this when O8/O9 moved R). 26725 ($6865) is the state `0 RANDOMIZE` produced in the step-G
+    ; baseline run, so RESULT stays 159 and the Phase 2 numbers stay comparable.
+    DB "26725 RANDOMIZE SETUP CLS "
     DB ": BENCH 2 BORDER GET-FRAMES T0 ! RUN-PIXEL GET-FRAMES T1 ! "
     DB "4 BORDER 0 INK "
     DB ".\" FRAMES=\" T1 @ T0 @ - . .\" N=\" REPS . .\" RESULT=\" AX @ BY @ + . ; "
