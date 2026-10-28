@@ -89,7 +89,8 @@ recomputes it, and `make check` runs that.
   differs in size (the cartridge's is 9 B shorter), so every word from `$1427` on is at a different address.
 - **Revisited and kept (owner, 2026-10-28).** The other options considered:
   - Pad the cartridge's paging code so the two builds share addresses and tapes: about 1 B HOME and 10 B
-    cartridge. Not worth it: the cartridge build exists only to work around one emulator.
+    cartridge. This restores what the builds had before step R1 (the cartridge's own EXROM paging), when they
+    differed only in 14 bytes below `$0100`. Not taken for now (owner, 2026-10-28).
   - Relink on load: the compiler marks ROM addresses in a RAM bitmap, and SAVE-LIB writes them as names.
     Estimated [E] 250-350 B HOME and about 2.7 KB RAM, and ROM addresses stored as data would still crash after
     a release.
