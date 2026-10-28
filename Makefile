@@ -88,7 +88,7 @@ ALL_IMAGES := build/forth_rom0.bin $(SMOKE_BINS) $(VISUAL_BINS) $(TEST_BINS) \
               build/forth_demo_gallery_rom0.bin build/graphics_exrom.bin \
               build/forth_boot.dck build/forth_demo_blackjack.dck
 
-.PHONY: all product cart docs dist check clean $(ALIASES)
+.PHONY: all product cart docs dist check clean test roms-for-test $(ALIASES)
 
 all: $(ALL_IMAGES)
 
@@ -217,6 +217,24 @@ docs:
 # every build and release.
 dist: product cart graphics-exrom forth-lros docs
 	tools/package_dist.sh
+
+# --- tests and benchmarks (scripts live in tools/) ---------------------------
+# Every self-checking ROM plus the three EXROM images tools/run_rom_tests.sh
+# pairs them with (the script reads tools/rom_list.txt itself).
+roms-for-test: $(SMOKE_BINS) $(TEST_BINS) build/graphics_exrom.bin \
+               build/stock_shaped_exrom.bin build/exrom_a5.bin
+
+# 8K of $00 (the stock-shaped EXROM placeholder); the script writes
+# build/stock_shaped_exrom.bin relative to the repo root.
+build/stock_shaped_exrom.bin: tools/make_exrom_placeholder.sh | build
+	sh tools/make_exrom_placeholder.sh
+
+# 8K of $A5, the EXROM image rom/test_exrom_isolation.asm expects.
+build/exrom_a5.bin: | build
+	head -c 8192 /dev/zero | tr '\000' '\245' > $@
+
+test: roms-for-test
+	tools/run_rom_tests.sh
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm
