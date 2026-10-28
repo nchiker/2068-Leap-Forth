@@ -553,6 +553,6 @@ MODE64_SCROLL_OUTPUT_UP:
     ld   (GFX_SCROLL_SRC_ROW), a
     call MODE64_COPY_ROW_BITMAP
     ld   b, 23
-    jp   MODE64_CLEAR_ROW
+    jr   MODE64_CLEAR_ROW
 
     ENDIF

@@ -819,7 +819,7 @@ STORAGE_LOAD:
     pop  ix
     pop  bc
     pop  hl
-    jp   .total_failure
+    jr   .total_failure
 
 .header_rejected:
     ; A valid standard header for another file type is not corruption;
@@ -836,7 +836,7 @@ STORAGE_LOAD:
     pop  ix
     pop  bc
     pop  hl
-    jp   .total_failure
+    jr   .total_failure
 
 .name_ok:
     ld   hl, (STORAGE_HEADER_BUF + STORAGE_HEADER_LENGTH_OFF)

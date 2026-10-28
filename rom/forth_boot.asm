@@ -523,7 +523,7 @@ RUNTIME_ERROR_HOOK:
     ; IMMEDIATE word's runtime error while compiling could otherwise
     ; leave STATE stuck too. Byte-identical to that routine's own tail,
     ; so shared via REPORT_INTERP_ERROR instead of duplicated here.
-    jp   REPORT_INTERP_ERROR
+    jr   REPORT_INTERP_ERROR
 
 RUNTIME_ERROR_MSG: DB "STACK?", 0
 
