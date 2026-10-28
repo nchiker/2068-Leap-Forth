@@ -54,20 +54,9 @@ IMAGES = (
 # 'owner' is the step that owns the decision (e.g. the step that rewrites or justifies the routine).
 # These are DEBT, not clearance: each entry is a stock-ROM-derived run that the owning step removes, and
 # the entry is deleted in that step's commit (the "no longer found" note below reminds when it is stale).
-_TAPE = {
-    "reason": "tape block I/O: a port of the stock ROM's SA-BYTES / LD-BYTES (audit section 4.1, "
-              "kernel/storage/storage.asm)",
-    "owner": "step S (clean-room rebuild)",
-}
-ALLOWED = {
-    ("STORAGE_SEND_BLOCK", 33): _TAPE,
-    ("STORAGE_SEND_BLOCK", 19): _TAPE,
-    ("STORAGE_SEND_BLOCK", 22): _TAPE,
-    ("STORAGE_SEND_BLOCK", 13): _TAPE,
-    ("STORAGE_RECEIVE_BLOCK", 45): _TAPE,
-    ("STORAGE_RECEIVE_BLOCK", 31): _TAPE,
-    ("STORAGE_RECEIVE_BLOCK", 32): _TAPE,
-}
+# Empty since step S: the tape block I/O (the last stock-derived code, 16 + 8 runs) was replaced by
+# Leap-C's clean-room kernel/storage/tapeblock.asm (docs/V2/STORAGE_SPEC.md D1).
+ALLOWED = {}
 
 # ---------------------------------------------------------------------------------------------------------
 # the byte-run search (as in 2068-Leap-C's tools/provenance.py)

@@ -297,6 +297,7 @@ check: $(CHECK_IMAGES)
 	# provenance: no 12-byte run shared with the stock ROMs except the recorded debt (exit 2: stock ROMs
 	# not found in FORTH_STOCK_ROMS or ~/fuse-build/roms, scan skipped and said so)
 	python3 -I tools/provenance.py; r=$$?; [ $$r -eq 0 ] || [ $$r -eq 2 ]
+	python3 -I tools/check_upstream.py
 
 clean:
 	rm -rf build dist
