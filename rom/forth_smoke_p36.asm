@@ -8,10 +8,13 @@
 ;   2. C@ zero-extends: C! 200 (a byte with its own top bit set) then
 ;      C@ it back -- must be exactly 200 on the data stack, not
 ;      sign-extended to a negative cell.
-;   3. CLS actually clears attribute memory: poison row 0 col 0's own
-;      attribute byte with $FF, call CLS, confirm it now reads
-;      ATTR_DEFAULT ($44) -- kernel/graphics's own GFX_CLS contract,
-;      now reachable as a word for the first time.
+;   3. CLS actually repaints attribute memory: set CURRENT_ATTR to
+;      DEFAULT_ATTR (as the product's own cold start does), poison row
+;      0 col 0's own attribute byte with $FF, call CLS, confirm it now
+;      reads DEFAULT_ATTR. Since c66d420 CLS repaints with CURRENT_ATTR
+;      (BASIC's CLS keeps your colours) rather than kernel/graphics's
+;      ATTR_DEFAULT ($44); this checkpoint originally expected $44 and
+;      never initialised CURRENT_ATTR, so it started failing then.
 ;   4. KEY? is FALSE when nothing is latched (KBD_KEYHIT forced to 0
 ;      first -- cold RAM isn't guaranteed clear, matching this
 ;      project's own "no assumed default" convention elsewhere).
@@ -99,14 +102,16 @@ COLD_START:
     ld   de, 200
     call CHECK_ITOP
 
-; ---- checkpoint 3: CLS actually clears attribute memory ----
+; ---- checkpoint 3: CLS actually repaints attribute memory ----
     ld   a, 3
     ld   (CHECKPOINT_NUM), a
+    ld   a, DEFAULT_ATTR
+    ld   (CURRENT_ATTR), a
     ld   a, $FF
     ld   (ATTR_ADDR), a
     call W_CLS
     ld   a, (ATTR_ADDR)
-    cp   ATTR_DEFAULT
+    cp   DEFAULT_ATTR
     jp   nz, FAIL_TEST
 
 ; ---- checkpoint 4: KEY? is FALSE when nothing is latched ----
