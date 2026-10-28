@@ -24,13 +24,13 @@ pad = 0xFF
 [[image]]
 file   = "forth_boot_rom0.bin"
 title  = "HOME ROM (Forth)"
-floor  = 449
+floor  = 469
 target = 200
 
 [[image]]
 file   = "forth_boot_cart.bin"
 title  = "HOME, DOCK cartridge build (Forth)"
-floor  = 761
+floor  = 781
 target = 200
 
 [[image]]

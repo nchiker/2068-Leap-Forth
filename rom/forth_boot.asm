@@ -74,10 +74,10 @@
 ; all three AY channels and held ~800ms — picked by the user from
 ; several presented options (a single-channel rising arpeggio and a
 ; simpler two-note beep among them). Same clock/formula core/sound.asm's
-; own header already uses for its own confirmed-clean tone; held via
-; CHIME_DELAY (a frame-count wait via kernel/interrupt's own
-; INT_GET_FRAMES, so interrupts must already be enabled —
-; KBD_ISR_INIT/IM1/EI now run BEFORE the chime, not after).
+; own header already uses for its own confirmed-clean tone; held with
+; one HALT per display frame (the wait BEEP uses, since step A; it was
+; a FRAMES-polling CHIME_DELAY before), so interrupts must already be
+; enabled — KBD_ISR_INIT/IM1/EI now run BEFORE the chime, not after.
 ; ============================================================================
 
     INCLUDE "include/hardware.inc"
@@ -296,9 +296,8 @@ COLD_CLEAR_END EQU UDG_TABLE + UDG_COUNT * 8
     call KBD_ISR_INIT               ; must run before EI -- confirmed
                                     ; 2068-Leap ordering
     im   1
-    ei                              ; must be on before CHIME_DELAY --
-                                    ; it waits on FRAMES, which only the
-                                    ; ISR ever advances
+    ei                              ; must be on before the chime: its
+                                    ; waits HALT for the frame interrupt
 
     call STARTUP_CHIME
 
@@ -332,12 +331,12 @@ COLD_CLEAR_END EQU UDG_TABLE + UDG_COUNT * 8
 ; ============================================================================
 STARTUP_CHIME:
     ; Table-driven: every remaining event is either a SOUND_WRITE
-    ; (register, value) pair or a CHIME_DELAY (tick count), walked from
+    ; (register, value) pair or a frame wait (tick count), walked from
     ; CHIME_TABLE below rather than unrolled inline -- byte-identical
     ; event sequence, same order, same values, just data instead of 27
     ; repeated `ld b,N:ld c,N:call SOUND_WRITE` / 11 repeated
-    ; `ld b,N:call CHIME_DELAY` blocks. $FF as the first byte of a pair
-    ; means "the second byte is a CHIME_DELAY tick count, not a
+    ; `ld b,N:call CHIME_DELAY` blocks (since replaced by an inline HALT loop). $FF as the first byte of a pair
+    ; means "the second byte is a frame count to wait, not a
     ; register" -- safe, since SOUND_WRITE's own register range is
     ; 0-16 (see its own header) and never reaches 255. $FE marks the
     ; table's end.
@@ -356,12 +355,12 @@ STARTUP_CHIME:
     call SOUND_WRITE
     jr   .loop
 .delay:
-    ld   a, (hl)
-    inc  hl
-    ld   b, a
-    push hl                         ; CHIME_DELAY destroys HL (see its
-    call CHIME_DELAY                ; own header) -- protect the table
-    pop  hl                         ; pointer across the call
+    ld   a, (hl)                    ; tick count: one HALT per display
+    inc  hl                         ; frame (interrupts are on, see the
+.hold:                              ; header), the same wait BEEP uses
+    halt
+    dec  a
+    jr   nz, .hold
     jr   .loop
 
 CHIME_TABLE:
@@ -374,7 +373,7 @@ CHIME_TABLE:
     DB   0,165, 1,1,  2,78,  3,1,  4,25,  5,1,  7,248,  8,0,  9,0,  10,0
     ; ---- staggered, ramped attack: A rolls in first, then B, then C,
     ; each fading up over 3 steps instead of snapping to full volume --
-    ; a $FF,3 pair is CHIME_DELAY 3 ticks, same gap used throughout ----
+    ; a $FF,3 pair is a 3-frame wait, same gap used throughout ----
     DB   8,4,  $FF,3,  8,8,  $FF,3,  8,12, $FF,3   ; gap before B enters
     DB   9,4,  $FF,3,  9,8,  $FF,3,  9,12, $FF,3   ; gap before C enters
     DB   10,4, $FF,3,  10,8, $FF,3,  10,12         ; full chord now sounding
@@ -385,25 +384,6 @@ CHIME_TABLE:
     DB   8,0,  9,0,  10,0            ; the AY holds its last register
                                      ; state indefinitely otherwise
     DB   $FE,0                       ; end of table
-
-; ============================================================================
-; CHIME_DELAY — busy-waits until FRAMES (kernel/interrupt.asm) has
-; advanced by B ticks. In: B = frame count. Destroys: AF, HL, DE
-; ============================================================================
-CHIME_DELAY:
-    ld   h, 0
-    ld   l, b
-    ex   de, hl                     ; de = frame count to wait
-    call INT_GET_FRAMES             ; hl = current frames
-    add  hl, de
-    ex   de, hl                     ; de = target frame count
-.wait:
-    call INT_GET_FRAMES             ; only touches hl -- de (target)
-                                    ; survives across this loop
-    or   a
-    sbc  hl, de
-    jr   c, .wait                   ; current < target -- keep waiting
-    ret
 
 BANNER: DB "2068-FORTH", 0
 
