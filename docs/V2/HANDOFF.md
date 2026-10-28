@@ -88,4 +88,7 @@ section 9 the ledger, section 10 the owner decisions, and section 6 the per-step
   `python3 -I`, because they import `scan_common`.
 - **Leftover lead, unchecked:** `production_reachability.py` reports `INT_GET_FRAMES` (4 B) as unreachable in the
   HOME image. Look at it in step Z.
+- **CI runs `make dist`, which nothing local runs** (pandoc is not installed here). It failed on PR #2 from step R1
+  on: `tools/package_dist.sh` heredocs expand `$`, so write hex as `\$A000`. Fixed in the handoff commit. For a
+  local check, run `tools/package_dist.sh` with placeholder files in `build/docs/`.
 - **Deferred from S:** a static storage-contract check (Leap V2 `check_storage_contract.py`).

@@ -133,7 +133,7 @@ cartridge/*_cart.bin               The raw 16K LROS images (chunks 0-1) inside
                                    those .dck files, for a cartridge EPROM.
 cartridge/forth_boot_chunk5.bin    The 8K DOCK chunk 5 of forth_boot.dck (the
                                    graphics code), for the same EPROM cartridge
-                                   at DOCK $A000.
+                                   at DOCK \$A000.
 roms/graphics_exrom.bin            8K EXROM (Phase 65): RECT, POLYGON,
                                    POLYGON-FILL, SPRITE-DEFINE/SHOW/HIDE.
                                    Use instead of stock_shaped_exrom.bin as
