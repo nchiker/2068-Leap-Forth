@@ -317,6 +317,8 @@ check: $(CHECK_IMAGES)
 	# the product ROMs carry their own ROM_IDENTITY (STORAGE_SPEC.md D3)
 	python3 -I tools/rom_identity.py --verify build/forth_boot_rom0.bin build/forth_boot.sym \
 	    build/forth_boot_cart.bin build/forth_boot_cart.sym
+	python3 -I tools/rom_identity.py --shared build/forth_boot_rom0.bin build/forth_boot.sym \
+	    build/forth_boot_cart.bin build/forth_boot_cart.sym
 
 clean:
 	rm -rf build dist

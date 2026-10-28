@@ -86,6 +86,8 @@
     ORG $0000
 
 ; ---- RST 00: cold start ----
+ROM_ID_SKIP_RESET:                  ; to ROM_ID_SKIP_RESET_END: the two builds' bytes differ here,
+ROM_ID_SKIP_RESET_END EQU $0005     ; so tools/rom_identity.py leaves them out (STORAGE_SPEC.md D3)
     IFDEF CARTRIDGE
 ; The LROS chunk byte, and the port $F4 value the stock ROM's handoff leaves
 ; behind (its complement: bit N of $F4 = 1 means chunk N comes from the DOCK).
@@ -112,6 +114,7 @@ RST_00:
     di
     jp   COLD_START
     ENDIF
+    ASSERT $ <= ROM_ID_SKIP_RESET_END
 
     DS   $0008 - $, $FF
 RST_08:
@@ -149,6 +152,8 @@ RST_38:
     DS   $0066 - $, $FF
 NMI_ENTRY:
     retn
+ROM_ID_SKIP_CART:                   ; to ROM_ID_SKIP_CART_END: CART_START, or $FF fill (D3)
+ROM_ID_SKIP_CART_END EQU ROM_ID_SKIP_CART + 4
 
     IFDEF CARTRIDGE
 ; ---- LROS entry point (DOCK cartridge build only). The stock ROM
@@ -163,6 +168,7 @@ CART_START:
     di
     jp   COLD_START
     ENDIF
+    ASSERT $ <= ROM_ID_SKIP_CART_END
 
     DS   $0100 - $, $FF
 

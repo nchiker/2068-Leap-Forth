@@ -72,6 +72,14 @@
 ; both states, so the interrupt argument above holds unchanged: the handler runs
 ; from DOCK chunk 0 in either state and touches nothing in chunk 5.
 ;
+; SAME ADDRESSES IN BOTH BUILDS (STORAGE_SPEC.md D3): the cartridge's page-in is
+; padded to the Home one's length and both page-outs load A with one 2-byte
+; `ld`, so every label from here on is at the same address in both builds and a
+; SAVE-LIB tape from either loads on the other. The differing bytes sit between
+; the `.rom_id_skip` and `.rom_id_skip_end` labels, which tools/rom_identity.py
+; leaves out of the identity CRC; `make check` proves the two images differ
+; nowhere else.
+;
 ; EXROM's own entry convention: execution starts at the very first
 ; byte of the 8K image (i.e. $A000 once paged in), same as a ROM's own
 ; reset vector. Multiple services are reached via a fixed service
@@ -89,6 +97,13 @@
                                                  ; DOCK chunk 5 is paged in by
                                                  ; BANK_PAGE_EXROM_IN, never
                                                  ; enabled by the OS
+    ENDIF
+
+BANK_PAGE_IN_LEN    EQU 14          ; the Home page-in's length; the cartridge's is padded to it
+    IFDEF CARTRIDGE
+BANK_F4_ALL_HOME    EQU CART_HSR    ; port $F4 with chunk 5 back to Home: the cartridge's own chunks
+    ELSE
+BANK_F4_ALL_HOME    EQU 0           ;   stay DOCK; in the Home build every chunk is Home
     ENDIF
 
 ; ============================================================================
@@ -118,12 +133,15 @@ BANK_PAGE_EXROM_IN:
                                      ; is already EXROM (an outer,
                                      ; still-active caller put it
                                      ; there) — nothing to do
+.rom_id_skip:
     IFDEF CARTRIDGE
     ld   a, CART_HSR | %00100000     ; the cartridge's own chunks stay
                                      ; DOCK, chunk 5 joins them (DOCK
                                      ; chunk 5 = the EXROM image).
                                      ; ONE write; port $FF untouched
     out  (PORT_BANK_HOME), a
+    jr   .already_paged_in
+    DS   BANK_PAGE_IN_LEN - ($ - .rom_id_skip), $FF   ; to the Home variant's length
     ELSE
     ld   a, (PORT_FF_SHADOW)
     or   %10000000                   ; bit 7 only — EXROM, not Dock;
@@ -138,6 +156,8 @@ BANK_PAGE_EXROM_IN:
                                      ; other chunk's bit stays 0 (Home)
     out  (PORT_BANK_HOME), a
     ENDIF
+.rom_id_skip_end:
+    ASSERT .rom_id_skip_end - .rom_id_skip == BANK_PAGE_IN_LEN
 .already_paged_in:
     ei
     ret
@@ -170,12 +190,10 @@ BANK_PAGE_EXROM_OUT:
                                        ; an outer caller is still
                                        ; relying on chunk 5 staying
                                        ; EXROM-mapped
-    IFDEF CARTRIDGE
-    ld   a, CART_HSR                 ; back to the cartridge's own
-                                     ; chunk bits: 0-1 stay DOCK
-    ELSE
-    xor  a                           ; all chunks back to Home
-    ENDIF
+.rom_id_skip:
+    ld   a, BANK_F4_ALL_HOME         ; chunk 5 back to Home (2 bytes in
+                                     ; both builds, not `xor a`: D3)
+.rom_id_skip_end:
     out  (PORT_BANK_HOME), a
 .still_nested:
 .depth_already_zero:

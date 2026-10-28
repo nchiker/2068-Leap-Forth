@@ -24,13 +24,13 @@ pad = 0xFF
 [[image]]
 file   = "forth_boot_rom0.bin"
 title  = "HOME ROM (Forth)"
-floor  = 627
+floor  = 626
 target = 200
 
 [[image]]
 file   = "forth_boot_cart.bin"
 title  = "HOME, DOCK cartridge build (Forth)"
-floor  = 636
+floor  = 626
 target = 200
 
 [[image]]
@@ -48,7 +48,7 @@ target = 200
 [[image]]
 file   = "forth_demo_gallery_rom0.bin"
 title  = "HOME ROM (Shooting Gallery demo)"
-floor  = 802
+floor  = 801
 target = 200
 
 [[image]]
@@ -61,3 +61,7 @@ target = 150
 #   file, floor before -> after, reason (the ledger row in the audit's section 9 that justifies it)
 #   forth_boot_cart.bin: 781 -> 478 (-303 B), step R1: the cartridge now carries RECT, POLYGON, POLYGON-FILL and
 #     SPRITE-DEFINE/SHOW/HIDE and the one-OUT paging variant; the audit's section 9 R1 row and section 6.9.
+#   forth_boot_rom0.bin: 627 -> 626 (-1 B), forth_boot_cart.bin: 636 -> 626 (-10 B), forth_demo_gallery_rom0.bin:
+#     802 -> 801 (-1 B), step S follow-up (owner, 2026-10-28): the Home and cartridge builds share LIB tapes. The
+#     cartridge's EXROM page-in is padded to the Home one's length and both page-outs use a 2-byte `ld a,n`, so every
+#     address matches (kernel/bank/bank.asm, STORAGE_SPEC.md D3); the audit's section 9 row "S follow-up".
