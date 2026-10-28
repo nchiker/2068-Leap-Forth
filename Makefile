@@ -88,7 +88,7 @@ ALL_IMAGES := build/forth_rom0.bin $(SMOKE_BINS) $(VISUAL_BINS) $(TEST_BINS) \
               build/forth_demo_gallery_rom0.bin build/graphics_exrom.bin \
               build/forth_boot.dck build/forth_demo_blackjack.dck
 
-.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron audio cartdiff tapetest tapetol tapetol-fuse fusesave \
+.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron audio cartdiff tapetest tapetol tapetol-fuse fusesave fusesave-cross \
         bench-roms $(ALIASES)
 
 all: $(ALL_IMAGES)
@@ -281,9 +281,15 @@ tapetol-fuse: build/forth_boot_rom0.bin build/graphics_exrom.bin
 
 # SAVE-TEXT and SAVE-LIB recorded by Fuse's tape deck, decoded by fuse-utils (tape2wav + audio2tape), compared with
 # STORAGE_SPEC.md section 4, then loaded back into a fresh Fuse (tools/fusesave.py). FUSESAVE_BUILD=<dir> for
-# another build. About 10 s.
-fusesave: build/forth_boot_rom0.bin build/graphics_exrom.bin
+# another build. About 5 s (the last 2 s are the Home <-> cartridge half, also `make fusesave-cross`).
+fusesave: build/forth_boot_rom0.bin build/graphics_exrom.bin build/forth_boot.dck
 	python3 -I tools/fusesave.py --build $(or $(FUSESAVE_BUILD),build)
+
+# Only the Home <-> DOCK cartridge half of fusesave (it is part of `make fusesave` too): SAVE-LIB on one build,
+# LOAD-LIB on the other, both ways, plus a negative control with a patched ROM_IDENTITY. Needs the stock TS2068 ROMs
+# (tools/fusedrive.py stock_roms: $$FORTH_STOCK_ROMS, ~/fuse-build/roms). About 2 s.
+fusesave-cross: build/forth_boot_rom0.bin build/graphics_exrom.bin build/forth_boot.dck
+	python3 -I tools/fusesave.py --cross --build $(or $(FUSESAVE_BUILD),build)
 
 repro:
 	tools/check_repro.sh

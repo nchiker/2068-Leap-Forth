@@ -18,7 +18,16 @@ and SAVE-LIB must leave HERE and LATEST alone.  Then the recording is played int
 LOAD-TEXT / LOAD-LIB, and so is the tape audio2tape made from the audio: the text must run (42), the library
 must give back HERE, LATEST and the dictionary bytes and its word CUBE must work (5 CUBE . = 125).
 
-Usage: fusesave.py [--build DIR] [--out FILE]      exit 0 = every check passed, 1 = any failed
+--cross adds the runtime proof that the Home build and the DOCK cartridge build share LIB tapes (they put every word
+at the same address and carry the same ROM_IDENTITY; `make check` proves the images match outside 25 skipped bytes):
+SAVE-LIB on Fuse running the Home build -> LOAD-LIB on Fuse booted from the stock TS2068 ROMs + build/forth_boot.dck,
+then the other way round, each time comparing HERE, LATEST and the dictionary bytes and running `5 CUBE .`.  A negative
+control changes the cartridge's ROM_IDENTITY cell in a copy of the image (tools/make_dck.py rewraps it) and shows that
+LOAD-LIB of the Home tape is then refused (THROW -37 caught by CATCH, printed with `.`) with the dictionary unchanged.
+
+Usage: fusesave.py [--build DIR] [--out FILE] [--cross]      exit 0 = every check passed, 1 = any failed
+       --cross runs ONLY the Home <-> cartridge checks (needs build/forth_boot.dck, forth_boot_cart.bin/.sym); without it
+       they run after the SAVE-TEXT / SAVE-LIB checks (about 2 s more), and a missing forth_boot.dck is a FAIL
 LIMITS: Fuse's emulation of the ROM's own MIC writes, a software decoder; there is no hardware here.
 """
 import argparse
@@ -128,10 +137,13 @@ def check_blocks(rep, label, blocks, want):
     return ok
 
 
-def roundtrip(build, work, rep, label, tape, command, verify):
-    """A fresh Fuse, `tape` in its deck, `command` typed; `verify(f)` returns (ok, detail) with Fuse still up."""
-    f = fusedrive.Fuse(build, os.path.join(work, "rt"), extra=["--no-accelerate-loader"]).start()
+def roundtrip(build, work, rep, label, tape, command, verify, dck=None, setup=()):
+    """A fresh Fuse (the cartridge `dck` on the stock ROMs, or the Home build), `setup` lines typed, `tape` in its
+    deck, `command` typed; `verify(f)` returns (ok, detail) with Fuse still up."""
+    f = fusedrive.Fuse(build, os.path.join(work, "rt"), extra=["--no-accelerate-loader"], dck=dck).start()
     try:
+        for line in setup:
+            f.type(line)
         r = f.cmd("tape_open %s" % tape)
         if r != "0":
             return rep.check(label, False, "tape_open returned %s" % r)
@@ -149,9 +161,9 @@ def screen_text(f):
     return " | ".join(r for r in f.rows() if r.strip())
 
 
-def record(build, work, setup, command, snap):
+def record(build, work, setup, command, snap, dck=None):
     """Boot, type `setup`, record `command`, return (recording path, f.stop()ped state dict from snap(f))."""
-    f = fusedrive.Fuse(build, os.path.join(work, "rec"), extra=["--no-accelerate-loader"]).start()
+    f = fusedrive.Fuse(build, os.path.join(work, "rec"), extra=["--no-accelerate-loader"], dck=dck).start()
     try:
         for line in setup:
             f.type(line)
@@ -240,10 +252,139 @@ def run(build, work, rep):
             roundtrip(build, wd, rep, "SAVE-LIB: LOAD-LIB of %s" % what, tape, "LOAD-LIB LIBA", verify)
 
 
+CROSS_SETUP = ": CUBE DUP DUP * * ;"
+
+
+def cross_run(build, work, rep):
+    """Home <-> cartridge LIB tapes (see the header).  Everything is judged from Fuse's memory and screen."""
+    SH = fusedrive.load_syms(os.path.join(build, "forth_boot.sym"))
+    SC = fusedrive.load_syms(os.path.join(build, "forth_boot_cart.sym"))
+    home = open(os.path.join(build, "forth_boot_rom0.bin"), "rb").read()
+    cart = open(os.path.join(build, "forth_boot_cart.bin"), "rb").read()
+    dck = os.path.join(build, "forth_boot.dck")
+    if not os.path.isfile(dck):
+        raise SystemExit("fusesave --cross: no %s (make build/forth_boot.dck)" % dck)
+    rom0, rom1 = fusedrive.stock_roms()
+    ra = SH["ROM_IDENTITY"]
+    idh, idc = home[ra] | home[ra + 1] << 8, cart[SC["ROM_IDENTITY"]] | cart[SC["ROM_IDENTITY"] + 1] << 8
+    rep.line("fusesave: cross: stock ROMs %s, %s; cartridge %s" % (rom0, rom1, dck))
+    same = all(SH[k] == SC[k] for k in ("ROM_IDENTITY", "HERE", "LATEST", "FORTH_DICT_RAM", "EDIT_LEN", "IO_READ_KEY"))
+    rep.check("cross: same addresses in both builds", same, "ROM_IDENTITY $%04X, HERE cell $%04X, LATEST cell $%04X, dictionary $%04X" % (
+        SH["ROM_IDENTITY"], SH["HERE"], SH["LATEST"], SH["FORTH_DICT_RAM"]))
+    rep.check("cross: same ROM_IDENTITY value", idh == idc, "Home $%04X, cartridge $%04X" % (idh, idc))
+    dict0 = SH["FORTH_DICT_RAM"]
+
+    def snap(f):
+        here = f.w16(SH["HERE"])
+        return dict(here=here, latest=f.w16(SH["LATEST"]), dict=f.peek(dict0, max(0, here - dict0)))
+
+    def booted_ok(f, want_cart, ident=None):
+        """The machine really is the one asked for: bytes 0-4 are the image's own (the cartridge's LROS header, or
+        Home's reset stub; the stock ROM would show its own) and its ROM_IDENTITY cell is the expected one."""
+        hdr, cell = f.peek(0, 5), f.w16(SH["ROM_IDENTITY"])
+        want_hdr = cart[:5] if want_cart else home[:5]
+        want_id = ident if ident is not None else (idc if want_cart else idh)
+        return hdr == want_hdr and cell == want_id, "bytes 0-4 %s, ROM_IDENTITY cell $%04X" % (hdr.hex(), cell)
+
+    def tape_of(label, dckfile):
+        """SAVE-LIB LIBX on the machine `label`; returns (recording, state after)."""
+        wd = os.path.join(work, label)
+        os.makedirs(wd)
+        box = {}
+
+        def snap_checked(f):
+            if "boot" not in box:
+                ok, d = booted_ok(f, dckfile is not None)
+                box["boot"] = rep.check("cross: %s machine is the %s" % (label, "cartridge" if dckfile else "Home build"), ok, d)
+            return snap(f)
+        rec, before, after, returned, secs, screen = record(build, wd, [CROSS_SETUP], "SAVE-LIB LIBX", snap_checked, dck=dckfile)
+        rep.check("cross: SAVE-LIB on %s returned" % label, returned, "%.1f s emulated, screen: %s" % (secs, screen))
+        rep.check("cross: SAVE-LIB on %s kept HERE, LATEST, dictionary" % label, before == after,
+                  "HERE $%04X LATEST $%04X, %d dictionary bytes" % (after["here"], after["latest"], len(after["dict"])))
+        try:
+            blocks, _ = independent_decode(rec, wd)
+            check_blocks(rep, "cross: tape from %s (audio2tape)" % label, blocks,
+                         tapes.lib_file("LIBX", after["dict"], after["latest"], idh))
+        except Exception as e:
+            rep.check("cross: tape2wav + audio2tape of the %s tape" % label, False, str(e))
+        return rec, after
+
+    def load_on(label, tape, saved, dckfile):
+        def verify(f):
+            ok0, d0 = booted_ok(f, dckfile is not None)
+            now, bad = snap(f), []
+            if not ok0:
+                bad.append("wrong machine: " + d0)
+            if now["here"] != saved["here"]:
+                bad.append("HERE $%04X, want $%04X" % (now["here"], saved["here"]))
+            if now["latest"] != saved["latest"]:
+                bad.append("LATEST $%04X, want $%04X" % (now["latest"], saved["latest"]))
+            if now["dict"] != saved["dict"]:
+                bad.append("dictionary bytes differ")
+            f.type("5 CUBE .")
+            if " 125 " not in " " + screen_text(f).replace("|", " ") + " ":
+                bad.append("5 CUBE . did not print 125")
+            return not bad, "; ".join(bad) or "HERE $%04X LATEST $%04X, %d dictionary bytes equal, 5 CUBE . -> 125" % (
+                now["here"], now["latest"], len(saved["dict"]))
+        roundtrip(build, work, rep, label, tape, "LOAD-LIB LIBX", verify, dck=dckfile)
+
+    rec_h, saved_h = tape_of("home", None)
+    rec_c, saved_c = tape_of("cartridge", dck)
+    rep.check("cross: Home and cartridge saved the same HERE, LATEST, dictionary", saved_h == saved_c,
+              "HERE $%04X/$%04X LATEST $%04X/$%04X" % (saved_h["here"], saved_c["here"], saved_h["latest"], saved_c["latest"]))
+    load_on("cross: Home SAVE-LIB -> cartridge LOAD-LIB", rec_h, saved_h, dck)
+    load_on("cross: cartridge SAVE-LIB -> Home LOAD-LIB", rec_c, saved_c, None)
+
+    # ---- negative control: a cartridge whose ROM_IDENTITY differs must refuse the Home tape
+    bad_id = idc ^ 0x5A5A
+    img = bytearray(cart)
+    img[SC["ROM_IDENTITY"]], img[SC["ROM_IDENTITY"] + 1] = bad_id & 0xFF, bad_id >> 8
+    pb, pd = os.path.join(work, "cart_badid.bin"), os.path.join(work, "cart_badid.dck")
+    open(pb, "wb").write(img)
+    r = subprocess.run([sys.executable, "-I", os.path.join(ROOT, "tools", "make_dck.py"), pb, pd,
+                        os.path.join(build, "graphics_exrom.bin")], capture_output=True, text=True)
+    if not rep.check("cross: negative control: patched cartridge built", r.returncode == 0 and os.path.isfile(pd),
+                     "ROM_IDENTITY cell $%04X: $%04X -> $%04X" % (SC["ROM_IDENTITY"], idc, bad_id)):
+        rep.line("fusesave:   " + (r.stdout + r.stderr).strip())
+        return
+    diff = [i for i in range(len(cart)) if cart[i] != img[i]]
+    rep.check("cross: negative control: only the identity cell differs", diff == [SC["ROM_IDENTITY"], SC["ROM_IDENTITY"] + 1],
+              "differing image offsets %s" % ["$%04X" % i for i in diff])
+    f = fusedrive.Fuse(build, os.path.join(work, "neg"), extra=["--no-accelerate-loader"], dck=pd).start()
+    label = "cross: negative control: LOAD-LIB of the Home tape refused"
+    try:
+        f.type(": LL LOAD-LIB ;")
+        before = snap(f)
+        if f.cmd("tape_open %s" % rec_h) != "0":
+            rep.check(label, False, "tape_open failed")
+            return
+        f.type("' LL CATCH LIBX", timeout=600)
+        if not f.idle():
+            rep.check(label, False, "the prompt did not come back")
+            return
+        st, bad = snap(f), []
+        if (before["here"], before["latest"], before["dict"]) != (st["here"], st["latest"], st["dict"]):
+            bad.append("dictionary changed: HERE $%04X->$%04X LATEST $%04X->$%04X" % (
+                before["here"], st["here"], before["latest"], st["latest"]))
+        f.type(".")
+        scr = screen_text(f)
+        if " -37 " not in " " + scr.replace("|", " ") + " ":
+            bad.append("CATCH did not leave -37 (screen: %s)" % scr)
+        ok0, d0 = booted_ok(f, True, ident=bad_id)
+        if not ok0:
+            bad.append("not the patched cartridge: " + d0)
+        rep.check(label, not bad, "; ".join(bad) or
+                  "CATCH left -37; HERE $%04X LATEST $%04X and %d dictionary bytes unchanged; machine's ROM_IDENTITY cell $%04X (genuine $%04X)" % (
+                      st["here"], st["latest"], len(st["dict"]), bad_id, idc))
+    finally:
+        f.stop()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--build", default=os.path.join(ROOT, "build"), help="image directory (default: build)")
     ap.add_argument("--out", help="write the report to this file as well as stdout")
+    ap.add_argument("--cross", action="store_true", help="only the Home <-> DOCK cartridge LIB tape checks (see the header)")
     a = ap.parse_args()
     for tool in ("tape2wav", "audio2tape"):
         if not shutil.which(tool):
@@ -260,7 +401,12 @@ def main():
     out, t0 = [], time.time()
     rep = Report(out)
     try:
-        run(build, work, rep)
+        if not a.cross:
+            run(build, work, rep)
+        if a.cross or os.path.isfile(os.path.join(build, "forth_boot.dck")):
+            cross_run(build, work, rep)
+        else:
+            rep.check("cross: Home <-> cartridge checks", False, "no %s/forth_boot.dck (make build/forth_boot.dck)" % build)
     finally:
         shutil.rmtree(work, ignore_errors=True)
     rep.line("fusesave: emulator Fuse %s, tape traps off, loader acceleration off; decoder fuse-utils tape2wav + audio2tape" %
@@ -268,6 +414,8 @@ def main():
     rep.line("fusesave: %d checks, %d failed, %.0f s wall" % (rep.n, rep.failed, time.time() - t0))
     if a.out:
         with open(a.out, "w") as f:
+            if a.cross:
+                f.write("# python3 -I tools/fusesave.py --cross --out %s  (Fuse %s)\n" % (a.out, fusedrive.fuse_version()))
             f.write("\n".join(out) + "\n")
     return 1 if rep.failed else 0
 
