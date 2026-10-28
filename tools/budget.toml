@@ -24,13 +24,13 @@ pad = 0xFF
 [[image]]
 file   = "forth_boot_rom0.bin"
 title  = "HOME ROM (Forth)"
-floor  = 144
+floor  = 146
 target = 200
 
 [[image]]
 file   = "forth_boot_cart.bin"
 title  = "HOME, DOCK cartridge build (Forth)"
-floor  = 456
+floor  = 458
 target = 200
 
 [[image]]
@@ -48,7 +48,7 @@ target = 200
 [[image]]
 file   = "forth_demo_gallery_rom0.bin"
 title  = "HOME ROM (Shooting Gallery demo)"
-floor  = 523
+floor  = 525
 target = 200
 
 [[image]]

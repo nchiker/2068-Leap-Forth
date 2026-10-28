@@ -30,7 +30,7 @@
 ; The retargeting itself is a one-bit change (chunk N = bit N on
 ; PORT_BANK_HOME, confirmed in include/hardware.inc's own citation of
 ; the real port $F4 description) — everything else below (the nesting-
-; safe depth counter, the DI/EI discipline, the shadow-preserving
+; safe depth counter, the EI-on-return discipline, the shadow-preserving
 ; PORT_FF_SHADOW read-modify-write) is chunk-agnostic and unchanged
 ; from the original, still-sound design. What is NOT yet true: this
 ; specific chunk-5 retargeting has NOT been hardware/emulator-confirmed
@@ -42,18 +42,23 @@
 ; more, paged into chunk 5 ($A000-$BFFF) only.
 ;
 ; INTERRUPT SAFETY — the one thing this file gets right or wrong for
-; everything built on top of it: interrupts are disabled ONLY across
-; the two port writes that actually change the paging state (a few
-; instructions), never across the caller's subsequent use of the
-; paged window. Holding DI for the whole window would reintroduce
-; exactly the keyboard-lag problem this project already fixed once
-; (see kernel/interrupt's own history) for anything nontrivial running
-; from EXROM. It's safe to re-enable immediately because this
-; project's real interrupt handler, KBD_ISR_TICK, never touches chunk
-; 5 — its own sysvars all live in chunk 4, which stays Home-mapped
-; the entire time chunk 5 is paged to EXROM. If kernel/interrupt ever
-; grows a handler that DOES need chunk-5 data, this reasoning needs
-; re-deriving, not assumed to still hold.
+; everything built on top of it: interrupts are NOT disabled anywhere
+; in these routines. Until step R0 (audit O8, after 2068-Leap-C delta
+; D14) they were off across the whole of each routine, about 120 T, and
+; the TS2068's frame interrupt stays asserted for only 32 T, so one
+; arriving in that window was lost (47 of 11,232 frames in Leap-C's
+; float loop); every EXROM call lost frames at that rate. It is safe
+; because the interrupt handler touches none of the banking state: not
+; BANK_EXROM_DEPTH, not PORT_FF_SHADOW, not ports $F4/$FF. It runs from
+; chunk 0 with its sysvars and stack in chunk 4, and chunk 5 is the only
+; chunk these routines page, so it makes no difference to the handler
+; whether the two port writes have happened yet. Holding DI for the
+; whole paged window would reintroduce the keyboard-lag problem this
+; project already fixed once (see kernel/interrupt's own history).
+; If kernel/interrupt ever grows a handler that touches chunk 5, the
+; banking state or ports $F4/$FF, this reasoning needs re-deriving, not
+; assuming. Both routines still end with EI, so interrupts are on at
+; the return exactly as before.
 ;
 ; EXROM's own entry convention: execution starts at the very first
 ; byte of the 8K image (i.e. $A000 once paged in), same as a ROM's own
@@ -68,8 +73,8 @@
 ; ============================================================================
 ; BANK_PAGE_EXROM_IN
 ; Pages chunk 5 ($A000-$BFFF) to EXROM. Every other chunk stays Home.
-; See this file's own header for the DI/EI reasoning — interrupts are
-; back on before this returns.
+; See this file's own header for the interrupt reasoning — interrupts are
+; on when this returns.
 ; In:  none
 ; Out: none
 ; Destroys: AF
@@ -84,7 +89,6 @@
 ; out — is completely unchanged: depth goes 0->1 here (real page-in
 ; happens) and 1->0 in BANK_PAGE_EXROM_OUT (real page-out happens).
 BANK_PAGE_EXROM_IN:
-    di
     ld   a, (BANK_EXROM_DEPTH)
     inc  a
     ld   (BANK_EXROM_DEPTH), a
@@ -125,7 +129,6 @@ BANK_PAGE_EXROM_IN:
 ; Destroys: AF
 ; ============================================================================
 BANK_PAGE_EXROM_OUT:
-    di
     ld   a, (BANK_EXROM_DEPTH)
     or   a
     jr   z, .depth_already_zero       ; defensive: an unbalanced OUT
