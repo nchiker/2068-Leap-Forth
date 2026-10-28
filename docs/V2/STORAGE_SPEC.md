@@ -85,6 +85,19 @@ recomputes it, and `make check` runs that.
 - **Test ROMs are not patched.** Their identity reads `$0000` and is self-consistent within one ROM.
 - **Consequence for users.** Every new ROM release invalidates LIB tapes; source text (`SAVE-TEXT`) is the
   portable format. The docs say so.
+- **The HOME and cartridge builds refuse each other's LIB tapes.** Their paging code in `kernel/bank/bank.asm`
+  differs in size (the cartridge's is 9 B shorter), so every word from `$1427` on is at a different address.
+- **Revisited and kept (owner, 2026-10-28).** The other options considered:
+  - Pad the cartridge's paging code so the two builds share addresses and tapes: about 1 B HOME and 10 B
+    cartridge. Not worth it: the cartridge build exists only to work around one emulator.
+  - Relink on load: the compiler marks ROM addresses in a RAM bitmap, and SAVE-LIB writes them as names.
+    Estimated [E] 250-350 B HOME and about 2.7 KB RAM, and ROM addresses stored as data would still crash after
+    a release.
+  - A hand-bumped ABI version, as in Leap's package ABI: without stable addresses it needs a bump almost every
+    release, and two dev builds with the same number would crash each other.
+
+  With subroutine threading and a packed ROM, a compiled image is only valid on the exact ROM. Leap V2.1's
+  `SAVE ... ALL` ties its compiled session to a CRC of the ROM for the same reason.
 
 **D4. LIB images are saved and loaded in place, with a CRC-16 trailer.**
 
