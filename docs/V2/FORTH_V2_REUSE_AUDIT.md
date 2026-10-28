@@ -265,17 +265,17 @@ BASIC-bound `rom/test_editor_auto.asm` or `rom/test_v2_editor_integration.asm`.
 | # | Item | Class | Reference | Forth file | Cost [E] | Notes |
 |---|---|---|---|---|---|---|
 | O1 | Cold start does not clear `UDG_TABLE` ($F180 is above the $8000-$F000 clear) | 2 | Leap `67c7137` item 2.2 | `rom/forth_boot.asm` ~217 | +8 B | **Verified bug**: CHR$ 144-164 show power-on garbage. **Fixed in step G (`861a823`), 0 B [M]**, see section 6.6 |
-| O2 | Stock-ROM bytes in the block-graphics glyph builder (two 12-byte PO-GR-2 runs) | 2 | Leap-C D21, Leap `c2415f8` | `kernel/graphics/graphics.asm` ~467 | −12 B | Licensing |
+| O2 | Stock-ROM bytes in the block-graphics glyph builder (two 12-byte PO-GR-2 runs) | 2 | Leap-C D21, Leap `c2415f8` | `kernel/graphics/graphics.asm` ~467 | −12 B | Licensing. **Done in step R0 (`7e7c461`), −12 B [M]**: body of Leap-C D21, scan no longer finds it, §6.7 |
 | O3 | Missing characters `[ ] \ { } \| ~ ^` and backtick: no glyphs, no keys, so no `[']`, `[CHAR]`, `\` comments, `[ ] LITERAL` | 2 | Leap-C D7, D8; Leap `8a52ab9` (72 B glyphs), `0b35b68` (direct glyph table, −38 B) | `kernel/io/io.asm`, `kernel/graphics/graphics.asm`, new words | ~+100 B + words | Significant Forth-standard gap |
 | O4 | `GFX_CLEAR_ROW` writes attributes per character via `GFX_SET_ATTR` | 2 | Leap `kernel/graphics/graphics.asm` (back-port 4.1, 5.8; `22b4999`) | `kernel/graphics/graphics.asm` ~1045 | smaller | 24,786 → 6,498 T per row [L]; runs on every scroll |
 | O5 | AY BEEP; current BEEP runs with interrupts off for the whole note | 3 | Leap `rom/v2_ay_beep.asm` (`6493615`); speaker kept as optional package | `core/beep.asm`, `kernel/sound/sound.asm` | −350-400 B | Owner decision: speaker → AY |
 | O6 | BREAK latch in the ISR so runaway loops can be stopped | 2 | Leap `8ee4f1a`, `fa8e5b9` | `kernel/interrupt`, loop words, `THROW` | +~14 B + polls | Measure loop cost (Phase 15 gate) |
 | O7 | No pause/timing word | 2 | Leap `AY_WAIT_FRAMES` (HALT counting, frame-wrap safe, 7 B) | new word `MS` or `PAUSE` | ~+20 B | `CHIME_DELAY` has the same wrap class, harmless at boot |
-| O8 | `di` in `BANK_PAGE_EXROM_IN/OUT` drops frame interrupts | 2 | Leap-C D14 (47/11,232 frames lost [L]) | `kernel/bank/bank.asm` | −2 B | Low impact today (graphics EXROM only) |
-| O9 | `SOUND` rejects register 0 | 3 | Leap `6493615` | `core/sound.asm` ~126 | −3 B | Optional |
+| O8 | `di` in `BANK_PAGE_EXROM_IN/OUT` drops frame interrupts | 2 | Leap-C D14 (47/11,232 frames lost [L]) | `kernel/bank/bank.asm` | −2 B | Low impact today (graphics EXROM only). **Done in step R0 (`684065f`), −2 B [M]**; frames lost 38% → 0 in a paging loop, §6.7 |
+| O9 | `SOUND` rejects register 0 | 3 | Leap `6493615` | `core/sound.asm` ~126 | −3 B | Optional. **Done in step R0 (`2dc9cf6`), −8 B [M]** (the chime's direct register-0 write goes too), §6.7 |
 | O10 | Faster unsigned multiply/divide | 2 | Leap-C `RT_UMUL/RT_UDIV` | `kernel/math/math.asm` | ± | 60000/7: 3,584 → 1,479 T [L] |
-| O11 | Dead code | — | — | io, graphics, mode64 | −64 B | Verify each before removal |
-| O12 | `jp` → `jr` | — | Leap-C `tools/relax_jumps.py` | various | ≤ −30 B | Many sites are deliberately `jp`; lowest priority |
+| O11 | Dead code | — | — | io, graphics, mode64 | −64 B | Verify each before removal. **Done in step R0 (`de5d735`), −64 B [M]**, §6.7 |
+| O12 | `jp` → `jr` | — | Leap-C `tools/relax_jumps.py` | various | ≤ −30 B | Many sites are deliberately `jp`; lowest priority. **Done in step R0 (`bcf45ac`), −20 B [M]** (30 candidates; 10 left as `jp`), §6.7 |
 
 **Provenance summary** [L, scan of HEAD against `48.rom`, `tc2068-0.rom`, `tc2068-1.rom`]: the only
 12-byte matches are the tape block I/O (§4.1) and the glyph builder (O2). Files written while
@@ -471,6 +471,42 @@ unchanged. `make check`, `make repro` (260 files) and `make bench` (all deltas +
   `core/ kernel/ rom/` reads it, which a future step that starts using those cells must revisit; `make test`
   grew by about 28 s for T9.
 
+### 6.7 Step R0 results (2026-10-28, branch `v2/step-r0-recover`, from `v2/step-g-guards`)
+
+O2, O8, O9, O11 and O12 done, each with its own commit and measured bytes; HOME free **68 → 174 B [M]**
+(cartridge 380 → 486), EXROM unchanged at 6,682. The reserve ratchet floors were raised in each commit.
+Unlike step G, R0 changes behaviour in places, so the check is the test suite and the measurements below,
+not byte-identical images; every image that includes the changed files moves.
+
+- **Oracles first.** `rom/test_blockgfx.asm` (O2) was added and passes on the old routine; a deliberate
+  one-bit mutation turns it red. `rom/test_sound_reg0.asm` (O9) reads the AY registers back (they are
+  readable under ZEsarUX) and was red on the old code, green on the new. `make test`: 70 PASS, 0 FAIL, 1 SKIP.
+- **O2 (−12 B).** The glyph builder's body is Leap-C's delta D21, which that project records as written
+  clean-room from the screen format. That is a record I did not re-verify; what was measured here is that
+  the 12-byte scan no longer finds the routine (45 → 25 runs, only the tape block I/O and one EXROM fill run
+  left) and that the 16 glyphs equal the rule the screen format fixes. NOTICE section 3 says exactly that;
+  it still needs the owner's review.
+- **O11 (−64 B).** Verified by searching every `.asm` in the tree with comments stripped, not just the Home
+  listing: `IO_ANY_KEY_DOWN` 19, `GFX_PUTCHAR_OVER` 16, the SYMBOL SHIFT+A/S key cases 19, and
+  `MODE64_READ_PIXEL` 10, which moved into `forth_smoke_p8b` because that test is its only caller.
+  Not removed: `NMI_ENTRY` (the NMI vector) and `MEM_FILL` (the fall-through of `MEM_FILL_ZERO`). Visible
+  change: `KEY` no longer returns 12 or 14 for SYMBOL SHIFT+A/S (now 0); the two chords are free for step K.
+- **O8 (−2 B).** The interrupt handler touches none of the banking state, so the `di` in the two paging
+  routines only lost frames. A throwaway ROM that pages 40,000 times: 129 of an expected 207 frames
+  before, 244 of 244 after.
+- **O9 (−8 B).** `SOUND` takes registers 0-16 (17+ ignored); the boot chime's raw write of register 0
+  became the first table entry. The same writes happen in the same order. `0 n SOUND` used to do nothing.
+- **O12 (−20 B).** 30 `jp` were in range; 20 are now `jr`. The rest were left on purpose: `core/beep.asm`
+  (step A rewrites it), sites an earlier author marked "JP, not JR", and sites inside 10 bytes of the
+  limit, where `check_z80_opcodes.py` complains. `jr` is smaller but not faster, so the result was
+  checked against `make bench` (all within ±0.04%). `tools/relax_jumps.py` is the port of Leap-C's tool.
+- **Found on the way: the pixel benchmark depended on code layout.** `0 RANDOMIZE` makes RND read the R
+  register, so the O8/O9 changes moved pixel's RESULT from 159 to 213 and `make bench` failed its RESULT
+  check (T-states moved 0.04%). `rom/bench/bench_pixel.asm` now seeds 26725 (`$6865`, read from the
+  step-G baseline run), which restores RESULT 159 and the Phase 2 numbers. A tooling fix, `6ddb8c9`.
+- **Left for later.** HOME is 26 B short of the 200 B target; step A (AY BEEP, −350-400 B) is next.
+  `KEY_NEXT_ERROR`/`KEY_PREV_ERROR` and `EDIR_*` constants are now unused in `include/` (no bytes).
+
 **Not recommended:** full platform vendoring (`platform/MANIFEST` + `deltas/*.patch`). Leap's kernel
 changes since the fork are mostly BASIC-specific or shrink work; this ledger is the one-time record
 of what was judged. A full package ABI is also not needed now: Forth already has
@@ -537,6 +573,7 @@ E and K.
 | **T** Test infrastructure | `ba2009b` T10, `a060549` T3, `994429a` T6, `24b4231` T1, `2ab1541` T2, `edb8314` T7, `9a0ee04` T8 | 68 [M] | 6,682 [M] | 0 → 0 (tooling only; every image, `.sym` and `.lst` byte-identical to baseline [M]) | Phase 2 baseline, §6.4 | `make test`: 67 PASS, 1 FAIL (`forth_smoke_p36`, stale test, §6.5), 1 SKIP (`p53_realtape`) [M] |
 | T follow-up: p36 | `6de13c3` | 68 [M] | 6,682 [M] | 0 → 0 (only p36's own images change) | — | `make test`: 68 PASS, 0 FAIL, 1 SKIP [M] |
 | **G** Guards | `8670a4f` T4, `d17d5e4` T5, `e25c803` NOTICE, `6263919` T9, `861a823` O1 | 68 [M] (cartridge 380) | 6,682 [M] | Cold start: 0 B → 0 B. The one `MEM_FILL_ZERO` now runs to the end of `UDG_TABLE` (`ld bc` immediate `$7000` → `$7228`); [E] was +8 B for a separate fill. **Floors set at 68 HOME / 380 cart / 449, 449, 457 demos / 6,682 EXROM; none lowered.** Targets 200 / 150 (HOME is 132 B short, EXROM met) | Boot to the prompt is 4,442,252 T-states with and without O1 (frame-synced chime wait absorbs the 552 extra bytes cleared); `make bench` unchanged (bench ROMs have their own cold start) | `make test`: 68 PASS, 0 FAIL, 1 SKIP, and POWERON 7/7 [M] |
+| **R0** Recover | `b16011a` test_blockgfx, `7e7c461` O2, `de5d735` O11, `684065f` O8, `2dc9cf6` O9, `6ddb8c9` bench seed, `bcf45ac` O12 | 174 [M] (cartridge 486; Blackjack 522, Gallery 527) | 6,682 [M] | HOME 68 → 174 free (+106): O2 −12, O11 −64, O8 −2, O9 −8, O12 −20 (estimate was −80-110). **Floors raised to 174 HOME / 486 cart / 522, 522, 527 demos / 6,682 EXROM**; HOME is 26 B short of the 200 B target | O8: a paging loop kept 62% of frames before and 100% after (ZEsarUX). `make bench`: every figure within ±0.04% of the Phase 2 baseline; pixel's seed fixed (RESULT stays 159) | `make test`: 70 PASS, 0 FAIL, 1 SKIP, POWERON 7/7 [M]; `make check`, `make repro` (260 files) pass |
 | | | | | | | |
 
 ---
