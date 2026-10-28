@@ -247,13 +247,20 @@ bench-roms: $(BENCH_BINS)
 bench: bench-roms
 	python3 tools/bench.py --baseline tools/bench_baseline.json
 
-check:
+# Images the guards below measure (tools/budget.toml, tools/provenance.py): built first, so `make check`
+# works from a clean tree.
+CHECK_IMAGES := build/forth_boot_rom0.bin build/forth_boot_cart.bin build/forth_demo_blackjack_rom0.bin \
+                build/forth_demo_blackjack_cart.bin build/forth_demo_gallery_rom0.bin build/graphics_exrom.bin
+
+check: $(CHECK_IMAGES)
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm
 	python3 tools/check_z80_opcodes.py core/*.asm kernel/*/*.asm rom/*.asm
 	python3 tools/audit_layout.py
 	# z80sim flag semantics + snapshot/replay (run in-directory: they import sim/snapshot as siblings)
 	cd tools/z80sim && python3 -m unittest test_flags test_snapshot
 	tools/check_test_list.sh
+	# reserve ratchet: free space may not fall below the floors in tools/budget.toml (owner decision 1)
+	python3 -I tools/budget.py
 
 clean:
 	rm -rf build dist
