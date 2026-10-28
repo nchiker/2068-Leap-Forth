@@ -48,8 +48,8 @@ Highlights:
   printed on an unrecognized word with a prompt that recovers cleanly
   instead of hanging.
 - **Tape storage**, Jupiter-Ace-style: `SAVE-LIB`/`LOAD-LIB` round-trip
-  a whole dictionary image (CRC-checked, tied to the exact ROM that
-  saved it), `SAVE-TEXT`/`LOAD-TEXT` the portable source text, and
+  a whole dictionary image (CRC-checked, tied to the exact ROM release
+  that saved it; its HOME-ROM and DOCK-cartridge editions share tapes), `SAVE-TEXT`/`LOAD-TEXT` the portable source text, and
   `VERIFY-LIB`/`VERIFY-TEXT` compare a tape with memory. Failures are
   `THROW`n (`-28` for SPACE, `-37` for any other tape failure, `-8` if
   an image doesn't fit), so a program can `CATCH` them. The tape blocks

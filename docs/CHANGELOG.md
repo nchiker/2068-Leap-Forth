@@ -876,7 +876,8 @@ this is the condensed one-paragraph-per-phase version.
   through a `$D000` buffer, so the 8,190-byte limit is gone (the image
   must satisfy `HERE + 2 <= DICT_RAM_CEILING`), and the image carries a
   CRC-16 trailer. A `SAVE-LIB` tape now carries the identity of the ROM
-  that saved it (a CRC of the ROM image): a new ROM release makes older
+  that saved it (a CRC of the ROM image, the same for the HOME-ROM and
+  DOCK-cartridge editions of a release, which share tapes): a new ROM release makes older
   `SAVE-LIB` tapes unloadable (`LOAD-LIB` refuses with `-37` before
   reading the data) and pre-step-S `SAVE-LIB` tapes are not loaded;
   `SAVE-TEXT` is the portable format and

@@ -710,6 +710,47 @@ ZRCP `realtape-open`, SAVE captured from breakpoint actions on the sender's `out
   unchanged and case 1 loads a V1-format text tape, but no tape saved by the V1 ROM itself was played into the new
   one).
 
+**Step S follow-up (2026-10-28, same branch), after the owner's review:**
+- **V1 compatibility is not a requirement** (owner). V1 text tapes load only because the format did not change.
+  This is recorded in spec D2, `bffccc8`, and the old-ROM TEXT cross-load deferred above is dropped.
+- **Fuse added as a second tape emulator [M]** (`e0d3fa9`, `24c429c`). The port is of Leap-C's headless Fuse 1.9.1
+  driver: `tools/fuse/fuseshim.c` (Leap-C `d31d785`) and `tools/fusedrive.py`.
+  - `make tapetol-fuse` plays the 71 tapes as TZX `$15` at 4 T a sample. The old build accepts 48 and this build
+    67, nothing narrower; Leap-C's beta.2 also accepts 67. ZEsarUX's coarser `.rwa` run gives 66.
+  - This build refuses 4 tapes: the three data dropouts, which it must refuse, and pilot-missing-end.
+  - `make fusesave` records SAVE-TEXT and SAVE-LIB with Fuse's tape deck. fuse-utils `tape2wav` and `audio2tape`
+    decode the recordings independently of our tools, the decoded blocks are checked against spec section 4, and
+    the tapes are loaded back: 41 checks, 0 failed.
+  - On the old build, `audio2tape` reads header and data as one block, the missing-gap defect. Fuse runs the
+    TS2068's 60 Hz frame, so the 50-frame gap is 0.83 s there, and the decoder still separates the blocks.
+  - This covers the `audio2tape` item deferred above. Evidence: `s_fuse_tapetol_old_vs_new.txt`,
+    `s_fuse_save.txt`, `s_fuse_cross.txt`.
+- **LIB identity revisited [M]** (spec D3, `a1d78ff`). The owner asked for it. With subroutine threading on a packed
+  ROM, a compiled image is valid only on the exact ROM, so the identity stays a ROM CRC. Relinking and a manual ABI
+  version were weighed and not taken.
+- **The HOME and DOCK cartridge builds share LIB tapes again** (owner's choice):
+  - Step R1 had made the cartridge's paging code 9 B shorter, moving every word after `$1427`.
+  - Now its page-in is padded to the Home length and both page-outs use a 2-byte `ld a,n`. HOME −1 B (626 free),
+    cartridge −10 B (626), Gallery −1 B (801); floors lowered with history in `tools/budget.toml`.
+  - `tools/rom_identity.py` leaves the 25 differing bytes, between `ROM_ID_SKIP_*` / `.rom_id_skip` labels, out of
+    the CRC. `--shared` in `make check` proves the two images differ nowhere else and carry the same identity
+    (`$CA30`).
+  - `make fusesave` proves it at run time: SAVE-LIB on Home loads on the cartridge (stock ROMs plus `.dck` on Fuse),
+    and the other way round. A cartridge with a patched identity refuses the tape with -37 and leaves the
+    dictionary unchanged.
+- **Tape routine not rewritten.** The owner allowed a rewrite of Leap-C's block I/O if needed, but neither emulator
+  shows a need. Of the refused tapes, three have bytes missing from the data. The others are pilot-missing-end
+  (Leap-C refuses it too) and, on ZEsarUX only, 30% jitter.
+- **Checks [M]** (`docs/V2/evidence/s_followup_shared_identity.txt`):
+  - `make check` passes.
+  - `make test`: 70 PASS, 0 FAIL, 1 SKIP; POWERON 7/7.
+  - `make cartdiff`: 26/26.
+  - `make tapetest`: 15/15.
+  - `make bench`: every row ok.
+  - `make repro`: 266 files.
+- **Limits.** Still only emulators: ZEsarUX and Fuse, whose DOCK, EXROM and tape-deck models carry the cross-build
+  proof. Not tested: a real cassette deck or a real cartridge board.
+
 **Not recommended:** full platform vendoring (`platform/MANIFEST` + `deltas/*.patch`). Leap's kernel
 changes since the fork are mostly BASIC-specific or shrink work; this ledger is the one-time record
 of what was judged. A full package ABI is also not needed now: Forth already has
@@ -781,6 +822,7 @@ E and K.
 | **A** AY BEEP | `5f4678f` BEEP, `6086ecc` chime wait; spec `docs/V2/AY_BEEP_SPEC.md` | 469 [M] (cartridge 781; Blackjack 797, Gallery 802) | 6,682 [M] | HOME 174 → 469 free (+295): `core/beep.asm` ~439 → 219 B (+220), `SOUND_BEEP` left out of the product and bench ROMs (+55), chime wait inline (+20). **Floors raised to 469 HOME / 781 cart / 797, 797, 802 demos / 6,682 EXROM**; HOME now exceeds the 200 B target by 269 B | Boot to the prompt 4,442,252 → 4,442,116 T (same frame count). A note no longer holds interrupts off; `make bench` within ±0.04% of the Phase 2 baseline | `make test`: 70 PASS, 0 FAIL, 1 SKIP, POWERON 7/7 [M]; `make check`, `make repro` pass |
 | **R1** Cartridge EXROM paging | `ce1579d`; spec `docs/V2/CARTRIDGE_EXROM_SPEC.md` | 469 [M] (cartridge 478; Blackjack 797, Gallery 802) | 6,682 [M] | Cartridge 781 → 478 free (-303): the six graphics words and the one-`OUT` paging variant (estimate -312). Home images unchanged. **Floors: cart lowered to 478** (ledger row for the lowered floor); others unchanged | Home build's code unchanged; `make bench` not affected | `make test`: 70 PASS, 0 FAIL, 1 SKIP [M]; `make cartdiff`: 26/26 identical, old build 26/26 fail, selftest 7/7 checks; `make repro` pass |
 | **S** Storage rebuild | `dcdc9ce` S1, `08c7ce6` S2, `9c42346` + `c39f674` S2 fixes, the docs/floors/ledger commit after them; spec `docs/V2/STORAGE_SPEC.md`, oracle `e7f0bae` | 627 [M] (cartridge 636; Blackjack 797, Gallery 802) | 6,682 [M] | Storage 1,141 → 983 B (−158): block I/O 327 → 316 (Leap-C clean-room, adopted), header layer 393 → 181, words 421 → 484 (+VERIFY-LIB, VERIFY-TEXT). **Floors raised to 627 HOME / 636 cart**; others unchanged | `make bench` within ±0.04%; a LIB SAVE/LOAD adds a CRC pass (~400 T/byte) | `make test` 70 PASS 0 FAIL 1 SKIP, POWERON 7/7 [M]; `make tapetest` 15/15 (old build 3/15); `make tapetol` 66/71, old 49/71, nothing narrower; `make repro`, `make check` pass; cartdiff 26/26 |
+| S follow-up: shared identity, Fuse | `bffccc8` V1 note, `e0d3fa9` + `24c429c` Fuse, `a1d78ff` shared identity | 626 [M] (cartridge 626; Blackjack 797, Gallery 801) | 6,682 [M] | Paging variants padded to equal length: HOME −1 B, cartridge −10 B, Gallery −1 B. **Floors lowered to 626 HOME / 626 cart / 801 Gallery** (ledger row for the lowered floors) | `make bench` every row ok | `make test` 70/0/1, POWERON 7/7; tapetest 15/15; tapetol 66/71 (ZEsarUX), tapetol-fuse 67/71 (old 48); fusesave 41/41 incl. Home ↔ cartridge LIB tapes; cartdiff 26/26; repro, check pass |
 | | | | | | | |
 
 ---
@@ -805,4 +847,5 @@ Decided 2026-10-28 (owner): 1, 2, 4, 5, 6. Open: 3.
    schedule a rewrite only for a file the T5 scan flags.
 6. **Legacy tapes**: accept unstamped `SAVE-LIB` images from V1 with a warning, or refuse them? **Decided
    (2026-10-28): whatever takes the least code.** Applied in step S as rejection: V1 SAVE-LIB tapes are header type
-   0, which LOAD-LIB (type 3) never matches, at no code cost. V1 SAVE-TEXT tapes still load.
+   0, which LOAD-LIB (type 3) never matches, at no code cost. Later the same day the owner added that V1
+   compatibility need not be maintained at all; V1 SAVE-TEXT tapes load only because the format is unchanged.

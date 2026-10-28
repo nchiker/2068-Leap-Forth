@@ -3453,7 +3453,9 @@ SAVE-LIB MYWORDS
   stamped by any other ROM before reading a single byte of data: the
   dictionary is left untouched and the error below is thrown. In
   practice that means every new release of the ROM makes older
-  `SAVE-LIB` tapes unloadable. Tapes saved by the very first
+  `SAVE-LIB` tapes unloadable. The two editions of one release, the
+  replacement HOME ROM and the DOCK cartridge, count as the same ROM:
+  a tape saved on either loads on the other. Tapes saved by the very first
   versions of `SAVE-LIB` (before the tape storage rebuild) are not
   loaded either. If you need a tape to outlive a ROM upgrade, use
   `SAVE-TEXT`, below.

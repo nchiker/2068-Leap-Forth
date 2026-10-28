@@ -75,8 +75,9 @@ before any data byte is received. The identity is enforced in both directions:
 
 **D3. `ROM_IDENTITY` is a CRC of the ROM image, patched in after assembly.** `ROM_IDENTITY` is a 2-byte cell
 assembled as `$0000`. `tools/rom_identity.py --patch` sets it to `$8000 | (CRC-16 of the 16 KB image with the cell
-zeroed)` in the product images (`forth_boot_rom0.bin`, `forth_boot_cart.bin`, before `make_dck.py`). `--verify`
-recomputes it, and `make check` runs that.
+and the skip ranges zeroed)` in the product images (`forth_boot_rom0.bin`, `forth_boot_cart.bin`, before
+`make_dck.py`). `--verify` recomputes it, `--shared` checks that the two builds differ only inside the skip ranges
+and carry the same identity, and `make check` runs both.
 
 - **Why a ROM CRC.** Any change to ROM bytes changes the identity, so an image only loads into the exact ROM that
   saved it. A build stamp (the audit's suggestion) would also change on edits that leave the ROM byte-identical, for
@@ -85,12 +86,18 @@ recomputes it, and `make check` runs that.
 - **Test ROMs are not patched.** Their identity reads `$0000` and is self-consistent within one ROM.
 - **Consequence for users.** Every new ROM release invalidates LIB tapes; source text (`SAVE-TEXT`) is the
   portable format. The docs say so.
-- **The HOME and cartridge builds refuse each other's LIB tapes.** Their paging code in `kernel/bank/bank.asm`
-  differs in size (the cartridge's is 9 B shorter), so every word from `$1427` on is at a different address.
-- **Revisited and kept (owner, 2026-10-28).** The other options considered:
-  - Pad the cartridge's paging code so the two builds share addresses and tapes: about 1 B HOME and 10 B
-    cartridge. This restores what the builds had before step R1 (the cartridge's own EXROM paging), when they
-    differed only in 14 bytes below `$0100`. Not taken for now (owner, 2026-10-28).
+- **The HOME and DOCK cartridge builds share LIB tapes (owner, 2026-10-28).** Step R1 gave the cartridge its own
+  EXROM paging, 9 B shorter, which moved every word from `$1427` on. Now the cartridge's page-in is padded to the
+  Home one's 14 bytes, and both page-outs load A with a 2-byte `ld a,n` (Home: `ld a,0` instead of `xor a`). So
+  every address is the same again [M]: HOME −1 B, cartridge −10 B. The 25 bytes that still differ are the skip
+  ranges, between labels named `ROM_ID_SKIP_*` (`rom/forth_boot.asm`) or `.rom_id_skip` (`kernel/bank/bank.asm`):
+  - the reset stub or LROS header, `$0000-$0004`;
+  - `CART_START` or `$FF` fill, `$0068-$006B`;
+  - the two paging variants, 14 B and 2 B.
+
+  A skipped byte is code a LIB image cannot call into: the reset stub, the cartridge entry, and the inside of two
+  routines whose entry points stay inside the CRC.
+- **Exact ROM kept (owner, 2026-10-28)**, after these other options were weighed:
   - Relink on load: the compiler marks ROM addresses in a RAM bitmap, and SAVE-LIB writes them as names.
     Estimated [E] 250-350 B HOME and about 2.7 KB RAM, and ROM addresses stored as data would still crash after
     a release.
@@ -255,7 +262,8 @@ RAM: the `$8580` and `$8A62` name cells merge (−13 B); two parameter cells may
 raw ZRCP `realtape-open`. Tapes are built by a port of Leap-C's `tools/tapes.py`, kept to framing, `.tap` / `.rwa`
 writers and the MIC-edge decoder. SAVE output is captured as MIC edges by breakpoint actions on the sender's `out`,
 then decoded (Leap-C `lcharness.tape_capture`). TSRun cannot play a tape into a custom loader (Leap-C
-`EMULATORS.md:180`), so ZEsarUX is the only emulator for this oracle.
+`EMULATORS.md:180`), so ZEsarUX ran this oracle. Fuse was added afterwards (section 10): `make tapetol-fuse` and
+`make fusesave`.
 
 Harness mechanics, measured by a probe on the current build [M, ZEsarUX 13.0]:
 
@@ -330,8 +338,9 @@ Each step: `make check`, `make test`, and `make tapetest` from step 3 on.
 - **SAVE.** SAVE is checked by decoding the ROM's own MIC edges, not by recording an audio file.
 - **Cassette decks.** Real cassette decks (wow, flutter, level, azimuth) are outside what this step shows; the
   tolerance sweep approximates some of them.
-- **Fuse.** It remains available for a manual cross-check (`tools/run_realtape_test.sh`), not as a gate.
-  Headless Fuse 1.9.1 is also driven by `make tapetol-fuse` (the 71 tapes as TZX `$15` at 4 T a sample, against
+- **Fuse** (added after step S). Headless Fuse 1.9.1, Leap-C's driver, is used by `make tapetol-fuse` (the 71 tapes as TZX `$15` at 4 T a sample, against
   ZEsarUX's 224 T; `tools/fusedrive.py`, `tools/fuse/fuseshim.c`) and `make fusesave` (SAVE-TEXT and SAVE-LIB
   recorded by Fuse's tape deck, decoded by fuse-utils `tape2wav` + `audio2tape`, compared with section 4, loaded
-  back). Results: `docs/V2/evidence/s_fuse_tapetol_old_vs_new.txt`, `s_fuse_save.txt`. Still emulators, not hardware.
+  back, and LIB tapes crossed between the HOME and DOCK cartridge builds). `tools/run_realtape_test.sh` remains a
+  manual check. Results: `docs/V2/evidence/s_fuse_tapetol_old_vs_new.txt`, `s_fuse_save.txt`, `s_fuse_cross.txt`.
+  These are not in `make test`. Still emulators, not hardware.

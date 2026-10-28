@@ -1,0 +1,24 @@
+# S follow-up (shared identity), tree at 35c45e7 + docs; make check / make test / make cartdiff / make tapetest / make fusesave / make tapetol-fuse / make tapetol / make bench / make repro, 2026-10-28
+budget: forth_boot_rom0.bin              626    626    200     met  $3D8D
+budget: forth_boot_cart.bin              626    626    200     met  $3D8D
+budget: forth_demo_blackjack_rom0.bin    797    797    200     met  $3CE2
+budget: forth_demo_blackjack_cart.bin    797    797    200     met  $3CE2
+budget: forth_demo_gallery_rom0.bin      801    801    200     met  $3CDE
+budget: graphics_exrom.bin              6682   6682    150     met  $05E5
+rom_identity: ok build/forth_boot_rom0.bin: $CA30
+rom_identity: ok build/forth_boot_cart.bin: $CA30
+rom_identity: ok build/forth_boot_rom0.bin and build/forth_boot_cart.bin share identity, 25 bytes skipped in 4 ranges
+ROM TESTS: PASS 70  FAIL 0  SKIP 1
+POWERON: PASS 7 FAIL 0  (patterns; 0 DEFINED range(s) differ; 28 s)
+26 case/emulator pair(s), 0 FAIL
+TAPETEST: PASS 15 FAIL 0
+fusesave: 41 checks, 0 failed, 5 s wall
+tapetol (ZEsarUX, .rwa 224 T): build accepts 66 of 71
+tapetol-fuse (Fuse 1.9.1, TZX $15 4 T): build accepts 67 of 71
+bench rows ok: 8
+float         177269677          50.648     174841886    2502  PASS
+pixel          57306332          16.373      54821554     785  PASS
+sieve         148051156          42.300     146138092    2091  PASS
+string          2827830           0.808       1995755      28  PASS
+
+repro: OK (266 files identical across two trees; stamps verified)
