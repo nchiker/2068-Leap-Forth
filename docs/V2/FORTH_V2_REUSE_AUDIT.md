@@ -534,10 +534,10 @@ O5 done as approved (owner decision 2): `BEEP` plays on the AY chip. HOME free *
 - **Chime.** Its FRAMES-polling `CHIME_DELAY` became an inline `HALT` loop (−20 B). Boot to the prompt is
   4,442,252 T before and 4,442,116 after: a 136 T difference in the last frame's tail, not a frame (69,888 T), so
   every wait lasts the same number of frames. The register writes were not traced one by one.
-- **Not done / for the owner.** Nothing was listened to: only registers and timing were checked, under ZEsarUX,
-  whose frames run at 50 Hz against the real machine's 60 Hz (so a note is 20% longer there, as Leap's study found).
-  The hardware checklist should add: a scale through the TV sound, the AY level 15 next to the old beeper, and STICK
-  after the chime. `0 RANDOMIZE`-style seeding in the Blackjack demo is untouched.
+- **Verification limits.** There is no hardware: everything was checked under ZEsarUX, by AY registers and
+  timing, not by ear. ZEsarUX runs 50 Hz frames against the real machine's 60 Hz, so a note lasts 20% longer
+  there (the same finding as Leap's study). The real-machine clock and frame rate are taken from libspectrum's
+  TS2068 timing table, as the rest of the project does.
 
 **Not recommended:** full platform vendoring (`platform/MANIFEST` + `deltas/*.patch`). Leap's kernel
 changes since the fork are mostly BASIC-specific or shrink work; this ledger is the one-time record
