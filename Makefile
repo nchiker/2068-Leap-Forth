@@ -88,7 +88,7 @@ ALL_IMAGES := build/forth_rom0.bin $(SMOKE_BINS) $(VISUAL_BINS) $(TEST_BINS) \
               build/forth_demo_gallery_rom0.bin build/graphics_exrom.bin \
               build/forth_boot.dck build/forth_demo_blackjack.dck
 
-.PHONY: all product cart docs dist check clean test roms-for-test repro bench \
+.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron \
         bench-roms $(ALIASES)
 
 all: $(ALL_IMAGES)
@@ -236,6 +236,12 @@ build/exrom_a5.bin: | build
 
 test: roms-for-test
 	tools/run_rom_tests.sh
+
+# Boots the Home ROM from RAM and register power-on patterns and requires every byte the ROM defines to
+# come out the same as from zeroed RAM (tools/poweron.py's header says what Forth defines). Own port
+# range, 10820-10839.
+poweron: build/forth_boot_rom0.bin build/stock_shaped_exrom.bin
+	python3 -I tools/poweron.py
 
 repro:
 	tools/check_repro.sh
