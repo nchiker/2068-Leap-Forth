@@ -88,7 +88,7 @@ ALL_IMAGES := build/forth_rom0.bin $(SMOKE_BINS) $(VISUAL_BINS) $(TEST_BINS) \
               build/forth_demo_gallery_rom0.bin build/graphics_exrom.bin \
               build/forth_boot.dck build/forth_demo_blackjack.dck
 
-.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron audio cartdiff tapetest tapetol \
+.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron audio cartdiff tapetest tapetol tapetol-fuse fusesave \
         bench-roms $(ALIASES)
 
 all: $(ALL_IMAGES)
@@ -271,6 +271,19 @@ tapetest: build/forth_boot_rom0.bin build/graphics_exrom.bin
 # Ports 10980-10999.
 tapetol: build/forth_boot_rom0.bin build/graphics_exrom.bin
 	python3 -I tools/tapetol.py $(if $(TAPETOL_BASE),--build $(TAPETOL_BASE)) --build build --jobs 6
+
+# The same 71 tapes on Fuse 1.9.1, headless (tools/tapetol.py --emu fuse): TZX direct recordings at 4 T a sample
+# (ZEsarUX's are 224 T), tape traps off, auto-load off, no loader acceleration; keys typed through Fuse's keyboard
+# matrix (tools/fusedrive.py, tools/fuse/fuseshim.c). Same report, same gate, TAPETOL_BASE as above. About 20 s a
+# build; needs gcc and SDL2 headers (libsdl2-dev) for the shim, and /usr/local/bin/fuse 1.9.1 (FORTH_FUSE=<path>).
+tapetol-fuse: build/forth_boot_rom0.bin build/graphics_exrom.bin
+	python3 -I tools/tapetol.py --emu fuse $(if $(TAPETOL_BASE),--build $(TAPETOL_BASE)) --build build --jobs 6
+
+# SAVE-TEXT and SAVE-LIB recorded by Fuse's tape deck, decoded by fuse-utils (tape2wav + audio2tape), compared with
+# STORAGE_SPEC.md section 4, then loaded back into a fresh Fuse (tools/fusesave.py). FUSESAVE_BUILD=<dir> for
+# another build. About 10 s.
+fusesave: build/forth_boot_rom0.bin build/graphics_exrom.bin
+	python3 -I tools/fusesave.py --build $(or $(FUSESAVE_BUILD),build)
 
 repro:
 	tools/check_repro.sh

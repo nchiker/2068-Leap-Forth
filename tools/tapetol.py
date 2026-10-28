@@ -30,14 +30,24 @@ The distortions (stock widths and pilots otherwise):
   pilot-dropout D               D ms without an edge in the middle of each pilot
   data-dropout D                D ms without an edge in the data block (a LOAD that must fail)
 
-Usage: python3 -I tools/tapetol.py --build DIR [--build DIR2 ...] [--case NAME ...] [--jobs N] [--out FILE]
+Usage: python3 -I tools/tapetol.py [--emu zesarux|fuse] --build DIR [--build DIR2 ...] [--case NAME ...] [--jobs N] [--out FILE]
   With two or more --build directories (the old images first, then the new), the report compares them: every case
   the first accepts must be accepted by each later one; otherwise NARROWER lines are printed and the exit status
   is 1.  A DIR holds forth_boot_rom0.bin, graphics_exrom.bin and forth_boot.sym (DIR/build is tried too).
   Workers run on ZRCP ports 10980 and up (one emulator per worker, --port0 to move them, 10980-10999 only).
 
-EMULATOR LIMITS: there is no hardware here.  The verdicts are those of ZEsarUX running the ROM's own receiver on
-a 224 T-per-sample tape; they say nothing about a real cassette recorder, a real EAR comparator or a real clock.
+--emu fuse (default zesarux): the same 71 cases on Fuse 1.9.1 headless, as Leap-C runs them (tools/fusedrive.py,
+tools/fuse/fuseshim.c).  The tape is a TZX direct recording (block $15) at 4 T a sample, so every pulse width is
+exact to 4 T (against ZEsarUX's 224 T), Fuse's CPU clock is 3,528,000 Hz, tape traps are off, auto-load is off and
+`--no-accelerate-loader` is set, so the ROM's own receiver measures every pulse.  Fuse starts the tape by itself when it
+sees the ROM listen to the EAR bit (loader detection).  Each case runs in a fresh Fuse (a refused load can leave
+the dictionary half written, and a leftover 12345 on the screen would read as an accept); the command is typed
+through the emulated keyboard, paced by the machine (IO_READ_KEY / IO_LATCH_AND_CLEAR), and the case ends when the
+ROM is back in its key wait with an empty edit line.  Workers are plain processes (no ZRCP ports).
+
+EMULATOR LIMITS: there is no hardware here.  The verdicts are those of ZEsarUX (224 T per sample) or Fuse (4 T per
+sample) running the ROM's own receiver; they say nothing about a real cassette recorder, a real EAR comparator or a
+real clock.
 """
 import argparse
 import json
@@ -70,6 +80,9 @@ SAMPLE = 4                          # the narrowest pulse a case may ask for, in
 LEAD_S = 30                         # idle samples that open every tape: the typing time
 PORT_LO, PORT_HI = 10980, 10999
 WIDTHS = dict(pilot=PILOT_T, sync1=SYNC1_T, sync2=SYNC2_T, zero=ZERO_T, one=ONE_T)
+FUSE_CPU_HZ = 3_528_000             # Fuse's TS2068 clock (Leap-C's figure too)
+FUSE_SAMPLE = 4                     # T-states a TZX direct-recording sample (block $15)
+EMU = "zesarux"                     # set by main() before the workers start (they inherit it)
 
 
 # ---------------------------------------------------------------------------------------------------- the tape
@@ -154,6 +167,22 @@ def rwa(runs, lead_s=LEAD_S):
             out.extend(bytes([0xC8 if level else 0x38]) * n)
     out.extend(b"\x80" * (CPU_HZ // SAMPLE_T))
     return bytes(out), t
+
+
+def tzx_direct(runs, sample=FUSE_SAMPLE):
+    """A TZX file of one direct-recording block ($15), `sample` T-states a sample, the levels of `runs`
+    (Leap-C's tools/tapetol.py writer)."""
+    parts, t = [], 0
+    for level, dt in runs:
+        t1 = t + dt
+        parts.append("01"[level] * (t1 // sample - t // sample))
+        t = t1
+    bits = "".join(parts)
+    used = len(bits) % 8 or 8
+    bits += "0" * (-len(bits) % 8)
+    data = int("1" + bits, 2).to_bytes(len(bits) // 8 + 1, "big")[1:]
+    return (b"ZXTape!\x1a" + bytes([1, 20]) + bytes([0x15]) + struct.pack("<HHB", sample, 0, used) +
+            struct.pack("<I", len(data))[:3] + bytes(data))
 
 
 def cases():
@@ -330,6 +359,39 @@ def run_case(m, path, total_t, timeout_wall=900.0):
             raise HarnessError("wall timeout")
 
 
+def fuse_worker(build, k, todo, q, tmp, keep):
+    """Fuse: one fresh Fuse a case (module docstring), the tape a TZX $15, the command typed on its keyboard."""
+    import fusedrive
+    blocks = text_blocks(NAME, PROG)
+    wdir = tempfile.mkdtemp(prefix="case.%d." % k, dir=tmp)
+    try:
+        for name, kw in todo:
+            path = os.path.join(wdir, "case.tzx")
+            with open(path, "wb") as f:
+                f.write(tzx_direct(synth(blocks, **kw)))
+            for attempt in (1, 2, 3):           # (a harness failure, e.g. a lost key handshake: a new Fuse, again)
+                f = None
+                try:
+                    f = fusedrive.Fuse(build, os.path.join(wdir, "fuse"), extra=["--no-accelerate-loader"]).start()
+                    r = f.cmd("tape_open %s" % path)
+                    if r != "0":
+                        raise HarnessError("tape_open: %s" % r)
+                    f.type(LOAD_CMD, timeout=600)
+                    if not f.idle():
+                        raise HarnessError("the prompt did not come back")
+                    rows = [r for r in f.rows() if r.strip()]
+                    q.put((name, EXPECT in " ".join(rows), "last row %r" % (rows[-1] if rows else "")))
+                    break
+                except Exception as e:
+                    if attempt == 3:
+                        q.put((None, False, "%r: %r" % (name, e)))
+                finally:
+                    if f:
+                        f.stop()
+    finally:
+        shutil.rmtree(wdir, ignore_errors=True)
+
+
 def worker(build, port, todo, q, tmp, keep):
     blocks = text_blocks(NAME, PROG)
     wdir = tempfile.mkdtemp(prefix="case.%d." % port, dir=tmp)
@@ -365,7 +427,8 @@ def run(build, jobs, port0, only, tmp):
     todo = [c for c in cases() if not only or c[0] in only]
     q, procs = mp.Queue(), []
     for k in range(min(jobs, len(todo))):
-        p = mp.Process(target=worker, args=(build, port0 + k, todo[k::jobs], q, tmp, False), daemon=True)
+        p = mp.Process(target=fuse_worker if EMU == "fuse" else worker,
+                       args=(build, port0 + k, todo[k::jobs], q, tmp, False), daemon=True)
         p.start()
         procs.append(p)
     res = {}
@@ -388,11 +451,21 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--build", action="append", help="an image directory (default: build)")
     ap.add_argument("--case", action="append", help="run only this case (exact name; repeatable)")
-    ap.add_argument("--jobs", type=int, default=4, help="parallel emulators, one ZRCP port each (default 4)")
+    ap.add_argument("--emu", choices=("zesarux", "fuse"), default="zesarux", help="the emulator (default zesarux)")
+    ap.add_argument("--jobs", type=int, default=None, help="parallel emulators (default 4; with ZEsarUX one ZRCP port each)")
     ap.add_argument("--port0", type=int, default=PORT_LO, help="first ZRCP port (10980-10999)")
     ap.add_argument("--out", help="write the report to this file as well as stdout")
     a = ap.parse_args()
-    if a.jobs < 1 or a.port0 < PORT_LO or a.port0 + a.jobs - 1 > PORT_HI:
+    global EMU, CPU_HZ
+    EMU = a.emu
+    if a.jobs is None:
+        a.jobs = 6 if EMU == "fuse" else 4
+    if EMU == "fuse":
+        CPU_HZ = FUSE_CPU_HZ                # (synth's silences and dropouts, in T-states of Fuse's clock)
+        sys.path.insert(0, HERE)
+        import fusedrive
+        fusedrive.build_shim()              # (once, before the workers start)
+    if a.jobs < 1 or (EMU == "zesarux" and (a.port0 < PORT_LO or a.port0 + a.jobs - 1 > PORT_HI)):
         raise SystemExit("tapetol: ports %d..%d must lie within %d-%d" % (a.port0, a.port0 + a.jobs - 1, PORT_LO, PORT_HI))
     known = [n for n, _ in cases()]
     for n in a.case or []:
@@ -431,6 +504,10 @@ def main():
         lines.append("tapetol: NARROWER: %s refuses %r, which %s accepts" % (b, n, builds[0]))
     for b, n in missing:
         lines.append("tapetol: NOT RUN: %s %r" % (b, n))
+    if EMU == "fuse":
+        import fusedrive
+        lines.append("tapetol: emulator Fuse %s, TZX $15 at %d T a sample, %d Hz, traps off, auto-load off, no loader acceleration"
+                     % (fusedrive.fuse_version(), FUSE_SAMPLE, FUSE_CPU_HZ))
     lines.append("tapetol: %d jobs, %.0f s wall" % (a.jobs, time.time() - t0))
     text = "\n".join(lines) + "\n"
     sys.stdout.write(text)

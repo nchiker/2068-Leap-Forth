@@ -331,3 +331,7 @@ Each step: `make check`, `make test`, and `make tapetest` from step 3 on.
 - **Cassette decks.** Real cassette decks (wow, flutter, level, azimuth) are outside what this step shows; the
   tolerance sweep approximates some of them.
 - **Fuse.** It remains available for a manual cross-check (`tools/run_realtape_test.sh`), not as a gate.
+  Headless Fuse 1.9.1 is also driven by `make tapetol-fuse` (the 71 tapes as TZX `$15` at 4 T a sample, against
+  ZEsarUX's 224 T; `tools/fusedrive.py`, `tools/fuse/fuseshim.c`) and `make fusesave` (SAVE-TEXT and SAVE-LIB
+  recorded by Fuse's tape deck, decoded by fuse-utils `tape2wav` + `audio2tape`, compared with section 4, loaded
+  back). Results: `docs/V2/evidence/s_fuse_tapetol_old_vs_new.txt`, `s_fuse_save.txt`. Still emulators, not hardware.
