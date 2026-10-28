@@ -2,31 +2,27 @@
 ; rom/forth_smoke_p7.asm — Phase 7 smoke ROM: storage (SAVE-LIB, LOAD-LIB)
 ;
 ; Proves core/storage.asm's SAVE-LIB/LOAD-LIB wiring: filename handling,
-; the LATEST-prefixed payload format, HERE/LATEST restoration after a
-; simulated fresh boot, AND (added when SAVE/LOAD were renamed
-; SAVE-LIB/LOAD-LIB and a real, live buffer-overflow bug was found and
-; fixed in W_SAVELIB — see core/storage.asm's own header for the full
-; writeup) the fix itself: a real round trip bigger than the OLD
-; 512-byte ceiling, and a real refusal of a dictionary bigger than the
-; NEW 8190-byte ceiling. Uses kernel/storage's own STORAGE_TEST_FAKE_SEND
-; /STORAGE_TEST_FAKE_RECEIVE hooks (conditional-compilation switches
-; already present in kernel/storage/storage.asm, unused until this
-; phase) with this file's own fake in-memory "tape" standing in for
-; real cassette timing — see core/storage.asm's own header for exactly
-; what this does and does NOT prove (real tape wire-format
-; compatibility in an actual emulator is a real, separate, still-open
-; gap, not silently covered by this test).
+; the type-3 image (LATEST in the header, the dictionary bytes plus a
+; CRC-16 trailer in the data block -- see docs/V2/STORAGE_SPEC.md
+; sections 4-5), HERE/LATEST restoration after a simulated fresh boot,
+; a round trip larger than the original 512-byte ceiling, and the
+; refusal at the dictionary ceiling (HERE + 2 > DICT_RAM_CEILING, THROW
+; -8; the old 8190-byte limit and the $D000 copy buffer are gone since
+; audit step S). Uses kernel/storage's own STORAGE_TEST_FAKE_SEND
+; /STORAGE_TEST_FAKE_RECEIVE hooks (conditional-compilation switches in
+; kernel/storage/storage.asm) with this file's own fake in-memory "tape"
+; standing in for real cassette timing. That proves the wiring, not the
+; wire format: real-tape behaviour is covered by tools/tapetest.py (the
+; step-S oracle under ZEsarUX) and rom/forth_smoke_p53_realtape.asm.
 ;
-; NEW DEPENDENCY: core/storage.asm's W_SAVELIB now THROWs -8 on
-; overflow, so this file must also INCLUDE core/throwcatch.asm (with
-; THROW_CATCH_ENABLED defined before core/interp.asm) — a real, new
-; requirement this ROM didn't have before, exactly matching
-; core/tick.asm's own precedent for its -13. core/throwcatch.asm's own
-; uncaught path references FSTACK_TOP (core/float.asm), which this
-; minimal ROM doesn't otherwise need — declared locally as a literal
-; below (matching rom/forth_smoke_p52.asm's own precedent of locally
-; redeclaring a constant rather than pulling in a whole extra file for
-; one symbol) rather than INCLUDEing core/float.asm just for this.
+; DEPENDENCY: core/storage.asm's W_SAVELIB THROWs -8 on overflow, so
+; this file also INCLUDEs core/throwcatch.asm (with THROW_CATCH_ENABLED
+; defined before core/interp.asm), matching core/tick.asm's own
+; precedent for its -13. core/throwcatch.asm's own uncaught path
+; references FSTACK_TOP (core/float.asm), which this minimal ROM doesn't
+; otherwise need — declared locally as a literal below (matching
+; rom/forth_smoke_p52.asm's own precedent) rather than INCLUDEing
+; core/float.asm just for this.
 ;
 ; INCLUDE ORDER: same rule as every earlier smoke ROM. Only
 ; kernel/storage is needed — not kernel/math/io/graphics/sound, and not
@@ -49,34 +45,32 @@
 ;   2. Define TRIPLER, SAVE-LIB it as "PROG2", reset the dictionary
 ;      again, LOAD-LIB with no name at all (a wildcard), then call
 ;      TRIPLER -> top of stack 15. Proves the wildcard path.
-;   3. THE FIX, positive case: define BIGDEF, a single word compiled to
-;      well over 512 bytes (200 DUP/DROP pairs padding out its body,
-;      6 bytes each = 1200 bytes, plus its literals/header — comfortably
-;      past the OLD 512-byte ceiling, comfortably under the NEW
-;      8190-byte one), SAVE-LIB it, poison the RAM dictionary region
-;      with $FF (stronger than checkpoints 1/2's pointer-only reset,
-;      matching rom/forth_smoke_p52.asm's own RESET_AND_POISON
-;      technique), LOAD-LIB it back, and confirm BIGDEF still computes
-;      the right answer (10) — direct proof the larger buffer actually
-;      works end-to-end, not just that it's bigger on paper. Also reads
-;      SAVE_DICT_LEN back directly and confirms it really was > 512,
-;      so this checkpoint can't silently pass by accident with a
-;      smaller-than-intended payload.
-;   4. (checkpoint number 5) THE FIX, negative case: without spending
-;      ROM budget compiling an 8KB+ real definition, HERE is set
-;      directly to FORTH_DICT_RAM + SAVE_LOAD_MAX_DICT + 100 (a
-;      deterministic, legitimate way to simulate "the dictionary has
-;      grown past the ceiling" — the overflow check runs and refuses
-;      BEFORE anything ever reads the FORTH_DICT_RAM..HERE span, so it
-;      does not matter that this span isn't real compiled data). A
-;      canary byte is planted immediately past SAVE_LOAD_TEMP_BUF's own
-;      end, and the fake tape's write position is recorded. SAVE-LIB is
-;      then attempted (wrapped in CATCH, the same technique
+;   3. A larger image: define BIGDEF, a single word compiled to well
+;      over 512 bytes (200 DUP/DROP pairs padding out its body, 6 bytes
+;      each = 1200 bytes, plus its literals/header), SAVE-LIB it, poison
+;      the RAM dictionary region with $FF (stronger than checkpoints
+;      1/2's pointer-only reset, matching rom/forth_smoke_p52.asm's own
+;      RESET_AND_POISON technique), LOAD-LIB it back, and confirm BIGDEF
+;      still computes the right answer (10). Also checks HERE directly
+;      and confirms the dictionary really was > 512 bytes, so this
+;      checkpoint can't silently pass with a smaller-than-intended
+;      image.
+;   4. (checkpoint number 5) The refusal at the dictionary ceiling: HERE
+;      is set directly to DICT_RAM_CEILING - 1 (a deterministic way to
+;      simulate "the dictionary has grown to the ceiling" without
+;      compiling ~22 KB of real definitions — the check runs and refuses
+;      BEFORE anything reads the FORTH_DICT_RAM..HERE span, so it does
+;      not matter that this span isn't real compiled data). HERE + 2 is
+;      then past DICT_RAM_CEILING, so the CRC would not fit. A canary
+;      byte is planted at HERE (where an unchecked SAVE-LIB would write
+;      the CRC first), and the fake tape's write position is recorded.
+;      SAVE-LIB is then attempted (wrapped in CATCH, the same technique
 ;      rom/forth_smoke_p46.asm's own checkpoint 6 already established
 ;      for a deliberately-throwing xt) and must produce -8; the canary
 ;      and the tape's write position must both be completely unchanged
-;      afterward — direct proof the refusal touches neither adjacent
-;      memory nor the tape, not just that *some* number came back.
+;      afterward — direct proof the refusal touches neither the
+;      dictionary space nor the tape, not just that *some* number came
+;      back.
 ;
 ; Border goes GREEN (4) if all four checkpoints pass; otherwise it
 ; shows the failing checkpoint's number (1, 2, 3, or 5), matching every
@@ -195,11 +189,11 @@ COLD_START:
     ; confirm this checkpoint actually exercised a payload bigger than
     ; the OLD ceiling -- not just trusting SRC_3A's own byte count by
     ; eye
-    ld   hl, (SAVE_DICT_LEN)
-    ld   de, 512
+    ld   hl, (HERE)               ; the dictionary SAVE-LIB just saved
+    ld   de, FORTH_DICT_RAM + 512
     or   a
     sbc  hl, de
-    jp   c, FAIL_TEST             ; SAVE_DICT_LEN <= 512: this
+    jp   c, FAIL_TEST             ; dictionary <= 512 bytes: this
                                    ; checkpoint didn't test what it
                                    ; claims to
     jp   z, FAIL_TEST
@@ -214,13 +208,12 @@ COLD_START:
     call W_DROP
 
 ; ---- checkpoint 5 (see this file's own header for why 4 is skipped):
-; THE FIX, negative case -- a dictionary bigger than the NEW ceiling is
-; refused cleanly, touching neither the canary just past
-; SAVE_LOAD_TEMP_BUF's own end nor the tape ----
+; the refusal at the dictionary ceiling -- SAVE-LIB throws -8, touching
+; neither the canary at HERE nor the tape ----
     ld   a, 5
     ld   (CHECKPOINT_NUM), a
 
-    ld   hl, FORTH_DICT_RAM + SAVE_LOAD_MAX_DICT + 100
+    ld   hl, DICT_RAM_CEILING - 1 ; HERE + 2 > DICT_RAM_CEILING: the CRC would not fit
     ld   (HERE), hl
 
     ld   a, $42
@@ -340,11 +333,8 @@ FAKE_TAPE_RPOS     EQU $87A4    ; 2 bytes
 SAVED_WPOS_CHECK   EQU $87A6    ; 2 bytes -- checkpoint 5's own scratch,
                                 ; right after the fake tape's own
                                 ; read/write positions
-CANARY_ADDR EQU SAVE_LOAD_TEMP_BUF + 8192   ; = $F000 given today's
-                                ; SAVE_LOAD_TEMP_BUF ($D000) -- one byte
-                                ; immediately past core/storage.asm's own
-                                ; buffer, exactly where an unchecked
-                                ; overflow would land first
+CANARY_ADDR EQU DICT_RAM_CEILING - 1   ; = HERE in checkpoint 5: where an
+                                ; unchecked SAVE-LIB would write its CRC first
 
 SRC_1A:    DB ": DOUBLER DUP + ; SAVE-LIB PROG1 "
 SRC_1A_LEN EQU $ - SRC_1A
@@ -431,6 +421,7 @@ STORAGE_TEST_SEND_BLOCK:         ; A = type, IX = data ptr, DE = length
     or   a
     sbc  hl, de
     ld   (FAKE_TAPE_WPOS), hl
+    scf                           ; sent whole (STORAGE_SPEC.md section 3)
     ret
 
 STORAGE_TEST_RECEIVE_BLOCK:      ; A = expected type, carry-in = load(set)
@@ -525,3 +516,5 @@ FSTACK_TOP EQU $9000
     DS   $4000 - $, $FF
 
     SAVEBIN "forth_smoke_p7_rom0.bin", $0000, $4000
+
+DICT_LATEST_COLD EQU H_CATCH   ; LATEST of an empty user dictionary (core/storage.asm LOAD-LIB)

@@ -1,0 +1,115 @@
+2068-Forth: licensing and provenance notice
+============================================
+
+*** DRAFT FOR OWNER REVIEW (audit step G). Not yet approved. ***
+This is a provenance statement. Every factual claim below comes from a measurement or a record named next
+to it; nothing here is a legal conclusion, and the owner must read it before it is kept, edited or
+published. Where the owner has not decided something, it says so.
+
+2068-Forth is released under the MIT License (LICENSE), copyright (c) 2026 Charlie Day.
+
+2068-Forth is an independent community project. It is not affiliated with or endorsed by Timex, Sinclair
+Research, Amstrad, Sky, the Fuse project or the ZEsarUX project; those names belong to their owners.
+
+No emulator and no stock ROM image is stored in this repository (git ls-files lists none). The scan in
+section 3 reads the stock ROMs from a directory outside the repository and prints only offsets and lengths.
+
+
+1. Where the code came from
+---------------------------
+
+2068-Forth was scaffolded on 2026-09-01 (commit 96aea38) from 2068-Leap
+(https://github.com/nchiker/2068-Leap, commit 546ceda, V1 kernel), MIT License, same copyright holder.
+docs/PROJECT_PLAN.md records which files came from it. At scaffold time six kernel files were byte-identical
+to that commit: kernel/bank, kernel/graphics, kernel/interrupt, kernel/io, kernel/math, kernel/storage
+(docs/V2/FORTH_V2_REUSE_AUDIT.md, header). The rest of the Forth system (core/, rom/, the demos) was
+written for this project.
+
+
+2. Tools and references
+-----------------------
+
+Tools: tools/check_asm.py and tools/check_z80_opcodes.py came from 2068-Leap (docs/PROJECT_PLAN.md);
+tools/sjasmplus_strict.sh was first taken from 2068-Leap and is now ported from 2068-Leap-C's
+tools/sjasm_strict.sh; tools/z80sim/ is a vendored copy of z80sim commit 13c9bce (tools/z80sim/UPSTREAM.md).
+All of these have the same copyright holder and the MIT License. tools/budget.py, tools/provenance.py and
+tools/poweron.py follow the design of the scripts of the same names in 2068-Leap-C; the search and
+fill logic of provenance.py is ported from it.
+
+Source comments cite, without reproducing them: the "Timex Sinclair 2068 ROM Disassembly" (David Anderson,
+2023) and the stock ROM's routine names. The files whose comments mention the disassembly are: core/printer.asm,
+core/sound.asm, core/stick.asm, include/hardware.inc, include/sysvars.inc, kernel/graphics/graphics.asm,
+kernel/interrupt/interrupt.asm, kernel/io/io.asm, kernel/mode64/mode64.asm and kernel/sound/sound.asm (grep,
+updated in step S: core/beep.asm no longer mentions it since step A, kernel/storage/storage.asm since step S). A comment that cites the
+disassembly does not by itself show that the code was copied or not copied; section 3 is the measurement.
+
+kernel/storage/tapeblock.asm (since step S) is 2068-Leap-C's clean-room tape block I/O
+(src/runtime/tapeblock.asm at d31d785; MIT, same copyright holder), its code unchanged; see section 3a and
+kernel/storage/UPSTREAM.md, which tools/check_upstream.py enforces in make check.
+
+core/beep.asm (since step A) takes its period table and shift-and-round scheme from 2068-Leap's rom/v2_ay_beep.asm
+(MIT, same copyright holder), rebuilt against docs/V2/AY_BEEP_SPEC.md.
+
+
+3. Byte comparison with the stock ROMs (tools/provenance.py, run by make check)
+-------------------------------------------------------------------------------
+
+tools/provenance.py compares the images built from this tree with the stock Spectrum 48K ROM (48.rom) and
+the TS2068's HOME ROM and EXROM (tc2068-0.rom, tc2068-1.rom), byte for byte, and lists every common run of
+12 bytes or more. Images compared: the Forth HOME ROM and its DOCK-cartridge build, the Blackjack demo
+(HOME and cartridge), the Shooting Gallery demo, and the graphics EXROM. Result at the commit that
+introduced this file: 45 common runs, in the places a-c below. After step R0 replaced the glyph builder
+(b), the result is 25 runs: a and c. After step S replaced the tape block I/O (a), the result is 1 run: c.
+
+  a. Tape block I/O (STORAGE_SEND_BLOCK, STORAGE_RECEIVE_BLOCK): REPLACED in step S. Before, 7 runs of 13
+     to 45 bytes (each found in 48.rom and in tc2068-1.rom), in routines whose own header called them a
+     port of the stock ROM's SA-BYTES and LD-BYTES; the Forth HOME ROM and its cartridge build only. The
+     new code is 2068-Leap-C's src/runtime/tapeblock.asm, adopted with its code unchanged as
+     kernel/storage/tapeblock.asm (MIT, same copyright holder). 2068-Leap-C's docs/TAPE_CLEANROOM.md
+     records that it was written from a specification of the tape signal by an author who had not seen
+     the old code, the stock ROM or a disassembly. That record is 2068-Leap-C's; this repository has not
+     re-checked it, and the people who adopted it here had read the old routines, which is why the code
+     was adopted unchanged rather than rewritten. What was measured here: the scan finds no 12-byte run
+     in it, and the code hashes to Leap-C's (tools/check_upstream.py).
+
+  b. Block-graphics glyph builder (GFX_CHAR_TO_FONT_OFFSET, kernel/graphics/graphics.asm): REPLACED in step
+     R0 (audit O2). Before, two 12-byte runs equal to the same bytes of 48.rom and of tc2068-0.rom, in the
+     Forth, Blackjack and Gallery images. The new body is the one 2068-Leap-C carries as its delta D21
+     (MIT, same copyright holder); 2068-Leap-C's NOTICE and docs/TAPE_CLEANROOM.md record that it was
+     written from the screen format alone by an author who had not seen the old code. That record is
+     2068-Leap-C's; this repository has not re-checked it. What was measured here: the scan finds no
+     12-byte run in the new routine, and rom/test_blockgfx.asm checks that its output matches the glyphs
+     the screen format fixes.
+
+  c. One run of 1,171 bytes at the end of graphics_exrom.bin, of which one byte is not the $FF fill; the
+     stock ROM also ends in a run of $FF. Not a finding; the script classes it as fill.
+
+Until step S, item a was recorded in tools/provenance.py as allowed debt owned by step S; the list is now
+empty, so any new run fails make check.
+
+No run of 12 bytes or more was found anywhere else. In particular none falls in core/printer.asm,
+kernel/sound, kernel/mode64 or core/stick.asm. The scan does not detect code that was rewritten from the
+disassembly with different bytes, and it does not examine runs shorter than 12 bytes.
+
+The font (kernel/graphics/graphics.asm, FONT_TABLE) has no 12-byte run in common with these ROMs. That is all
+this file claims about it; the glyph-by-glyph comparison Leap-C's NOTICE makes has not been done here.
+
+
+4. Owner positions on files this scan covers (decisions of 2026-10-28, audit section 10)
+----------------------------------------------------------------------------------------
+
+Both positions are conditional on the scan and are recorded here as conditions, not as conclusions.
+
+- Decision 4 (floating-point core, "fpcore"): the owner accepted, for this NOTICE, the position Leap V2
+  takes for its own fpcore (passes the 12-byte scan; MIT), CONDITIONAL on the scan coming back clean on the
+  Forth tree. The Forth tree has no fpcore yet (it is rebuild step F). Since step S the scan on the tree
+  reports no run except the fill (c) above. Whether the condition is met, now or for
+  the float code when it exists, is for the owner; this file does not decide it.
+
+- Decision 5 (files written while reading the disassembly: core/printer.asm, kernel/sound, kernel/mode64,
+  core/stick.asm): the owner accepted them as they are for now, and a clean-room rewrite is to be scheduled
+  only for one of them that the scan flags. The scan flags none of them. That is a measurement at one
+  commit, not a permanent clearance; it is re-run by make check whenever the stock ROMs are available.
+  The audit's list names four files; section 2 lists others whose comments cite the disassembly (for example
+  core/sound.asm and kernel/io/io.asm). Decision 5 does not mention them, and the scan flags
+  none of them.

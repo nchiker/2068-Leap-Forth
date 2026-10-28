@@ -156,32 +156,6 @@ IO_KEY_SCAN_ALL:
     ret
 
 ; ============================================================================
-; IO_ANY_KEY_DOWN
-; Checks whether any key anywhere on the keyboard is currently pressed.
-; Convenience wrapper around IO_KEY_SCAN_ALL for simple polling (e.g. the
-; interactive test in rom/test_io.asm).
-; In:  none
-; Out: carry set if at least one key is down, carry clear if none are
-; Destroys: AF, BC, HL
-; ============================================================================
-IO_ANY_KEY_DOWN:
-    call IO_KEY_SCAN_ALL          ; HL = IO_SCAN_TABLE
-    ld   b, KEY_ROW_COUNT
-.check_loop:
-    ld   a, (hl)
-    and  $1F                       ; only bits 0-4 are meaningful
-    cp   $1F                        ; all 5 bits set = nothing pressed
-                                   ; in this row
-    jr   nz, .found
-    inc  hl
-    djnz .check_loop
-    or   a                          ; clear carry: nothing found
-    ret
-.found:
-    scf
-    ret
-
-; ============================================================================
 ; IO_FIND_KEY
 ; Scans an already-filled IO_SCAN_TABLE (caller must call IO_KEY_SCAN_
 ; ALL first — this does no scanning of its own, unlike the old
@@ -448,24 +422,6 @@ IO_DECODE_KEY:
     bit  1, a
     jr   nz, .no_shift                ; neither shift held
 
-    ; --- SYMBOL SHIFT + A/S combo (basic/'s error nav), checked
-    ; before the generic table lookup — row1 is otherwise entirely
-    ; unmapped there anyway (see kernel/io's own header) ---
-    ld   a, b
-    cp   1
-    jr   nz, .sym_table_lookup
-    ld   a, c
-    or   a
-    jr   nz, .chk_prev_error
-    ld   a, KEY_NEXT_ERROR            ; row1 bit0 = 'A'
-    ret
-.chk_prev_error:
-    cp   1
-    jr   nz, .sym_table_lookup
-    ld   a, KEY_PREV_ERROR            ; row1 bit1 = 'S'
-    ret
-
-.sym_table_lookup:
     ld   a, b
     add  a, a
     add  a, a
@@ -507,8 +463,7 @@ IO_DECODE_KEY:
 ; routine is now just a thin consumer of the ISR's latched state.
 ; In:  none
 ; Out: A = translated code (same meanings as before — KEY_CURSOR_*,
-;      KEY_DELETE, KEY_DELETE_LINE, KEY_INSERT_LINE, KEY_NEXT/
-;      PREV_ERROR, ASCII, or 0 for an unmapped/shift-alone position)
+;      KEY_DELETE, KEY_DELETE_LINE, KEY_INSERT_LINE, ASCII, or 0 for an unmapped/shift-alone position)
 ; Destroys: AF
 ; ============================================================================
 

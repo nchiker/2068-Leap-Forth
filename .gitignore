@@ -14,6 +14,7 @@ __pycache__/
 /.claude/*
 !/.claude/skills/
 /CLAUDE.md
+/zesarux_index_menu.idx
 
 # Vendored from github.com/jon0x0/AISkill_TS2068, which has no license
 # (its own audio-tools bundle explicitly says "Confirm the project's

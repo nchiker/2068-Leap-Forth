@@ -1,0 +1,14 @@
+FAIL  rect_basic             tsrun    screen=33 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=10 ctl=ok
+      - screen differs in 33 byte(s): 4061:3F/00 4062:FF/00 4063:FE/00 4161:3F/00 4162:FF/00 4163:FE/00
+      - EXROM-side state differs in 10 byte(s)  [max BANK_EXROM_DEPTH home=1 cart=1]
+FAIL  polygon_fill           tsrun    screen=254 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=41 ctl=ok
+      - screen differs in 254 byte(s): 40AC:0F/00 40AD:FF/00 40AE:FF/00 40AF:FF/00 40B0:FF/00 40B1:F0/00
+      - EXROM-side state differs in 41 byte(s)  [max BANK_EXROM_DEPTH home=1 cart=1]
+FAIL  sprite_show            tsrun    screen=32 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=60 ctl=ok
+      - screen differs in 32 byte(s): 484A:FF/00 484B:FF/00 486A:FF/00 486B:FF/00 494A:FF/00 494B:FF/00
+      - EXROM-side state differs in 60 byte(s)  [max BANK_EXROM_DEPTH home=1 cart=1]
+FAIL  loop_all_six           tsrun    screen=2453 stack=0 dict=0 (normalised calls=72 words=1, 72 ROM calls in 371B) state=90 ctl=ok
+      - screen differs in 2453 byte(s): 4040:FF/70 4041:FF/88 4042:FF/00 4043:FF/00 4044:FF/00 4045:FF/00
+      - EXROM-side state differs in 90 byte(s)  [max BANK_EXROM_DEPTH home=1 cart=1]
+
+4 case/emulator pair(s), 4 FAIL

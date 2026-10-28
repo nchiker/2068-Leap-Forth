@@ -1,0 +1,74 @@
+case                         2068-forth    
+scale-all -25%               refuse (tape ended)
+scale-all -20%               refuse (tape ended)
+scale-all -15%               accept        
+scale-all -10%               accept        
+scale-all -5%                accept        
+scale-all +0%                accept        
+scale-all +5%                accept        
+scale-all +10%               accept        
+scale-all +15%               accept        
+scale-all +20%               accept        
+scale-all +25%               accept        
+scale-pilot -25%             refuse (tape ended)
+scale-pilot -20%             refuse (tape ended)
+scale-pilot -15%             refuse (tape ended)
+scale-pilot -10%             accept        
+scale-pilot -5%              accept        
+scale-pilot +5%              accept        
+scale-pilot +10%             accept        
+scale-pilot +15%             accept        
+scale-pilot +20%             accept        
+scale-pilot +25%             accept        
+scale-sync -25%              accept        
+scale-sync -20%              accept        
+scale-sync -15%              accept        
+scale-sync -10%              accept        
+scale-sync -5%               accept        
+scale-sync +5%               accept        
+scale-sync +10%              accept        
+scale-sync +15%              accept        
+scale-sync +20%              accept        
+scale-sync +25%              accept        
+scale-bits -25%              refuse (tape ended)
+scale-bits -20%              accept        
+scale-bits -15%              accept        
+scale-bits -10%              accept        
+scale-bits -5%               accept        
+scale-bits +5%               accept        
+scale-bits +10%              accept        
+scale-bits +15%              accept        
+scale-bits +20%              accept        
+scale-bits +25%              accept        
+jitter 5%                    accept        
+jitter 10%                   accept        
+jitter 15%                   accept        
+jitter 20%                   accept        
+jitter 25%                   refuse (tape ended)
+jitter 30%                   refuse (tape ended)
+scale-all -20% jitter 10%    refuse (tape ended)
+scale-all -10% jitter 10%    accept        
+scale-all +10% jitter 10%    accept        
+scale-all +20% jitter 10%    accept        
+bit-skew 10%                 accept        
+bit-skew 20%                 accept        
+bit-skew 30%                 accept        
+pilot-short 2000             refuse (tape ended)
+pilot-short 1500             refuse (tape ended)
+pilot-short 1000             refuse (tape ended)
+pilot-short 800              refuse (tape ended)
+pilot-short 600              refuse (tape ended)
+pilot-short 400              refuse (tape ended)
+pilot-missing                accept        
+pilot-missing-end            refuse (tape ended)
+pilot-extra                  accept        
+inverted                     accept        
+pilot-dropout 2 ms           accept        
+pilot-dropout 10 ms          refuse (tape ended)
+pilot-dropout 50 ms          refuse (tape ended)
+pilot-dropout 200 ms         refuse (tape ended)
+data-dropout 1 ms            refuse (idle at +24.0 s)
+data-dropout 5 ms            refuse (idle at +23.1 s)
+data-dropout 20 ms           refuse (idle at +21.7 s)
+tapetol: build accepts 49 of 71
+tapetol: 6 jobs, 211 s wall

@@ -1,0 +1,7 @@
+# tools/tapetest.py --selftest on the old build (ce1579d)
+selftest run: 2 blocks captured, CATCH of -37 THROW left [-37, -37], dictionary 14 B
+unmutated: PASS 
+(a) one decoded byte corrupted: reported as FAIL -> decoded payload differs (len 5 vs 5, first diff at 1)
+(b) one compared dictionary byte corrupted: reported as FAIL -> dictionary: 1 dictionary RAM bytes changed (first at $9803)
+(c) expected THROW code corrupted (-36): reported as FAIL -> THROW: THROW code -37, expected -36
+TAPETEST SELFTEST: ok

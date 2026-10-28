@@ -74,10 +74,10 @@
 ; all three AY channels and held ~800ms — picked by the user from
 ; several presented options (a single-channel rising arpeggio and a
 ; simpler two-note beep among them). Same clock/formula core/sound.asm's
-; own header already uses for its own confirmed-clean tone; held via
-; CHIME_DELAY (a frame-count wait via kernel/interrupt's own
-; INT_GET_FRAMES, so interrupts must already be enabled —
-; KBD_ISR_INIT/IM1/EI now run BEFORE the chime, not after).
+; own header already uses for its own confirmed-clean tone; held with
+; one HALT per display frame (the wait BEEP uses, since step A; it was
+; a FRAMES-polling CHIME_DELAY before), so interrupts must already be
+; enabled — KBD_ISR_INIT/IM1/EI now run BEFORE the chime, not after.
 ; ============================================================================
 
     INCLUDE "include/hardware.inc"
@@ -86,7 +86,14 @@
     ORG $0000
 
 ; ---- RST 00: cold start ----
+ROM_ID_SKIP_RESET:                  ; to ROM_ID_SKIP_RESET_END: the two builds' bytes differ here,
+ROM_ID_SKIP_RESET_END EQU $0005     ; so tools/rom_identity.py leaves them out (STORAGE_SPEC.md D3)
     IFDEF CARTRIDGE
+; The LROS chunk byte, and the port $F4 value the stock ROM's handoff leaves
+; behind (its complement: bit N of $F4 = 1 means chunk N comes from the DOCK).
+; kernel/bank/bank.asm builds its two $F4 writes from CART_HSR.
+CART_CHUNK_SPEC EQU %11111100
+CART_HSR        EQU (~CART_CHUNK_SPEC) & $FF
 ; ---- DOCK cartridge build (make forth-boot-cart): the 5-byte LROS header
 ; the stock ROM's initialization looks for at DOCK $0000 (TS2068
 ; Technical Manual §5.1.1). The OS copies it into SYSCON, enables the
@@ -97,7 +104,7 @@
     DB   $00                        ; not used
     DB   $01                        ; cartridge type 1 = LROS
     DW   CART_START                 ; start address, JP byte order
-    DB   %11111100                  ; chunk spec, LOW-active: chunks 0-1
+    DB   CART_CHUNK_SPEC            ; chunk spec, LOW-active: chunks 0-1
                                     ; in use ($0000-$3FFF), 2-7 stay
                                     ; Home. Bit 3 must be 1 so the OS's
                                     ; GOTO_BANK (in Home chunk 3) can
@@ -107,6 +114,7 @@ RST_00:
     di
     jp   COLD_START
     ENDIF
+    ASSERT $ <= ROM_ID_SKIP_RESET_END
 
     DS   $0008 - $, $FF
 RST_08:
@@ -144,6 +152,8 @@ RST_38:
     DS   $0066 - $, $FF
 NMI_ENTRY:
     retn
+ROM_ID_SKIP_CART:                   ; to ROM_ID_SKIP_CART_END: CART_START, or $FF fill (D3)
+ROM_ID_SKIP_CART_END EQU ROM_ID_SKIP_CART + 4
 
     IFDEF CARTRIDGE
 ; ---- LROS entry point (DOCK cartridge build only). The stock ROM
@@ -158,6 +168,7 @@ CART_START:
     di
     jp   COLD_START
     ENDIF
+    ASSERT $ <= ROM_ID_SKIP_CART_END
 
     DS   $0100 - $, $FF
 
@@ -214,11 +225,20 @@ COLD_START:
     ; through DICT_RAM_CEILING, core/free.asm) before anything below
     ; reads or writes into it, so nothing here can show leftover
     ; power-on garbage instead of a clean, empty system.
+    ;
+    ; The clear runs on through UDG_TABLE ($F180-$F227, above
+    ; DICT_RAM_CEILING): nothing initialised it, so CHR$ 144-164 (W_UDG,
+    ; the glyph lookup) showed power-on garbage. Found by tools/poweron.py
+    ; (audit O1). Extending the one fill costs no bytes; a second
+    ; MEM_FILL_ZERO call for the table would cost 9. The $F000-$F17F
+    ; between them is unused by Forth, so clearing it is harmless.
+COLD_CLEAR_END EQU UDG_TABLE + UDG_COUNT * 8
+    ASSERT COLD_CLEAR_END > DICT_RAM_CEILING
     ld   hl, $8000
-    ld   bc, DICT_RAM_CEILING - $8000
+    ld   bc, COLD_CLEAR_END - $8000
     call MEM_FILL_ZERO
 
-    ld   hl, DICT_LATEST_INIT_RECALL   ; the full chain's own head —
+    ld   hl, DICT_LATEST_COLD          ; the full chain's own head —
                                     ; see this file's own header (Phase
                                     ; 64 -- core/recall.asm's LIST-DEFS/
                                     ; RECALL -- spliced on after
@@ -287,9 +307,8 @@ COLD_START:
     call KBD_ISR_INIT               ; must run before EI -- confirmed
                                     ; 2068-Leap ordering
     im   1
-    ei                              ; must be on before CHIME_DELAY --
-                                    ; it waits on FRAMES, which only the
-                                    ; ISR ever advances
+    ei                              ; must be on before the chime: its
+                                    ; waits HALT for the frame interrupt
 
     call STARTUP_CHIME
 
@@ -318,29 +337,19 @@ COLD_START:
 ; Channel A rings first, then B, then C roll in on top of it (like an
 ; actual bell chime), rather than all three hitting at once.
 ;
-; Channel A's tone-period FINE byte is chip register 0 — and
-; core/sound.asm's own SOUND_WRITE (faithfully matching the real ROM's
-; SOUND command) refuses register 0 as out-of-range, since SOUND's own
-; documented range is 1-16 and can never reach it (see that file's own
-; header). That restriction exists to keep SOUND itself authentic to
-; the real ROM; it doesn't bind this boot code, which is free to write
-; the AY ports directly for that one otherwise-unreachable register.
+; Channel A's tone-period FINE byte is chip register 0; SOUND_WRITE
+; reaches it since step R0 (O9), so it is simply the first table entry.
 ; ============================================================================
 STARTUP_CHIME:
-    ld   a, 0                       ; Channel A tone period, fine --
-    out  (PORT_AY_REG), a           ; chip register 0, unreachable via
-    ld   a, 165                     ; SOUND_WRITE/SOUND (see header
-    out  (PORT_AY_DATA), a          ; above) -- written directly instead
-
     ; Table-driven: every remaining event is either a SOUND_WRITE
-    ; (register, value) pair or a CHIME_DELAY (tick count), walked from
+    ; (register, value) pair or a frame wait (tick count), walked from
     ; CHIME_TABLE below rather than unrolled inline -- byte-identical
     ; event sequence, same order, same values, just data instead of 27
     ; repeated `ld b,N:ld c,N:call SOUND_WRITE` / 11 repeated
-    ; `ld b,N:call CHIME_DELAY` blocks. $FF as the first byte of a pair
-    ; means "the second byte is a CHIME_DELAY tick count, not a
-    ; register" -- safe, since SOUND_WRITE's own real register range is
-    ; 1-16 (see its own header) and never reaches 255. $FE marks the
+    ; `ld b,N:call CHIME_DELAY` blocks (since replaced by an inline HALT loop). $FF as the first byte of a pair
+    ; means "the second byte is a frame count to wait, not a
+    ; register" -- safe, since SOUND_WRITE's own register range is
+    ; 0-16 (see its own header) and never reaches 255. $FE marks the
     ; table's end.
     ld   hl, CHIME_TABLE
 .loop:
@@ -357,24 +366,25 @@ STARTUP_CHIME:
     call SOUND_WRITE
     jr   .loop
 .delay:
-    ld   a, (hl)
-    inc  hl
-    ld   b, a
-    push hl                         ; CHIME_DELAY destroys HL (see its
-    call CHIME_DELAY                ; own header) -- protect the table
-    pop  hl                         ; pointer across the call
+    ld   a, (hl)                    ; tick count: one HALT per display
+    inc  hl                         ; frame (interrupts are on, see the
+.hold:                              ; header), the same wait BEEP uses
+    halt
+    dec  a
+    jr   nz, .hold
     jr   .loop
 
 CHIME_TABLE:
-    ; Channel A tone period coarse (period 421, C4 ~262 Hz); Channel B
+    ; Channel A tone period fine (165) and coarse (period 421, C4 ~262
+    ; Hz); Channel B
     ; tone period fine/coarse (period 334, E4 ~330 Hz); Channel C tone
     ; period fine/coarse (period 281, G4 ~392 Hz); mixer (all three
     ; tones on, all noise off); all three channels silent until their
     ; own staggered attack below.
-    DB   1,1,  2,78,  3,1,  4,25,  5,1,  7,248,  8,0,  9,0,  10,0
+    DB   0,165, 1,1,  2,78,  3,1,  4,25,  5,1,  7,248,  8,0,  9,0,  10,0
     ; ---- staggered, ramped attack: A rolls in first, then B, then C,
     ; each fading up over 3 steps instead of snapping to full volume --
-    ; a $FF,3 pair is CHIME_DELAY 3 ticks, same gap used throughout ----
+    ; a $FF,3 pair is a 3-frame wait, same gap used throughout ----
     DB   8,4,  $FF,3,  8,8,  $FF,3,  8,12, $FF,3   ; gap before B enters
     DB   9,4,  $FF,3,  9,8,  $FF,3,  9,12, $FF,3   ; gap before C enters
     DB   10,4, $FF,3,  10,8, $FF,3,  10,12         ; full chord now sounding
@@ -385,25 +395,6 @@ CHIME_TABLE:
     DB   8,0,  9,0,  10,0            ; the AY holds its last register
                                      ; state indefinitely otherwise
     DB   $FE,0                       ; end of table
-
-; ============================================================================
-; CHIME_DELAY — busy-waits until FRAMES (kernel/interrupt.asm) has
-; advanced by B ticks. In: B = frame count. Destroys: AF, HL, DE
-; ============================================================================
-CHIME_DELAY:
-    ld   h, 0
-    ld   l, b
-    ex   de, hl                     ; de = frame count to wait
-    call INT_GET_FRAMES             ; hl = current frames
-    add  hl, de
-    ex   de, hl                     ; de = target frame count
-.wait:
-    call INT_GET_FRAMES             ; only touches hl -- de (target)
-                                    ; survives across this loop
-    or   a
-    sbc  hl, de
-    jr   c, .wait                   ; current < target -- keep waiting
-    ret
 
 BANNER: DB "2068-FORTH", 0
 
@@ -523,7 +514,7 @@ RUNTIME_ERROR_HOOK:
     ; IMMEDIATE word's runtime error while compiling could otherwise
     ; leave STATE stuck too. Byte-identical to that routine's own tail,
     ; so shared via REPORT_INTERP_ERROR instead of duplicated here.
-    jp   REPORT_INTERP_ERROR
+    jr   REPORT_INTERP_ERROR
 
 RUNTIME_ERROR_MSG: DB "STACK?", 0
 
@@ -535,7 +526,6 @@ RUNTIME_ERROR_MSG: DB "STACK?", 0
     INCLUDE "kernel/io/io.asm"
     INCLUDE "kernel/interrupt/interrupt.asm"
     INCLUDE "kernel/graphics/graphics.asm"
-    INCLUDE "kernel/sound/sound.asm"
     INCLUDE "kernel/storage/storage.asm"
     INCLUDE "kernel/mode64/mode64.asm"
     INCLUDE "kernel/bank/bank.asm"
@@ -600,44 +590,18 @@ DICT_CHAIN_POINT DEFL H_J
 DICT_CHAIN_POINT DEFL H_ATXY
     INCLUDE "core/hires.asm"
 DICT_CHAIN_POINT DEFL H_NORMAL
-    IFNDEF CARTRIDGE
-; ---- RECT/POLYGON-FILL/SPRITE-* all reach their EXROM-resident impl
-; through kernel/bank/bank.asm's BANK_PAGE_EXROM_IN, which pages chunk
-; 5 by writing PORT_SCLD (port $FF) bit 7 -- DOCK vs EXROM -- before
-; PORT_BANK_HOME (port $F4) narrows that to chunk 5 alone. Port $FF's
-; bit 7 is a GLOBAL DOCK/EXROM select shared by every chunk $F4 already
-; marks non-Home, not a per-chunk one. In the -DCARTRIDGE build, chunks
-; 0-1 are non-Home for the entire run (the LROS header's own chunk spec
-; keeps the cartridge itself mapped there) and this very routine, plus
-; RECT's EXROM_CALL_SLOT trampoline, live inside chunk 0/1. The bit-7
-; write therefore swaps the code that's *currently executing* out from
-; under the CPU before the second, narrowing write ever runs.
-;
-; Confirmed by direct reproduction (2026-09-13, TSRun's real core
-; headless under Node, github.com/josef-jelinek/TSRun, insertDock +
-; forth_boot.dck + stock ts2068.rom): typing `10 10 30 30 RECT` under
-; the cartridge build corrupts the screen and leaves the machine
-; unresponsive to further input -- a control run with a harmless,
-; non-EXROM command on the same build stayed responsive throughout.
-; See NOTES_FROM_STRUCTURED_BASIC.md item 1 for the original review
-; that flagged this before it was reproduced.
-;
-; Until BANK_PAGE_EXROM_IN/OUT get a real fix (a trampoline and return
-; path living in RAM that's guaranteed to stay Home-mapped regardless
-; of $F4/$FF, e.g. chunk 4 -- see that file's own header on why chunk 4
-; is otherwise unused -- copied there and called through instead of
-; jumping to it directly from Dock), fail closed: the -DCARTRIDGE build
-; omits these words entirely rather than ship a build that crashes on
-; first use. The normal (non-cartridge) ROM build is unaffected --
-; every one of its chunks 0-3 IS Home, so $F4 never marks the code
-; that's calling BANK_PAGE_EXROM_IN as non-Home in the first place.
+; ---- RECT/POLYGON/POLYGON-FILL/SPRITE-* reach their EXROM-resident code through
+; kernel/bank/bank.asm. In the -DCARTRIDGE build that code travels in the cartridge
+; as DOCK chunk 5 and the paging is one OUT to port $F4 (step R1, docs/V2/
+; CARTRIDGE_EXROM_SPEC.md); before R1 these words were left out of that build
+; because the home paging sequence wrote port $FF bit 7 and swapped the
+; running cartridge out (docs/lros_cartridge.md has the history). ----
     INCLUDE "core/rectfill.asm"
 DICT_CHAIN_POINT DEFL H_RECT
     INCLUDE "core/polygon.asm"
 DICT_CHAIN_POINT DEFL H_POLYGONFILL
     INCLUDE "core/sprite.asm"
 DICT_CHAIN_POINT DEFL H_SPRITEHIDE
-    ENDIF
     INCLUDE "core/key.asm"
 DICT_CHAIN_POINT DEFL H_BREAKQ
     INCLUDE "core/mathfn.asm"
@@ -698,20 +662,10 @@ DICT_CHAIN_POINT DEFL H_UDG
                                  ; this must be a per-ROM opt-in, not
                                  ; unconditional
     INCLUDE "core/loadtext.asm"
-    ; core/storage.asm's own SAVE_LOAD_TEMP_BUF/SAVE_LOAD_MAX_DICT are
-    ; literals that deliberately TIME-SHARE this exact same physical RAM
-    ; (LOADTEXT_BUF/LOADTEXT_MAX_LEN) rather than referencing these
-    ; symbols directly -- core/storage.asm must still assemble standalone
-    ; in rom/forth_smoke_p7.asm, where neither of these exists (see that
-    ; file's own header for why it can't be a live expression). This is
-    ; the one place in the real product ROM where both sides of that
-    ; literal duplication actually exist together -- if either ever
-    ; drifts, this fires at assembly time instead of silently corrupting
-    ; RAM the two mechanisms were supposed to be safely sharing.
-    ASSERT SAVE_LOAD_TEMP_BUF == LOADTEXT_BUF
-    ASSERT SAVE_LOAD_MAX_DICT == LOADTEXT_MAX_LEN - 2
 DICT_CHAIN_POINT DEFL H_LOADTEXT
     INCLUDE "core/recall.asm"
+DICT_LATEST_COLD EQU DICT_LATEST_INIT_RECALL  ; LATEST of an empty user dictionary: cold start,
+                                              ; and core/storage.asm's LOAD-LIB after a failure
 DICT_CHAIN_POINT DEFL H_RECALL
     INCLUDE "core/editor.asm"
 

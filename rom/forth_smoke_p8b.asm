@@ -168,6 +168,17 @@ DICT_CHAIN_POINT DEFL H_SEMICOLON   ; see core/control.asm's own header
     INCLUDE "core/float.asm"
     INCLUDE "core/mode64.asm"
 
+; ---- test-only: MODE64_READ_PIXEL used to live in kernel/mode64/mode64.asm; it had no caller in
+; any product ROM, so audit step R0 (O11) moved it here, where it is the oracle for checkpoint 1 ----
+MODE64_READ_PIXEL:
+    call GFX_PIXEL64_ADDR_SETUP
+    ld   b, a
+    ld   a, (hl)
+    and  b
+    ret  z
+    ld   a, 1
+    ret
+
     DS   $4000 - $, $FF
 
     SAVEBIN "forth_smoke_p8b_rom0.bin", $0000, $4000

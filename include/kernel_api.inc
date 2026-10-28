@@ -45,7 +45,6 @@
 ; ---- kernel/io (see kernel/io/io.asm) ----
     EXTERN IO_KEY_SCAN_ROW      ; A = row-select byte -> A = row state
     EXTERN IO_KEY_SCAN_ALL      ; -> HL = IO_SCAN_TABLE, filled
-    EXTERN IO_ANY_KEY_DOWN      ; -> carry set if any key is down
     EXTERN IO_READ_KEY          ; blocking -> A = ASCII code (0 if unmapped)
     EXTERN IO_READ_KEY_NONBLOCK ; non-blocking -> A = ASCII code, or 0
     EXTERN IO_KEY_AVAILABLE     ; non-destructive lookahead -> A = 0 or nonzero
@@ -148,47 +147,22 @@
                                  ; register on the next RND() call) —
                                  ; backs BASIC's RANDOMISE <n>
 
-; ---- kernel/storage (see kernel/storage/storage.asm) ----
-; Tape SAVE/LOAD, ported from the real TS2068 ROM's own cassette
-; routines (2026-08-24) — see storage.asm's own header for the full
-; protocol design and why (kernel/storage/archive/README.md covers the
-; previous from-scratch design this replaced).
-    EXTERN STORAGE_SEND_BLOCK   ; A = STORAGE_TYPE_HEADER or _DATA, IX =
-                                 ; data pointer, DE = data length —
-                                 ; sends one block: leader tone, sync,
-                                 ; every byte MSB-first, trailing
-                                 ; checksum. Destroys AF, AF', BC, DE,
-                                 ; HL, IX.
-    EXTERN STORAGE_RECEIVE_BLOCK ; A = STORAGE_TYPE_HEADER or _DATA,
-                                 ; carry set on entry = load (clear =
-                                 ; verify, unused by this project's own
-                                 ; callers), IX = destination pointer,
-                                 ; DE = expected length -> carry set =
-                                 ; failure (timeout, SPACE pressed,
-                                 ; wrong type, or checksum mismatch),
-                                 ; carry clear = success. Destroys AF,
-                                 ; AF', BC, DE, HL, IX.
-    EXTERN STORAGE_SAVE         ; HL = filename pointer, B = filename
-                                 ; length, IX = data pointer, DE = data
-                                 ; length — builds the header, sends it
-                                 ; once, then sends the data block
-                                 ; TWICE (see storage.asm's own header,
-                                 ; "IMPROVEMENT"). Carry always clear.
-    EXTERN STORAGE_LOAD         ; IX = destination pointer, HL =
-                                 ; filename to match, B = its length (0
-                                 ; = wildcard, LOAD ""), DE = max
-                                 ; allowed data length -> DE = actual
-                                 ; data length received, A = 1 if the
-                                 ; data block's backup copy was needed
-                                 ; (0 = clean first-copy load). Carry
-                                 ; set = total failure (no matching
-                                 ; header found, header's claimed
-                                 ; length exceeds the caller's bound,
-                                 ; or both data copies failed).
-    EXTERN STORAGE_REPORT_PROGRESS ; no input — calls STORAGE_PROGRESS_
-                                 ; HOOK if one is set, so the status bar
-                                 ; can be redrawn once at the start of a
-                                 ; SAVE/LOAD (this ROM has no
-                                 ; interrupts). Destroys nothing.
+; ---- kernel/storage (see kernel/storage/storage.asm; contract in docs/V2/STORAGE_SPEC.md 3, 5) ----
+; Tape SAVE/LOAD: Leap-C's clean-room block I/O (kernel/storage/tapeblock.asm) and the
+; header layer rebuilt in audit step S. Every routine leaves interrupts off except STORAGE_SAVE.
+    EXTERN STORAGE_SEND_BLOCK   ; A = flag, IX = data, DE = length -> carry set = sent whole,
+                                 ; clear = SPACE stopped it. Destroys AF, AF', BC, DE, HL, IX
+    EXTERN STORAGE_RECEIVE_BLOCK ; A = flag, carry set = load (clear = verify), IX, DE ->
+                                 ; carry clear = success; set = any failure, DE = bytes not
+                                 ; stored. Destroys AF, AF', BC, DE, HL, IX, STORAGE_ENTRY_RETRY
+    EXTERN STORAGE_SAVE         ; A = header type, HL / BC = header parameters 1 / 2, IX = data,
+                                 ; DE = length, name in STORAGE_NAME_BUF -> carry set = stopped
+                                 ; by SPACE (no data block after a stopped header)
+    EXTERN STORAGE_FIND         ; A = header type, name in STORAGE_NAME_BUF / _LEN (0 = any) ->
+                                 ; carry clear = found, header in STORAGE_HEADER_BUF; set: B = $FF
+                                 ; if SPACE stopped it
+    EXTERN STORAGE_LOAD_DATA    ; IX, DE, carry set = load / clear = verify -> carry clear =
+                                 ; success; set: B = $FF if SPACE, Z = nothing written
+    EXTERN STORAGE_CRC          ; HL = start, BC = count -> DE = CRC-16/CCITT-FALSE
 
     ENDIF

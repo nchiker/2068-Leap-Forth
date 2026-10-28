@@ -8,18 +8,18 @@ WHY THIS IS DIFFERENT FROM ts2068rom's tools/tape_gen.py: that project's
 own protocol is a from-scratch, non-standard framing (many small
 128-byte blocks, each sent twice), so it needed a hand-built Direct
 Recording TZX with hand-tuned pulse widths. 2068-Forth's kernel/storage/
-storage.asm is instead a byte-for-byte port of the REAL TS2068/Sinclair
-ROM's own SA-BYTES/LD-BYTES cassette routines (see that file's own
-header — every instruction checked against the real EXROM binary) — one
-header block (type $00) + one data block (type $FF), standard pilot/
-sync/bit pulse widths, standard XOR checksum. That means a real,
+storage.asm sends and receives blocks through Leap-C's clean-room
+kernel/storage/tapeblock.asm (since audit step S; written from a public
+format description, not from the stock ROM's SA-BYTES/LD-BYTES) — one
+header block (flag $00) + one data block (flag $FF), standard pilot/
+sync/bit pulse widths, standard XOR checksum. The wire format is the
+standard Sinclair one. That means a real,
 plain .TAP file (the classic [len_lo][len_hi][flag][...data...]
 [checksum] block framing) is *already* the exact real wire format —
 Fuse's own standard tape engine generates the genuine pulse train from
 it, no hand-rolled sample data needed, and no scale-fudging: this
-project's receiver keeps the real ROM's own stock $C6/$CB thresholds
-unmodified (unlike ts2068rom's, which needed empirical retuning for a
-genuinely new protocol).
+project's receiver decodes the standard format (unlike ts2068rom's,
+which needed empirical retuning for a genuinely new protocol).
 
 Checksum convention (confirmed against kernel/storage/storage.asm's own
 STORAGE_SEND_BLOCK: the running checksum in H starts as the type-flag
@@ -29,8 +29,9 @@ payload[-1].
 
 Header payload layout (STORAGE_HEADER_* offsets in kernel/storage/
 storage.asm):
-    byte 0      : file type (always 0 here — SAVE-TEXT/SAVE-LIB always
-                  set STORAGE_REQUEST_TYPE to 0)
+    byte 0      : file type (always 0 here, a text tape as SAVE-TEXT
+                  writes it; SAVE-LIB tapes are type 3 and carry the
+                  ROM identity, so this tool does not make them)
     bytes 1-10  : filename, space-padded to 10 characters
     bytes 11-12 : data length, little-endian
     bytes 13-14 : autostart word (STORAGE_NO_AUTOSTART = 0x8000), LE

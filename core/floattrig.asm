@@ -384,14 +384,14 @@ RANGE_REDUCE:
     jp   p, .neg_done
     ld   a, (TRIG_GUARD)
     cp   TRIG_GUARD_MAX
-    jp   nc, .neg_done
+    jr   nc, .neg_done
     inc  a
     ld   (TRIG_GUARD), a
     ld   hl, TWO_PI_M
     ld   a, TWO_PI_E
     call FPUSH
     call W_FPLUS
-    jp   .neg_loop
+    jr   .neg_loop
 .neg_done:
     xor  a
     ld   (TRIG_GUARD), a
@@ -402,13 +402,13 @@ RANGE_REDUCE:
     jp   m, .ge_done
     ld   a, (TRIG_GUARD)
     cp   TRIG_GUARD_MAX
-    jp   nc, .ge_done
+    jr   nc, .ge_done
     inc  a
     ld   (TRIG_GUARD), a
     ld   hl, TWO_PI_M
     ld   a, TWO_PI_E
     call TOS_MINUS_CONST
-    jp   .ge_loop
+    jr   .ge_loop
 .ge_done:
     ret
 
@@ -436,9 +436,9 @@ RAW_SIN_TABLE:
     inc  a
     ld   (TRIG_IDX), a
     cp   17
-    jp   nc, .frac_done          ; guard -- r<=HALF_PI means idx<=16
+    jr   nc, .frac_done          ; guard -- r<=HALF_PI means idx<=16
                                   ; always, this should never trigger
-    jp   .frac_loop
+    jr   .frac_loop
 .frac_done:
     ld   a, (TRIG_IDX)
     cp   17
@@ -481,7 +481,7 @@ RAW_SIN:
     ld   hl, TWO_PI_M
     ld   a, TWO_PI_E
     call CONST_MINUS_TOS
-    jp   .reduced
+    jr   .reduced
 .q3:
     ; PI <= x < THREE_HALF_PI  ->  r = x - PI, sign = -1
     ld   a, 1
@@ -489,7 +489,7 @@ RAW_SIN:
     ld   hl, PI_M
     ld   a, PI_E
     call TOS_MINUS_CONST
-    jp   .reduced
+    jr   .reduced
 .q2:
     ; HALF_PI <= x < PI  ->  r = PI - x, sign = +1
     xor  a
@@ -497,7 +497,7 @@ RAW_SIN:
     ld   hl, PI_M
     ld   a, PI_E
     call CONST_MINUS_TOS
-    jp   .reduced
+    jr   .reduced
 .q1:
     ; x < HALF_PI  ->  r = x, sign = +1
     xor  a

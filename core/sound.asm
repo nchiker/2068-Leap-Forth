@@ -35,16 +35,16 @@
 ; `SOUND` routine (M2127: `OUT ($F5),A` uses the register value
 ; straight off the calculator stack, no `DEC A` before the `OUT`) and
 ; from the sibling project's own already-verified `SOUND_EXROM`, which
-; matches — and the data byte to port `$F6` (`PORT_AY_DATA`). The real
-; ROM validates the register to 1-16 inclusive (0 and 17+ both
-; rejected). A real, worth-stating consequence of NO offset existing:
-; the AY-3-8912 only has chip registers 0-15, so `SOUND`'s own valid
-; range (1-16) can never reach chip register 0 (Channel A's tone-period
-; FINE byte) at all — only its coarse byte (chip register 1) is
-; reachable for that specific channel/field; every other register,
-; including both halves of Channel B/C's own tone periods (chip
-; registers 2-5), is fully reachable. Channel A can still be used for
-; fine-grained tones by way of registers 2-5 belonging to B/C instead.
+; matches — and the data byte to port `$F6` (`PORT_AY_DATA`). The range
+; accepted is 0-16: 17 and above are rejected. Until step R0 (audit
+; O9) register 0 was rejected too, which made chip register 0 (Channel
+; A's tone-period FINE byte) unreachable through SOUND: this file's
+; first version took the real ROM to validate 1-16, and the sibling
+; 2068-Leap V2 maintenance line (6493615) later found the real ROM's
+; test accepts 0 and changed its own SOUND the same way. The AY-3-8912
+; has chip registers 0-15 only, so 16 selects no chip register; it is
+; still accepted, unchanged. rom/test_sound_reg0.asm reads the chip back
+; to show register 0 is written.
 ;
 ; ERROR HANDLING: the real ROM raises a genuine BASIC error
 ; ("INVALID SOUND REGISTER") for an out-of-range register — this
@@ -72,7 +72,7 @@
 ; ts2068rom project) marks the AY port pair's own read-back behavior as
 ; "still open," unconfirmed even there. `rom/forth_smoke_p32.asm`
 ; verifies the same way the sibling project verified its own `SOUND`:
-; valid register/data pairs (1-16) run to completion without hanging,
+; valid register/data pairs (0-16) run to completion without hanging,
 ; and a sentinel value on the data stack survives a call untouched
 ; (proving `SOUND` consumes exactly its own two arguments and nothing
 ; else) — the same data-stack-hygiene proof shape `core/rawbeep.asm`'s
@@ -118,15 +118,13 @@
     DEFINE CORE_SOUND_ASM
 
 ; ============================================================================
-; SOUND_WRITE (internal, not a dictionary word) — B = register (1-16),
+; SOUND_WRITE (internal, not a dictionary word) — B = register (0-16),
 ; C = data (0-255). Silently does nothing if the register is out of
 ; range (see this file's own header on why silent, not an error).
 ; Destroys: AF
 ; ============================================================================
 SOUND_WRITE:
     ld   a, b
-    or   a
-    ret  z                    ; register 0 -- out of range, ignore
     cp   17
     ret  nc                   ; register >=17 -- out of range, ignore
     out  (PORT_AY_REG), a

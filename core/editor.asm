@@ -342,7 +342,7 @@ WRAP_STORE_ROW:
 WRAP_CALC:
     ld   a, 31
     ld   (FWRAP_WIDTH_MINUS1), a
-    jp   WRAP_CALC_SHARED
+    jr   WRAP_CALC_SHARED
 
     IFDEF KERNEL_MODE64_ASM         ; real 64-column TEXT mode only
                                     ; exists once kernel/mode64/mode64.asm
@@ -354,7 +354,7 @@ WRAP_CALC:
 WRAP_CALC64:
     ld   a, 63
     ld   (FWRAP_WIDTH_MINUS1), a
-    jp   WRAP_CALC_SHARED
+    jr   WRAP_CALC_SHARED
     ENDIF
 
 WRAP_CALC_SHARED:

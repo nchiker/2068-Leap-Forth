@@ -319,3 +319,5 @@ DICT_CHAIN_POINT DEFL H_DOT   ; core/throwcatch.asm below is needed
     DS   $4000 - $, $FF
 
     SAVEBIN "forth_smoke_p9_rom0.bin", $0000, $4000
+
+DICT_LATEST_COLD EQU DICT_LATEST_INIT_P8B   ; LATEST of an empty user dictionary (core/storage.asm LOAD-LIB)

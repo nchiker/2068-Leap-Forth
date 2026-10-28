@@ -61,13 +61,9 @@
     IFNDEF CORE_FREE_ASM
     DEFINE CORE_FREE_ASM
 
-DICT_RAM_CEILING EQU $F000   ; Phase 44: raised from $C000 once FILL's
-                             ; own scratch was relocated out of the way
-                             ; (include/sysvars.inc) — sits with margin
-                             ; below GFX_LINE_X0-Y1 ($F3C4), the one
-                             ; remaining live cell found in this range;
-                             ; see this file's own header for the full
-                             ; writeup
+; DICT_RAM_CEILING ($F000) is defined in core/dict.asm, next to FORTH_DICT_RAM, since step S
+; (core/storage.asm's SAVE-LIB/LOAD-LIB need it in ROMs without this file); see this file's own
+; header for how it was chosen.
 
 ; ============================================================================
 ; FREE ( -- n )  bytes remaining before HERE reaches DICT_RAM_CEILING

@@ -46,7 +46,7 @@
 ; ink/paper pair, chosen by MODE64_SET_PALETTE, not per shape or word.
 ;
 ; SMALLEST PROVABLE SLICE for this phase: MODE64_ON/OFF (the mode
-; switch itself) and MODE64_WRITE_PIXEL/MODE64_READ_PIXEL (so
+; switch itself) and MODE64_WRITE_PIXEL (and the test-only MODE64_READ_PIXEL, now in rom/forth_smoke_p8b.asm) (so
 ; rom/forth_smoke_p8b.asm can prove a pixel plotted in this mode is
 ; readable back at exactly the coordinate it was plotted at, the same
 ; GFX_READ_PIXEL-based verification technique Phase 5 already
@@ -176,7 +176,7 @@ MODE64_SET_PALETTE:
 
 ; ============================================================================
 ; GFX_PIXEL64_ADDR_SETUP (internal, not a public entry point) — shared
-; address computation for MODE64_WRITE_PIXEL/MODE64_READ_PIXEL. Reuses
+; address computation for MODE64_WRITE_PIXEL (and the test-only MODE64_READ_PIXEL, now in rom/forth_smoke_p8b.asm). Reuses
 ; kernel/graphics's own already-verified BIT_MASK_TABLE/ROW_BASE_TABLE
 ; and GFX_PIXEL_ROW/GFX_PIXEL_SCANLINE scratch for the row/scanline
 ; part — identical to the single-file case, only the column math and
@@ -273,18 +273,6 @@ MODE64_WRITE_PIXEL:
     or   b
 .write:
     ld   (hl), a
-    ret
-
-; ============================================================================
-; MODE64_READ_PIXEL ( HL = x 0-511, C = y 0-191 -- A = 1 or 0 )
-; ============================================================================
-MODE64_READ_PIXEL:
-    call GFX_PIXEL64_ADDR_SETUP
-    ld   b, a
-    ld   a, (hl)
-    and  b
-    ret  z
-    ld   a, 1
     ret
 
 ; ============================================================================
@@ -565,6 +553,6 @@ MODE64_SCROLL_OUTPUT_UP:
     ld   (GFX_SCROLL_SRC_ROW), a
     call MODE64_COPY_ROW_BITMAP
     ld   b, 23
-    jp   MODE64_CLEAR_ROW
+    jr   MODE64_CLEAR_ROW
 
     ENDIF

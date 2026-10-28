@@ -1,0 +1,42 @@
+# make fusesave; Fuse 1.9.1 (/usr/local/bin/fuse) headless, fuse-utils tape2wav + audio2tape. Section 1: this build (step S + these tools). Section 2: the old build (ce1579d), for contrast: 'make fusesave FUSESAVE_BUILD=<old>/build'; its 3 FAILs are expected (no inter-block gap: audio2tape reads the data pilot as header bits, STORAGE_SPEC section 5; no ROM_IDENTITY).
+## section 1: this build
+python3 -I tools/fusesave.py --build build
+fusesave: build /home/charlie.day/2068-forth/.claude/worktrees/agent-a32ee6dd4fe43718b/build
+fusesave: SAVE-TEXT: returned                PASS  11.7 s emulated, screen: 2068-FORTH | OK
+fusesave: SAVE-TEXT: blocks decoded          PASS  audio2tape found 2 blocks of [19, 24] bytes, expected 2 of [19, 24] bytes
+fusesave: SAVE-TEXT: block 0 framing         PASS  flag $00 (want $00), XOR checksum good, payload 17 bytes
+fusesave: SAVE-TEXT: header fields           PASS  got  type 0 name 'TXTSAVE   ' length 22 param1 $8000 param2 $0016
+fusesave:                                           want type 0 name 'TXTSAVE   ' length 22 param1 $8000 param2 $0016
+fusesave: SAVE-TEXT: block 1 framing         PASS  flag $FF (want $FF), XOR checksum good, payload 22 bytes
+fusesave: SAVE-TEXT: data bytes              PASS  22 bytes
+fusesave: SAVE-TEXT: LOAD-TEXT of Fuse's recording PASS  screen: 2068-FORTH | 42 OK
+fusesave: SAVE-TEXT: LOAD-TEXT of audio2tape's tape PASS  screen: 2068-FORTH | 42 OK
+fusesave: SAVE-LIB: returned                 PASS  9.5 s emulated, screen: 2068-FORTH | OK | OK
+fusesave: SAVE-LIB: HERE, LATEST, dictionary kept PASS  HERE $981D LATEST $980C, 29 dictionary bytes (before: $981D $980C 29)
+fusesave: SAVE-LIB: blocks decoded           PASS  audio2tape found 2 blocks of [19, 33] bytes, expected 2 of [19, 33] bytes
+fusesave: SAVE-LIB: block 0 framing          PASS  flag $00 (want $00), XOR checksum good, payload 17 bytes
+fusesave: SAVE-LIB: header fields            PASS  got  type 3 name 'LIBA      ' length 31 param1 $F521 param2 $980C
+fusesave:                                           want type 3 name 'LIBA      ' length 31 param1 $F521 param2 $980C
+fusesave: SAVE-LIB: block 1 framing          PASS  flag $FF (want $FF), XOR checksum good, payload 31 bytes
+fusesave: SAVE-LIB: data bytes               PASS  31 bytes
+fusesave: SAVE-LIB: LOAD-LIB of Fuse's recording PASS  HERE $981D LATEST $980C, 29 bytes equal, 5 CUBE . -> 125
+fusesave: SAVE-LIB: LOAD-LIB of audio2tape's tape PASS  HERE $981D LATEST $980C, 29 bytes equal, 5 CUBE . -> 125
+fusesave: emulator Fuse 1.9.1, tape traps off, loader acceleration off; decoder fuse-utils tape2wav + audio2tape
+fusesave: 17 checks, 0 failed, 3 s wall
+
+## section 2: old build ce1579d (expected to fail)
+python3 -I tools/fusesave.py --build /tmp/claude-1000/-home-charlie-day-2068-forth/b8da91d9-7aa2-41a6-8e1e-56d063835ddc/scratchpad/old/build
+fusesave: build /tmp/claude-1000/-home-charlie-day-2068-forth/b8da91d9-7aa2-41a6-8e1e-56d063835ddc/scratchpad/old/build (no ROM_IDENTITY: an old build)
+fusesave: SAVE-TEXT: returned                PASS  10.2 s emulated, screen: 2068-FORTH | OK
+fusesave: SAVE-TEXT: blocks decoded          FAIL  audio2tape found 1 blocks of [244] bytes, expected 2 of [19, 24] bytes
+fusesave: SAVE-TEXT: LOAD-TEXT of Fuse's recording PASS  screen: 2068-FORTH | 42 OK
+fusesave: SAVE-TEXT: LOAD-TEXT of audio2tape's tape PASS  screen: 2068-FORTH | 42 OK
+fusesave: SAVE-LIB: returned                 PASS  8.6 s emulated, screen: 2068-FORTH | OK | OK
+fusesave: SAVE-LIB: HERE, LATEST, dictionary kept PASS  HERE $981D LATEST $980C, 29 dictionary bytes (before: $981D $980C 29)
+fusesave: SAVE-LIB: ROM_IDENTITY in the build FAIL  no ROM_IDENTITY symbol: header param 1 cannot carry the identity (checked against $0000)
+fusesave: SAVE-LIB: blocks decoded           FAIL  audio2tape found 1 blocks of [253] bytes, expected 2 of [19, 33] bytes
+fusesave: SAVE-LIB: LOAD-LIB of Fuse's recording PASS  HERE $981D LATEST $980C, 29 bytes equal, 5 CUBE . -> 125
+fusesave: SAVE-LIB: LOAD-LIB of audio2tape's tape PASS  HERE $981D LATEST $980C, 29 bytes equal, 5 CUBE . -> 125
+fusesave: emulator Fuse 1.9.1, tape traps off, loader acceleration off; decoder fuse-utils tape2wav + audio2tape
+fusesave: 10 checks, 3 failed, 3 s wall
+make: *** [Makefile:286: fusesave] Error 1

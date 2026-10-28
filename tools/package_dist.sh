@@ -51,11 +51,15 @@ for rom in forth_boot forth_demo_blackjack; do
   test -f "build/$rom.dck" || { echo "missing build/$rom.dck -- run make cart first" >&2; exit 1; }
   cp "build/$rom.dck" "build/${rom}_cart.bin" "$stage/cartridge/"
 done
+# forth_boot's cartridge carries the graphics EXROM image as DOCK chunk 5; an EPROM
+# cartridge needs that 8K at DOCK $A000 as well (step R1, docs/V2/CARTRIDGE_EXROM_SPEC.md)
+test -f build/graphics_exrom.bin || { echo "missing build/graphics_exrom.bin -- run make graphics-exrom first" >&2; exit 1; }
+cp build/graphics_exrom.bin "$stage/cartridge/forth_boot_chunk5.bin"
 
 # --- graphics EXROM (Phase 65: RECT/POLYGON/POLYGON-FILL/sprites) --------
-# Base dictionary only -- the DOCK cartridge builds above don't include
-# this; see docs/lros_cartridge.md for why there's no cartridge path for
-# it yet. Also wrapped as EightyOne/TS-Pico .dck cartridges (bank $FE,
+# The Home-ROM build's EXROM. (forth_boot.dck above already carries the same
+# image as DOCK chunk 5, so its cartridge needs no EXROM; this is the
+# separate-EXROM path.) Also wrapped as EightyOne .dck cartridges (bank $FE,
 # chunk 5), alongside a placeholder wrapping of the same inert EXROM
 # already staged above -- see docs/eightyone_setup.md.
 mkdir -p "$stage/roms" "$stage/eightyone"
@@ -120,15 +124,22 @@ roms/stock_shaped_exrom.bin        An inert 8K EXROM placeholder, for
                                    emulators that insist on a second ROM
                                    file. Use a real EXROM dump if you have one.
 cartridge/forth_boot.dck           The same two ROMs built as DOCK cartridges
-cartridge/forth_demo_blackjack.dck (LROS format, chunks 0-1). Plug in instead
-                                   of replacing the home ROM -- see below.
-cartridge/*_cart.bin               The raw 16K LROS images inside those .dck
-                                   files, for burning to a cartridge EPROM.
+cartridge/forth_demo_blackjack.dck (LROS format). Plug in instead of replacing
+                                   the home ROM -- see below. forth_boot.dck
+                                   is chunks 0, 1 and 5 (it includes RECT,
+                                   POLYGON, POLYGON-FILL, SPRITE-*; their
+                                   code is DOCK chunk 5); Blackjack is 0-1.
+cartridge/*_cart.bin               The raw 16K LROS images (chunks 0-1) inside
+                                   those .dck files, for a cartridge EPROM.
+cartridge/forth_boot_chunk5.bin    The 8K DOCK chunk 5 of forth_boot.dck (the
+                                   graphics code), for the same EPROM cartridge
+                                   at DOCK \$A000.
 roms/graphics_exrom.bin            8K EXROM (Phase 65): RECT, POLYGON,
                                    POLYGON-FILL, SPRITE-DEFINE/SHOW/HIDE.
                                    Use instead of stock_shaped_exrom.bin as
-                                   --rom-ts2068-1 to get these six words --
-                                   NOT part of either cartridge build above.
+                                   --rom-ts2068-1 to get these six words
+                                   in the home-ROM build. (forth_boot.dck
+                                   carries this image itself, as chunk 5.)
 roms/forth_boot_graphics_combined_24k.bin
                                    forth_boot_rom0.bin + graphics_exrom.bin
                                    concatenated, for ZEsarUX --romfile.
@@ -172,7 +183,10 @@ normally, finds the cartridge in the DOCK slot, and hands control to
     fuse --machine ts2068 --dock cartridge/forth_boot.dck
 In ZEsarUX: select the TS2068, smartload the .dck, then hard reset.
 For real hardware, burn cartridge/forth_boot_cart.bin to a 16K (27128)
-EPROM on a DOCK cartridge board mapped to chunks 0-1 (addresses 0000h-3FFFh).
+EPROM on a DOCK cartridge board mapped to chunks 0-1 (addresses 0000h-3FFFh)
+and cartridge/forth_boot_chunk5.bin to the 8K at DOCK chunk 5 (A000h-BFFFh);
+without it the cartridge works but RECT/POLYGON/SPRITE-* silently do nothing.
+(Checked in emulators only; no physical cartridge was run.)
 
 Build details are in BUILD_INFO.txt. Licence: MIT (see LICENSE).
 TXT

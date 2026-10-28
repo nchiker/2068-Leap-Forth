@@ -1,0 +1,194 @@
+FAIL  rect_basic             zesarux  screen=133 stack=1 dict=2 (normalised calls=0 words=0, 0 ROM calls in 0B) state=472 ctl=BAD
+      - CART UNRESPONSIVE (no idle prompt after: 10 10 30 30 RECT)
+      - screen differs in 133 byte(s): 4000:70/00 4001:70/00 4002:30/00 4003:70/00 4005:F8/00 4006:70/00
+      - stacks differ: data depth 0/-13171 float depth 0/0 IX 9800/FEE6 IY 9000/9000
+      - dictionary differs: 0 unexplained byte(s)  HERE 9800/0413 LATEST 39FD/0413 len 0/0
+      - EXROM-side state differs in 472 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)
+FAIL  rect_basic             tsrun    screen=154 stack=1 dict=0 (normalised calls=0 words=0, 0 ROM calls in 0B) state=11 ctl=BAD
+      - CART UNRESPONSIVE (frames=6356; no idle prompt after: 10 10 30 30 RECT)
+      - screen differs in 154 byte(s): 4020:70/00 4021:88/00 4040:F0/00 4042:70/00 4043:88/00 4061:3F/00
+      - stacks differ: data depth 0/-13171 float depth 0/0 IX 9800/FEE6 IY 9000/9000
+      - EXROM-side state differs in 11 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)  [max BANK_EXROM_DEPTH home=1 cart=255]
+INFO  rect_basic             HOME screen ZEsarUX vs TSRun: identical
+FAIL  rect_reversed_colour   zesarux  screen=542 stack=1 dict=2 (normalised calls=0 words=0, 0 ROM calls in 0B) state=479 ctl=BAD
+      - CART UNRESPONSIVE (no idle prompt after: 150 120 110 90 RECT)
+      - screen differs in 542 byte(s): 4000:70/00 4001:70/00 4002:30/00 4003:70/00 4005:F8/00 4006:70/00
+      - stacks differ: data depth 0/-13171 float depth 0/0 IX 9800/FEE6 IY 9000/9000
+      - dictionary differs: 0 unexplained byte(s)  HERE 9800/0413 LATEST 39FD/0413 len 0/0
+      - EXROM-side state differs in 479 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)
+FAIL  rect_reversed_colour   tsrun    screen=568 stack=1 dict=0 (normalised calls=0 words=0, 0 ROM calls in 0B) state=15 ctl=BAD
+      - CART UNRESPONSIVE (frames=6546; no idle prompt after: 150 120 110 90 RECT)
+      - screen differs in 568 byte(s): 4040:70/00 4041:88/00 4060:70/00 4061:88/00 4076:0F/00 4077:FF/00
+      - stacks differ: data depth 0/-13171 float depth 0/0 IX 9800/FEE6 IY 9000/9000
+      - EXROM-side state differs in 15 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)  [max BANK_EXROM_DEPTH home=1 cart=255]
+INFO  rect_reversed_colour   HOME screen ZEsarUX vs TSRun: identical
+FAIL  rect_span_cells        zesarux  screen=466 stack=1 dict=2 (normalised calls=0 words=0, 0 ROM calls in 0B) state=470 ctl=BAD
+      - CART UNRESPONSIVE (no idle prompt after: 1 INK 3 PAPER 3 5 77 41 RECT)
+      - screen differs in 466 byte(s): 4000:70/00 4001:70/00 4002:30/00 4003:70/00 4005:F8/00 4006:70/00
+      - stacks differ: data depth 0/-13171 float depth 0/0 IX 9800/FEE6 IY 9000/9000
+      - dictionary differs: 0 unexplained byte(s)  HERE 9800/0413 LATEST 39FD/0413 len 0/0
+      - EXROM-side state differs in 470 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)
+FAIL  rect_span_cells        tsrun    screen=561 stack=1 dict=0 (normalised calls=0 words=0, 0 ROM calls in 0B) state=16 ctl=BAD
+      - CART UNRESPONSIVE (frames=6488; no idle prompt after: 1 INK 3 PAPER 3 5 77 41 RECT)
+      - screen differs in 561 byte(s): 4020:70/00 4021:88/00 4022:FF/00 4023:FF/00 4024:FF/00 4025:FF/00
+      - stacks differ: data depth 0/-13171 float depth 0/0 IX 9800/FEE6 IY 9000/9000
+      - EXROM-side state differs in 16 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)  [max BANK_EXROM_DEPTH home=1 cart=1]
+INFO  rect_span_cells        HOME screen ZEsarUX vs TSRun: identical
+FAIL  polygon                zesarux  screen=636 stack=1 dict=2 (normalised calls=0 words=0, 0 ROM calls in 0B) state=386 ctl=BAD
+      - CART UNRESPONSIVE (no idle prompt after: 2 INK 150 100 200 90 230 130 210 170 170 160 5 POL)
+      - screen differs in 636 byte(s): 4020:70/00 4021:88/00 4040:70/00 4041:88/00 4060:F0/00 4062:70/00
+      - stacks differ: data depth 0/6499 float depth 0/0 IX 9800/6539 IY 9000/9000
+      - dictionary differs: 0 unexplained byte(s)  HERE 9800/0002 LATEST 39FD/900F len 0/0
+      - EXROM-side state differs in 386 byte(s)
+      - control line did not print `3 OK` (home=True cart=False)
+FAIL  polygon                tsrun    screen=636 stack=1 dict=2 (normalised calls=0 words=0, 0 ROM calls in 0B) state=386 ctl=BAD
+      - CART UNRESPONSIVE (frames=7280; no idle prompt after: 2 INK 150 100 200 90 230 130 210 170 170 160 5 POL)
+      - screen differs in 636 byte(s): 4020:70/00 4021:88/00 4040:70/00 4041:88/00 4060:F0/00 4062:70/00
+      - stacks differ: data depth 0/6499 float depth 0/0 IX 9800/6539 IY 9000/9000
+      - dictionary differs: 0 unexplained byte(s)  HERE 9800/0002 LATEST 39FD/900F len 0/0
+      - EXROM-side state differs in 386 byte(s)
+      - control line did not print `3 OK` (home=True cart=False)  [max BANK_EXROM_DEPTH home=1 cart=207]
+INFO  polygon                HOME screen ZEsarUX vs TSRun: identical
+FAIL  polygon_fill           zesarux  screen=501 stack=1 dict=0 (normalised calls=0 words=0, 0 ROM calls in 0B) state=52 ctl=BAD
+      - CART UNRESPONSIVE (no idle prompt after: 100 40 140 40 100 80 3 POLYGON-FILL)
+      - screen differs in 501 byte(s): 4020:70/00 4021:88/00 4040:70/00 4041:88/00 4060:F0/00 4062:70/00
+      - stacks differ: data depth 0/13296 float depth 0/0 IX 9800/3020 IY 9000/9000
+      - EXROM-side state differs in 52 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)
+FAIL  polygon_fill           tsrun    screen=501 stack=1 dict=0 (normalised calls=0 words=0, 0 ROM calls in 0B) state=52 ctl=BAD
+      - CART UNRESPONSIVE (frames=6565; no idle prompt after: 100 40 140 40 100 80 3 POLYGON-FILL)
+      - screen differs in 501 byte(s): 4020:70/00 4021:88/00 4040:70/00 4041:88/00 4060:F0/00 4062:70/00
+      - stacks differ: data depth 0/13296 float depth 0/0 IX 9800/3020 IY 9000/9000
+      - EXROM-side state differs in 52 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)  [max BANK_EXROM_DEPTH home=1 cart=1]
+INFO  polygon_fill           HOME screen ZEsarUX vs TSRun: identical
+FAIL  sprite_define          zesarux  screen=247 stack=1 dict=2 (normalised calls=0 words=0, 0 ROM calls in 0B) state=475 ctl=BAD
+      - CART UNRESPONSIVE (no idle prompt after: 2 INK 40 40 55 55 RECT)
+      - screen differs in 247 byte(s): 4000:70/00 4001:70/00 4002:30/00 4003:70/00 4005:F8/00 4006:70/00
+      - stacks differ: data depth 0/-13171 float depth 0/0 IX 9800/FEE6 IY 9000/9000
+      - dictionary differs: 0 unexplained byte(s)  HERE 9800/0413 LATEST 39FD/0413 len 0/0
+      - EXROM-side state differs in 475 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)
+FAIL  sprite_define          tsrun    screen=296 stack=1 dict=0 (normalised calls=0 words=0, 0 ROM calls in 0B) state=92 ctl=BAD
+      - CART UNRESPONSIVE (frames=6422; no idle prompt after: 2 INK 40 40 55 55 RECT)
+      - screen differs in 296 byte(s): 4020:70/00 4021:88/00 4040:70/00 4041:88/00 4060:70/00 4061:88/00
+      - stacks differ: data depth 0/-13171 float depth 0/0 IX 9800/FEE6 IY 9000/9000
+      - EXROM-side state differs in 92 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)  [max BANK_EXROM_DEPTH home=1 cart=255]
+INFO  sprite_define          HOME screen ZEsarUX vs TSRun: identical
+FAIL  sprite_show            zesarux  screen=818 stack=1 dict=2 (normalised calls=0 words=0, 0 ROM calls in 0B) state=469 ctl=BAD
+      - CART UNRESPONSIVE (no idle prompt after: 2 INK 40 40 55 55 RECT)
+      - screen differs in 818 byte(s): 4060:70/00 4061:88/00 4080:70/00 4081:88/00 40A0:F0/00 40A2:70/00
+      - stacks differ: data depth 0/-13171 float depth 0/0 IX 9800/FEE6 IY 9000/9000
+      - dictionary differs: 0 unexplained byte(s)  HERE 9800/0413 LATEST 39FD/0413 len 0/0
+      - EXROM-side state differs in 469 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)
+FAIL  sprite_show            tsrun    screen=995 stack=1 dict=0 (normalised calls=0 words=0, 0 ROM calls in 0B) state=63 ctl=BAD
+      - CART UNRESPONSIVE (frames=6422; no idle prompt after: 2 INK 40 40 55 55 RECT)
+      - screen differs in 995 byte(s): 4000:00/70 4001:00/70 4002:00/30 4003:00/70 4005:00/F8 4006:00/70
+      - stacks differ: data depth 0/-13171 float depth 0/0 IX 9800/FEE6 IY 9000/9000
+      - EXROM-side state differs in 63 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)  [max BANK_EXROM_DEPTH home=1 cart=255]
+INFO  sprite_show            HOME screen ZEsarUX vs TSRun: identical
+FAIL  sprite_hide            zesarux  screen=800 stack=1 dict=2 (normalised calls=0 words=0, 0 ROM calls in 0B) state=474 ctl=BAD restored=ok
+      - CART UNRESPONSIVE (no idle prompt after: 2 INK 40 40 55 55 RECT)
+      - screen differs in 800 byte(s): 4060:70/00 4061:88/00 4080:70/00 4081:88/00 40A0:70/00 40A1:88/00
+      - stacks differ: data depth 0/-13171 float depth 0/0 IX 9800/FEE6 IY 9000/9000
+      - dictionary differs: 0 unexplained byte(s)  HERE 9800/0413 LATEST 39FD/0413 len 0/0
+      - EXROM-side state differs in 474 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)
+FAIL  sprite_hide            tsrun    screen=977 stack=1 dict=0 (normalised calls=0 words=0, 0 ROM calls in 0B) state=63 ctl=BAD restored=ok
+      - CART UNRESPONSIVE (frames=6422; no idle prompt after: 2 INK 40 40 55 55 RECT)
+      - screen differs in 977 byte(s): 4000:00/70 4001:00/70 4002:00/30 4003:00/70 4005:00/F8 4006:00/70
+      - stacks differ: data depth 0/-13171 float depth 0/0 IX 9800/FEE6 IY 9000/9000
+      - EXROM-side state differs in 63 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)  [max BANK_EXROM_DEPTH home=1 cart=255]
+INFO  sprite_hide            HOME screen ZEsarUX vs TSRun: identical
+FAIL  stack_kept             zesarux  screen=70 stack=9 dict=0 (normalised calls=0 words=0, 0 ROM calls in 0B) state=15 ctl=ok
+      - screen differs in 70 byte(s): 4020:70/F0 4021:88/00 4022:00/70 4023:00/88 4040:F0/00 4042:70/00
+      - stacks differ: data depth 3/0 float depth 1/0 IX 97FA/9800 IY 8FFD/9000
+      - EXROM-side state differs in 15 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+FAIL  stack_kept             tsrun    screen=203 stack=4 dict=0 (normalised calls=0 words=0, 0 ROM calls in 0B) state=11 ctl=BAD
+      - CART UNRESPONSIVE (frames=6488; no idle prompt after: 1 2 3 10 10 30 30 RECT 5 S>F)
+      - screen differs in 203 byte(s): 4020:70/00 4021:88/00 4040:F0/00 4042:70/00 4043:88/00 4061:3F/00
+      - stacks differ: data depth 3/-13171 float depth 1/0 IX 97FA/FEE6 IY 8FFD/9000
+      - EXROM-side state differs in 11 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)  [max BANK_EXROM_DEPTH home=1 cart=255]
+INFO  stack_kept             HOME screen ZEsarUX vs TSRun: identical
+FAIL  nested_big_polygon     zesarux  screen=4710 stack=0 dict=0 (normalised calls=0 words=0, 0 ROM calls in 0B) state=115 ctl=ok
+      - screen differs in 4710 byte(s): 4020:70/F0 4021:88/00 4022:00/70 4023:00/88 402E:07/00 402F:FF/00
+      - EXROM-side state differs in 115 byte(s)
+FAIL  nested_big_polygon     tsrun    screen=4981 stack=1 dict=0 (normalised calls=0 words=0, 0 ROM calls in 0B) state=91 ctl=BAD
+      - CART UNRESPONSIVE (frames=8003; no idle prompt after: 128 188 80 185 30 160 10 110 30 60 80 20 12 POLYGO)
+      - screen differs in 4981 byte(s): 402E:07/00 402F:FF/00 4030:FF/00 4031:C0/00 4040:70/00 4041:88/00
+      - stacks differ: data depth 0/-13171 float depth 0/0 IX 9800/FEE6 IY 9000/9000
+      - EXROM-side state differs in 91 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)  [max BANK_EXROM_DEPTH home=1 cart=255]
+INFO  nested_big_polygon     HOME screen ZEsarUX vs TSRun: identical
+FAIL  loop_rect              zesarux  screen=1373 stack=1 dict=105 (normalised calls=0 words=0, 25 ROM calls in 0B) state=481 ctl=BAD
+      - CART UNRESPONSIVE (no idle prompt after: BARS)
+      - screen differs in 1373 byte(s): 4000:FF/00 4001:70/00 4002:30/00 4003:70/00 4005:F8/00 4006:70/00
+      - stacks differ: data depth 0/-13169 float depth 0/0 IX 9800/FEE2 IY 9000/9000
+      - dictionary differs: 0 unexplained byte(s)  HERE 9867/0413 LATEST 9800/0413 len 103/0
+      - EXROM-side state differs in 481 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)
+FAIL  loop_rect              tsrun    screen=1356 stack=1 dict=0 (normalised calls=0 words=0, 25 ROM calls in 103B) state=16 ctl=BAD
+      - CART UNRESPONSIVE (frames=7088; no idle prompt after: BARS)
+      - screen differs in 1356 byte(s): 4000:FF/70 4008:FF/F8 4010:FF/00 4018:FF/00 4020:FF/70 4021:F8/88
+      - stacks differ: data depth 0/-13168 float depth 0/0 IX 9800/FEE0 IY 9000/9000
+      - EXROM-side state differs in 16 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)  [max BANK_EXROM_DEPTH home=1 cart=196]
+INFO  loop_rect              HOME screen ZEsarUX vs TSRun: identical
+FAIL  loop_all_six           zesarux  screen=2510 stack=0 dict=373 (normalised calls=0 words=0, 72 ROM calls in 0B) state=101 ctl=ok
+      - screen differs in 2510 byte(s): 4020:70/F0 4021:88/00 4022:00/70 4023:00/88 4040:FF/00 4041:FF/00
+      - dictionary differs: 0 unexplained byte(s)  HERE 9973/9800 LATEST 9934/39FD len 371/0
+      - EXROM-side state differs in 101 byte(s)
+FAIL  loop_all_six           tsrun    screen=2510 stack=0 dict=373 (normalised calls=0 words=0, 72 ROM calls in 0B) state=101 ctl=ok
+      - screen differs in 2510 byte(s): 4020:70/F0 4021:88/00 4022:00/70 4023:00/88 4040:FF/00 4041:FF/00
+      - dictionary differs: 0 unexplained byte(s)  HERE 9973/9800 LATEST 9934/39FD len 371/0
+      - EXROM-side state differs in 101 byte(s)  [max BANK_EXROM_DEPTH home=1 cart=2]
+INFO  loop_all_six           HOME screen ZEsarUX vs TSRun: identical
+FAIL  compiled_rect_twice    zesarux  screen=646 stack=1 dict=36 (normalised calls=0 words=0, 8 ROM calls in 0B) state=472 ctl=BAD
+      - CART UNRESPONSIVE (no idle prompt after: 20 20 SQ)
+      - screen differs in 646 byte(s): 4000:70/00 4001:70/00 4002:30/00 4003:70/00 4005:F8/00 4006:70/00
+      - stacks differ: data depth 0/-13170 float depth 0/0 IX 9800/FEE4 IY 9000/9000
+      - dictionary differs: 0 unexplained byte(s)  HERE 9822/0413 LATEST 9800/0413 len 34/0
+      - EXROM-side state differs in 472 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)
+FAIL  compiled_rect_twice    tsrun    screen=611 stack=1 dict=0 (normalised calls=0 words=0, 8 ROM calls in 34B) state=16 ctl=BAD
+      - CART UNRESPONSIVE (frames=6678; no idle prompt after: 20 20 SQ)
+      - screen differs in 611 byte(s): 4040:70/00 4041:88/00 4060:70/00 4061:88/00 4062:0F/00 4063:FF/00
+      - stacks differ: data depth 0/-13170 float depth 0/0 IX 9800/FEE4 IY 9000/9000
+      - EXROM-side state differs in 16 byte(s)
+      - chunk 5 still paged in / depth not 0 at idle
+      - control line did not print `3 OK` (home=True cart=False)  [max BANK_EXROM_DEPTH home=1 cart=255]
+INFO  compiled_rect_twice    HOME screen ZEsarUX vs TSRun: identical
+
+26 case/emulator pair(s), 26 FAIL
+exit=1

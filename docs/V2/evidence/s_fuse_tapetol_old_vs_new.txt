@@ -1,0 +1,78 @@
+# make tapetol-fuse TAPETOL_BASE=<old build: ce1579d, the step R1 tree>; Fuse 1.9.1 (/usr/local/bin/fuse), headless; columns: first = old build (tag shown by directory), second = this build (tag shown is the worktree directory name)
+python3 -I tools/tapetol.py --emu fuse --build /tmp/claude-1000/-home-charlie-day-2068-forth/b8da91d9-7aa2-41a6-8e1e-56d063835ddc/scratchpad/old/build --build build --jobs 6
+case                         old             agent-a32ee6dd4fe43718b
+scale-all -25%               refuse (last row 'OK')  accept        
+scale-all -20%               refuse (last row 'OK')  accept        
+scale-all -15%               accept          accept        
+scale-all -10%               accept          accept        
+scale-all -5%                accept          accept        
+scale-all +0%                accept          accept        
+scale-all +5%                accept          accept        
+scale-all +10%               accept          accept        
+scale-all +15%               accept          accept        
+scale-all +20%               accept          accept        
+scale-all +25%               accept          accept        
+scale-pilot -25%             refuse (last row 'OK')  accept        
+scale-pilot -20%             refuse (last row 'OK')  accept        
+scale-pilot -15%             refuse (last row 'OK')  accept        
+scale-pilot -10%             accept          accept        
+scale-pilot -5%              accept          accept        
+scale-pilot +5%              accept          accept        
+scale-pilot +10%             accept          accept        
+scale-pilot +15%             accept          accept        
+scale-pilot +20%             accept          accept        
+scale-pilot +25%             accept          accept        
+scale-sync -25%              accept          accept        
+scale-sync -20%              accept          accept        
+scale-sync -15%              accept          accept        
+scale-sync -10%              accept          accept        
+scale-sync -5%               accept          accept        
+scale-sync +5%               accept          accept        
+scale-sync +10%              accept          accept        
+scale-sync +15%              accept          accept        
+scale-sync +20%              accept          accept        
+scale-sync +25%              accept          accept        
+scale-bits -25%              refuse (last row 'OK')  accept        
+scale-bits -20%              accept          accept        
+scale-bits -15%              accept          accept        
+scale-bits -10%              accept          accept        
+scale-bits -5%               accept          accept        
+scale-bits +5%               accept          accept        
+scale-bits +10%              accept          accept        
+scale-bits +15%              accept          accept        
+scale-bits +20%              accept          accept        
+scale-bits +25%              accept          accept        
+jitter 5%                    accept          accept        
+jitter 10%                   accept          accept        
+jitter 15%                   accept          accept        
+jitter 20%                   refuse (last row 'OK')  accept        
+jitter 25%                   refuse (last row 'OK')  accept        
+jitter 30%                   refuse (last row 'OK')  accept        
+scale-all -20% jitter 10%    refuse (last row 'OK')  accept        
+scale-all -10% jitter 10%    accept          accept        
+scale-all +10% jitter 10%    accept          accept        
+scale-all +20% jitter 10%    accept          accept        
+bit-skew 10%                 accept          accept        
+bit-skew 20%                 accept          accept        
+bit-skew 30%                 accept          accept        
+pilot-short 2000             refuse (last row 'OK')  accept        
+pilot-short 1500             refuse (last row 'OK')  accept        
+pilot-short 1000             refuse (last row 'OK')  accept        
+pilot-short 800              refuse (last row 'OK')  accept        
+pilot-short 600              refuse (last row 'OK')  accept        
+pilot-short 400              refuse (last row 'OK')  accept        
+pilot-missing                accept          accept        
+pilot-missing-end            refuse (last row 'OK')  refuse (last row 'STACK?')
+pilot-extra                  accept          accept        
+inverted                     accept          accept        
+pilot-dropout 2 ms           accept          accept        
+pilot-dropout 10 ms          refuse (last row 'OK')  accept        
+pilot-dropout 50 ms          refuse (last row 'OK')  accept        
+pilot-dropout 200 ms         refuse (last row 'OK')  accept        
+data-dropout 1 ms            refuse (last row 'OK')  refuse (last row 'STACK?')
+data-dropout 5 ms            refuse (last row 'TOL     ?')  refuse (last row 'STACK?')
+data-dropout 20 ms           refuse (last row 'TOL     ?')  refuse (last row 'STACK?')
+tapetol: /tmp/claude-1000/-home-charlie-day-2068-forth/b8da91d9-7aa2-41a6-8e1e-56d063835ddc/scratchpad/old/build accepts 48 of 71
+tapetol: /home/charlie.day/2068-forth/.claude/worktrees/agent-a32ee6dd4fe43718b/build accepts 67 of 71
+tapetol: emulator Fuse 1.9.1, TZX $15 at 4 T a sample, 3528000 Hz, traps off, auto-load off, no loader acceleration
+tapetol: 6 jobs, 86 s wall

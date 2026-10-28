@@ -48,9 +48,13 @@ Highlights:
   printed on an unrecognized word with a prompt that recovers cleanly
   instead of hanging.
 - **Tape storage**, Jupiter-Ace-style: `SAVE-LIB`/`LOAD-LIB` round-trip
-  a whole dictionary image through the documented public tape-transport
-  contract — deliberately never reaching into the transport's own
-  internals, so it stays compatible with real emulator/hardware LOAD.
+  a whole dictionary image (CRC-checked, tied to the exact ROM release
+  that saved it; its HOME-ROM and DOCK-cartridge editions share tapes), `SAVE-TEXT`/`LOAD-TEXT` the portable source text, and
+  `VERIFY-LIB`/`VERIFY-TEXT` compare a tape with memory. Failures are
+  `THROW`n (`-28` for SPACE, `-37` for any other tape failure, `-8` if
+  an image doesn't fit), so a program can `CATCH` them. The tape blocks
+  use the standard Sinclair format, sent and received by 2068-Leap-C's
+  clean-room block I/O (`kernel/storage/tapeblock.asm`).
 - **Printer support** — `LPRINT`/`LLIST` send Forth's own listings and
   output to a real TS2068 printer interface.
 - Arrays (`ARRAY`/`CELLS`), string handling (`S" TYPE STRING PLACE
@@ -123,11 +127,16 @@ or in ZEsarUX, over ZRCP: `smartload build/forth_boot.dck` then
 reset). Either emulator needs its own copy of the genuine stock TS2068
 ROM already configured — this project doesn't ship one, since it isn't
 ours to redistribute, but every emulator here already bundles or
-readily accepts one. The raw `build/forth_boot_cart.bin` is what goes
-on the EPROM of a real cartridge. This currently covers only the base
-dictionary — the graphics extension has no cartridge path yet (it
-pages the EXROM bank, a physically different bank from DOCK — see
-`docs/lros_cartridge.md`).
+readily accepts one. The cartridge has the whole dictionary, including
+`RECT`, `POLYGON`, `POLYGON-FILL` and `SPRITE-DEFINE`/`SHOW`/`HIDE`: the
+graphics code (the same `graphics_exrom.bin` the home build uses as its
+EXROM) is carried in the cartridge as DOCK chunk 5 and paged in with one
+`OUT` to port `$F4`, so no EXROM is needed and port `$FF` is never touched
+(`docs/V2/CARTRIDGE_EXROM_SPEC.md`). For an EPROM cartridge,
+`build/forth_boot_cart.bin` is chunks 0-1 (`$0000-$3FFF`) and
+`build/graphics_exrom.bin` goes at DOCK `$A000` (chunk 5). Checked in
+ZEsarUX and TSRun (`make cartdiff`); not on a physical cartridge.
+The Blackjack cartridge has none of those words and stays 16K.
 
 ### RECT, POLYGON, POLYGON-FILL, and sprites (Phase 65)
 
@@ -239,8 +248,9 @@ runs on TS-Pico today, two independent ways: as a plain Home-ROM
 replacement, or non-destructively as a DOCK cartridge
 (`build/forth_boot.dck`, confirmed booting under Fuse and ZEsarUX with
 the genuine stock ROM — real TS-Pico hardware itself untested so far).
-The graphics extension doesn't have a path to TS-Pico yet (it has no
-EXROM slot). See [`docs/ts_pico_setup.md`](docs/ts_pico_setup.md) for
+The graphics words need no EXROM slot in the DOCK cartridge build: it
+carries their code as DOCK chunk 5 (emulator-checked; TS-Pico itself
+untried). See [`docs/ts_pico_setup.md`](docs/ts_pico_setup.md) for
 the corrected, firmware-sourced picture of exactly how TS-Pico's
 ROM/DOCK loading actually works, and exact load commands.
 
@@ -265,7 +275,7 @@ The zip's `README-FIRST.txt` explains every file in it; in short:
 - `roms/stock_shaped_exrom.bin` — 8K EXROM placeholder.
 - `roms/forth_boot_combined_24k.bin` / `forth_boot_graphics_combined_24k.bin` — Home+EXROM concatenated, for ZEsarUX (placeholder and real graphics EXROM respectively).
 - `roms/graphics_exrom.bin` — the real 8K graphics EXROM (Phase 65).
-- `cartridge/*.dck`, `cartridge/*_cart.bin` — both product ROMs as DOCK/LROS cartridges, for Fuse/ZEsarUX/real hardware/TS-Pico — see "Or leave the stock ROM in place" above. Base dictionary only; the graphics extension has no cartridge path yet.
+- `cartridge/*.dck`, `cartridge/*_cart.bin` — both product ROMs as DOCK/LROS cartridges, for Fuse/ZEsarUX/real hardware/TS-Pico — see "Or leave the stock ROM in place" above. `forth_boot.dck` includes the graphics words (code in DOCK chunk 5; `forth_boot_chunk5.bin` is that 8K chunk for an EPROM); the Blackjack cartridge is 16K.
 - `eightyone/*.dck` — the placeholder and graphics EXROM wrapped for EightyOne's cartridge slot (a different mechanism from the DOCK cartridges above — bank `$FE`, not `$0`; NOT usable as-is on TS-Pico — see `docs/ts_pico_setup.md`, and `docs/eightyone_setup.md` for which of these actually work on real EightyOne).
 - `experimental-lros/` — the earlier, unverified LROS/DOCK boot stub (see `docs/lros_cartridge.md`); superseded for most purposes by the `cartridge/` builds above, kept for reference.
 - `symbols/`, `docs/`, `run_fuse.sh`, `BUILD_INFO.txt` — listings, docs as Markdown/PDF/DOCX, a ready-to-run Fuse script, and build provenance.
@@ -334,12 +344,15 @@ make forth-boot       # the real, live, bootable product ROM
 make graphics-exrom       # Phase 65: the EXROM chunk-5 payload (RECT/
                           # POLYGON/POLYGON-FILL/SPRITE-DEFINE/SHOW/HIDE),
                           # a standalone 8K image at build/graphics_exrom.bin
-make test-exrom-isolation # Phase 65 smoke ROM: chunk-5 paging proof
-make test-rect            # Phase 65 smoke ROM: RECT
-make test-polygon         # Phase 65 smoke ROM: POLYGON (outline)
-make test-sprite          # Phase 65 smoke ROM: SPRITE-DEFINE/SHOW/HIDE
-make test-poly-fill       # Phase 65 smoke ROM: POLYGON-FILL
+make build-test-exrom-isolation # Phase 65 smoke ROM: chunk-5 paging proof
+make build-test-rect            # Phase 65 smoke ROM: RECT
+make build-test-polygon         # Phase 65 smoke ROM: POLYGON (outline)
+make build-test-sprite          # Phase 65 smoke ROM: SPRITE-DEFINE/SHOW/HIDE
+make build-test-poly-fill       # Phase 65 smoke ROM: POLYGON-FILL
 make check            # static asm checks over core/, kernel/, and rom/
+make test             # headless: every smoke/test ROM under ZEsarUX via ts2068-debug, border 4 = pass
+make repro            # builds twice in separate trees; every file in build/ must hash the same
+make bench            # T-states per benchmark -> build/bench.json, compared with tools/bench_baseline.json
 make product          # just the two ROMs people run: forth-boot + forth-demo-blackjack
 make cart             # the same two as DOCK cartridges -> build/*.dck (+ raw *_cart.bin)
 make docs             # tutorial + README as PDF (and the tutorial as DOCX) -> build/docs/
@@ -362,7 +375,11 @@ core/       language-layer code, not hardware-facing:
               control.asm (Phase 4 — IF/ELSE/THEN, BEGIN/UNTIL)
               ts2068.asm  (Phase 5 — PLOT/LINE/CIRCLE/BORDER)
               editor.asm  (Phase 6 — line editing)
-              storage.asm (Phase 7 — SAVE-LIB/LOAD-LIB)
+              storage.asm (Phase 7 — SAVE-LIB/VERIFY-LIB/LOAD-LIB; rebuilt
+                          in audit step S)
+              tapeword.asm (audit step S — what the six tape words share:
+                          name parsing, THROW on failure)
+              loadtext.asm (Phase 52 — SAVE-TEXT/VERIFY-TEXT/LOAD-TEXT)
               float.asm   (Phase 8 stretch — F+/F-)
               mode64.asm  (Phase 8 stretch — 64COL/32COL/PALETTE64/PLOT64)
               print.asm   (Phase 10 — EMIT/.)
@@ -384,9 +401,11 @@ core/       language-layer code, not hardware-facing:
               input.asm   (Phase 28 — ACCEPT/INPUT)
               floatsqrt.asm (Phase 29 — FSQRT)
               floattrig.asm (Phase 30 — PI/SIN/COS)
-              rawbeep.asm (Phase 5's original raw-units BEEP, kept for
-                          rom/forth_smoke_p5.asm's own history)
-              beep.asm    (Phase 31 — real, semitone/seconds BEEP)
+              rawbeep.asm (Phase 5's original raw-units loudspeaker BEEP, an
+                          optional package: not in the product ROMs, kept
+                          for rom/forth_smoke_p5.asm)
+              beep.asm    (Phase 31 — semitone/seconds BEEP, on the AY
+                          chip since audit step A)
               sound.asm   (Phase 32 — real, register-level SOUND)
               rectfill.asm (Phase 65 — RECT, EXROM chunk 5; also owns
                           the shared EXROM_CALL_SLOT trampoline)

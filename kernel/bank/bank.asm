@@ -30,7 +30,7 @@
 ; The retargeting itself is a one-bit change (chunk N = bit N on
 ; PORT_BANK_HOME, confirmed in include/hardware.inc's own citation of
 ; the real port $F4 description) — everything else below (the nesting-
-; safe depth counter, the DI/EI discipline, the shadow-preserving
+; safe depth counter, the EI-on-return discipline, the shadow-preserving
 ; PORT_FF_SHADOW read-modify-write) is chunk-agnostic and unchanged
 ; from the original, still-sound design. What is NOT yet true: this
 ; specific chunk-5 retargeting has NOT been hardware/emulator-confirmed
@@ -42,18 +42,43 @@
 ; more, paged into chunk 5 ($A000-$BFFF) only.
 ;
 ; INTERRUPT SAFETY — the one thing this file gets right or wrong for
-; everything built on top of it: interrupts are disabled ONLY across
-; the two port writes that actually change the paging state (a few
-; instructions), never across the caller's subsequent use of the
-; paged window. Holding DI for the whole window would reintroduce
-; exactly the keyboard-lag problem this project already fixed once
-; (see kernel/interrupt's own history) for anything nontrivial running
-; from EXROM. It's safe to re-enable immediately because this
-; project's real interrupt handler, KBD_ISR_TICK, never touches chunk
-; 5 — its own sysvars all live in chunk 4, which stays Home-mapped
-; the entire time chunk 5 is paged to EXROM. If kernel/interrupt ever
-; grows a handler that DOES need chunk-5 data, this reasoning needs
-; re-deriving, not assumed to still hold.
+; everything built on top of it: interrupts are NOT disabled anywhere
+; in these routines. Until step R0 (audit O8, after 2068-Leap-C delta
+; D14) they were off across the whole of each routine, about 120 T, and
+; the TS2068's frame interrupt stays asserted for only 32 T, so one
+; arriving in that window was lost (47 of 11,232 frames in Leap-C's
+; float loop); every EXROM call lost frames at that rate. It is safe
+; because the interrupt handler touches none of the banking state: not
+; BANK_EXROM_DEPTH, not PORT_FF_SHADOW, not ports $F4/$FF. It runs from
+; chunk 0 with its sysvars and stack in chunk 4, and chunk 5 is the only
+; chunk these routines page, so it makes no difference to the handler
+; whether the two port writes have happened yet. Holding DI for the
+; whole paged window would reintroduce the keyboard-lag problem this
+; project already fixed once (see kernel/interrupt's own history).
+; If kernel/interrupt ever grows a handler that touches chunk 5, the
+; banking state or ports $F4/$FF, this reasoning needs re-deriving, not
+; assuming. Both routines still end with EI, so interrupts are on at
+; the return exactly as before.
+;
+; THE CARTRIDGE BUILD (-DCARTRIDGE, step R1, docs/V2/CARTRIDGE_EXROM_SPEC.md):
+; there, chunks 0-1 come from the DOCK for the whole run and port $FF bit 7
+; (DOCK vs EXROM) is a GLOBAL select for every chunk port $F4 marks non-Home,
+; so writing it would swap the running cartridge out. The cartridge therefore
+; carries the EXROM image (build/graphics_exrom.bin) as DOCK chunk 5 and the
+; paging routines below, under IFDEF CARTRIDGE, write ONLY port $F4: page-in
+; sets bit 5 on top of the cartridge's own chunk bits (CART_HSR, derived from
+; the LROS header byte in rom/forth_boot.asm), page-out restores CART_HSR.
+; Port $FF is never touched, so bit 7 stays 0 (DOCK). Chunks 0-1 are DOCK in
+; both states, so the interrupt argument above holds unchanged: the handler runs
+; from DOCK chunk 0 in either state and touches nothing in chunk 5.
+;
+; SAME ADDRESSES IN BOTH BUILDS (STORAGE_SPEC.md D3): the cartridge's page-in is
+; padded to the Home one's length and both page-outs load A with one 2-byte
+; `ld`, so every label from here on is at the same address in both builds and a
+; SAVE-LIB tape from either loads on the other. The differing bytes sit between
+; the `.rom_id_skip` and `.rom_id_skip_end` labels, which tools/rom_identity.py
+; leaves out of the identity CRC; `make check` proves the two images differ
+; nowhere else.
 ;
 ; EXROM's own entry convention: execution starts at the very first
 ; byte of the 8K image (i.e. $A000 once paged in), same as a ROM's own
@@ -65,11 +90,27 @@
     IFNDEF KERNEL_BANK_ASM
     DEFINE KERNEL_BANK_ASM
 
+    IFDEF CARTRIDGE
+    ; CART_CHUNK_SPEC (rom/forth_boot.asm) is the LOW-active LROS chunk byte.
+    ASSERT (CART_CHUNK_SPEC & %00001000) != 0    ; chunk 3 stays Home (OS handoff)
+    ASSERT (CART_CHUNK_SPEC & %00100000) != 0    ; chunk 5 stays Home RAM: the
+                                                 ; DOCK chunk 5 is paged in by
+                                                 ; BANK_PAGE_EXROM_IN, never
+                                                 ; enabled by the OS
+    ENDIF
+
+BANK_PAGE_IN_LEN    EQU 14          ; the Home page-in's length; the cartridge's is padded to it
+    IFDEF CARTRIDGE
+BANK_F4_ALL_HOME    EQU CART_HSR    ; port $F4 with chunk 5 back to Home: the cartridge's own chunks
+    ELSE
+BANK_F4_ALL_HOME    EQU 0           ;   stay DOCK; in the Home build every chunk is Home
+    ENDIF
+
 ; ============================================================================
 ; BANK_PAGE_EXROM_IN
 ; Pages chunk 5 ($A000-$BFFF) to EXROM. Every other chunk stays Home.
-; See this file's own header for the DI/EI reasoning — interrupts are
-; back on before this returns.
+; See this file's own header for the interrupt reasoning — interrupts are
+; on when this returns.
 ; In:  none
 ; Out: none
 ; Destroys: AF
@@ -84,7 +125,6 @@
 ; out — is completely unchanged: depth goes 0->1 here (real page-in
 ; happens) and 1->0 in BANK_PAGE_EXROM_OUT (real page-out happens).
 BANK_PAGE_EXROM_IN:
-    di
     ld   a, (BANK_EXROM_DEPTH)
     inc  a
     ld   (BANK_EXROM_DEPTH), a
@@ -93,6 +133,16 @@ BANK_PAGE_EXROM_IN:
                                      ; is already EXROM (an outer,
                                      ; still-active caller put it
                                      ; there) — nothing to do
+.rom_id_skip:
+    IFDEF CARTRIDGE
+    ld   a, CART_HSR | %00100000     ; the cartridge's own chunks stay
+                                     ; DOCK, chunk 5 joins them (DOCK
+                                     ; chunk 5 = the EXROM image).
+                                     ; ONE write; port $FF untouched
+    out  (PORT_BANK_HOME), a
+    jr   .already_paged_in
+    DS   BANK_PAGE_IN_LEN - ($ - .rom_id_skip), $FF   ; to the Home variant's length
+    ELSE
     ld   a, (PORT_FF_SHADOW)
     or   %10000000                   ; bit 7 only — EXROM, not Dock;
                                      ; bits 0-6 (video mode, INTEN) are
@@ -105,6 +155,9 @@ BANK_PAGE_EXROM_IN:
     ld   a, %00100000                ; bit 5 = chunk 5 only; every
                                      ; other chunk's bit stays 0 (Home)
     out  (PORT_BANK_HOME), a
+    ENDIF
+.rom_id_skip_end:
+    ASSERT .rom_id_skip_end - .rom_id_skip == BANK_PAGE_IN_LEN
 .already_paged_in:
     ei
     ret
@@ -125,7 +178,6 @@ BANK_PAGE_EXROM_IN:
 ; Destroys: AF
 ; ============================================================================
 BANK_PAGE_EXROM_OUT:
-    di
     ld   a, (BANK_EXROM_DEPTH)
     or   a
     jr   z, .depth_already_zero       ; defensive: an unbalanced OUT
@@ -138,8 +190,11 @@ BANK_PAGE_EXROM_OUT:
                                        ; an outer caller is still
                                        ; relying on chunk 5 staying
                                        ; EXROM-mapped
-    xor  a
-    out  (PORT_BANK_HOME), a         ; all chunks back to Home
+.rom_id_skip:
+    ld   a, BANK_F4_ALL_HOME         ; chunk 5 back to Home (2 bytes in
+                                     ; both builds, not `xor a`: D3)
+.rom_id_skip_end:
+    out  (PORT_BANK_HOME), a
 .still_nested:
 .depth_already_zero:
     ei

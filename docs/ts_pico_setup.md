@@ -45,14 +45,16 @@ today, both using files this project already builds:
   own DCK parser, but TS-Pico hardware itself hasn't been tried yet —
   see "Loading the full dictionary as a DOCK cartridge" below.
 
-Either way, **the graphics extension
+**The graphics extension
 (`RECT`/`POLYGON`/`POLYGON-FILL`/`SPRITE-DEFINE`/`SPRITE-SHOW`/`SPRITE-HIDE`)
-cannot currently reach a real TS-Pico.** This project's own graphics
-dispatch pages the **EXROM** bank (chunk 5) — a bank TS-Pico has no way
-to substitute, regardless of which slot the rest of the dictionary uses.
-Making these six words work on TS-Pico would need the graphics code
-retargeted to run from the **DOCK** bank instead, which is real,
-unstarted follow-up work, not a docs gap.
+needs the DOCK cartridge build on TS-Pico.** The Home-ROM build pages the
+**EXROM** bank (chunk 5), a bank TS-Pico has no way to substitute. Since
+step R1 the `forth_boot.dck` cartridge carries the same graphics code as
+**DOCK chunk 5** (24,585 bytes: chunks 0, 1 and 5) and pages it with one
+`OUT` to port `$F4`, never touching port `$FF`, so it needs no EXROM
+(`docs/V2/CARTRIDGE_EXROM_SPEC.md`). That is checked in ZEsarUX and TSRun
+only; whether TS-Pico's firmware serves a DOCK chunk 5 from its `.dck` has
+not been tried (the file layout is the standard one its parser reads, but no TS-Pico was run).
 
 ## Why not LROS for everything
 

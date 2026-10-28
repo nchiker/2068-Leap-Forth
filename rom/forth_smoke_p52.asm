@@ -418,6 +418,7 @@ STORAGE_TEST_SEND_BLOCK:         ; A = type, IX = data ptr, DE = length
     or   a                        ; BC is still FAKE_TAPE_BUF -- nothing
     sbc  hl, bc                   ; in the loop above touches B or C
     ld   (FAKE_TAPE_WPOS), hl
+    scf                           ; sent whole (STORAGE_SPEC.md section 3)
     ret
 
 STORAGE_TEST_RECEIVE_BLOCK:      ; A = expected type, carry-in = load(set)
@@ -529,14 +530,10 @@ DICT_CHAIN_POINT DEFL H_CSTORE
 DICT_CHAIN_POINT DEFL H_INVERT
     INCLUDE "core/udg.asm"
 DICT_CHAIN_POINT DEFL H_UDG
-    ; core/free.asm itself isn't needed (its FREE word is never used by
-    ; this test) -- only its DICT_RAM_CEILING constant is, which
-    ; core/loadtext.asm's own LOADTEXT_BUF derives from. Defined locally
-    ; here instead of pulling in the whole file, matching that constant's
-    ; real value ($F000) exactly (core/free.asm's own header).
-DICT_RAM_CEILING EQU $F000
     INCLUDE "core/loadtext.asm"
 
     DS   $4000 - $, $FF
 
     SAVEBIN "forth_smoke_p52_rom0.bin", $0000, $4000
+
+DICT_LATEST_COLD EQU DICT_LATEST_INIT_LOADTEXT   ; LATEST of an empty user dictionary (core/storage.asm LOAD-LIB)

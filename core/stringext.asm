@@ -303,7 +303,7 @@ W_SEARCH:
 
     ld   a, (SRCH_LEN2)
     or   a
-    jp   z, .notfound                   ; empty needle -- see header
+    jr   z, .notfound                   ; empty needle -- see header
 
     ld   a, (SRCH_LEN1)
     ld   b, a
@@ -311,7 +311,7 @@ W_SEARCH:
     ld   c, a
     ld   a, b
     sub  c                                ; a = len1 - len2
-    jp   c, .notfound                      ; borrow -- needle longer
+    jr   c, .notfound                      ; borrow -- needle longer
                                            ; than haystack, can't fit
     ld   (SRCH_MAXPOS), a
     xor  a
@@ -321,7 +321,7 @@ W_SEARCH:
     ld   b, a
     ld   a, (SRCH_MAXPOS)
     cp   b
-    jp   c, .notfound                       ; pos > maxpos -- exhausted
+    jr   c, .notfound                       ; pos > maxpos -- exhausted
     ld   hl, (SRCH_ADDR1)
     ld   a, (SRCH_POS)
     ld   d, 0
@@ -337,12 +337,12 @@ W_SEARCH:
     inc  hl
     inc  de
     djnz .inner
-    jp   .found                                ; all len2 bytes matched
+    jr   .found                                ; all len2 bytes matched
 .nomatch:
     ld   a, (SRCH_POS)
     inc  a
     ld   (SRCH_POS), a
-    jp   .outer
+    jr   .outer
 .found:
     call DPOP_HL                                ; discard len1 (already
     call DPOP_HL                                 ; captured); discard

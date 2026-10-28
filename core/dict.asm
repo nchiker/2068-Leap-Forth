@@ -99,6 +99,13 @@ DSTACK_LIMIT EQU $9000   ; lowest legal stack address — 1024 bytes of stack
 ; ============================================================================
 LATEST       EQU $9002   ; 2 bytes: RAM cell holding the head-of-dictionary address
 HERE         EQU $9004   ; 2 bytes: RAM cell holding the next free RAM-dictionary byte
+DICT_RAM_CEILING EQU $F000   ; Phase 44: raised from $C000 once FILL's
+                             ; own scratch was relocated out of the way
+                             ; (include/sysvars.inc) — sits with margin
+                             ; below GFX_LINE_X0-Y1 ($F3C4), the one
+                             ; remaining live cell found in this range;
+                             ; see core/free.asm's header for the full
+                             ; writeup
 FORTH_DICT_RAM EQU $9800 ; first free byte of the RAM dictionary area Phase 3's
                          ; CREATE will compile into. Was $A000 until Phase 43's
                          ; own FREE audit (see core/free.asm's header) found

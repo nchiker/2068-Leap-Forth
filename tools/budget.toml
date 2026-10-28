@@ -1,0 +1,67 @@
+# ROM reserve floors for `make check` (tools/budget.py). Audit step G, item T4; owner decision 1.
+#
+# Target reserve (owner decision 1, 2026-10-28, docs/V2/FORTH_V2_REUSE_AUDIT.md section 10):
+#   200 B free in a HOME image, 150 B free in the EXROM.
+# It is enforced as a RATCHET: `floor` is the least free space an image may have. `make check` fails
+# when an image's free space (bytes after its last non-pad byte, the way the audit measured it)
+# falls below its floor, and prints how far each image is from its target.
+#
+# How the floors move:
+#   - RAISING a floor is a deliberate edit: when a step recovers space, raise the floor to the new
+#     measured free space in the same commit, so the space cannot be given back unnoticed.
+#     `make check` prints a note when free space is above the floor.
+#   - LOWERING a floor must be explicit: edit the floor here and add the row to the ledger (section 9
+#     of the audit) in the SAME commit, and record it in [[history]] below. Never lower a floor to
+#     make a failing check pass without a ledger row that justifies it.
+#   - The floors stay below the target until the rebuild steps recover the space; the guard blocks
+#     regressions now and tightens toward the target. `target` is reporting only.
+#
+# Free space is measured from the image in build/: size minus the trailing run of `pad` bytes.
+# The cartridge images differ from the Home images (their own layout) and are floored separately.
+
+pad = 0xFF
+
+[[image]]
+file   = "forth_boot_rom0.bin"
+title  = "HOME ROM (Forth)"
+floor  = 626
+target = 200
+
+[[image]]
+file   = "forth_boot_cart.bin"
+title  = "HOME, DOCK cartridge build (Forth)"
+floor  = 626
+target = 200
+
+[[image]]
+file   = "forth_demo_blackjack_rom0.bin"
+title  = "HOME ROM (Blackjack demo)"
+floor  = 797
+target = 200
+
+[[image]]
+file   = "forth_demo_blackjack_cart.bin"
+title  = "HOME, DOCK cartridge build (Blackjack demo)"
+floor  = 797
+target = 200
+
+[[image]]
+file   = "forth_demo_gallery_rom0.bin"
+title  = "HOME ROM (Shooting Gallery demo)"
+floor  = 801
+target = 200
+
+[[image]]
+file   = "graphics_exrom.bin"
+title  = "Graphics EXROM (chunk 5)"
+floor  = 6682
+target = 150
+
+# Every floor change after the first commit of this file, newest last:
+#   file, floor before -> after, reason (the ledger row in the audit's section 9 that justifies it)
+#   forth_boot_cart.bin: 781 -> 478 (-303 B), step R1: the cartridge now carries RECT, POLYGON, POLYGON-FILL and
+#     SPRITE-DEFINE/SHOW/HIDE and the one-OUT paging variant; the audit's section 9 R1 row and section 6.9.
+#   forth_boot_rom0.bin: 627 -> 626 (-1 B), forth_boot_cart.bin: 636 -> 626 (-10 B), forth_demo_gallery_rom0.bin:
+#     802 -> 801 (-1 B), step S follow-up (owner, 2026-10-28): the Home and cartridge builds share LIB tapes. The
+#     cartridge's EXROM page-in is padded to the Home one's length and both page-outs use a 2-byte `ld a,n`, so every
+#     address matches (kernel/bank/bank.asm, STORAGE_SPEC.md D3); the audit's section 9 row "S follow-up".
