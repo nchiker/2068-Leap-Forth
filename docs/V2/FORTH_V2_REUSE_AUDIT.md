@@ -264,7 +264,7 @@ BASIC-bound `rom/test_editor_auto.asm` or `rom/test_v2_editor_integration.asm`.
 
 | # | Item | Class | Reference | Forth file | Cost [E] | Notes |
 |---|---|---|---|---|---|---|
-| O1 | Cold start does not clear `UDG_TABLE` ($F180 is above the $8000-$F000 clear) | 2 | Leap `67c7137` item 2.2 | `rom/forth_boot.asm` ~217 | +8 B | **Verified bug**: CHR$ 144-164 show power-on garbage |
+| O1 | Cold start does not clear `UDG_TABLE` ($F180 is above the $8000-$F000 clear) | 2 | Leap `67c7137` item 2.2 | `rom/forth_boot.asm` ~217 | +8 B | **Verified bug**: CHR$ 144-164 show power-on garbage. **Fixed in step G (`861a823`), 0 B [M]**, see section 6.6 |
 | O2 | Stock-ROM bytes in the block-graphics glyph builder (two 12-byte PO-GR-2 runs) | 2 | Leap-C D21, Leap `c2415f8` | `kernel/graphics/graphics.asm` ~467 | −12 B | Licensing |
 | O3 | Missing characters `[ ] \ { } \| ~ ^` and backtick: no glyphs, no keys, so no `[']`, `[CHAR]`, `\` comments, `[ ] LITERAL` | 2 | Leap-C D7, D8; Leap `8a52ab9` (72 B glyphs), `0b35b68` (direct glyph table, −38 B) | `kernel/io/io.asm`, `kernel/graphics/graphics.asm`, new words | ~+100 B + words | Significant Forth-standard gap |
 | O4 | `GFX_CLEAR_ROW` writes attributes per character via `GFX_SET_ATTR` | 2 | Leap `kernel/graphics/graphics.asm` (back-port 4.1, 5.8; `22b4999`) | `kernel/graphics/graphics.asm` ~1045 | smaller | 24,786 → 6,498 T per row [L]; runs on every scroll |
@@ -424,12 +424,52 @@ files), which is what makes the check meaningful.
   `CURRENT_ATTR` ($87CB) and the attribute area read `$00`. A stale expectation, not a ROM defect. The
   fix initialises `CURRENT_ATTR` to `DEFAULT_ATTR` and expects that after `CLS`. Only p36's own
   images changed; `make test` is now 68 PASS, 0 FAIL, 1 SKIP.
-- Deferred: T4/T5/T9 (step G), T11-T18. CI (`.github/workflows/build.yml`) is not yet changed to run
+- Deferred: T11-T18 (T4, T5, T9 were done in step G, section 6.6). CI (`.github/workflows/build.yml`) is not yet changed to run
   `make check`/`make repro`/`make test` (T17). `rom/bench/*.asm` are not covered by `check_asm.py` /
   `check_z80_opcodes.py` (they take `rom/*.asm`). `forth_smoke_p52` (fake tape) is run by the runner as
   an ordinary border-4 ROM and passes; `forth_smoke_p53_realtape` remains Fuse-only. `rom/test_exrom_isolation.asm`'s
   header cites a nonexistent `tools/make_test_exrom.sh`; the `$A5` image is now made by the Makefile.
   The blackjack `BLACKJACK_TEST_MODE` build still has no target.
+
+### 6.6 Step G results (2026-10-28, branch `v2/step-g-guards`)
+
+T4, T5, NOTICE, T9 and O1, one commit each (ledger row in §9). Only `rom/forth_boot.asm` changed under
+`core/ kernel/ include/ rom/` (O1). **Byte check [M]:** after T4, T5, NOTICE and T9 all 260 files of a clean
+build were sha256-identical to the baseline recorded before anything was touched. After O1 a clean build
+differs in `forth_boot_rom0.bin`, `forth_boot_cart.bin`, `forth_boot.dck` and the `.lst`/`.sym` of the two
+(two bytes each, `$0124-$0125`, the `ld bc` immediate) and in the `*.build.json` stamps (which hash the Makefile
+and `rom/forth_boot.asm`). Every smoke, test, bench, visual, blackjack, gallery, EXROM, LROS and `main` image is
+unchanged. `make check`, `make repro` (260 files) and `make bench` (all deltas +0.000%) pass.
+
+- **T4 `tools/budget.py`, `tools/budget.toml`** (in `make check`): free space is measured from the image (last
+  non-pad byte) and may not fall below the committed floor; the 200 / 150 B targets are printed as distance.
+  Six images are floored, including the cartridge builds, which have their own layout (380 B free against 68 B
+  for the Home ROM). Raising a floor is an edit to the toml; lowering one needs a ledger row in the same commit
+  (the toml header says so; not machine-enforced).
+- **T5 `tools/provenance.py`** (in `make check`; skips and says so when the stock ROMs are not in
+  `$FORTH_STOCK_ROMS` / `~/fuse-build/roms`): six images, 45 common runs of 12 bytes or more [M]. The audit's
+  claim holds: all fall in `STORAGE_SEND_BLOCK` / `STORAGE_RECEIVE_BLOCK` (tape block I/O, 24 runs, owner step S)
+  and `GFX_CHAR_TO_FONT_OFFSET` (two 12-byte runs per image, 20 runs over the five images that contain it,
+  owner step R0, O2), plus one 1,171-byte run at the end of the EXROM that is $FF fill with one non-fill byte.
+  Nothing in `core/printer.asm`, `kernel/sound`, `kernel/mode64` or `core/stick.asm`, so the condition on
+  owner decisions 4 and 5 was not tripped by this scan; this file does not decide them. The two debts sit in
+  an allowed table with their owning steps, to be deleted by those steps.
+- **NOTICE** is a draft for owner review, not an approved statement. It makes no licence claim about the two
+  debts, records decisions 4 and 5 as conditions, and notes that more files than the four named in decision 5
+  cite the disassembly in their comments (`core/beep.asm`, `core/sound.asm`, `kernel/io`, `kernel/graphics`,
+  `kernel/interrupt`, `kernel/storage`, and two includes).
+- **T9 `tools/poweron.py`** (`make poweron`, part of `make test`; ports 10820-10839): boots from zero, ones,
+  alternating, address-low-byte and four seeded random patterns written over `$4000-$FFFF` and the registers.
+  Defined = everything outside a short table of regions with recorded reasons (machine stack below SP, `$FF00+`,
+  GFX_FILL scratch / display file 2 / `$5C36`, the unused Leap cells `$F000-$F17F` and `$F228-$F5FF`, GFX_LINE
+  cells). `reset-cpu` keeps RAM and registers (measured). Before O1 it failed all 7 patterns with UDG_TABLE
+  (`$F180-$F227`) the only DEFINED difference (outputs are in the T9 and O1 commit messages); after O1 it
+  passes 7/7. Every boot reaches the prompt with SP `$FF00` in 4,442,252 T-states.
+- **O1**: instead of a second fill (+9 B), the existing fill runs on to the end of `UDG_TABLE`: 0 B. It also
+  zeroes `$F000-$F17F`, which Forth does not use.
+- Not done here, as scoped: the two debts above; the T9 table treats `$F228-$F5FF` as unused because nothing in
+  `core/ kernel/ rom/` reads it, which a future step that starts using those cells must revisit; `make test`
+  grew by about 28 s for T9.
 
 **Not recommended:** full platform vendoring (`platform/MANIFEST` + `deltas/*.patch`). Leap's kernel
 changes since the fork are mostly BASIC-specific or shrink work; this ledger is the one-time record
@@ -496,6 +536,7 @@ E and K.
 | Baseline | `fff5259` | 68 [M] | 6,682 [M] | see §3 | — | as committed |
 | **T** Test infrastructure | `ba2009b` T10, `a060549` T3, `994429a` T6, `24b4231` T1, `2ab1541` T2, `edb8314` T7, `9a0ee04` T8 | 68 [M] | 6,682 [M] | 0 → 0 (tooling only; every image, `.sym` and `.lst` byte-identical to baseline [M]) | Phase 2 baseline, §6.4 | `make test`: 67 PASS, 1 FAIL (`forth_smoke_p36`, stale test, §6.5), 1 SKIP (`p53_realtape`) [M] |
 | T follow-up: p36 | `6de13c3` | 68 [M] | 6,682 [M] | 0 → 0 (only p36's own images change) | — | `make test`: 68 PASS, 0 FAIL, 1 SKIP [M] |
+| **G** Guards | `8670a4f` T4, `d17d5e4` T5, `e25c803` NOTICE, `6263919` T9, `861a823` O1 | 68 [M] (cartridge 380) | 6,682 [M] | Cold start: 0 B → 0 B. The one `MEM_FILL_ZERO` now runs to the end of `UDG_TABLE` (`ld bc` immediate `$7000` → `$7228`); [E] was +8 B for a separate fill. **Floors set at 68 HOME / 380 cart / 449, 449, 457 demos / 6,682 EXROM; none lowered.** Targets 200 / 150 (HOME is 132 B short, EXROM met) | Boot to the prompt is 4,442,252 T-states with and without O1 (frame-synced chime wait absorbs the 552 extra bytes cleared); `make bench` unchanged (bench ROMs have their own cold start) | `make test`: 68 PASS, 0 FAIL, 1 SKIP, and POWERON 7/7 [M] |
 | | | | | | | |
 
 ---
