@@ -1,463 +1,217 @@
 ; ============================================================================
-; kernel/storage/storage.asm -- tape SAVE/LOAD: header logic over the block I/O
+; kernel/storage/storage.asm -- tape SAVE/LOAD: the header layer over the block I/O
 ;
-; STORAGE_SEND_BLOCK / STORAGE_RECEIVE_BLOCK are Leap-C's clean-room tape block I/O
-; (kernel/storage/tapeblock.asm, adopted unchanged; docs/V2/STORAGE_SPEC.md D1 and section 3
-; for the contract). This file holds the header logic above it: STORAGE_SAVE (a 17-byte header
-; block, then the data block) and STORAGE_LOAD (header search, then the data block). The wire
-; format is the standard one, so tapes made by the stock ROM's routines still load.
+; Rebuilt in audit step S against docs/V2/STORAGE_SPEC.md (sections 3-5); 2068-Leap V2's
+; kernel/storage/storage.asm was the reference for the header search's SPACE handling.
 ;
-; Test hooks: a ROM that DEFINEs STORAGE_TEST_FAKE_SEND / STORAGE_TEST_FAKE_RECEIVE supplies
-; STORAGE_TEST_SEND_BLOCK / STORAGE_TEST_RECEIVE_BLOCK with the same contract (an in-RAM tape,
-; rom/forth_smoke_p7.asm, p52).
+; STORAGE_SEND_BLOCK / STORAGE_RECEIVE_BLOCK are Leap-C's clean-room block I/O
+; (kernel/storage/tapeblock.asm, adopted unchanged, spec D1 and section 3). Above it:
+;   STORAGE_SAVE       a 17-byte header block, then the data block only if the header went out whole
+;   STORAGE_FIND       the header search: the first header of a type (and name) on the tape
+;   STORAGE_LOAD_DATA  the data block after a found header, loaded or verified
+;   STORAGE_CRC        CRC-16/CCITT-FALSE, for the LIB image's trailer (spec D4)
+; The wire format is the standard one, so tapes made by the stock ROM's routines and by
+; Forth V1 still read. The words are in core/storage.asm (LIB) and core/loadtext.asm (TEXT).
+;
+; Every routine here leaves interrupts off (the block I/O's `di`) except STORAGE_SAVE, which
+; enables them; the words' common tail (STORAGE_END, core/storage.asm) enables them.
+;
+; Test hooks: a ROM that DEFINEs STORAGE_TEST_FAKE_SEND and/or STORAGE_TEST_FAKE_RECEIVE supplies
+; STORAGE_TEST_SEND_BLOCK / STORAGE_TEST_RECEIVE_BLOCK with the section-3 contract (an in-RAM
+; tape: rom/forth_smoke_p7.asm, p52).
 ; ============================================================================
 
-STORAGE_TYPE_HEADER EQU $00   ; SA-BYTES/LD-BYTES type-flag byte — this
-                               ; is the value LD-LOOK-H's own real code
-                               ; uses ("XOR A" before calling LD-BYTES
-                               ; to search for a header); the book's own
-                               ; prose describing SA-BYTES has this
-                               ; backwards from its own actual code.
-STORAGE_TYPE_DATA   EQU $FF
+STORAGE_TYPE_HEADER EQU $00         ; flag byte of a header block
+STORAGE_TYPE_DATA   EQU $FF         ; flag byte of a data block
+STORAGE_TYPE_TEXT   EQU 0           ; header types (spec section 4): SAVE-TEXT, as in V1
+STORAGE_TYPE_LIB    EQU 3           ;   SAVE-LIB (V1 used 0, so V1 LIB tapes are not found)
 
 STORAGE_HEADER_TYPE_OFF      EQU 0
 STORAGE_HEADER_NAME_OFF      EQU 1
-STORAGE_HEADER_LENGTH_OFF    EQU 11
-STORAGE_HEADER_AUTOSTART_OFF EQU 13
-STORAGE_HEADER_PROGLEN_OFF   EQU 15
+STORAGE_HEADER_LENGTH_OFF    EQU 11  ; the data block's length
+STORAGE_HEADER_PARAM1_OFF    EQU 13  ; TEXT: STORAGE_NO_AUTOSTART; LIB: ROM_IDENTITY
+STORAGE_HEADER_PARAM2_OFF    EQU 15  ; TEXT: the length again; LIB: LATEST
 STORAGE_HEADER_PAYLOAD_LEN   EQU 17
-STORAGE_LOAD_DATA_TOUCHED    EQU $FF     ; failure return marker: at least
-                                         ; one destination byte was written
+STORAGE_HEADER_ATTEMPTS_MAX  EQU 15  ; headers refused before the search gives up
 STORAGE_NO_AUTOSTART         EQU $8000
 
-    ASSERT STORAGE_HEADER_NAME_OFF + STORAGE_HEADER_FILENAME_LEN = STORAGE_HEADER_LENGTH_OFF
-    ASSERT STORAGE_HEADER_PROGLEN_OFF + 2 = STORAGE_HEADER_PAYLOAD_LEN
+    ASSERT STORAGE_HEADER_NAME_OFF = STORAGE_HEADER_TYPE_OFF + 1
+    ASSERT STORAGE_HEADER_NAME_OFF + STORAGE_HEADER_FILENAME_LEN = STORAGE_HEADER_LENGTH_OFF ; (sysvars.inc)
+    ASSERT STORAGE_HEADER_PARAM2_OFF + 2 = STORAGE_HEADER_PAYLOAD_LEN
 
-STORAGE_NZ_SENTINEL EQU $02   ; NOT a real type flag — see every "cp
-                               ; STORAGE_NZ_SENTINEL" call site in
-                               ; STORAGE_LOAD below. STORAGE_RECEIVE_
-                               ; BLOCK's own .loop (".flag" branch)
-                               ; tests the CALLER's Z flag at the
-                               ; moment of the call (restored via its
-                               ; own first "ex af,af'") to decide
-                               ; whether to validate the just-received
-                               ; type-flag byte. Z must be CLEAR (NZ)
-                               ; at the call site for validation to
-                               ; fire correctly; neither "ld a,type" nor
-                               ; "scf" touch Z at all, so this sentinel
-                               ; forces it explicitly without disturbing
-                               ; A (it can never equal either real type
-                               ; flag, $00 or $FF).
+; The name being saved or searched for: space-padded, with its length (0 = any name on LOAD).
+; The cells core/storage.asm's V1 LOAD-LIB used ($8589-$8593, in the $8426-$8FFF gap
+; docs/PROJECT_PLAN.md's Phase 5 established as free).
+STORAGE_NAME_LEN    EQU $8589       ; 1 byte
+STORAGE_NAME_BUF    EQU $858A       ; STORAGE_HEADER_FILENAME_LEN bytes
 
-STORAGE_HEADER_ATTEMPTS_MAX EQU 15  ; STORAGE_LOAD's own .header_search
-                               ; retry cap. STORAGE_ENTRY_RETRY_MAX
-                               ; below is what actually provides real-
-                               ; world dead-air tolerance for a single
-                               ; attempt (a genuine signal can take
-                               ; several real seconds to start); this
-                               ; outer count only needs to cover a
-                               ; handful of complete-but-wrong attempts
-                               ; (found something, but wrong name/too
-                               ; long/SPACE), not waiting through
-                               ; silence. Worst case if every attempt
-                               ; somehow burned its full inner budget:
+    IFDEF STORAGE_TEST_FAKE_SEND
+STORAGE_SEND_BLOCK EQU STORAGE_TEST_SEND_BLOCK
+    ELSE
+STORAGE_SEND_BLOCK EQU TAPE_SEND_BLOCK
+    ENDIF
     IFDEF STORAGE_TEST_FAKE_RECEIVE
 STORAGE_RECEIVE_BLOCK EQU STORAGE_TEST_RECEIVE_BLOCK
     ELSE
 STORAGE_RECEIVE_BLOCK EQU TAPE_RECV_BLOCK
     ENDIF
-STORAGE_SEND_BLOCK EQU TAPE_SEND_BLOCK
     INCLUDE "kernel/storage/tapeblock.asm"
 
+; The identity a LIB image carries (spec D3): $8000 | the CRC-16 of this ROM image with this
+; cell zeroed, patched in after assembly by tools/rom_identity.py for the product images. An
+; unpatched ROM (every test ROM) reads $0000, which is consistent within that ROM.
+ROM_IDENTITY:
+    DW   0
 
 ; ============================================================================
-; STORAGE_SAVE
-; In:  HL = filename pointer, B = filename length, IX = data pointer,
-;      DE = data length
-; Out: carry always clear (this project's own caller ignores it anyway
-;      — see rom/exrom_storage.asm's own header)
-; Destroys: AF, BC, DE, HL, IX
+; STORAGE_SAVE -- save one file: the header block, then the data block
+; In:  A = header type, HL = header parameter 1, BC = parameter 2, IX = data, DE = data length;
+;      the name in STORAGE_NAME_BUF
+; Out: carry clear = saved. Carry set = SPACE stopped it (no data block is sent after a stopped
+;      header), B = $FF. Interrupts on
+; Destroys: AF, AF', BC, DE, HL, IX
 ; ============================================================================
 STORAGE_SAVE:
-    di
-    ld   a, b
-    cp   STORAGE_HEADER_FILENAME_LEN + 1
-    jr   c, .name_len_ok
-    ld   b, STORAGE_HEADER_FILENAME_LEN   ; transport field is fixed-width
-.name_len_ok:
+    ld   (STORAGE_HEADER_BUF + STORAGE_HEADER_TYPE_OFF), a
+    ld   (STORAGE_HEADER_BUF + STORAGE_HEADER_LENGTH_OFF), de
+    ld   (STORAGE_HEADER_BUF + STORAGE_HEADER_PARAM1_OFF), hl
+    ld   (STORAGE_HEADER_BUF + STORAGE_HEADER_PARAM2_OFF), bc
     push ix
     push de
-    ld   (STORAGE_SEND_LEN), de           ; stash the caller's own data
-                                         ; ptr/length before HL/BC get
-                                         ; reused building the header —
-                                         ; STORAGE_SEND_LEN is scratch
-                                         ; here (not the running-
-                                         ; countdown role it had in the
-                                         ; archived design; renamed
-                                         ; comment, same sysvar slot)
-
-    ld   a, (STORAGE_REQUEST_TYPE)
-    ld   (STORAGE_HEADER_BUF + STORAGE_HEADER_TYPE_OFF), a
+    ld   hl, STORAGE_NAME_BUF
     ld   de, STORAGE_HEADER_BUF + STORAGE_HEADER_NAME_OFF
-    ld   a, b
-    or   a
-    jr   z, .name_done                    ; zero-length name — leave
-                                         ; the buffer's own default
-                                         ; padding as-is (BASIC_DO_SAVE
-                                         ; always supplies a real name
-                                         ; today, kept defensive)
-    push bc
-    ld   b, a
-.name_copy:
-    ld   a, (hl)
-    ld   (de), a
-    inc  hl
-    inc  de
-    djnz .name_copy
-    pop  bc
-.name_done:
-    ld   a, STORAGE_HEADER_FILENAME_LEN
-    sub  b
-    jr   z, .len_set
-    ld   b, a
-    ld   a, ' '
-.pad:
-    ld   (de), a
-    inc  de
-    djnz .pad
-.len_set:
-    ld   hl, (STORAGE_SEND_LEN)
-    ld   (STORAGE_HEADER_BUF + STORAGE_HEADER_LENGTH_OFF), hl
-    ld   a, (STORAGE_REQUEST_TYPE)
-    cp   STORAGE_EXTENSION_TYPE
-    ld   de, (STORAGE_HEADER_BUF + STORAGE_HEADER_AUTOSTART_OFF)
-    jr   nz, .autostart_ready
-    ld   de, EXT_SERVICE_ABI_VERSION
-.autostart_ready:
-    ld   (STORAGE_HEADER_BUF + STORAGE_HEADER_AUTOSTART_OFF), de
-    ; The stock BASIC header's second parameter is the program portion
-    ; length. This ROM serializes program text only (never variables),
-    ; so it is identical to the data length.
-    ld   (STORAGE_HEADER_BUF + STORAGE_HEADER_PROGLEN_OFF), hl
-
-    xor  a
-    ld   (STORAGE_PROGRESS_PCT), a
-    ld   a, 1
-    ld   (STORAGE_OP_STATE), a            ; SAVING
-    call STORAGE_REPORT_PROGRESS
-
-    ld   a, STORAGE_TYPE_HEADER
+    ld   bc, STORAGE_HEADER_FILENAME_LEN
+    ldir
     ld   ix, STORAGE_HEADER_BUF
     ld   de, STORAGE_HEADER_PAYLOAD_LEN
-    IFDEF STORAGE_TEST_FAKE_SEND
-    call STORAGE_TEST_SEND_BLOCK
-    ELSE
-    call STORAGE_SEND_BLOCK
-    ENDIF
-
-    ld   a, 10
-    ld   (STORAGE_PROGRESS_PCT), a
-    call STORAGE_REPORT_PROGRESS          ; safe inter-block update;
-                                         ; never draw inside a tape block
-
-    pop  de                               ; caller's real data length
-    pop  ix                               ; caller's real data pointer
+    xor  a                              ; STORAGE_TYPE_HEADER
+    call STORAGE_SEND_BLOCK             ; carry set = sent whole
+    pop  de
+    pop  ix
     ld   a, STORAGE_TYPE_DATA
-    IFDEF STORAGE_TEST_FAKE_SEND
-    call STORAGE_TEST_SEND_BLOCK
-    ELSE
-    call STORAGE_SEND_BLOCK               ; stock format: one data block
-    ENDIF
-
-    ld   a, 2
-    ld   (STORAGE_OP_STATE), a            ; SAVED
-    ld   a, 100
-    ld   (STORAGE_PROGRESS_PCT), a
-    call STORAGE_REPORT_PROGRESS          ; BASIC_DRAW_STATUS_LINE is
-                                         ; only ever reached through
-                                         ; this hook, not the normal
-                                         ; editor redraw cycle, so
-                                         ; without this call SAVED would
-                                         ; never actually reach the
-                                         ; screen
-    or   a
-    ei                                     ; re-enable interrupts before
-                                         ; returning -- STORAGE_SAVE's own
-                                         ; entry `di` above must not
-                                         ; outlive this call, or the
-                                         ; keyboard ISR (KBD_ISR_TICK)
-                                         ; never fires again and
-                                         ; IO_READ_KEY's blocking wait
-                                         ; hangs the live editor forever
+    call c, STORAGE_SEND_BLOCK
+    ld   b, $FF
+    ccf
+    ei
     ret
 
 ; ============================================================================
-; STORAGE_LOAD
-; In:  IX = destination pointer, HL = filename pointer, B = filename
-;      length (0 = wildcard, LOAD ""), DE = max allowed data length
-; Out: DE = actual data length received (only meaningful if carry
-;          clear), A = 0 on success or a clean failure,
-;          STORAGE_LOAD_DATA_TOUCHED on failure after destination writes
-;      Carry set = total failure (no matching header, or header's own
-;          claimed length exceeds the caller's bound, or the data block
-;          failed). A distinguishes whether destination bytes were written.
-; Destroys: AF, BC, DE, HL, IX
+; STORAGE_FIND -- the header search
+; In:  A = header type; STORAGE_NAME_BUF, STORAGE_NAME_LEN (0 = any name)
+; Out: carry clear = found: the header in STORAGE_HEADER_BUF.
+;      Carry set = not found: B = $FF if SPACE stopped it, else 0 (no signal for the receiver's
+;      whole ~8.6 s budget, or STORAGE_HEADER_ATTEMPTS_MAX headers refused). Interrupts off
+; A header of another type or name is refused and the search goes on with the next one.
+; Destroys: AF, AF', BC, DE, HL, IX
 ; ============================================================================
-STORAGE_LOAD:
-    di
-    ld   (STORAGE_MAX_LEN), de
-    push hl                               ; caller's filename pointer
-    push bc                               ; caller's filename length
-    push ix                               ; caller's real destination
-                                         ; pointer — IX gets reused for
-                                         ; STORAGE_HEADER_BUF below
-
-    xor  a
-    ld   (STORAGE_PROGRESS_PCT), a
-    ld   a, 3
-    ld   (STORAGE_OP_STATE), a            ; LOADING
-    call STORAGE_REPORT_PROGRESS
-
+STORAGE_FIND:
+    ld   (STORAGE_REQUEST_TYPE), a
     ld   b, STORAGE_HEADER_ATTEMPTS_MAX
-.header_search:
-    push bc                               ; B = attempts remaining —
-                                         ; STORAGE_RECEIVE_BLOCK
-                                         ; destroys BC, so this must be
-                                         ; saved/restored around each
-                                         ; attempt, same pattern as the
-                                         ; entry-pushed HL/BC/IX below
-    ld   a, STORAGE_TYPE_HEADER
-    cp   STORAGE_NZ_SENTINEL              ; force Z clear — see that
-                                         ; constant's own header
-    scf
+.next:
+    push bc
     ld   ix, STORAGE_HEADER_BUF
-    ld   de, STORAGE_HEADER_PAYLOAD_LEN       ; the receive loop
-                                         ; naturally reads and
-                                         ; checksums the trailing
-                                         ; checksum byte too, on top of
-                                         ; this real length — no +1
-                                         ; needed here (verified via
-                                         ; z80sim, see STORAGE_HEADER_
-                                         ; BUF's own header)
+    ld   de, STORAGE_HEADER_PAYLOAD_LEN
+    xor  a                              ; STORAGE_TYPE_HEADER
+    scf                                 ; load
     call STORAGE_RECEIVE_BLOCK
     pop  bc
-    jr   nc, .header_found
-    djnz .header_search
-    ; exhausted every attempt — give up cleanly instead of retrying
-    ; forever. Rebalance the entry-pushed IX/BC/HL (never consumed on
-    ; this path) before falling into .total_failure.
-    pop  ix
-    pop  bc
-    pop  hl
-    jp   .total_failure                   ; JP not JR — out of JR's
-                                         ; +-127 range from here
-
-.header_found:
-    ; Keep the outer header-search budget before restoring the caller's
-    ; registers.  A nonmatching header is not a LOAD failure: it may be
-    ; an earlier file on a multi-file (or appended) tape, so .name_mismatch
-    ; must be able to resume .header_search with this same remaining count.
-    ; STORAGE_CHECKSUM is otherwise unused by the current real-ROM-derived
-    ; protocol (its running XOR lives in H), making it safe scratch here.
-    ld   a, b
-    ld   (STORAGE_CHECKSUM), a
-    ld   a, (STORAGE_HEADER_BUF + STORAGE_HEADER_TYPE_OFF)
-    ld   c, a
+    jr   c, .failed
+    ld   hl, STORAGE_HEADER_BUF + STORAGE_HEADER_TYPE_OFF
     ld   a, (STORAGE_REQUEST_TYPE)
-    cp   c
-    jr   nz, .header_rejected
-    pop  ix                               ; caller's real destination
-                                         ; pointer, restored
-    pop  bc                               ; caller's filename length
-    pop  hl                               ; caller's filename pointer
-    ld   a, b
+    cp   (hl)
+    jr   nz, .refused
+    ld   a, (STORAGE_NAME_LEN)
     or   a
-    jr   z, .name_ok                      ; wildcard — LOAD ""
-    ; Preserve the original inputs while the fixed-width comparison
-    ; consumes HL/B.  They are needed if this is a different file and
-    ; the search continues at the following header.
-    push bc
-    push hl
-    push ix
-    ld   de, STORAGE_HEADER_BUF + STORAGE_HEADER_NAME_OFF
-    ld   b, STORAGE_HEADER_FILENAME_LEN
-.name_cmp:
+    ret  z                              ; any name
+    ld   de, STORAGE_NAME_BUF
+    ld   c, STORAGE_HEADER_FILENAME_LEN
+.name:
+    inc  hl
     ld   a, (de)
     cp   (hl)
-    jr   nz, .name_mismatch
-    inc  hl
+    jr   nz, .refused
     inc  de
-    djnz .name_cmp
-    pop  ix
-    pop  hl
-    pop  bc
-    jr   .name_ok
-.name_mismatch:
-    pop  ix
-    pop  hl
-    pop  bc
-    push hl                               ; restore STORAGE_LOAD's
-    push bc                               ; entry stack shape so a later
-    push ix                               ; matching header gets its
-                                         ; original destination/name
-    ld   a, (STORAGE_CHECKSUM)
-    ld   b, a
-    djnz .header_search
-    pop  ix
-    pop  bc
-    pop  hl
-    jr   .total_failure
-
-.header_rejected:
-    ; A valid standard header for another file type is not corruption;
-    ; continue looking for a BASIC-program header on the tape.
-    pop  ix
-    pop  bc
-    pop  hl
-    push hl
-    push bc
-    push ix
-    ld   a, (STORAGE_CHECKSUM)
-    ld   b, a
-    djnz .header_search
-    pop  ix
-    pop  bc
-    pop  hl
-    jr   .total_failure
-
-.name_ok:
-    ld   hl, (STORAGE_HEADER_BUF + STORAGE_HEADER_LENGTH_OFF)
-    ld   de, (STORAGE_MAX_LEN)
-    or   a
-    sbc  hl, de
-    jr   c, .length_ok                    ; header length < max — fine
+    dec  c
+    jr   nz, .name
+    ret                                 ; carry clear: the last cp was equal
+.failed:
+    call STORAGE_SPACE_HELD
+    jr   nc, STORAGE_STOPPED
+    ld   hl, (STORAGE_ENTRY_RETRY)      ; 0 only when the receiver's budget ran out
     ld   a, h
     or   l
-    jr   z, .length_ok                    ; header length == max — fine
-    jp   .total_failure                   ; JP not JR — out of range;
-                                         ; header length > max
+    jr   nz, .refused
+    ld   b, 1                           ; no signal: end the search (djnz falls through, B = 0)
+.refused:
+    djnz .next
+    scf
+    ret
 
-.length_ok:
-    ld   de, (STORAGE_HEADER_BUF + STORAGE_HEADER_LENGTH_OFF)
-    ld   a, 10
-    ld   (STORAGE_PROGRESS_PCT), a
-    ld   a, 7
-    ld   (STORAGE_OP_STATE), a            ; PROGRAM: <name> — matching
-                                         ; header confirmed, about to
-                                         ; receive the data block. Real
-                                         ; ROM's own LOAD shows the
-                                         ; found program's name at
-                                         ; exactly this point, not just
-                                         ; at final completion.
-    call STORAGE_REPORT_PROGRESS
-    push ix
+STORAGE_STOPPED:
+    ld   b, $FF
+    scf
+    ret
+
+; Out: carry clear = SPACE is down. Destroys: AF
+STORAGE_SPACE_HELD:
+    ld   a, $7F
+    in   a, (PORT_ULA)
+    rra
+    ret
+
+; ============================================================================
+; STORAGE_LOAD_DATA -- the data block that follows a found header
+; In:  IX = destination, DE = length; carry set = load, clear = verify against the bytes at IX
+; Out: carry clear = success. Carry set = failure: B = $FF if SPACE stopped it, else 0, and
+;      Z set = nothing at IX was written. Interrupts off
+; Destroys: AF, AF', BC, DE, HL, IX
+; ============================================================================
+STORAGE_LOAD_DATA:
     push de
     ld   a, STORAGE_TYPE_DATA
-    cp   STORAGE_NZ_SENTINEL              ; force Z clear — see that
-                                         ; constant's own header
-    scf
-    call STORAGE_RECEIVE_BLOCK
-    jr   c, .data_failed
-.data_ok:
-    pop  de                               ; discard the saved retry
-                                         ; state — reload the real
-                                         ; length below instead, since
-                                         ; STORAGE_RECEIVE_BLOCK's own
-                                         ; DE counts DOWN to 0 on
-                                         ; success, not what our own
-                                         ; caller needs
-    pop  ix
-    ld   de, (STORAGE_HEADER_BUF + STORAGE_HEADER_LENGTH_OFF)
-    ld   a, 4
-    ld   (STORAGE_OP_STATE), a            ; LOADED
-    ld   a, 100
-    ld   (STORAGE_PROGRESS_PCT), a
-.success_done:
-    call STORAGE_REPORT_PROGRESS          ; without this, LOADED would never
-                                         ; actually reach the screen —
-                                         ; see STORAGE_SAVE's own
-                                         ; matching comment for why
-    xor  a
-    ei                                     ; re-enable interrupts before
-                                         ; returning -- see STORAGE_SAVE's
-                                         ; own matching comment for why;
-                                         ; `ei` touches no flags/registers,
-                                         ; so A and the carry flag set
-                                         ; just above survive intact
-    ret
-
-.data_failed:
-    ; DE is the receiver's remaining byte count; the stack holds the
-    ; original length. If they differ, part (or all) of the destination
-    ; has already been overwritten and the caller must not retain the old
-    ; program as though it were still trustworthy.
+    call STORAGE_RECEIVE_BLOCK          ; carry passes through `ld` and `push`
     pop  hl
-    pop  ix
-    ld   a, d
-    cp   h
-    jr   nz, .data_touched
-    ld   a, e
-    cp   l
-    jr   nz, .data_touched
-.total_failure:
-    xor  a                               ; clean failure: no program bytes
-                                         ; were written
-    jr   .report_failure
-.data_touched:
-    ld   a, STORAGE_LOAD_DATA_TOUCHED
-.report_failure:
-    push af                              ; preserve clean/dirty result marker
-    ld   a, 6
-    ld   (STORAGE_OP_STATE), a            ; LOAD FAILED
-    call STORAGE_REPORT_PROGRESS          ; without this, LOAD FAILED
-                                         ; would never actually reach
-                                         ; the screen — see STORAGE_
-                                         ; SAVE's own matching comment
-                                         ; for why
-    pop  af
+    ret  nc
+    call STORAGE_SPACE_HELD
+    sbc  a, a
+    cpl
+    ld   b, a                           ; $FF if SPACE is down
+    or   a
+    sbc  hl, de                         ; Z: DE is still the whole length, nothing was stored
     scf
-    ei                                     ; re-enable interrupts on the
-                                         ; failure path too -- a failed
-                                         ; LOAD must not leave the
-                                         ; keyboard ISR permanently
-                                         ; masked any more than a
-                                         ; successful one; `ei` touches
-                                         ; no flags/registers, so A and
-                                         ; the carry flag set just above
-                                         ; survive intact
     ret
 
 ; ============================================================================
-; STORAGE_REPORT_PROGRESS
-; Calls STORAGE_PROGRESS_HOOK if one is set, so BASIC can redraw its
-; own status bar to reflect the current STORAGE_OP_STATE live, mid-
-; operation. This ROM has no interrupts during SAVE/LOAD (see this
-; file's own top header), so there is no other way for a live status
-; update to reach the screen during a block transfer.
-; In:  none
-; Out: none
-; Destroys: nothing the hook itself doesn't (the hook's own contract is
-;      "no input, no output" — callers of THIS routine should still
-;      preserve their own live registers across it defensively, same
-;      as the archived design's own convention)
+; STORAGE_CRC -- CRC-16/CCITT-FALSE: polynomial $1021, initial value $FFFF, most significant bit
+; first, no final XOR (check value: "123456789" gives $29B1)
+; In:  HL = start, BC = count
+; Out: DE = the CRC; HL = start + count; BC = 0
+; Destroys: AF. About 400 T per byte
 ; ============================================================================
-STORAGE_REPORT_PROGRESS:
-    push af
+STORAGE_CRC:
+    ld   de, $FFFF
+.byte:
+    ld   a, b
+    or   c
+    ret  z
+    ld   a, (hl)
+    inc  hl
+    xor  d
+    ld   d, a
     push bc
-    push de
-    push hl
-    push ix
-    ld   hl, (STORAGE_PROGRESS_HOOK)
-    ld   a, h
-    or   l
-    jr   z, .none
-    call .call_hl
-.none:
-    pop  ix
-    pop  hl
-    pop  de
+    ld   b, 8
+.bit:
+    sla  e
+    rl   d
+    jr   nc, .no_poly
+    ld   a, d
+    xor  $10
+    ld   d, a
+    ld   a, e
+    xor  $21
+    ld   e, a
+.no_poly:
+    djnz .bit
     pop  bc
-    pop  af
-    ret
-.call_hl:
-    jp   (hl)
+    dec  bc
+    jr   .byte

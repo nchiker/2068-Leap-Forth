@@ -124,6 +124,7 @@ build/forth_rom0.bin: rom/main.asm $(SRC_STAMP) | build
 forth-boot: build/forth_boot_rom0.bin
 build/forth_boot_rom0.bin: rom/forth_boot.asm $(SRC_STAMP) | build
 	$(SJASM) --sym=build/forth_boot.sym --lst=build/forth_boot.lst $<
+	python3 -I tools/rom_identity.py --patch $@ build/forth_boot.sym
 	python3 tools/build_stamp.py --write --target forth-boot
 
 # Blackjack demo ROM: boots directly into a real, playable single-deck
@@ -191,6 +192,7 @@ product: forth-boot forth-demo-blackjack
 forth-boot-cart: build/forth_boot.dck
 build/forth_boot_cart.bin: rom/forth_boot.asm $(SRC_STAMP) | build
 	$(SJASM) -DCARTRIDGE --sym=build/forth_boot_cart.sym --lst=build/forth_boot_cart.lst $<
+	python3 -I tools/rom_identity.py --patch $@ build/forth_boot_cart.sym
 build/forth_boot.dck: build/forth_boot_cart.bin build/graphics_exrom.bin tools/make_dck.py
 	python3 tools/make_dck.py build/forth_boot_cart.bin $@ build/graphics_exrom.bin
 	python3 tools/build_stamp.py --write --target forth-boot-cart
@@ -298,6 +300,9 @@ check: $(CHECK_IMAGES)
 	# not found in FORTH_STOCK_ROMS or ~/fuse-build/roms, scan skipped and said so)
 	python3 -I tools/provenance.py; r=$$?; [ $$r -eq 0 ] || [ $$r -eq 2 ]
 	python3 -I tools/check_upstream.py
+	# the product ROMs carry their own ROM_IDENTITY (STORAGE_SPEC.md D3)
+	python3 -I tools/rom_identity.py --verify build/forth_boot_rom0.bin build/forth_boot.sym \
+	    build/forth_boot_cart.bin build/forth_boot_cart.sym
 
 clean:
 	rm -rf build dist

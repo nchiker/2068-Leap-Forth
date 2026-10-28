@@ -397,3 +397,5 @@ DICT_LATEST_INIT_P57 EQU H_I   ; head of the dictionary once this ROM's
     DS   $4000 - $, $FF
 
     SAVEBIN "forth_smoke_p57_rom0.bin", $0000, $4000
+
+DICT_LATEST_COLD EQU DICT_LATEST_INIT_P57   ; LATEST of an empty user dictionary (core/storage.asm LOAD-LIB)

@@ -76,6 +76,7 @@ EDIT_LINE_BUF        EQU $F228
 ; its retained filename must not share STATUS_BUF: STORAGE_LOAD invokes the
 ; progress redraw before header comparison. Keep the semantic alias explicit
 ; so the cross-subsystem lifetime rule is assembly-checked below.
+; (Unused since step S: the tape name is STORAGE_NAME_BUF, kernel/storage/storage.asm.)
 STORAGE_LOAD_NAME_BUF EQU EDIT_LINE_BUF
     ASSERT STORAGE_LOAD_NAME_BUF != STATUS_BUF
 
@@ -990,6 +991,11 @@ PORT_FE_SHADOW:      DEFS 1           ; 1 byte — fits the 5-byte gap
 ; the old design was abandoned. The new protocol needs far less state:
 ; exactly two blocks (header + one data block, no chunking), no bitmap,
 ; no per-chunk retry bookkeeping.
+; STEP S (docs/V2/STORAGE_SPEC.md): the tape code now uses only STORAGE_HEADER_BUF,
+; STORAGE_REQUEST_TYPE and STORAGE_ENTRY_RETRY from this block (and STORAGE_NAME_BUF/_LEN, defined
+; in kernel/storage/storage.asm). STORAGE_SEND_LEN, STORAGE_CHECKSUM, STORAGE_CMD_INVALID_FLAG,
+; STORAGE_OP_STATE, STORAGE_PROGRESS_PCT, STORAGE_PROGRESS_HOOK and STORAGE_MAX_LEN are unused,
+; kept so that no later sysvar moves; the comments below describe the code before step S.
 STORAGE_SEND_LEN:    DEFS 2           ; 2 bytes — STORAGE_SAVE's own
                                  ; scratch: the caller's data length,
                                  ; stashed here while HL/BC get reused

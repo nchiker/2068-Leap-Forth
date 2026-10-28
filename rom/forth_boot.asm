@@ -232,7 +232,7 @@ COLD_CLEAR_END EQU UDG_TABLE + UDG_COUNT * 8
     ld   bc, COLD_CLEAR_END - $8000
     call MEM_FILL_ZERO
 
-    ld   hl, DICT_LATEST_INIT_RECALL   ; the full chain's own head —
+    ld   hl, DICT_LATEST_COLD          ; the full chain's own head —
                                     ; see this file's own header (Phase
                                     ; 64 -- core/recall.asm's LIST-DEFS/
                                     ; RECALL -- spliced on after
@@ -656,20 +656,10 @@ DICT_CHAIN_POINT DEFL H_UDG
                                  ; this must be a per-ROM opt-in, not
                                  ; unconditional
     INCLUDE "core/loadtext.asm"
-    ; core/storage.asm's own SAVE_LOAD_TEMP_BUF/SAVE_LOAD_MAX_DICT are
-    ; literals that deliberately TIME-SHARE this exact same physical RAM
-    ; (LOADTEXT_BUF/LOADTEXT_MAX_LEN) rather than referencing these
-    ; symbols directly -- core/storage.asm must still assemble standalone
-    ; in rom/forth_smoke_p7.asm, where neither of these exists (see that
-    ; file's own header for why it can't be a live expression). This is
-    ; the one place in the real product ROM where both sides of that
-    ; literal duplication actually exist together -- if either ever
-    ; drifts, this fires at assembly time instead of silently corrupting
-    ; RAM the two mechanisms were supposed to be safely sharing.
-    ASSERT SAVE_LOAD_TEMP_BUF == LOADTEXT_BUF
-    ASSERT SAVE_LOAD_MAX_DICT == LOADTEXT_MAX_LEN - 2
 DICT_CHAIN_POINT DEFL H_LOADTEXT
     INCLUDE "core/recall.asm"
+DICT_LATEST_COLD EQU DICT_LATEST_INIT_RECALL  ; LATEST of an empty user dictionary: cold start,
+                                              ; and core/storage.asm's LOAD-LIB after a failure
 DICT_CHAIN_POINT DEFL H_RECALL
     INCLUDE "core/editor.asm"
 

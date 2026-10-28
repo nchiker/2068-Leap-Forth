@@ -195,8 +195,8 @@ COLD_START:
     ; confirm this checkpoint actually exercised a payload bigger than
     ; the OLD ceiling -- not just trusting SRC_3A's own byte count by
     ; eye
-    ld   hl, (SAVE_DICT_LEN)
-    ld   de, 512
+    ld   hl, (HERE)               ; the dictionary SAVE-LIB just saved
+    ld   de, FORTH_DICT_RAM + 512
     or   a
     sbc  hl, de
     jp   c, FAIL_TEST             ; SAVE_DICT_LEN <= 512: this
@@ -220,7 +220,7 @@ COLD_START:
     ld   a, 5
     ld   (CHECKPOINT_NUM), a
 
-    ld   hl, FORTH_DICT_RAM + SAVE_LOAD_MAX_DICT + 100
+    ld   hl, DICT_RAM_CEILING - 1 ; HERE + 2 > DICT_RAM_CEILING: the CRC would not fit
     ld   (HERE), hl
 
     ld   a, $42
@@ -340,11 +340,8 @@ FAKE_TAPE_RPOS     EQU $87A4    ; 2 bytes
 SAVED_WPOS_CHECK   EQU $87A6    ; 2 bytes -- checkpoint 5's own scratch,
                                 ; right after the fake tape's own
                                 ; read/write positions
-CANARY_ADDR EQU SAVE_LOAD_TEMP_BUF + 8192   ; = $F000 given today's
-                                ; SAVE_LOAD_TEMP_BUF ($D000) -- one byte
-                                ; immediately past core/storage.asm's own
-                                ; buffer, exactly where an unchecked
-                                ; overflow would land first
+CANARY_ADDR EQU DICT_RAM_CEILING - 1   ; = HERE in checkpoint 5: where an
+                                ; unchecked SAVE-LIB would write its CRC first
 
 SRC_1A:    DB ": DOUBLER DUP + ; SAVE-LIB PROG1 "
 SRC_1A_LEN EQU $ - SRC_1A
@@ -431,6 +428,7 @@ STORAGE_TEST_SEND_BLOCK:         ; A = type, IX = data ptr, DE = length
     or   a
     sbc  hl, de
     ld   (FAKE_TAPE_WPOS), hl
+    scf                           ; sent whole (STORAGE_SPEC.md section 3)
     ret
 
 STORAGE_TEST_RECEIVE_BLOCK:      ; A = expected type, carry-in = load(set)
@@ -525,3 +523,5 @@ FSTACK_TOP EQU $9000
     DS   $4000 - $, $FF
 
     SAVEBIN "forth_smoke_p7_rom0.bin", $0000, $4000
+
+DICT_LATEST_COLD EQU H_CATCH   ; LATEST of an empty user dictionary (core/storage.asm LOAD-LIB)
