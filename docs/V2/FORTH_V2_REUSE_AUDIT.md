@@ -395,7 +395,7 @@ calls through RST vectors, about −480 B [E]), O14 (230 B of page-zero padding 
 | O12 | `jp` → `jr` | — | Leap-C `tools/relax_jumps.py` | various | ≤ −30 B | Many sites are deliberately `jp`; lowest priority. **Done in step R0 (`bcf45ac`), −20 B [M]** (30 candidates; 10 left as `jp`), §6.7 |
 | O13 | `DPOP_HL` (137 calls) and `DPUSH_HL` (105) through RST vectors in page zero; `rst` is 1 B and 11 T against `call`'s 3 B and 17 T | — | Leap-C `RST_LDI`/`RST_STI`/`RST_ENTER`/`RST_LEAVE` | `core/dict.asm`, `rom/forth_boot.asm`, every caller | ~−480 B [E] | Step L. Recommended as its own step before E's code (L audit section 4); otherwise Z |
 | O14 | Page-zero padding: 230 B of `$FF` in both builds, not counted by `budget.py` | — | Leap-C page zero | `rom/forth_boot.asm` | up to ~−200 B [E] | Step L, [M]. Z |
-| O15 | `GFX_FILL` (487 B) and `GFX_CIRCLE` (368 B) kernels to the EXROM, as RECT and POLYGON | 3 | Leap-C moved them out of HOME | `kernel/graphics/graphics.asm`, `rom/graphics_exrom.asm` | ~−820 B HOME, +~860 B EXROM [E] | Step L. **Owner decision**: CIRCLE and FILL would need the graphics EXROM, as RECT/POLYGON/SPRITE-* do |
+| O15 | `GFX_FILL` (487 B) and `GFX_CIRCLE` (368 B) kernels to the EXROM, as RECT and POLYGON | 3 | Leap-C moved them out of HOME | `kernel/graphics/graphics.asm`, `rom/graphics_exrom.asm` | ~−820 B HOME, +~860 B EXROM [E] | Step L. **Approved (decision 7), after E** |
 | O16 | `IO_DECODE_KEY` shares its table lookup (Forth 132 B, Leap-C 114 B) | 2 | Leap-C `platform/kernel/io` | `kernel/io/io.asm` | −18 B [E] | Step L. K |
 | O17 | Glyphs of `1` and `l` (differ in two pixels) | 2 | Leap-C D13 (`f209f21`) | `kernel/graphics/graphics.asm` | 0 | Step L. K |
 | O18 | PLOT and LINE do not clip y: `y >> 3` up to 31 indexes past `ROW_BASE_TABLE`; today the writes land in ROM [M], a latent RAM write | 2 | Leap-C `GFX_PLOT_CLIPPED` callers | `kernel/graphics/graphics.asm` `GFX_WRITE_PIXEL` | +4 B [E] | Step L, latent defect. D |
@@ -928,9 +928,10 @@ Decided 2026-10-28 (owner): all six. Decision 3 was decided at the end of step S
    0, which LOAD-LIB (type 3) never matches, at no code cost. Later the same day the owner added that V1
    compatibility need not be maintained at all; V1 SAVE-TEXT tapes load only because the format is unchanged.
 
-Raised by step L (2026-10-28), open:
+Raised by step L, decided by the owner on 2026-10-28 (the audit's recommendations):
 
-7. **O15:** move the FILL and CIRCLE kernels (855 B) to the EXROM? HOME gains about 820 B; CIRCLE and FILL would then
-   need the graphics EXROM, as RECT, POLYGON and SPRITE-* already do.
-8. **O13 order:** run the RST change as its own step before E's code (recommended, L audit section 4), or in Z?
-9. **O19:** when `SOUND_WRITE` and `AY_WRITE` merge, does `SOUND` keep accepting register 16?
+7. **O15:** move the FILL and CIRCLE kernels (855 B) to the EXROM? **Decided: yes, after E** (once E's view has
+   taken its EXROM space). CIRCLE and FILL then need the graphics EXROM, as RECT, POLYGON and SPRITE-* already do;
+   every supported configuration carries it (HOME build, cartridge since R1, EightyOne).
+8. **O13 order:** **decided: its own step before E's code**, after E's spec and oracle.
+9. **O19:** **decided: the merged routine accepts registers 0-15**; register 16 does not exist on the AY.

@@ -74,7 +74,10 @@ measured against the HOME budget. The plan puts Z after E and F so that code the
 reason does not hold for O13: it is a mechanical change of call form, so code E and F write afterwards simply uses
 `rst` from the start, and nothing is done twice. **Recommendation:** run O13 as its own small step before E's code
 (after E's spec and oracle, which do not depend on it), so that E is measured against the larger budget and the
-engine evaluation compares like with like. O14 and O19 stay in Z. The order is the owner's choice.
+engine evaluation compares like with like. O14 and O19 stay in Z.
+
+**Decided by the owner (2026-10-28):** O13 before E's code; O15 approved, after E; O19 merges to registers 0-15
+(audit section 10, decisions 7-9).
 
 ## 5. Not determined
 
