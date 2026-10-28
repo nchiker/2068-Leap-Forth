@@ -21,6 +21,7 @@ The API (a library; `python3 -I tools/fharness.py --selftest` is its self-test):
   .sym(n) .xsym(n) .read .write .w16 .poke16 .setreg .regs .pc .run .run_to .call .tstates_reset .tstates
   .screen_rows(scr=None, nrows=24, mode64=False)          the screen as text rows
   .expect_mem(where, data, what)  .ram_diff(before, after, base)
+  .checkpoint(name) / .rollback(path)                     snapshot the live machine and put it back exactly (oracles)
   Console(machine)                                         key/type/press/wait/edit_line/rows (Forth's editor)
   run_pool(build, tasks, fn, workers=None, port0=10900)    one emulator per worker process; results in task order
 `build` is a directory that holds forth_boot_rom0.bin (DIR or DIR/build, as tools/tapetol.py), so the images of an
@@ -393,6 +394,20 @@ class Machine:
         self.cmd("snapshot-load " + self.snap)
         self._enable_bp()
         self.restore_wall = time.time() - t0
+
+    def checkpoint(self, name="checkpoint"):
+        """Snapshot the live machine (RAM, registers, paging, the T-state phase as ZEsarUX keeps it) into the
+        private snapshot directory and return the path.  A routine called on the machine (call) may then change
+        anything, the stack and $FF00-$FF1F included; rollback(path) puts everything back.  The boot snapshot that
+        restore() loads is not touched."""
+        path = os.path.join(self.snapdir, name + ".zsf")
+        self.cmd("snapshot-save " + path)
+        return path
+
+    def rollback(self, path):
+        """Load a checkpoint() back (and re-enable breakpoints, which a snapshot load clears)."""
+        self.cmd("snapshot-load " + path)
+        self._enable_bp()
 
     # ------------------------------------------------------------- the screen
     def _glyph_table(self, putchar, cols):
@@ -810,6 +825,26 @@ def _check_mode64(m, _):
     return dict(ok=ok, detail="64-column row 5 = %r (columns 28-38 across the display-file boundary), glyphs as in 32 columns" % rows[5])
 
 
+def _check_checkpoint(m, _):
+    con = Console(m)
+    con.boot()
+    con.type("1 2", enter=False)
+    before = m.read(0x4000, 0xC000)
+    regs = m.regs()
+    cp = m.checkpoint("probe")
+    m.call("GFX_CLS")
+    m.write(0xF000, b"\x55")
+    changed = m.ram_diff(before, m.read(0x4000, 0xC000), 0x4000)
+    m.rollback(cp)
+    after = m.read(0x4000, 0xC000)
+    now = m.regs()
+    con.key(ord("+"))
+    ok = after == before and bool(changed) and (now["PC"], now["SP"]) == (regs["PC"], regs["SP"]) \
+        and con.in_editor() and con.edit_line() == "1 2+"
+    return dict(ok=ok, detail="a call and a poke changed %d range(s); rollback gave back $4000-$FFFF byte for byte, "
+                              "and the editor takes keys again" % len(changed))
+
+
 def _check_mem(m, _):
     ft = m.sym("FONT_TABLE")
     m.expect_mem("FONT_TABLE", m.rom_home[ft:ft + 16], "font")
@@ -830,7 +865,8 @@ def _check_mem(m, _):
 CHECKS = [("a", "boot", _check_boot), ("b", "glyph table", _check_glyphs), ("c", "banner", _check_banner),
           ("d", "restore determinism", _check_restore), ("e", "call GFX_CLS", _check_call),
           ("f", "Console.type", _check_type), ("g", "Console.press", _check_press),
-          ("i", "64-column screen", _check_mode64), ("j", "memory assertions", _check_mem)]
+          ("i", "64-column screen", _check_mode64), ("j", "memory assertions", _check_mem),
+          ("k", "checkpoint/rollback", _check_checkpoint)]
 
 
 def _run_checks(build, workers, port0):

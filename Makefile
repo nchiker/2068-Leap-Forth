@@ -88,7 +88,7 @@ ALL_IMAGES := build/forth_rom0.bin $(SMOKE_BINS) $(VISUAL_BINS) $(TEST_BINS) \
               build/forth_demo_gallery_rom0.bin build/graphics_exrom.bin \
               build/forth_boot.dck build/forth_demo_blackjack.dck
 
-.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron audio cartdiff tapetest tapetol tapetol-fuse fusesave fusesave-cross harness \
+.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron audio cartdiff tapetest tapetol tapetol-fuse fusesave fusesave-cross harness edtest \
         bench-roms $(ALIASES)
 
 all: $(ALL_IMAGES)
@@ -297,6 +297,14 @@ fusesave-cross: build/forth_boot_rom0.bin build/graphics_exrom.bin build/forth_b
 # Ports 10900-10919.
 harness: build/forth_boot_rom0.bin build/graphics_exrom.bin
 	python3 -I tools/fharness.py --selftest
+
+# Editor screen oracle (audit T12, tools/edtest.py's header): the current console editor characterised case by case (keys,
+# wrapping, scrolling, the workspace and RECALL, 64 columns, BREAK, colours), the redraw oracle (after every key the screen
+# equals a full redraw) and the typing-cost baseline. About 45 s on 7 workers (3 minutes on 1); not part of `make test`. Ports
+# 10900-10919. EDTEST_BUILD=<build dir> runs it on another build instead (an older one in a git worktree); the result
+# is written to build/edtest.json.
+edtest: build/forth_boot_rom0.bin build/graphics_exrom.bin
+	python3 -I tools/edtest.py --build $(or $(EDTEST_BUILD),build)
 
 repro:
 	tools/check_repro.sh
