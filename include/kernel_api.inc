@@ -45,7 +45,6 @@
 ; ---- kernel/io (see kernel/io/io.asm) ----
     EXTERN IO_KEY_SCAN_ROW      ; A = row-select byte -> A = row state
     EXTERN IO_KEY_SCAN_ALL      ; -> HL = IO_SCAN_TABLE, filled
-    EXTERN IO_ANY_KEY_DOWN      ; -> carry set if any key is down
     EXTERN IO_READ_KEY          ; blocking -> A = ASCII code (0 if unmapped)
     EXTERN IO_READ_KEY_NONBLOCK ; non-blocking -> A = ASCII code, or 0
     EXTERN IO_KEY_AVAILABLE     ; non-destructive lookahead -> A = 0 or nonzero

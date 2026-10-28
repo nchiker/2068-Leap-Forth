@@ -526,7 +526,8 @@ GFX_CHAR_TO_FONT_OFFSET:
 
 ; ============================================================================
 ; GFX_CHAR_SETUP (internal — not in kernel_api.inc)
-; Shared address computation for GFX_PUTCHAR and GFX_PUTCHAR_OVER —
+; Shared address computation for GFX_PUTCHAR (and, once, GFX_PUTCHAR_OVER,
+; removed in step R0 as dead code) —
 ; written once here rather than duplicated in both, given how much
 ; trouble duplicated addressing logic has already caused in this
 ; project (the GFX_PUTCHAR/GFX_CHAR_TO_FONT_OFFSET row-clobbering bug).
@@ -631,24 +632,6 @@ GFX_PUTCHAR:
     ex   de, hl                                ; HL = font ptr, DE = screen
                                               ; address (advanced)
     inc  hl                                    ; advance font ptr to next byte
-    djnz .scanline_loop
-    ret
-
-; XOR-plots a glyph instead of replacing the destination bytes. Kept
-; separate so every existing editor/status/help caller retains ordinary
-; opaque text semantics; BASIC PRINT selects this only for OVER 1.
-GFX_PUTCHAR_OVER:
-    call GFX_CHAR_SETUP
-    ret  c
-    ld   b, 8
-.scanline_loop:
-    ld   a, (hl)
-    ex   de, hl
-    xor  (hl)
-    ld   (hl), a
-    inc  h
-    ex   de, hl
-    inc  hl
     djnz .scanline_loop
     ret
 
