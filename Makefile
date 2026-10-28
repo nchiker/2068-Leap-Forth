@@ -261,6 +261,9 @@ check: $(CHECK_IMAGES)
 	tools/check_test_list.sh
 	# reserve ratchet: free space may not fall below the floors in tools/budget.toml (owner decision 1)
 	python3 -I tools/budget.py
+	# provenance: no 12-byte run shared with the stock ROMs except the recorded debt (exit 2: stock ROMs
+	# not found in FORTH_STOCK_ROMS or ~/fuse-build/roms, scan skipped and said so)
+	python3 -I tools/provenance.py; r=$$?; [ $$r -eq 0 ] || [ $$r -eq 2 ]
 
 clean:
 	rm -rf build dist
