@@ -88,7 +88,7 @@ ALL_IMAGES := build/forth_rom0.bin $(SMOKE_BINS) $(VISUAL_BINS) $(TEST_BINS) \
               build/forth_demo_gallery_rom0.bin build/graphics_exrom.bin \
               build/forth_boot.dck build/forth_demo_blackjack.dck
 
-.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron audio cartdiff tapetest tapetol tapetol-fuse fusesave fusesave-cross \
+.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron audio cartdiff tapetest tapetol tapetol-fuse fusesave fusesave-cross harness \
         bench-roms $(ALIASES)
 
 all: $(ALL_IMAGES)
@@ -290,6 +290,13 @@ fusesave: build/forth_boot_rom0.bin build/graphics_exrom.bin build/forth_boot.dc
 # (tools/fusedrive.py stock_roms: $$FORTH_STOCK_ROMS, ~/fuse-build/roms). About 2 s.
 fusesave-cross: build/forth_boot_rom0.bin build/graphics_exrom.bin build/forth_boot.dck
 	python3 -I tools/fusesave.py --cross --build $(or $(FUSESAVE_BUILD),build)
+
+# Self-test of the symbol-based ZEsarUX harness every later oracle builds on (audit T11, tools/fharness.py's header):
+# boot, snapshot restore, glyph table, screen reader, typed and matrix keys, memory assertions, and the worker pool
+# (the same checks on 1 and on 3 emulators, which must agree). About 3 seconds; not part of `make test`.
+# Ports 10900-10919.
+harness: build/forth_boot_rom0.bin build/graphics_exrom.bin
+	python3 -I tools/fharness.py --selftest
 
 repro:
 	tools/check_repro.sh
