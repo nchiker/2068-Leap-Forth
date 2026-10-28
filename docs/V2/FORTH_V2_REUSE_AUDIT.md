@@ -196,6 +196,16 @@ arithmetic, no overflow or divide-by-zero error, `F.` prints 4 truncated decimal
    Keep Forth's radian interface: `SIN`/`COS` take radians, and `RAD`/`DEG` remain.
 4. Shared number parser for float literals and `NUMBER` (ATOF with integer fallback).
 5. New words where cheap: `FNEGATE`, `F<`, `F=`, `FDUP`, `F@`, `F!`, `FVARIABLE`.
+6. **O10, integer multiply and divide** (added to F by the owner, 2026-10-28).
+   - Replace `MATH_UMUL16`, `MATH_UDIV16`, `MATH_MULTIPLY16`, `MATH_DIVIDE16` and `MATH_MOD16` in
+     `kernel/math/math.asm` (412 B [M]) with Leap-C's register-only helpers in `src/runtime/helpers.asm`
+     (`RT_UMUL`, `RT_UDIV`, `RT_DIVS`, `RT_MODS`, `RT_MUL`).
+   - Leap-C's delta D3 deleted 351 B of the V2 routines for them: 1.4-2.3× faster [L], 60000/7 from 3,584 to
+     1,479 T [L].
+   - Forth also calls `MATH_SQRT16`, `MATH_SGN16`, `MATH_RND16` and `MATH_RND_SEED`, which Leap-C deleted for
+     want of a C caller. Keep them, or take Leap-C's xorshift `rand` (`src/runtime/library.asm`), whichever
+     measures smaller.
+   - `make bench` must hold or improve: sieve and string are the integer gates. Measure the bytes; no estimate yet.
 
 **Budget.** Replace 2,129 B with ~1,464 + ~150 + ~450 + ~200 glue ≈ 2,260 B [E], roughly flat.
 Measure; if HOME is short, the transcendentals move to the EXROM.
@@ -314,6 +324,51 @@ allows if needed.
 **Deliverables.** A section ledger (section 3 format) before and after; one commit per change with its bytes; a
 ledger row in section 9; the candidates rejected, with the reason for each.
 
+### 4.5 Leap-C comparison audit for the remaining modules (step L, added 2026-10-28 by the owner)
+
+**Why.** About 6.4 KB of HOME code was never compared with Leap code: everything marked "Retain" in section 3.
+Another 3.8 KB is only adapted a routine at a time: the graphics kernel, keyboard, interrupt and boot. The owner
+asked for each of these to be audited against Leap-C, unless that would have no value.
+
+**What Leap-C has** [S, `~/2068-Leap-C` at `b918527`]:
+- **`platform/`**: Leap V2 v2.0.1's kernel, vendored with recorded deltas D1-D21 (`platform/UPSTREAM.md`,
+  `MANIFEST`). Auditing it covers Leap V2's kernel too.
+- **`src/runtime/library.asm`**: the C library (`LIB_PRINT`, `LIB_PRINTF`, `LIB_ITOA`/`UTOA`/`ATOI`, `LIB_AT`,
+  `LIB_TAB`, string and memory routines, `LIB_PLOT`, `LIB_DRAW`, `LIB_POINT`, `LIB_SPGET`, `LIB_SPPUT`,
+  `LIB_GETKEY`, `LIB_INKEY`, `LIB_INP`, `LIB_BEEP`, `LIB_SOUND`).
+- **`src/runtime/helpers.asm`**: integer helpers (multiply, divide, shifts, compare).
+- **`src/shell`**: the shell. **`src/compiler`**: the C compiler.
+
+Leap-C has no Forth interpreter, no printer code, and no 64-column mode (removed 2026-08-20).
+
+**Scope, judged by value** [S; each judgement is checked during the audit]:
+
+| Forth module | HOME B [M] | Leap-C counterpart | Value |
+|---|---:|---|---|
+| Graphics kernel | 2,596 | `platform/kernel/graphics/graphics.asm` (Leap V2 plus D6, D8, D12, D13, D21) | **High.** Forth's kernel was scaffolded from 2068-Leap's (`96aea38`); diff the two routine by routine (text, scroll, line, circle, attributes). D and K then use the findings |
+| Graphics words | 766 | `LIB_PLOT`, `LIB_DRAW`, `LIB_POINT`, `LIB_ATTRF`, `LIB_MODE`, `LIB_SPGET`/`SPPUT` | Medium: clamping, argument checks, sprite get/put |
+| Strings | 989 | `LIB_STRLEN`, `STRCPY`, `STRCAT`, `STRNCPY`, `STRCHR`, `STRCMP`, `MEMSET`, `MEMCPY`, `MEMMOVE`, `MEMCMP` | Medium: the copy, compare and search primitives under the Forth words |
+| Output words | 327 | `LIB_PRINT`, `LIB_ITOA`, `LIB_UTOA`, `LIB_PRINTF`, `LIB_AT`, `LIB_TAB` | Medium: number formatting and cursor positioning |
+| Keyboard and interrupt kernel | 625 | `platform/kernel/io` (D7), `platform/kernel/interrupt` (D4) | Medium: whatever K (D7) and B (BREAK) do not already take |
+| Integer words | ~703 | `helpers.asm` shifts and compare, `LIB_ABS`, `LIB_ATOI` | Low to medium. Multiply and divide are O10, in F; number parsing is F item 4 |
+| Sound words | ~185 | `LIB_SOUND`, `platform/rom/exrom_sound.asm` (D19) | Low: small, already fixed in R0 (O9) |
+| Boot | 599 | `src/rom/home.asm` | Low: mostly vectors, veneers and padding; check the cold-start sequence only |
+| Misc I/O | 133 | `LIB_INP` | Low: fold into the integer or output lane |
+| Interpreter and compiler, DO/LOOP | 2,256 | none: the C compiler and its code generator are not a Forth interpreter | **No value**; step Z covers them |
+| Errors (THROW/CATCH, ABORT) | 252 | `src/runtime/rtexit.asm`, C's exit and runtime error, a different model | No value beyond B's BREAK latch (D4); step Z |
+| 64-column mode | 460 | none (removed in Leap) | No value; step Z |
+| Printer | 338 | none | No value; step Z (provenance already accepted, decision 5) |
+
+**Method.** Read-only, with no code changes. For each module with value:
+- A routine map, Forth to Leap-C, with bytes [M] on both sides, speed where a benchmark exists, behaviour
+  differences, bugs Leap-C fixed that Forth still has, and provenance (Leap-C's 12-byte scan status).
+- A recommendation per routine: replace, adapt, or keep. Every replacement becomes an O-item in section 5 and
+  is placed in a step: an existing one (D, K, B, F, Z) or a new one.
+- Delegate the inventories per the owner's orchestration brief, and verify every claim a recommendation rests on.
+
+**When.** L is read-only, so it can run alongside E's harness work. It must finish before D, K and B, which touch
+the same graphics and keyboard code, and before Z, whose scope it changes.
+
 ---
 
 ## 5. Other findings
@@ -329,7 +384,7 @@ ledger row in section 9; the candidates rejected, with the reason for each.
 | O7 | No pause/timing word | 2 | Leap `AY_WAIT_FRAMES` (HALT counting, frame-wrap safe, 7 B) | new word `MS` or `PAUSE` | ~+20 B | `CHIME_DELAY` has the same wrap class, harmless at boot |
 | O8 | `di` in `BANK_PAGE_EXROM_IN/OUT` drops frame interrupts | 2 | Leap-C D14 (47/11,232 frames lost [L]) | `kernel/bank/bank.asm` | −2 B | Low impact today (graphics EXROM only). **Done in step R0 (`684065f`), −2 B [M]**; frames lost 38% → 0 in a paging loop, §6.7 |
 | O9 | `SOUND` rejects register 0 | 3 | Leap `6493615` | `core/sound.asm` ~126 | −3 B | Optional. **Done in step R0 (`2dc9cf6`), −8 B [M]** (the chime's direct register-0 write goes too), §6.7 |
-| O10 | Faster unsigned multiply/divide | 2 | Leap-C `RT_UMUL/RT_UDIV` | `kernel/math/math.asm` | ± | 60000/7: 3,584 → 1,479 T [L] |
+| O10 | Faster unsigned multiply/divide | 2 | Leap-C `RT_UMUL/RT_UDIV` | `kernel/math/math.asm` | ± | 60000/7: 3,584 → 1,479 T [L]. **Scheduled in step F (owner, 2026-10-28)**, §4.2 item 6 |
 | O11 | Dead code | — | — | io, graphics, mode64 | −64 B | Verify each before removal. **Done in step R0 (`de5d735`), −64 B [M]**, §6.7 |
 | O12 | `jp` → `jr` | — | Leap-C `tools/relax_jumps.py` | various | ≤ −30 B | Many sites are deliberately `jp`; lowest priority. **Done in step R0 (`bcf45ac`), −20 B [M]** (30 candidates; 10 left as `jp`), §6.7 |
 
@@ -800,7 +855,8 @@ measured ledger row (§9).
 | **R1** Cartridge EXROM paging | Make `-DCARTRIDGE` able to page the EXROM | +303 (cartridge only; Home 0) | 0 | G |
 | **S** Storage rebuild | §4.1 items 1-5; T14 | −11 then +40-70 | +~60 | R0 |
 | **E** Console + editor rebuild | §4.3; line store first, then engine evaluation, then view; T11, T12 | −370 to +80 | +2,200-2,600 | S (in-place save), R1, T11 |
-| **F** Float rebuild | §4.2; T13 | ~0 (±150) | 0 to +600 | R0, T11, T13 |
+| **F** Float rebuild | §4.2 (with O10, item 6); T13 | ~0 (±150), O10 not yet measured | 0 to +600 | R0, T11, T13 |
+| **L** Leap-C comparison audit (read-only) | §4.5 | 0 (it schedules work) | 0 | — (before D, K, B and Z) |
 | **Z** Size pass on retained code | §4.4; tools: z80-skills `shrink-z80` and its scripts | − (measure first; no estimate) | − | E, F |
 | **K** Keys and glyphs | O3 plus `[']`, `[CHAR]`, `\`, `[ ]` | +~100 | 0 | R0 or E savings |
 | **D** Display speed | O4 | ≤0 | 0 | — |

@@ -31,15 +31,28 @@ section 9 the ledger, section 10 the owner decisions, and section 6 the per-step
    `rom/exrom_editor.asm` engine replace the 998 B `core/editor.asm`? about −370 B [E]), then the full-screen
    view in the EXROM (+2.2-2.6 KB [E]). Write a spec first (like `STORAGE_SPEC.md`), then the oracle on the old
    build, then the code.
-2. **Step F: float rebuild** (section 4.2), with the 5-byte Sinclair format and Leap-C `fpcore`.
+2. **Step L: Leap-C comparison audit** (section 4.5). It is read-only, so it can run alongside E's harness work,
+   and must finish before D, K, B and Z. Audit against Leap-C (`platform/` is Leap V2's kernel plus deltas;
+   `src/runtime/library.asm` and `helpers.asm`) every HOME module never compared with Leap code. The value table
+   in 4.5 says where it is worth it:
+   - High: the graphics kernel.
+   - Medium: graphics words, strings, output words, keyboard/interrupt.
+   - Low: integer words, sound words, boot, misc I/O.
+   - None: interpreter/compiler, DO/LOOP, errors, 64-column mode, printer.
+
+   Each replacement found becomes an O-item placed in a step.
+3. **Step F: float rebuild** (section 4.2), with the 5-byte Sinclair format and Leap-C `fpcore`.
+   - **Includes O10:** integer multiply and divide go to Leap-C's register-only `src/runtime/helpers.asm`
+     routines (1.4-2.3× faster [L]). Keep `MATH_SQRT16`, `SGN16` and `RND16`, which Leap-C deleted, or take
+     Leap-C's xorshift `rand`, whichever measures smaller. The sieve and string benchmarks must hold or improve.
    - Oracle T13: Leap-C `tools/fpmodel.py` and `tools/floattest.py`.
    - Conditions: if `bench_float` gets slower, its baseline reset needs the owner's OK; if HOME is short,
      SIN/COS/TAN move to the EXROM.
    - Run the provenance scan on `fpcore` before adopting it (decision 4's condition).
    - Smoke ROMs p8, p18, p19, p22, p23, p29, p30, p34, p35 and p42 need regenerating.
-3. **Small steps, independent:** K (keys and glyphs `[ ] \ { } | ~ ^`, +~100 B), D (`GFX_CLEAR_ROW` speed),
+4. **Small steps, after L:** K (keys and glyphs `[ ] \ { } | ~ ^`, +~100 B), D (`GFX_CLEAR_ROW` speed),
    B (BREAK latch and a pause word, +~35 B).
-4. **Step Z: size pass on the retained code**, after E and F (section 4.4). Tools: the z80-skills `shrink-z80`
+5. **Step Z: size pass on the retained code**, after E, F and L (section 4.4). Tools: the z80-skills `shrink-z80`
    skill and its scripts.
 
 ## How the owner wants the work done
