@@ -34,6 +34,7 @@ STORAGE_HEADER_PARAM2_OFF    EQU 15  ; TEXT: the length again; LIB: LATEST
 STORAGE_HEADER_PAYLOAD_LEN   EQU 17
 STORAGE_HEADER_ATTEMPTS_MAX  EQU 15  ; headers refused before the search gives up
 STORAGE_NO_AUTOSTART         EQU $8000
+STORAGE_BLOCK_GAP_FRAMES     EQU 50      ; STORAGE_SAVE's pause between header and data
 
     ASSERT STORAGE_HEADER_NAME_OFF = STORAGE_HEADER_TYPE_OFF + 1
     ASSERT STORAGE_HEADER_NAME_OFF + STORAGE_HEADER_FILENAME_LEN = STORAGE_HEADER_LENGTH_OFF ; (sysvars.inc)
@@ -88,8 +89,15 @@ STORAGE_SAVE:
     call STORAGE_SEND_BLOCK             ; carry set = sent whole
     pop  de
     pop  ix
+    jr   nc, .stopped
+    ei                                  ; the gap between the blocks: 50 frames (1 s at 50 Hz),
+    ld   b, STORAGE_BLOCK_GAP_FRAMES    ;   as on a stock tape. Without it the data block's pilot
+.gap:                                   ;   follows the header's closing edge by ~2,400 T, which
+    halt                                ;   tape tools (tools/tapes.py's decoder among them) read
+    djnz .gap                           ;   as more bits of the header
     ld   a, STORAGE_TYPE_DATA
-    call c, STORAGE_SEND_BLOCK
+    call STORAGE_SEND_BLOCK
+.stopped:
     ld   b, $FF
     ccf
     ei

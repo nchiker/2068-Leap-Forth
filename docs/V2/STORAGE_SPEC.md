@@ -158,7 +158,10 @@ LIB data block: dictionary bytes, then CRC-16 low byte, high byte (D4).
   1. Build the header.
   2. Send it.
   3. If the header was stopped, return **without sending the data block**.
-  4. Otherwise send the data block.
+  4. Otherwise wait 50 frames (1 s at 50 Hz, `HALT`, interrupts on), as a stock tape has between its blocks, and send
+     the data block. (Added after the oracle's first run on the new build [M]: with no gap, the data pilot followed the
+     header's closing edge by about 2,400 T, and the test decoder, like other tape tools that end a block at a long
+     pulse, read the pilot as more header bits. 8 B.)
 - **Out:** carry clear = saved; carry set = stopped by SPACE (Leap V2's polarity, `LV storage.asm:88-91`).
 - **Interrupts** are enabled on every exit.
 
