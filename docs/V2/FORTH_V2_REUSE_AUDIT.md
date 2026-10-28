@@ -77,7 +77,7 @@ Both scratch builds were byte-identical to the committed `build/` images.
 no reserve guard in `make check`.
 
 **Constraint:** the `-DCARTRIDGE` build cannot page the EXROM (`fd36edd`). Every section moved to
-the EXROM is absent from the cartridge build until that is fixed (rebuild R1 below).
+the EXROM is absent from the cartridge build until that is fixed (rebuild R1 below; **done**, §6.9).
 
 ---
 
@@ -549,6 +549,45 @@ O5 done as approved (owner decision 2): `BEEP` plays on the AY chip. HOME free *
   its audio capture, not by ear. ZEsarUX runs 50 Hz frames against the real machine's 60 Hz and a 1.7734 MHz AY
   against 1.764 MHz, so a note lasts 20% longer there and sounds 0.53% sharper (the same findings as Leap's study).
 
+### 6.9 Step R1 results (2026-10-28, branch `v2/step-r1-cartridge-exrom`, from `v2/step-a-ay-beep`)
+
+The cartridge build now has `RECT`, `POLYGON`, `POLYGON-FILL` and `SPRITE-DEFINE/SHOW/HIDE`. Spec first:
+`docs/V2/CARTRIDGE_EXROM_SPEC.md`. Port `$FF` bit 7 is a global DOCK/EXROM select (measured in ZEsarUX), so a
+Home-RAM trampoline cannot keep the `$0100` callbacks and the interrupt handler in the cartridge. The design: the
+cartridge carries `graphics_exrom.bin` as DOCK chunk 5 (`tools/make_dck.py` takes it as a third argument and checks
+its service-table trailer); paging chunk 5 is one `OUT` to `$F4` (`CART_HSR | $20` in, `CART_HSR` out) and `$FF` is
+never written. `kernel/bank/bank.asm` has the two variants under `IFDEF CARTRIDGE`; the Home build's code is unchanged.
+`CART_CHUNK_SPEC` is asserted at assembly (bit 3 and bit 5 stay Home).
+
+- **Bytes [M].** Cartridge free 781 → 478 (-303 B; the spec estimated about 312 B [E]). Home 469, both Blackjack
+  images (797) and the Gallery (802) and the EXROM (6,682) are unchanged: the Blackjack cartridge does not include the
+  six words. Floor for `forth_boot_cart.bin` lowered 781 → 478 in `tools/budget.toml` in the same commit.
+- **Oracle** (`tools/cart_diff.py`, `make cartdiff`, about 15 minutes, not in `make test`): the same typed program on
+  the Home build and the cartridge build, on ZEsarUX and on TSRun's real core under Node. Compared exactly: screen
+  `$4000-$5AFF`, both stacks, `HERE`/`LATEST` and the user dictionary (ROM addresses compiled into definitions are
+  compared by symbol name, the count is printed), the EXROM-side state cells, and that chunk 5 is paged out and the
+  control line `1 2 + .` prints `3 OK`. 13 cases (each of the six words, reversed corners and colours, a 12-vertex
+  polygon, 240-iteration and mixed 30-iteration paging loops, a compiled word run twice). **Result: 26 of 26
+  case/emulator pairs identical** (`docs/V2/evidence/r1_cartdiff_pass.txt`). **It catches the original failure:**
+  against the old tree (guards removed, home-variant paging, no chunk 5) 26 of 26 fail, 22 of them with the
+  cartridge unresponsive after the first `RECT`, and TSRun's depth spy sees `BANK_EXROM_DEPTH` corrupted
+  (`r1_cartdiff_old_build_fails.txt`). `--selftest` flips a screen bit, a stack cell, a dictionary byte, a call
+  operand, an EXROM-state byte and moves `HERE`; all six are reported, the unmutated pair passes (`r1_cartdiff_selftest.txt`).
+- **Cartridge without chunk 5** (a 16K `.dck` like the pre-R1 one), TSRun only, 4 of the 13 cases
+  (`rect_basic`, `polygon_fill`, `sprite_show`, `loop_all_six`): the six words draw nothing (the harness reports the
+  screen and EXROM-state differences, as it must), but the machine stays responsive, the control line prints `3 OK`,
+  and chunk 5 is paged out at idle (`r1_cartdiff_no_chunk5.txt`). Not run on ZEsarUX.
+- **Nested page-in.** No such path exists: `BANK_PAGE_EXROM_IN` has one caller (`EXROM_CALL_SLOT`) and the five
+  `$0100` routines the EXROM code calls back cannot reach it (`tools/cart_nested_reach.py`, 254 instructions, no
+  indirect transfers). TSRun's store spy saw `BANK_EXROM_DEPTH` reach at most 1 in every case, on both builds.
+- **Interrupts.** Chunks 0-1 are DOCK in both paging states and the handler touches nothing in chunk 5, so the paging
+  stays interruptible (spec section 5). Not measured with a frame counter as step R0 did for the Home build.
+- **Verification limits.** There is no hardware. Both emulators agreeing is two emulators agreeing: ZEsarUX runs 50 Hz
+  frames, TSRun 60 Hz with its own DOCK model, and the stock ROM's handoff with an unnamed DOCK chunk was observed,
+  not disassembled. A real cartridge board whose decoding differs from the emulators' model is outside what this step shows.
+  An EPROM cartridge needs the 8K chunk-5 image burned at DOCK `$A000` as well (`cartridge/forth_boot_chunk5.bin` in the
+  dist package); without it the six words do nothing.
+
 **Not recommended:** full platform vendoring (`platform/MANIFEST` + `deltas/*.patch`). Leap's kernel
 changes since the fork are mostly BASIC-specific or shrink work; this ledger is the one-time record
 of what was judged. A full package ABI is also not needed now: Forth already has
@@ -593,7 +632,7 @@ measured ledger row (§9).
 | **T** Test infrastructure | T1-T3, T6, T7, T8 (benchmark baseline = plan Phase 2), T10 | 0 | 0 | — |
 | **G** Guards | T4, T5, NOTICE, T9 power-on test, O1 | +8 | 0 | T |
 | **R0** Recover | O11 dead code, O2 glyph, O8, O9, O12 | −80-110 | 0 | G |
-| **R1** Cartridge EXROM paging | Make `-DCARTRIDGE` able to page the EXROM | ? | 0 | G |
+| **R1** Cartridge EXROM paging | Make `-DCARTRIDGE` able to page the EXROM | +303 (cartridge only; Home 0) | 0 | G |
 | **S** Storage rebuild | §4.1 items 1-5; T14 | −11 then +40-70 | +~60 | R0 |
 | **E** Console + editor rebuild | §4.3; line store first, then engine evaluation, then view; T11, T12 | −370 to +80 | +2,200-2,600 | S (in-place save), R1, T11 |
 | **F** Float rebuild | §4.2; T13 | ~0 (±150) | 0 to +600 | R0, T11, T13 |
@@ -617,6 +656,7 @@ E and K.
 | **G** Guards | `8670a4f` T4, `d17d5e4` T5, `e25c803` NOTICE, `6263919` T9, `861a823` O1 | 68 [M] (cartridge 380) | 6,682 [M] | Cold start: 0 B → 0 B. The one `MEM_FILL_ZERO` now runs to the end of `UDG_TABLE` (`ld bc` immediate `$7000` → `$7228`); [E] was +8 B for a separate fill. **Floors set at 68 HOME / 380 cart / 449, 449, 457 demos / 6,682 EXROM; none lowered.** Targets 200 / 150 (HOME is 132 B short, EXROM met) | Boot to the prompt is 4,442,252 T-states with and without O1 (frame-synced chime wait absorbs the 552 extra bytes cleared); `make bench` unchanged (bench ROMs have their own cold start) | `make test`: 68 PASS, 0 FAIL, 1 SKIP, and POWERON 7/7 [M] |
 | **R0** Recover | `b16011a` test_blockgfx, `7e7c461` O2, `de5d735` O11, `684065f` O8, `2dc9cf6` O9, `6ddb8c9` bench seed, `bcf45ac` O12 | 174 [M] (cartridge 486; Blackjack 522, Gallery 527) | 6,682 [M] | HOME 68 → 174 free (+106): O2 −12, O11 −64, O8 −2, O9 −8, O12 −20 (estimate was −80-110). **Floors raised to 174 HOME / 486 cart / 522, 522, 527 demos / 6,682 EXROM**; HOME is 26 B short of the 200 B target | O8: a paging loop kept 62% of frames before and 100% after (ZEsarUX). `make bench`: every figure within ±0.04% of the Phase 2 baseline; pixel's seed fixed (RESULT stays 159) | `make test`: 70 PASS, 0 FAIL, 1 SKIP, POWERON 7/7 [M]; `make check`, `make repro` (260 files) pass |
 | **A** AY BEEP | `5f4678f` BEEP, `6086ecc` chime wait; spec `docs/V2/AY_BEEP_SPEC.md` | 469 [M] (cartridge 781; Blackjack 797, Gallery 802) | 6,682 [M] | HOME 174 → 469 free (+295): `core/beep.asm` ~439 → 219 B (+220), `SOUND_BEEP` left out of the product and bench ROMs (+55), chime wait inline (+20). **Floors raised to 469 HOME / 781 cart / 797, 797, 802 demos / 6,682 EXROM**; HOME now exceeds the 200 B target by 269 B | Boot to the prompt 4,442,252 → 4,442,116 T (same frame count). A note no longer holds interrupts off; `make bench` within ±0.04% of the Phase 2 baseline | `make test`: 70 PASS, 0 FAIL, 1 SKIP, POWERON 7/7 [M]; `make check`, `make repro` pass |
+| **R1** Cartridge EXROM paging | (this commit); spec `docs/V2/CARTRIDGE_EXROM_SPEC.md` | 469 [M] (cartridge 478; Blackjack 797, Gallery 802) | 6,682 [M] | Cartridge 781 → 478 free (-303): the six graphics words and the one-`OUT` paging variant (estimate -312). Home images unchanged. **Floors: cart lowered to 478** (ledger row for the lowered floor); others unchanged | Home build's code unchanged; `make bench` not affected | `make test`: 70 PASS, 0 FAIL, 1 SKIP [M]; `make cartdiff`: 26/26 identical, old build 26/26 fail, selftest 7/7 checks; `make repro` pass |
 | | | | | | | |
 
 ---

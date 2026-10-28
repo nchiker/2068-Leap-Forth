@@ -157,8 +157,9 @@ are loaded through entirely different commands. See
 [`ts_pico_setup.md`](ts_pico_setup.md) for the corrected, sourced
 picture — including what already works on TS-Pico today (the full
 non-graphics product, via its Home-ROM slot) and what doesn't yet
-(the graphics extension, which has no path to TS-Pico's EXROM at all
-since TS-Pico doesn't have one).
+(the graphics extension: TS-Pico has no EXROM, but the DOCK cartridge
+`forth_boot.dck` carries that code as DOCK chunk 5, see
+[`V2/CARTRIDGE_EXROM_SPEC.md`](V2/CARTRIDGE_EXROM_SPEC.md); emulator-checked only).
 
 ## Summary of confirmed status
 

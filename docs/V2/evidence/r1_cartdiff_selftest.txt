@@ -1,0 +1,22 @@
+selftest unmutated cart (must PASS)                 expected PASS got PASS  [ok]
+   PASS  selftest               tsrun    screen=0 stack=0 dict=0 (normalised calls=8 words=1, 8 ROM calls in 34B) state=0 ctl=ok
+selftest one flipped screen bit                     expected FAIL got FAIL  [ok]
+   FAIL  selftest               tsrun    screen=1 stack=0 dict=0 (normalised calls=8 words=1, 8 ROM calls in 34B) state=0 ctl=ok
+         - screen differs in 1 byte(s): 4100:88/80
+selftest flipped data-stack cell                    expected FAIL got FAIL  [ok]
+   FAIL  selftest               tsrun    screen=0 stack=1 dict=0 (normalised calls=8 words=1, 8 ROM calls in 34B) state=0 ctl=ok
+         - stacks differ: data depth 3/3 float depth 1/1 IX 97FA/97FA IY 8FFD/8FFD
+selftest flipped dictionary byte (a name byte)      expected FAIL got FAIL  [ok]
+   FAIL  selftest               tsrun    screen=0 stack=0 dict=1 (normalised calls=8 words=1, 8 ROM calls in 34B) state=0 ctl=ok
+         - dictionary differs: 1 unexplained byte(s) +0003:53/73 HERE 9822/9822 LATEST 9800/9800 len 34/34
+selftest CALL operand -> another symbol             expected FAIL got FAIL  [ok]
+   FAIL  selftest               tsrun    screen=0 stack=0 dict=1 (normalised calls=7 words=1, 8 ROM calls in 34B) state=0 ctl=ok
+         - dictionary differs: 1 unexplained byte(s) +0006:07/01 HERE 9822/9822 LATEST 9800/9800 len 34/34
+selftest flipped EXROM-state byte (sprite buffer)   expected FAIL got FAIL  [ok]
+   FAIL  selftest               tsrun    screen=0 stack=0 dict=0 (normalised calls=8 words=1, 8 ROM calls in 34B) state=1 ctl=ok
+         - EXROM-side state differs in 1 byte(s)
+selftest HERE moved by one                          expected FAIL got FAIL  [ok]
+   FAIL  selftest               tsrun    screen=0 stack=0 dict=2 (normalised calls=8 words=1, 8 ROM calls in 35B) state=0 ctl=ok
+         - dictionary differs: 0 unexplained byte(s)  HERE 9822/9823 LATEST 9800/9800 len 34/35
+selftest: 7/7 checks behaved as expected
+exit=1

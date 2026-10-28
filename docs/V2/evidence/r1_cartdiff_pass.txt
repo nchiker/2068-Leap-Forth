@@ -1,0 +1,42 @@
+PASS  rect_basic             zesarux  screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok
+PASS  rect_basic             tsrun    screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok  [max BANK_EXROM_DEPTH home=1 cart=1]
+INFO  rect_basic             HOME screen ZEsarUX vs TSRun: identical
+PASS  rect_reversed_colour   zesarux  screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok
+PASS  rect_reversed_colour   tsrun    screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok  [max BANK_EXROM_DEPTH home=1 cart=1]
+INFO  rect_reversed_colour   HOME screen ZEsarUX vs TSRun: identical
+PASS  rect_span_cells        zesarux  screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok
+PASS  rect_span_cells        tsrun    screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok  [max BANK_EXROM_DEPTH home=1 cart=1]
+INFO  rect_span_cells        HOME screen ZEsarUX vs TSRun: identical
+PASS  polygon                zesarux  screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok
+PASS  polygon                tsrun    screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok  [max BANK_EXROM_DEPTH home=1 cart=1]
+INFO  polygon                HOME screen ZEsarUX vs TSRun: identical
+PASS  polygon_fill           zesarux  screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok
+PASS  polygon_fill           tsrun    screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok  [max BANK_EXROM_DEPTH home=1 cart=1]
+INFO  polygon_fill           HOME screen ZEsarUX vs TSRun: identical
+PASS  sprite_define          zesarux  screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok
+PASS  sprite_define          tsrun    screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok  [max BANK_EXROM_DEPTH home=1 cart=1]
+INFO  sprite_define          HOME screen ZEsarUX vs TSRun: identical
+PASS  sprite_show            zesarux  screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok
+PASS  sprite_show            tsrun    screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok  [max BANK_EXROM_DEPTH home=1 cart=1]
+INFO  sprite_show            HOME screen ZEsarUX vs TSRun: identical
+PASS  sprite_hide            zesarux  screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok restored=ok
+PASS  sprite_hide            tsrun    screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok restored=ok  [max BANK_EXROM_DEPTH home=1 cart=1]
+INFO  sprite_hide            HOME screen ZEsarUX vs TSRun: identical
+PASS  stack_kept             zesarux  screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok
+PASS  stack_kept             tsrun    screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok  [max BANK_EXROM_DEPTH home=1 cart=1]
+INFO  stack_kept             HOME screen ZEsarUX vs TSRun: identical
+PASS  nested_big_polygon     zesarux  screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok
+PASS  nested_big_polygon     tsrun    screen=0 stack=0 dict=0 (normalised calls=0 words=1, 0 ROM calls in 0B) state=0 ctl=ok  [max BANK_EXROM_DEPTH home=1 cart=1]
+INFO  nested_big_polygon     HOME screen ZEsarUX vs TSRun: identical
+PASS  loop_rect              zesarux  screen=0 stack=0 dict=0 (normalised calls=25 words=1, 25 ROM calls in 103B) state=0 ctl=ok
+PASS  loop_rect              tsrun    screen=0 stack=0 dict=0 (normalised calls=25 words=1, 25 ROM calls in 103B) state=0 ctl=ok  [max BANK_EXROM_DEPTH home=1 cart=1]
+INFO  loop_rect              HOME screen ZEsarUX vs TSRun: identical
+PASS  loop_all_six           zesarux  screen=0 stack=0 dict=0 (normalised calls=72 words=1, 72 ROM calls in 371B) state=0 ctl=ok
+PASS  loop_all_six           tsrun    screen=0 stack=0 dict=0 (normalised calls=72 words=1, 72 ROM calls in 371B) state=0 ctl=ok  [max BANK_EXROM_DEPTH home=1 cart=1]
+INFO  loop_all_six           HOME screen ZEsarUX vs TSRun: identical
+PASS  compiled_rect_twice    zesarux  screen=0 stack=0 dict=0 (normalised calls=8 words=1, 8 ROM calls in 34B) state=0 ctl=ok
+PASS  compiled_rect_twice    tsrun    screen=0 stack=0 dict=0 (normalised calls=8 words=1, 8 ROM calls in 34B) state=0 ctl=ok  [max BANK_EXROM_DEPTH home=1 cart=1]
+INFO  compiled_rect_twice    HOME screen ZEsarUX vs TSRun: identical
+
+26 case/emulator pair(s), 0 FAIL
+exit=0

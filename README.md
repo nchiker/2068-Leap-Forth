@@ -123,11 +123,16 @@ or in ZEsarUX, over ZRCP: `smartload build/forth_boot.dck` then
 reset). Either emulator needs its own copy of the genuine stock TS2068
 ROM already configured — this project doesn't ship one, since it isn't
 ours to redistribute, but every emulator here already bundles or
-readily accepts one. The raw `build/forth_boot_cart.bin` is what goes
-on the EPROM of a real cartridge. This currently covers only the base
-dictionary — the graphics extension has no cartridge path yet (it
-pages the EXROM bank, a physically different bank from DOCK — see
-`docs/lros_cartridge.md`).
+readily accepts one. The cartridge has the whole dictionary, including
+`RECT`, `POLYGON`, `POLYGON-FILL` and `SPRITE-DEFINE`/`SHOW`/`HIDE`: the
+graphics code (the same `graphics_exrom.bin` the home build uses as its
+EXROM) is carried in the cartridge as DOCK chunk 5 and paged in with one
+`OUT` to port `$F4`, so no EXROM is needed and port `$FF` is never touched
+(`docs/V2/CARTRIDGE_EXROM_SPEC.md`). For an EPROM cartridge,
+`build/forth_boot_cart.bin` is chunks 0-1 (`$0000-$3FFF`) and
+`build/graphics_exrom.bin` goes at DOCK `$A000` (chunk 5). Checked in
+ZEsarUX and TSRun (`make cartdiff`); not on a physical cartridge.
+The Blackjack cartridge has none of those words and stays 16K.
 
 ### RECT, POLYGON, POLYGON-FILL, and sprites (Phase 65)
 
@@ -239,8 +244,9 @@ runs on TS-Pico today, two independent ways: as a plain Home-ROM
 replacement, or non-destructively as a DOCK cartridge
 (`build/forth_boot.dck`, confirmed booting under Fuse and ZEsarUX with
 the genuine stock ROM — real TS-Pico hardware itself untested so far).
-The graphics extension doesn't have a path to TS-Pico yet (it has no
-EXROM slot). See [`docs/ts_pico_setup.md`](docs/ts_pico_setup.md) for
+The graphics words need no EXROM slot in the DOCK cartridge build: it
+carries their code as DOCK chunk 5 (emulator-checked; TS-Pico itself
+untried). See [`docs/ts_pico_setup.md`](docs/ts_pico_setup.md) for
 the corrected, firmware-sourced picture of exactly how TS-Pico's
 ROM/DOCK loading actually works, and exact load commands.
 
@@ -265,7 +271,7 @@ The zip's `README-FIRST.txt` explains every file in it; in short:
 - `roms/stock_shaped_exrom.bin` — 8K EXROM placeholder.
 - `roms/forth_boot_combined_24k.bin` / `forth_boot_graphics_combined_24k.bin` — Home+EXROM concatenated, for ZEsarUX (placeholder and real graphics EXROM respectively).
 - `roms/graphics_exrom.bin` — the real 8K graphics EXROM (Phase 65).
-- `cartridge/*.dck`, `cartridge/*_cart.bin` — both product ROMs as DOCK/LROS cartridges, for Fuse/ZEsarUX/real hardware/TS-Pico — see "Or leave the stock ROM in place" above. Base dictionary only; the graphics extension has no cartridge path yet.
+- `cartridge/*.dck`, `cartridge/*_cart.bin` — both product ROMs as DOCK/LROS cartridges, for Fuse/ZEsarUX/real hardware/TS-Pico — see "Or leave the stock ROM in place" above. `forth_boot.dck` includes the graphics words (code in DOCK chunk 5; `forth_boot_chunk5.bin` is that 8K chunk for an EPROM); the Blackjack cartridge is 16K.
 - `eightyone/*.dck` — the placeholder and graphics EXROM wrapped for EightyOne's cartridge slot (a different mechanism from the DOCK cartridges above — bank `$FE`, not `$0`; NOT usable as-is on TS-Pico — see `docs/ts_pico_setup.md`, and `docs/eightyone_setup.md` for which of these actually work on real EightyOne).
 - `experimental-lros/` — the earlier, unverified LROS/DOCK boot stub (see `docs/lros_cartridge.md`); superseded for most purposes by the `cartridge/` builds above, kept for reference.
 - `symbols/`, `docs/`, `run_fuse.sh`, `BUILD_INFO.txt` — listings, docs as Markdown/PDF/DOCX, a ready-to-run Fuse script, and build provenance.

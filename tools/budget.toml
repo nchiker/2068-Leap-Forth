@@ -30,7 +30,7 @@ target = 200
 [[image]]
 file   = "forth_boot_cart.bin"
 title  = "HOME, DOCK cartridge build (Forth)"
-floor  = 781
+floor  = 478
 target = 200
 
 [[image]]
@@ -59,4 +59,5 @@ target = 150
 
 # Every floor change after the first commit of this file, newest last:
 #   file, floor before -> after, reason (the ledger row in the audit's section 9 that justifies it)
-# (none yet: the floors above are the measured free space at step G, branch v2/step-g-guards)
+#   forth_boot_cart.bin: 781 -> 478 (-303 B), step R1: the cartridge now carries RECT, POLYGON, POLYGON-FILL and
+#     SPRITE-DEFINE/SHOW/HIDE and the one-OUT paging variant; the audit's section 9 R1 row and section 6.9.

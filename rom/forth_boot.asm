@@ -87,6 +87,11 @@
 
 ; ---- RST 00: cold start ----
     IFDEF CARTRIDGE
+; The LROS chunk byte, and the port $F4 value the stock ROM's handoff leaves
+; behind (its complement: bit N of $F4 = 1 means chunk N comes from the DOCK).
+; kernel/bank/bank.asm builds its two $F4 writes from CART_HSR.
+CART_CHUNK_SPEC EQU %11111100
+CART_HSR        EQU (~CART_CHUNK_SPEC) & $FF
 ; ---- DOCK cartridge build (make forth-boot-cart): the 5-byte LROS header
 ; the stock ROM's initialization looks for at DOCK $0000 (TS2068
 ; Technical Manual §5.1.1). The OS copies it into SYSCON, enables the
@@ -97,7 +102,7 @@
     DB   $00                        ; not used
     DB   $01                        ; cartridge type 1 = LROS
     DW   CART_START                 ; start address, JP byte order
-    DB   %11111100                  ; chunk spec, LOW-active: chunks 0-1
+    DB   CART_CHUNK_SPEC            ; chunk spec, LOW-active: chunks 0-1
                                     ; in use ($0000-$3FFF), 2-7 stay
                                     ; Home. Bit 3 must be 1 so the OS's
                                     ; GOTO_BANK (in Home chunk 3) can
@@ -579,44 +584,18 @@ DICT_CHAIN_POINT DEFL H_J
 DICT_CHAIN_POINT DEFL H_ATXY
     INCLUDE "core/hires.asm"
 DICT_CHAIN_POINT DEFL H_NORMAL
-    IFNDEF CARTRIDGE
-; ---- RECT/POLYGON-FILL/SPRITE-* all reach their EXROM-resident impl
-; through kernel/bank/bank.asm's BANK_PAGE_EXROM_IN, which pages chunk
-; 5 by writing PORT_SCLD (port $FF) bit 7 -- DOCK vs EXROM -- before
-; PORT_BANK_HOME (port $F4) narrows that to chunk 5 alone. Port $FF's
-; bit 7 is a GLOBAL DOCK/EXROM select shared by every chunk $F4 already
-; marks non-Home, not a per-chunk one. In the -DCARTRIDGE build, chunks
-; 0-1 are non-Home for the entire run (the LROS header's own chunk spec
-; keeps the cartridge itself mapped there) and this very routine, plus
-; RECT's EXROM_CALL_SLOT trampoline, live inside chunk 0/1. The bit-7
-; write therefore swaps the code that's *currently executing* out from
-; under the CPU before the second, narrowing write ever runs.
-;
-; Confirmed by direct reproduction (2026-09-13, TSRun's real core
-; headless under Node, github.com/josef-jelinek/TSRun, insertDock +
-; forth_boot.dck + stock ts2068.rom): typing `10 10 30 30 RECT` under
-; the cartridge build corrupts the screen and leaves the machine
-; unresponsive to further input -- a control run with a harmless,
-; non-EXROM command on the same build stayed responsive throughout.
-; See NOTES_FROM_STRUCTURED_BASIC.md item 1 for the original review
-; that flagged this before it was reproduced.
-;
-; Until BANK_PAGE_EXROM_IN/OUT get a real fix (a trampoline and return
-; path living in RAM that's guaranteed to stay Home-mapped regardless
-; of $F4/$FF, e.g. chunk 4 -- see that file's own header on why chunk 4
-; is otherwise unused -- copied there and called through instead of
-; jumping to it directly from Dock), fail closed: the -DCARTRIDGE build
-; omits these words entirely rather than ship a build that crashes on
-; first use. The normal (non-cartridge) ROM build is unaffected --
-; every one of its chunks 0-3 IS Home, so $F4 never marks the code
-; that's calling BANK_PAGE_EXROM_IN as non-Home in the first place.
+; ---- RECT/POLYGON/POLYGON-FILL/SPRITE-* reach their EXROM-resident code through
+; kernel/bank/bank.asm. In the -DCARTRIDGE build that code travels in the cartridge
+; as DOCK chunk 5 and the paging is one OUT to port $F4 (step R1, docs/V2/
+; CARTRIDGE_EXROM_SPEC.md); before R1 these words were left out of that build
+; because the home paging sequence wrote port $FF bit 7 and swapped the
+; running cartridge out (docs/lros_cartridge.md has the history). ----
     INCLUDE "core/rectfill.asm"
 DICT_CHAIN_POINT DEFL H_RECT
     INCLUDE "core/polygon.asm"
 DICT_CHAIN_POINT DEFL H_POLYGONFILL
     INCLUDE "core/sprite.asm"
 DICT_CHAIN_POINT DEFL H_SPRITEHIDE
-    ENDIF
     INCLUDE "core/key.asm"
 DICT_CHAIN_POINT DEFL H_BREAKQ
     INCLUDE "core/mathfn.asm"

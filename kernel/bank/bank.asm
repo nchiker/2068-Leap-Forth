@@ -60,6 +60,18 @@
 ; assuming. Both routines still end with EI, so interrupts are on at
 ; the return exactly as before.
 ;
+; THE CARTRIDGE BUILD (-DCARTRIDGE, step R1, docs/V2/CARTRIDGE_EXROM_SPEC.md):
+; there, chunks 0-1 come from the DOCK for the whole run and port $FF bit 7
+; (DOCK vs EXROM) is a GLOBAL select for every chunk port $F4 marks non-Home,
+; so writing it would swap the running cartridge out. The cartridge therefore
+; carries the EXROM image (build/graphics_exrom.bin) as DOCK chunk 5 and the
+; paging routines below, under IFDEF CARTRIDGE, write ONLY port $F4: page-in
+; sets bit 5 on top of the cartridge's own chunk bits (CART_HSR, derived from
+; the LROS header byte in rom/forth_boot.asm), page-out restores CART_HSR.
+; Port $FF is never touched, so bit 7 stays 0 (DOCK). Chunks 0-1 are DOCK in
+; both states, so the interrupt argument above holds unchanged: the handler runs
+; from DOCK chunk 0 in either state and touches nothing in chunk 5.
+;
 ; EXROM's own entry convention: execution starts at the very first
 ; byte of the 8K image (i.e. $A000 once paged in), same as a ROM's own
 ; reset vector. Multiple services are reached via a fixed service
@@ -69,6 +81,15 @@
 
     IFNDEF KERNEL_BANK_ASM
     DEFINE KERNEL_BANK_ASM
+
+    IFDEF CARTRIDGE
+    ; CART_CHUNK_SPEC (rom/forth_boot.asm) is the LOW-active LROS chunk byte.
+    ASSERT (CART_CHUNK_SPEC & %00001000) != 0    ; chunk 3 stays Home (OS handoff)
+    ASSERT (CART_CHUNK_SPEC & %00100000) != 0    ; chunk 5 stays Home RAM: the
+                                                 ; DOCK chunk 5 is paged in by
+                                                 ; BANK_PAGE_EXROM_IN, never
+                                                 ; enabled by the OS
+    ENDIF
 
 ; ============================================================================
 ; BANK_PAGE_EXROM_IN
@@ -97,6 +118,13 @@ BANK_PAGE_EXROM_IN:
                                      ; is already EXROM (an outer,
                                      ; still-active caller put it
                                      ; there) — nothing to do
+    IFDEF CARTRIDGE
+    ld   a, CART_HSR | %00100000     ; the cartridge's own chunks stay
+                                     ; DOCK, chunk 5 joins them (DOCK
+                                     ; chunk 5 = the EXROM image).
+                                     ; ONE write; port $FF untouched
+    out  (PORT_BANK_HOME), a
+    ELSE
     ld   a, (PORT_FF_SHADOW)
     or   %10000000                   ; bit 7 only — EXROM, not Dock;
                                      ; bits 0-6 (video mode, INTEN) are
@@ -109,6 +137,7 @@ BANK_PAGE_EXROM_IN:
     ld   a, %00100000                ; bit 5 = chunk 5 only; every
                                      ; other chunk's bit stays 0 (Home)
     out  (PORT_BANK_HOME), a
+    ENDIF
 .already_paged_in:
     ei
     ret
@@ -141,8 +170,13 @@ BANK_PAGE_EXROM_OUT:
                                        ; an outer caller is still
                                        ; relying on chunk 5 staying
                                        ; EXROM-mapped
-    xor  a
-    out  (PORT_BANK_HOME), a         ; all chunks back to Home
+    IFDEF CARTRIDGE
+    ld   a, CART_HSR                 ; back to the cartridge's own
+                                     ; chunk bits: 0-1 stay DOCK
+    ELSE
+    xor  a                           ; all chunks back to Home
+    ENDIF
+    out  (PORT_BANK_HOME), a
 .still_nested:
 .depth_already_zero:
     ei

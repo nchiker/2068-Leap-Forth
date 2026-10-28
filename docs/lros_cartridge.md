@@ -43,7 +43,7 @@ replacement for `rom/forth_boot.asm`:
 | Loading mechanism | DOCK cartridge port | DOCK cartridge port |
 | Owns `$0000`? | No — stock Home ROM boots first, hands off | No — stock Home ROM boots first, hands off |
 | Status | The real product, confirmed booting under Fuse and ZEsarUX with the genuine stock ROM | Boot-stub proof of concept, **not yet run on real hardware or verified against a real DOCK/TS-Pico loader** |
-| Size | 16K (DOCK chunks 0-1) | One 8K DOCK chunk (chunk 0) |
+| Size | 16K (DOCK chunks 0-1) + the 8K graphics image as DOCK chunk 5 (since R1) | One 8K DOCK chunk (chunk 0) |
 | Content | Full 143-word dictionary | Border-cycle smoke test only (same role as `rom/main.asm`'s own Milestone 0) |
 
 ## Why it's a stub, not the full interpreter
@@ -155,11 +155,32 @@ Home ROM that boots first and hands off to it.
   compatible with this file format at the structural level (see
   `docs/ts_pico_setup.md`), and the file itself now boots on two real
   emulators. What's still unconfirmed is real hardware itself: TS-Pico
-  handoff behavior and DOCK-bank timing/activation quirks. The graphics
-  extension still can't reach TS-Pico either way — it pages the EXROM
-  bank, which TS-Pico has no way to substitute.
-- **RECT/POLYGON-FILL/SPRITE-* are deliberately absent from the
-  `-DCARTRIDGE` build (fixed 2026-09-13).** `kernel/bank/bank.asm`'s
+  handoff behavior and DOCK-bank timing/activation quirks. Since step R1
+  the graphics words no longer need an EXROM in the cartridge build (they
+  run from DOCK chunk 5, see below), so the old "TS-Pico has no way to
+  substitute the EXROM" obstacle does not apply to `forth_boot.dck`;
+  whether TS-Pico serves a DOCK chunk 5 is, like the rest, untried.
+- **RECT/POLYGON/POLYGON-FILL/SPRITE-* in the cartridge build: fixed in
+  step R1 (2026-10-28), kept below as history.** The design is in
+  `docs/V2/CARTRIDGE_EXROM_SPEC.md`: the cartridge carries the EXROM image
+  (`build/graphics_exrom.bin`, byte for byte) as **DOCK chunk 5**, and
+  `kernel/bank/bank.asm`'s cartridge variant pages chunk 5 with one `OUT` to
+  port `$F4` (`CART_HSR | $20`), never writing port `$FF`. The `.dck` is now
+  `00 02 02 00 00 00 02 00 00` (chunks 0, 1, 5; 24,585 bytes); the LROS
+  chunk byte stays `%11111100`, so the OS enables chunks 0-1 only and chunk 5
+  stays Home RAM until the first page-in. The words are in the cartridge
+  dictionary again, the three `IFNDEF CARTRIDGE` guards are gone, and
+  `make cartdiff` runs the same typed programs on the home build and the
+  cartridge build on two emulators and requires equal screens and stacks.
+  Note that the "trampoline in chunk 4" idea at the end of the history below
+  could not have worked: the EXROM code calls back into HOME through the
+  `$0100` jump table in cartridge chunk 0, and `$FF` bit 7 is global, so
+  chunk 5 and chunks 0-1 can never come from different banks.
+
+  *History: the section as it stood before R1.*
+
+- **(Before R1) RECT/POLYGON-FILL/SPRITE-* were deliberately absent from the
+  `-DCARTRIDGE` build (decided 2026-09-13).** `kernel/bank/bank.asm`'s
   `BANK_PAGE_EXROM_IN` pages chunk 5 to EXROM by first flipping port
   `$FF` bit 7 (DOCK vs EXROM — a GLOBAL select for every chunk port
   `$F4` already marks non-Home) and only then narrowing that to chunk

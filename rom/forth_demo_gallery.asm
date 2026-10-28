@@ -44,12 +44,12 @@
 ;     and every rom/test_*.asm graphics fixture already use) — copied
 ;     verbatim below, same slot order, since the prebuilt
 ;     graphics_exrom.bin's own call sites already assume that layout.
-;   - This is the NORMAL (non-cartridge) ROM+EXROM build only — the
-;     `-DCARTRIDGE` build deliberately omits RECT/POLYGON/SPRITE-*
-;     (see this project's own recent commit history) because of a real,
-;     documented bank-switch hazard specific to a DOCK cartridge
-;     session. That hazard does not apply here: this ROM never runs
-;     from DOCK.
+;   - This is the NORMAL (non-cartridge) ROM+EXROM build only; it has
+;     no -DCARTRIDGE target. (forth_boot's cartridge build used to omit
+;     RECT/POLYGON/SPRITE-* because of a bank-switch hazard specific to
+;     a DOCK cartridge; step R1 fixed that by carrying the EXROM code as
+;     DOCK chunk 5, docs/V2/CARTRIDGE_EXROM_SPEC.md)
+;     That hazard does not apply here: this ROM never runs from DOCK.
 ;   - rom/test_rect.asm and rom/test_sprite.asm were both rebuilt and
 ;     re-run fresh under real ZEsarUX (ZRCP) while specifying this file,
 ;     confirming border GREEN (all checkpoints pass) for RECT and for

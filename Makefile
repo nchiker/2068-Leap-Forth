@@ -88,7 +88,7 @@ ALL_IMAGES := build/forth_rom0.bin $(SMOKE_BINS) $(VISUAL_BINS) $(TEST_BINS) \
               build/forth_demo_gallery_rom0.bin build/graphics_exrom.bin \
               build/forth_boot.dck build/forth_demo_blackjack.dck
 
-.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron audio \
+.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron audio cartdiff \
         bench-roms $(ALIASES)
 
 all: $(ALL_IMAGES)
@@ -191,8 +191,8 @@ product: forth-boot forth-demo-blackjack
 forth-boot-cart: build/forth_boot.dck
 build/forth_boot_cart.bin: rom/forth_boot.asm $(SRC_STAMP) | build
 	$(SJASM) -DCARTRIDGE --sym=build/forth_boot_cart.sym --lst=build/forth_boot_cart.lst $<
-build/forth_boot.dck: build/forth_boot_cart.bin tools/make_dck.py
-	python3 tools/make_dck.py build/forth_boot_cart.bin $@
+build/forth_boot.dck: build/forth_boot_cart.bin build/graphics_exrom.bin tools/make_dck.py
+	python3 tools/make_dck.py build/forth_boot_cart.bin $@ build/graphics_exrom.bin
 	python3 tools/build_stamp.py --write --target forth-boot-cart
 
 forth-demo-blackjack-cart: build/forth_demo_blackjack.dck
@@ -249,6 +249,13 @@ poweron: build/forth_boot_rom0.bin build/stock_shaped_exrom.bin
 # (tools/ay_audio.py's header). About two minutes, real-time; not part of `make test`. Ports 10880-10899.
 audio: build/forth_boot_rom0.bin build/stock_shaped_exrom.bin
 	python3 tools/ay_audio.py
+
+# Differential test of the cartridge's EXROM paging (step R1, docs/V2/CARTRIDGE_EXROM_SPEC.md section 8): the same
+# typed Forth program on the home build and on the cartridge build, on ZEsarUX and on TSRun's real core under Node
+# (tools/cart_diff.py's header says what is compared). About 15 minutes; not part of `make test`; needs a TSRun
+# checkout (TSRUN_DIR, default ~/TSRun) and Node. Ports 10930-10949.
+cartdiff: build/forth_boot_rom0.bin build/graphics_exrom.bin build/forth_boot.dck
+	python3 tools/cart_diff.py --home-dir . --cart-dir .
 
 repro:
 	tools/check_repro.sh
