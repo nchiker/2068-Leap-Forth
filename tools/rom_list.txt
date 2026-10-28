@@ -92,3 +92,8 @@ forth_smoke_p64            smoke    none  4
 forth_smoke_p65            smoke    none  4     
 forth_smoke_p48            smoke    none  6     visual test: hangs with border yellow(6) after ULAPLUS/PALETTE; no border-4 verdict
 forth_smoke_p53_realtape   smoke    none  skip  needs a real .TAP and Fuse (tools/run_realtape_test.sh); not headless
+
+bench_float                bench    none  -     Phase 2 benchmark driver; see tools/bench.py
+bench_pixel                bench    none  -     Phase 2 benchmark driver; see tools/bench.py
+bench_sieve                bench    none  -     Phase 2 benchmark driver; see tools/bench.py
+bench_string               bench    none  -     Phase 2 benchmark driver; see tools/bench.py

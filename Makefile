@@ -88,7 +88,8 @@ ALL_IMAGES := build/forth_rom0.bin $(SMOKE_BINS) $(VISUAL_BINS) $(TEST_BINS) \
               build/forth_demo_gallery_rom0.bin build/graphics_exrom.bin \
               build/forth_boot.dck build/forth_demo_blackjack.dck
 
-.PHONY: all product cart docs dist check clean test roms-for-test repro $(ALIASES)
+.PHONY: all product cart docs dist check clean test roms-for-test repro bench \
+        bench-roms $(ALIASES)
 
 all: $(ALL_IMAGES)
 
@@ -238,6 +239,13 @@ test: roms-for-test
 
 repro:
 	tools/check_repro.sh
+
+bench-roms: $(BENCH_BINS)
+
+# Measures T-states to each benchmark's done-symbol -> build/bench.json and compares
+# with tools/bench_baseline.json (the plan's Phase 2 baseline); a slowdown fails.
+bench: bench-roms
+	python3 tools/bench.py --baseline tools/bench_baseline.json
 
 check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm
