@@ -379,6 +379,60 @@ pixel 785, 2026-09-15). Its harness is Leap-specific; the `benchmark-z80` skill 
 | T17 | **CI**: add `make check`, `make repro`, release sha256; ZEsarUX in CI is not practical (Leap-C CI does not run it either) | Leap `.github/workflows` | S |
 | T18 | **Developer notes**: CONTRIBUTING/CLAUDE.md pointer to ts2068-debug and the `2068-debug` skill | — | S |
 
+### 6.4 Step T results (2026-10-28, branch `v2/step-t-test-infra`)
+
+Items T1, T2, T3, T6, T7, T8 and T10 are done, one commit each (ledger row in §9). No ROM source
+(`core/`, `kernel/`, `include/`, `rom/*.asm`) changed. **Byte check [M]:** all 234 pre-existing
+`.bin`, `.dck`, `.sym`, `.lst` and `.inc` files from a clean build are sha256-identical to the
+baseline recorded before the Makefile was touched, both after T3 and after T6 (serial and
+`make -j8`), and again at the end. HOME free stays 68 B, EXROM free 6,682 B. The seven
+`*.build.json` stamps differ, and only in the `Makefile` hash they record (`build_stamp.py` hashes
+the Makefile by design). Builds are fully deterministic (two clean builds hash identically in all 241
+files), which is what makes the check meaningful.
+
+- **T1 `make test`** (`tools/run_rom_tests.sh`, list in `tools/rom_list.txt`): border 4 = pass; a ROM
+  is finished when its CPU state and border are unchanged across two 500k-opcode chunks. Own ports
+  (from 10760) and state dirs. Full suite 55 s. Exceptions are the list's `expect` column: p48 (visual,
+  hangs with the border yellow, 6) and `p53_realtape` (needs a real `.TAP` and Fuse; SKIP).
+- **T2** `check_test_list.sh` (in `make check`): every `rom/*.asm` has a row; also fails if
+  `make -n test|check` could reach Fuse. **T3** strict wrapper: all 79 assemblies (77 ROMs + 2 cartridge variants), 0 warnings.
+- **T6** Makefile 685 → 229 lines, driven by the list; `--outprefix=build/` (no `mv`, no ROM change);
+  `build/.src.stamp` over `core/ kernel/ include/`; `-j` safe (clean build 8.6 s serial, 3.7 s `-j8`).
+  `test-*` assemble-only targets are now `build-test-*`; the two never-built visual-check ROMs are in `all`.
+- **T7** `make repro`: two trees, 248 files identical, stamps re-verified. **T10** `tools/z80sim` at
+  `13c9bce` with `UPSTREAM.md`; its 20 tests run in `make check`.
+- **T8** `make bench` (`tools/bench.py`) is the plan's Phase 2 baseline, committed in
+  `tools/bench_baseline.json`. T-states from reset to the done-symbol `COLD_START.hang` (includes boot
+  and compiling the Forth source), and for the timed region between the two `BORDER` calls [M]:
+
+  | Benchmark | Total T-states | Timed region | Region at 3.5 MHz | In-ROM `FRAMES=` |
+  |---|---:|---:|---:|---:|
+  | sieve  | 148,052,276 | 146,138,092 | 41.8 s | 2091 |
+  | pixel  |  57,304,991 |  54,821,539 | 15.7 s |  785 |
+  | float  | 177,267,668 | 174,841,884 | 49.9 s | 2502 |
+  | string |   2,828,926 |   1,995,755 |  0.6 s |   28 |
+
+  Runs are exactly repeatable only after zeroing R, BC, DE, HL, IX, IY: ZRCP `reset-cpu` leaves them
+  stale, and `pixel` seeds `RANDOMIZE` from R, which changed both its time and its `RESULT` (the
+  `.fs` header's 159 was one lucky seed). Gate for later steps: slower than 1% fails.
+
+### 6.5 Findings and deferrals from step T
+
+- **`forth_smoke_p36` fails (border 3, deterministic; ROM not fixed, per the step rules).** Checkpoint 3
+  writes `$FF` to the first attribute byte, calls `CLS`, and expects `ATTR_DEFAULT` (`$44`). Since
+  `c66d420` (2026-09-05, "Fix INK/PAPER/CLS to affect printed text") `W_CLS` repaints with
+  `CURRENT_ATTR`, which p36 never initialises; at runtime `CURRENT_ATTR` ($87CB) and the attribute
+  area read `$00`. The expectation is stale (a test bug, not a ROM defect). The fix is one line in
+  `rom/forth_smoke_p36.asm` (initialise `CURRENT_ATTR`) and was left for an owner-approved commit;
+  until then `make test` exits non-zero. Evidence: `diagnose` in `build/test-logs/forth_smoke_p36.diagnose.json`
+  (PC `FAIL_TEST`, SP `$FF00`, AF `$0393`, DE `$5B00`, HL `$5AFF`).
+- Deferred: T4/T5/T9 (step G), T11-T18. CI (`.github/workflows/build.yml`) is not yet changed to run
+  `make check`/`make repro`/`make test` (T17). `rom/bench/*.asm` are not covered by `check_asm.py` /
+  `check_z80_opcodes.py` (they take `rom/*.asm`). `forth_smoke_p52` (fake tape) is run by the runner as
+  an ordinary border-4 ROM and passes; `forth_smoke_p53_realtape` remains Fuse-only. `rom/test_exrom_isolation.asm`'s
+  header cites a nonexistent `tools/make_test_exrom.sh`; the `$A5` image is now made by the Makefile.
+  The blackjack `BLACKJACK_TEST_MODE` build still has no target.
+
 **Not recommended:** full platform vendoring (`platform/MANIFEST` + `deltas/*.patch`). Leap's kernel
 changes since the fork are mostly BASIC-specific or shrink work; this ledger is the one-time record
 of what was judged. A full package ABI is also not needed now: Forth already has
@@ -442,6 +496,7 @@ E and K.
 | Step | Commit | HOME free | EXROM free | Section bytes before → after | Speed note | Smoke ROMs |
 |---|---|---:|---:|---|---|---|
 | Baseline | `fff5259` | 68 [M] | 6,682 [M] | see §3 | — | as committed |
+| **T** Test infrastructure | `ba2009b` T10, `a060549` T3, `994429a` T6, `24b4231` T1, `2ab1541` T2, `edb8314` T7, `9a0ee04` T8 | 68 [M] | 6,682 [M] | 0 → 0 (tooling only; every image, `.sym` and `.lst` byte-identical to baseline [M]) | Phase 2 baseline, §6.4 | `make test`: 67 PASS, 1 FAIL (`forth_smoke_p36`, stale test, §6.4), 1 SKIP (`p53_realtape`) [M] |
 | | | | | | | |
 
 ---

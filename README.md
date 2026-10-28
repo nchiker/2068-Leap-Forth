@@ -340,6 +340,9 @@ make build-test-polygon         # Phase 65 smoke ROM: POLYGON (outline)
 make build-test-sprite          # Phase 65 smoke ROM: SPRITE-DEFINE/SHOW/HIDE
 make build-test-poly-fill       # Phase 65 smoke ROM: POLYGON-FILL
 make check            # static asm checks over core/, kernel/, and rom/
+make test             # headless: every smoke/test ROM under ZEsarUX via ts2068-debug, border 4 = pass
+make repro            # builds twice in separate trees; every file in build/ must hash the same
+make bench            # T-states per benchmark -> build/bench.json, compared with tools/bench_baseline.json
 make product          # just the two ROMs people run: forth-boot + forth-demo-blackjack
 make cart             # the same two as DOCK cartridges -> build/*.dck (+ raw *_cart.bin)
 make docs             # tutorial + README as PDF (and the tutorial as DOCX) -> build/docs/
