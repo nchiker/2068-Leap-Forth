@@ -88,7 +88,7 @@ ALL_IMAGES := build/forth_rom0.bin $(SMOKE_BINS) $(VISUAL_BINS) $(TEST_BINS) \
               build/forth_demo_gallery_rom0.bin build/graphics_exrom.bin \
               build/forth_boot.dck build/forth_demo_blackjack.dck
 
-.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron \
+.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron audio \
         bench-roms $(ALIASES)
 
 all: $(ALL_IMAGES)
@@ -243,6 +243,12 @@ test: roms-for-test build/forth_boot_rom0.bin
 # range, 10820-10839.
 poweron: build/forth_boot_rom0.bin build/stock_shaped_exrom.bin
 	python3 tools/poweron.py
+
+# What the emulated AY actually plays for BEEP: captures ZEsarUX's audio output while the product ROM plays a
+# scale and compares each note's frequency with the formula and with the same period written through SOUND
+# (tools/ay_audio.py's header). About two minutes, real-time; not part of `make test`. Ports 10880-10899.
+audio: build/forth_boot_rom0.bin build/stock_shaped_exrom.bin
+	python3 tools/ay_audio.py
 
 repro:
 	tools/check_repro.sh

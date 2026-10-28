@@ -41,3 +41,10 @@ Independent of the table in the code, it checks against the formula:
 3. out of range (`70 BEEP`, `-61 BEEP`): R0/R1 unchanged, no wait;
 4. R7 bits other than 0 and 3, and channels B and C (R2-R5, R9, R10), survive a `BEEP`;
 5. interrupts are enabled on return, the data and float stacks are balanced.
+
+## Audio check (`tools/ay_audio.py`, `make audio`)
+
+Registers say what BEEP asked the chip for; the audio capture says what the emulated chip then played. The product
+ROM plays `n 0.3 BEEP` for ten notes; ZEsarUX's audio output is measured note by note against the formula and against
+the same period written through plain `SOUND` (the emulator's own rendering of that period). Emulator-only, by
+design: there is no hardware.

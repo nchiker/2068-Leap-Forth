@@ -534,10 +534,20 @@ O5 done as approved (owner decision 2): `BEEP` plays on the AY chip. HOME free *
 - **Chime.** Its FRAMES-polling `CHIME_DELAY` became an inline `HALT` loop (−20 B). Boot to the prompt is
   4,442,252 T before and 4,442,116 after: a 136 T difference in the last frame's tail, not a frame (69,888 T), so
   every wait lasts the same number of frames. The register writes were not traced one by one.
-- **Verification limits.** There is no hardware: everything was checked under ZEsarUX, by AY registers and
-  timing, not by ear. ZEsarUX runs 50 Hz frames against the real machine's 60 Hz, so a note lasts 20% longer
-  there (the same finding as Leap's study). The real-machine clock and frame rate are taken from libspectrum's
-  TS2068 timing table, as the rest of the project does.
+- **Audio capture (`tools/ay_audio.py`, `make audio`).** ZEsarUX's own audio output (`--aofile`, 15.6 kHz, emulated
+  time) was recorded while the product ROM played a scale typed at the prompt. Ten notes, −39 to +36 semitones
+  (above about 2.2 kHz edge counting is not reliable, so higher notes are checked by register only): each BEEP's
+  frequency matches the same period written through plain `SOUND` to within 0.03%, and the formula to within
+  −0.02% (+36) … −0.37% (−12) … −1.13% (−24) … −2.34% (−39). The larger errors at the low end are the
+  emulator's rendering of long periods, not BEEP: `SOUND` reads the same. Notes last 0.348-0.349 s of audio
+  against 18 frames asked for (0.36 s at 50 Hz): the first frame of an isolated note is partial, as specified.
+  Mutation-checked: a wrong table entry turns it red at every octave of that note. The startup chime of the
+  step-A BEEP build and of the build with the `HALT` wait compare equal window by window (52 windows each, worst
+  per-window power difference 0.05 of the loudest), which backs the frame-count argument above with sound, not
+  only T-states.
+- **Verification limits.** There is no hardware: everything was checked under ZEsarUX, by AY registers, timing and
+  its audio capture, not by ear. ZEsarUX runs 50 Hz frames against the real machine's 60 Hz and a 1.7734 MHz AY
+  against 1.764 MHz, so a note lasts 20% longer there and sounds 0.53% sharper (the same findings as Leap's study).
 
 **Not recommended:** full platform vendoring (`platform/MANIFEST` + `deltas/*.patch`). Leap's kernel
 changes since the fork are mostly BASIC-specific or shrink work; this ledger is the one-time record
