@@ -1,0 +1,67 @@
+# make tapetest on the old build (ce1579d), before any step S ROM change
+tapetest: build baseline-tree/build (ROM_IDENTITY absent, $0000 used)
+case 1 text_doubler: PASS
+    obs: loaded in 14.0 s emulated; screen ['2068-FORTH', '42 OK']
+    old-build table: pass
+case 2 blackjack_p53: PASS
+    obs: 67 s emulated; screen ['YOU WIN!', 'THANKS FOR PLAYING!    OK']
+    old-build table: pass
+case 3 savetext_roundtrip: FAIL SAVE-TEXT: header param1 = $0000, expected $8000
+    obs: 11982 edges, 2 blocks, 6.2 s emulated
+    old-build table: header param 1 differs
+case 4 savelib_roundtrip: FAIL SAVE-LIB: header type = 0, expected 3; SAVE-LIB: header param2 = $0028, expected $9815; no ROM_IDENTITY in this build (header param 1 cannot carry it); SAVE-LIB data (dictionary + CRC-16) differs (len 40 vs 40, first diff at 0)
+    obs: 12270 edges, dictionary 38 B, header type 0
+    old-build table: fails the format checks; round trip passes
+case 5 foreign_identity: FAIL foreign identity: THROW code 0, expected -37
+    obs: foreign identity: code 0, 132.8 s emulated, HERE 9809->9809 LATEST 9800->9800
+    old-build table: n/a (loads as nothing; type 3 skipped)
+case 6 v1_lib_tape: FAIL V1 type-0 lib tape: THROW code 0, expected -37; V1 type-0 lib tape: HERE 9809 -> 9869; V1 type-0 lib tape: LATEST 9800 -> 9829; V1 type-0 lib tape: 96 dictionary RAM bytes changed (first at $9809)
+    obs: V1 type-0 lib tape: code 0, 14.0 s emulated, HERE 9809->9869 LATEST 9800->9829
+    old-build table: loads
+case 7 crc_mismatch: FAIL CRC mismatch (XOR fixed up): THROW code 0, expected -37; CRC mismatch (XOR fixed up): HERE 9809, expected 9800 (reset); CRC mismatch (XOR fixed up): LATEST 9800, expected 39FD (reset)
+    obs: CRC mismatch (XOR fixed up): code 0, 133.0 s emulated, HERE 9809->9809 LATEST 9800->9800
+    old-build table: loads the corrupt image
+case 8 header_length_0_1: FAIL header length 0 and 1: THROW code 0, expected -37
+    obs: header length 0 and 1: code 0, 124.0 s emulated, HERE 9809->9809 LATEST 9800->9800
+    old-build table: RAM corrupted / hang
+case 9 wrong_flag: FAIL data block with the wrong flag: THROW code 0, expected -37
+    obs: data block with the wrong flag: code 0, 133.0 s emulated, HERE 9809->9809 LATEST 9800->9800
+    old-build table: reports success
+case 10 dropout: FAIL dropout in the data block: THROW code 0, expected -37; dropout in the data block: HERE 9809, expected 9800 (reset); dropout in the data block: LATEST 9800, expected 39FD (reset)
+    obs: dropout in the data block: code 0, 133.6 s emulated, HERE 9809->9809 LATEST 9800->9800
+    old-build table: reports success
+case 11 space_in_search: FAIL SPACE during the header search: THROW code 0, expected -28
+    obs: code 0, 0.105 s emulated from SPACE to the prompt, idle True, screen ['2068-FORTH', 'OK', 'OK']
+    old-build table: returns silently, no error
+case 11a no_tape: FAIL no tape: THROW code 0, expected -37
+    obs: code 0, 135.8 s emulated from ENTER to the prompt; dictionary RAM bytes changed: 11
+    old-build table: silent, after 136.8 s
+case 12 space_in_save: FAIL SPACE during the SAVE header: THROW code 0, expected -28; captured 2 blocks (header + data would be 2), expected 1; a data block was sent after SPACE
+    obs: code 0; 11326 edges, decoded blocks (bytes, checksum ok) [(1, True), (1, False)], about 3 further edges (a pilot that was cut short); SPACE down after 5011 edges (1.5 s into the header)
+    old-build table: header + data captured
+case 13 two_headers: PASS
+    obs: 22.5 s emulated
+    old-build table: pass
+case 14 verify: FAIL VERIFY-LIB / VERIFY-TEXT unknown (setup line raised an error)
+    old-build table: n/a
+case 11L space_in_search_loadlib: FAIL SPACE during the header search (LOAD-LIB): the prompt did not come back (58 s emulated after SPACE; screen ['~~~~~~~~~~~~~     ~~', '                              ~~', ' ~~    ~   ~~~  ~ ~  ~']); SPACE during the header search (LOAD-LIB): THROW code None, expected -28; SPACE during the header search (LOAD-LIB): prompt 57.76 s emulated after SPACE (limit 1 s)
+    obs: code None, 57.762 s emulated from SPACE to the prompt, idle False, screen ['~~~~~~~~~~~~~     ~~', '                              ~~', ' ~~    ~   ~~~  ~ ~  ~']
+    old-build table: (extra) wildcard LOAD-LIB + SPACE: phantom header, length 0
+case 7L legacy_crc: INFO
+    obs: V1 image, one byte altered, XOR fixed up: prompt back True after 14.0 s emulated; THROW code 0; HERE 9809 -> 9869, LATEST 9800 -> 9829; 202 dictionary RAM bytes changed; the 105 image bytes are at $9800: True
+    old-build table: loads the corrupt image
+case 8L legacy_len1: INFO
+    obs: V1 header length 1: prompt back False after 51.3 s emulated; THROW code None; HERE 9809 -> 9800, LATEST 9800 -> FFFF; 9787 dictionary RAM bytes changed; screen ['~~~~~~~~~~~~~~    ~~', '                              ~~', ' ~~    ~   ~~~  ~ ~  ~']
+    old-build table: RAM corrupted / hang
+case 8Z legacy_len0: INFO
+    obs: V1 header length 0: prompt back True after 13.2 s emulated; THROW code 0; HERE 9809 -> 9809, LATEST 9800 -> 9800; 17 dictionary RAM bytes changed
+    old-build table: RAM corrupted / hang
+case 9L legacy_wrong_flag: INFO
+    obs: V1 image, data block flag $55: prompt back True after 13.6 s emulated; THROW code 0; HERE 9809 -> 9869, LATEST 9800 -> 203A; 46 dictionary RAM bytes changed; the 105 image bytes are at $9800: False
+    old-build table: reports success
+case 10L legacy_dropout: INFO
+    obs: V1 image, 2-byte dropout in the data block: prompt back True after 13.4 s emulated; THROW code 0; HERE 9809 -> 9869, LATEST 9800 -> 9829; 66 dictionary RAM bytes changed; the 105 image bytes are at $9800: False
+    old-build table: reports success
+TAPETEST: PASS 3 FAIL 12
+extras (not in the tally): PASS 0 FAIL 1
+wall 296 s

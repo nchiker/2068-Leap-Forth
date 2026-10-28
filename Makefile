@@ -88,7 +88,7 @@ ALL_IMAGES := build/forth_rom0.bin $(SMOKE_BINS) $(VISUAL_BINS) $(TEST_BINS) \
               build/forth_demo_gallery_rom0.bin build/graphics_exrom.bin \
               build/forth_boot.dck build/forth_demo_blackjack.dck
 
-.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron audio cartdiff \
+.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron audio cartdiff tapetest tapetol \
         bench-roms $(ALIASES)
 
 all: $(ALL_IMAGES)
@@ -256,6 +256,19 @@ audio: build/forth_boot_rom0.bin build/stock_shaped_exrom.bin
 # checkout (TSRUN_DIR, default ~/TSRun) and Node. Ports 10930-10949.
 cartdiff: build/forth_boot_rom0.bin build/graphics_exrom.bin build/forth_boot.dck
 	python3 tools/cart_diff.py --home-dir . --cart-dir .
+
+# Tape oracle (audit step S, docs/V2/STORAGE_SPEC.md section 8): tapes played into ZEsarUX's real-tape input
+# (realtape-open) and SAVE output captured as MIC edges, judged against the spec. About 5 minutes; not part of
+# `make test`. Ports 10960-10979. TAPETEST_OLD=<build dir> runs it on another build instead.
+tapetest: build/forth_boot_rom0.bin build/graphics_exrom.bin
+	python3 -I tools/tapes.py --selftest
+	python3 -I tools/tapetest.py --build $(or $(TAPETEST_OLD),build)
+
+# Tape tolerance (T14): Leap-C's 71 distorted tapes on ZEsarUX. A report with one gate: no case the first build
+# accepts may be refused by a later one. TAPETOL_BASE=<old build dir> compares against it. About 4 minutes per build.
+# Ports 10980-10999.
+tapetol: build/forth_boot_rom0.bin build/graphics_exrom.bin
+	python3 -I tools/tapetol.py $(if $(TAPETOL_BASE),--build $(TAPETOL_BASE)) --build build --jobs 6
 
 repro:
 	tools/check_repro.sh
