@@ -22,6 +22,7 @@ graphics_exrom             exrom    -     -     EXROM image, not runnable alone
 hires_visual_check         visual   none  -     screenshot check, no verdict
 mode64_visual_check        visual   none  -     screenshot check, no verdict
 
+test_blockgfx              test     none  4     block-graphics glyphs 128-143 (oracle for audit O2)
 test_rect                  test     gfx   4     
 test_polygon               test     gfx   4     
 test_sprite                test     gfx   4     
