@@ -242,6 +242,7 @@ check:
 	python3 tools/audit_layout.py
 	# z80sim flag semantics + snapshot/replay (run in-directory: they import sim/snapshot as siblings)
 	cd tools/z80sim && python3 -m unittest test_flags test_snapshot
+	tools/check_test_list.sh
 
 clean:
 	rm -rf build dist
