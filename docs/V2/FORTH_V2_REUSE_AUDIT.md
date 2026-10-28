@@ -418,14 +418,12 @@ files), which is what makes the check meaningful.
 
 ### 6.5 Findings and deferrals from step T
 
-- **`forth_smoke_p36` fails (border 3, deterministic; ROM not fixed, per the step rules).** Checkpoint 3
-  writes `$FF` to the first attribute byte, calls `CLS`, and expects `ATTR_DEFAULT` (`$44`). Since
-  `c66d420` (2026-09-05, "Fix INK/PAPER/CLS to affect printed text") `W_CLS` repaints with
-  `CURRENT_ATTR`, which p36 never initialises; at runtime `CURRENT_ATTR` ($87CB) and the attribute
-  area read `$00`. The expectation is stale (a test bug, not a ROM defect). The fix is one line in
-  `rom/forth_smoke_p36.asm` (initialise `CURRENT_ATTR`) and was left for an owner-approved commit;
-  until then `make test` exits non-zero. Evidence: `diagnose` in `build/test-logs/forth_smoke_p36.diagnose.json`
-  (PC `FAIL_TEST`, SP `$FF00`, AF `$0393`, DE `$5B00`, HL `$5AFF`).
+- **`forth_smoke_p36` failed (border 3, deterministic); fixed in `6de13c3`, a test-only commit.** Checkpoint 3
+  writes `$FF` to the first attribute byte, calls `CLS`, and expected `ATTR_DEFAULT` (`$44`). Since
+  `c66d420` (2026-09-05) `W_CLS` repaints with `CURRENT_ATTR`, which p36 never initialised; at runtime
+  `CURRENT_ATTR` ($87CB) and the attribute area read `$00`. A stale expectation, not a ROM defect. The
+  fix initialises `CURRENT_ATTR` to `DEFAULT_ATTR` and expects that after `CLS`. Only p36's own
+  images changed; `make test` is now 68 PASS, 0 FAIL, 1 SKIP.
 - Deferred: T4/T5/T9 (step G), T11-T18. CI (`.github/workflows/build.yml`) is not yet changed to run
   `make check`/`make repro`/`make test` (T17). `rom/bench/*.asm` are not covered by `check_asm.py` /
   `check_z80_opcodes.py` (they take `rom/*.asm`). `forth_smoke_p52` (fake tape) is run by the runner as
@@ -484,9 +482,9 @@ measured ledger row (§9).
 | **K** Keys and glyphs | O3 plus `[']`, `[CHAR]`, `\`, `[ ]` | +~100 | 0 | R0 or E savings |
 | **D** Display speed | O4 | ≤0 | 0 | — |
 | **B** BREAK and timing | O6, O7 | +~35 | 0 | T8 benchmarks |
-| **A** AY BEEP (if approved) | O5 | −350-400 | 0 | owner decision |
+| **A** AY BEEP (approved 2026-10-28) | O5 | −350-400 | 0 | R0 |
 
-If O5 is approved, run it immediately after R0: it is the largest single HOME recovery and funds S,
+O5 is approved: run it immediately after R0: it is the largest single HOME recovery and funds S,
 E and K.
 
 ---
@@ -496,20 +494,28 @@ E and K.
 | Step | Commit | HOME free | EXROM free | Section bytes before → after | Speed note | Smoke ROMs |
 |---|---|---:|---:|---|---|---|
 | Baseline | `fff5259` | 68 [M] | 6,682 [M] | see §3 | — | as committed |
-| **T** Test infrastructure | `ba2009b` T10, `a060549` T3, `994429a` T6, `24b4231` T1, `2ab1541` T2, `edb8314` T7, `9a0ee04` T8 | 68 [M] | 6,682 [M] | 0 → 0 (tooling only; every image, `.sym` and `.lst` byte-identical to baseline [M]) | Phase 2 baseline, §6.4 | `make test`: 67 PASS, 1 FAIL (`forth_smoke_p36`, stale test, §6.4), 1 SKIP (`p53_realtape`) [M] |
+| **T** Test infrastructure | `ba2009b` T10, `a060549` T3, `994429a` T6, `24b4231` T1, `2ab1541` T2, `edb8314` T7, `9a0ee04` T8 | 68 [M] | 6,682 [M] | 0 → 0 (tooling only; every image, `.sym` and `.lst` byte-identical to baseline [M]) | Phase 2 baseline, §6.4 | `make test`: 67 PASS, 1 FAIL (`forth_smoke_p36`, stale test, §6.5), 1 SKIP (`p53_realtape`) [M] |
+| T follow-up: p36 | `6de13c3` | 68 [M] | 6,682 [M] | 0 → 0 (only p36's own images change) | — | `make test`: 68 PASS, 0 FAIL, 1 SKIP [M] |
 | | | | | | | |
 
 ---
 
 ## 10. Owner decisions needed
 
-1. **Reserve target**: adopt 200 B HOME / 150 B EXROM as provisional?
+Decided 2026-10-28 (owner): 1, 2, 4, 5. Open: 3, 6.
+
+1. **Reserve target**: adopt 200 B HOME / 150 B EXROM as provisional? **Decided: yes, as a ratchet.**
+   The T4 guard floors each section at its current free space (HOME 68, EXROM 6,682) so it blocks
+   regressions now and tightens toward the target as space is recovered; HOME is 132 B under the
+   target today, so a hard gate would fail immediately.
 2. **AY BEEP** (O5): replace the speaker BEEP, keep the speaker as an optional word set, or keep
-   both?
+   both? **Decided: approved as O5 proposes** (§5): BEEP becomes AY-based and the speaker BEEP is kept
+   only as an optional package. Step A runs immediately after R0.
 3. **Float format**: accept 5-byte floats (float-stack depth ~341 → ~204 cells; smoke ROMs
    regenerated)?
 4. **`fpcore` provenance**: accept Leap V2's position (passes the 12-byte scan, MIT) for Forth's
-   NOTICE?
+   NOTICE? **Decided: yes, conditional** on the T5 scan coming back clean on the Forth tree.
 5. **Disassembly-informed files** (`core/printer.asm`, `kernel/sound`, `kernel/mode64`,
-   `core/stick.asm`): accept as clean, or schedule clean-room rewrites?
+   `core/stick.asm`): accept as clean, or schedule clean-room rewrites? **Decided: accept for now;**
+   schedule a rewrite only for a file the T5 scan flags.
 6. **Legacy tapes**: accept unstamped `SAVE-LIB` images from V1 with a warning, or refuse them?
