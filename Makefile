@@ -1,104 +1,118 @@
-.PHONY: all boot forth-lros forth-smoke forth-smoke-p64 forth-smoke-p65 graphics-exrom test-exrom-isolation test-rect test-polygon test-sprite test-poly-fill forth-demo-gallery forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-smoke-p31 forth-smoke-p32 forth-smoke-p33 forth-smoke-p34 forth-smoke-p35 forth-smoke-p36 forth-smoke-p37 forth-smoke-p38 forth-smoke-p40 forth-smoke-p41 forth-smoke-p42 forth-smoke-p43 forth-smoke-p44 forth-smoke-p45 forth-smoke-p46 forth-smoke-p47 forth-smoke-p48 forth-smoke-p49 forth-smoke-p50 forth-smoke-p51 forth-boot forth-demo-blackjack forth-smoke-p52 forth-smoke-p53-realtape forth-smoke-p54 forth-smoke-p55 forth-smoke-p56 forth-smoke-p57 forth-smoke-p58 forth-smoke-p59 forth-smoke-p60 forth-smoke-p61 forth-smoke-p62 forth-smoke-p63 forth-boot-cart forth-demo-blackjack-cart cart product docs dist check clean
+# 2068-Forth build.
+#
+# The ROM list, tools/rom_list.txt, is the single source of truth for which
+# ROMs exist (its header documents the format). This Makefile parses it into
+# per-kind variables; no smoke/test/visual/bench ROM name is typed here. Only
+# the product, special and exrom kinds -- which need bespoke recipes or
+# post-steps -- have explicit rules below, and a consistency check fails the
+# parse if rom_list.txt and those rules ever disagree.
+#
+# Every ROM assembles with `--outprefix=build/`, which redirects the SAVEBIN
+# lines inside rom/*.asm into build/ (the .asm files are untouched), so nothing
+# is written to the repo root and no `mv` step is needed.
+#
+# Per-phase history comments for the forth_smoke*.asm ROMs were dropped from
+# this file when it became list-driven: each rom/forth_smoke_pN.asm carries its
+# own header with the phase description and pass/fail contract. (The old
+# comments remain in git history.)
 
-all: boot forth-smoke forth-smoke-p3 forth-smoke-p4 forth-smoke-p5 forth-smoke-p6 forth-smoke-p7 forth-smoke-p8 forth-smoke-p8b forth-smoke-p9 forth-smoke-p10 forth-smoke-p11 forth-smoke-p12 forth-smoke-p13 forth-smoke-p14 forth-smoke-p15 forth-smoke-p16 forth-smoke-p17 forth-smoke-p18 forth-smoke-p19 forth-smoke-p20 forth-smoke-p21 forth-smoke-p22 forth-smoke-p23 forth-smoke-p24 forth-smoke-p25 forth-smoke-p26 forth-smoke-p27 forth-smoke-p28 forth-smoke-p29 forth-smoke-p30 forth-smoke-p31 forth-smoke-p32 forth-smoke-p33 forth-smoke-p34 forth-smoke-p35 forth-smoke-p36 forth-smoke-p37 forth-smoke-p38 forth-smoke-p40 forth-smoke-p41 forth-smoke-p42 forth-smoke-p43 forth-smoke-p44 forth-smoke-p45 forth-smoke-p46 forth-smoke-p47 forth-smoke-p48 forth-smoke-p49 forth-smoke-p50 forth-smoke-p51 forth-boot forth-demo-blackjack forth-smoke-p52 forth-smoke-p53-realtape forth-smoke-p54 forth-smoke-p55 forth-smoke-p56 forth-smoke-p57 forth-smoke-p58 forth-smoke-p59 forth-smoke-p60 forth-smoke-p61 forth-smoke-p62 forth-smoke-p63 forth-smoke-p64 forth-smoke-p65 graphics-exrom test-exrom-isolation test-rect test-polygon test-sprite test-poly-fill forth-demo-gallery forth-boot-cart forth-demo-blackjack-cart
+ROM_LIST := tools/rom_list.txt
 
-# Milestone 0: boot stub only.
-boot:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/main.sym --lst=build/main.lst rom/main.asm
-	mv forth_rom0.bin build/forth_rom0.bin
+# --- parse the ROM list ------------------------------------------------------
+# stems of one kind, in list order (skips comments and blank lines)
+rom_of_kind = $(shell awk -v k=$(1) '!/^[[:space:]]*\#/ && NF && $$2==k {print $$1}' $(ROM_LIST))
+# forth_smoke_p3 -> forth-smoke-p3
+dash = $(subst _,-,$(1))
 
-# Phase 2: dictionary header format + subroutine-threaded primitives
-# (DUP SWAP DROP OVER + - @ !) smoke ROM. Border goes green if every
-# self-check passes; otherwise it shows the 1-7 checkpoint number of the
-# first one that failed — see rom/forth_smoke.asm's own header for the
-# full pass/fail contract and a real EXROM-placeholder gotcha hit during
-# this ROM's own bring-up.
-forth-smoke:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke.sym --lst=build/forth_smoke.lst rom/forth_smoke.asm
-	mv forth_smoke_rom0.bin build/forth_smoke_rom0.bin
+ALL_STEMS    := $(shell awk '!/^[[:space:]]*\#/ && NF {print $$1}' $(ROM_LIST))
+SMOKE_ROMS   := $(call rom_of_kind,smoke)
+TEST_ROMS    := $(call rom_of_kind,test)
+VISUAL_ROMS  := $(call rom_of_kind,visual)
+BENCH_ROMS   := $(call rom_of_kind,bench)
+PRODUCT_ROMS := $(call rom_of_kind,product)
+SPECIAL_ROMS := $(call rom_of_kind,special)
+EXROM_ROMS   := $(call rom_of_kind,exrom)
 
-# Phase 3: outer interpreter (WORD/FIND/NUMBER) + colon compiler (: ;)
-# smoke ROM. Runs two fixed source strings through INTERPRET_RUN: plain
-# arithmetic, then defining and using a new word — see
-# rom/forth_smoke_p3.asm's own header for the full pass/fail contract.
-forth-smoke-p3:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p3.sym --lst=build/forth_smoke_p3.lst rom/forth_smoke_p3.asm
-	mv forth_smoke_p3_rom0.bin build/forth_smoke_p3_rom0.bin
+# Stems with explicit rules further down; must equal the list's
+# product+special+exrom kinds, and every stem must have a known kind.
+EXPLICIT_ROMS := main forth_boot forth_demo_blackjack forth_demo_gallery \
+                 forth_lros graphics_exrom
+ifeq ($(ALL_STEMS),)
+$(error $(ROM_LIST) is missing or empty)
+endif
+ifneq ($(sort $(EXPLICIT_ROMS)),$(sort $(PRODUCT_ROMS) $(SPECIAL_ROMS) $(EXROM_ROMS)))
+$(error $(ROM_LIST) product/special/exrom kinds do not match the explicit rules in the Makefile)
+endif
+ifneq ($(sort $(ALL_STEMS)),$(sort $(SMOKE_ROMS) $(TEST_ROMS) $(VISUAL_ROMS) $(BENCH_ROMS) $(EXPLICIT_ROMS)))
+$(error $(ROM_LIST) contains a stem with an unknown kind)
+endif
 
-# Phase 4: control flow (IF/ELSE/THEN, BEGIN/UNTIL) smoke ROM. Defines
-# and uses a word with both branches of an IF, then a word with a
-# BEGIN/UNTIL loop whose result only comes out right if it looped the
-# correct number of times — see rom/forth_smoke_p4.asm's own header.
-forth-smoke-p4:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p4.sym --lst=build/forth_smoke_p4.lst rom/forth_smoke_p4.asm
-	mv forth_smoke_p4_rom0.bin build/forth_smoke_p4_rom0.bin
+SMOKE_BINS  := $(patsubst %,build/%_rom0.bin,$(SMOKE_ROMS))
+TEST_BINS   := $(patsubst %,build/%_rom0.bin,$(TEST_ROMS))
+VISUAL_BINS := $(patsubst %,build/%_rom0.bin,$(VISUAL_ROMS))
+BENCH_BINS  := $(patsubst %,build/%_rom0.bin,$(BENCH_ROMS))
 
-# Phase 5: TS2068 vocabulary (PLOT, LINE, CIRCLE, BEEP, BORDER) smoke
-# ROM -- the first to pull in real kernel/ modules (kernel/math,
-# kernel/graphics, kernel/sound) alongside core/. See
-# rom/forth_smoke_p5.asm's own header for its verification strategy
-# (GFX_READ_PIXEL readback, not just a stack check).
-forth-smoke-p5:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p5.sym --lst=build/forth_smoke_p5.lst rom/forth_smoke_p5.asm
-	mv forth_smoke_p5_rom0.bin build/forth_smoke_p5_rom0.bin
+# --- common pieces -----------------------------------------------------------
+SJASM := tools/sjasmplus_strict.sh --outprefix=build/
 
-# Phase 6: line editing smoke ROM. Feeds core/editor.asm's
-# EDITOR_PROCESS_KEY a canned sequence of key codes (no live keyboard,
-# no Fuse keystroke injection needed) exercising insert, cursor
-# left/right, and delete, then commits each line via INTERPRET_RUN --
-# see rom/forth_smoke_p6.asm's own header for the exact sequences and
-# core/editor.asm's own header for why EDITOR_LOOP_LIVE (the real
-# interactive entry point) isn't exercised here.
-forth-smoke-p6:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p6.sym --lst=build/forth_smoke_p6.lst rom/forth_smoke_p6.asm
-	mv forth_smoke_p6_rom0.bin build/forth_smoke_p6_rom0.bin
+# Coarse dependency tracking: any change under core/ kernel/ include/ (or to
+# the assembler wrapper, or to data files the rom/*.asm sources INCBIN)
+# rebuilds every ROM. Each ROM additionally depends on its own rom/<stem>.asm.
+SRC_FILES := $(shell find core kernel include -type f | sort) \
+             $(wildcard rom/*.fs rom/*.inc) tools/sjasmplus_strict.sh
+SRC_STAMP := build/.src.stamp
 
-# Phase 7: storage (SAVE-LIB, LOAD-LIB) smoke ROM. Verified against
-# kernel/storage's own STORAGE_TEST_FAKE_SEND/RECEIVE hooks (an
-# in-memory fake tape, not real cassette timing) -- proves this
-# project's own wiring, NOT that the real tape wire format round-trips
-# in a real emulator, which remains open. See rom/forth_smoke_p7.asm
-# and core/storage.asm's own headers.
-forth-smoke-p7:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p7.sym --lst=build/forth_smoke_p7.lst rom/forth_smoke_p7.asm
-	mv forth_smoke_p7_rom0.bin build/forth_smoke_p7_rom0.bin
+.DEFAULT_GOAL := all
 
-# Phase 8 (stretch goal, part A): floating point (F+, F-) smoke ROM.
-# Native Forth floats, not a port of 2068-Leap's own RST $28 calculator
-# -- see core/float.asm's own header. No kernel/ dependency.
-forth-smoke-p8:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p8.sym --lst=build/forth_smoke_p8.lst rom/forth_smoke_p8.asm
-	mv forth_smoke_p8_rom0.bin build/forth_smoke_p8_rom0.bin
+# --- target names ------------------------------------------------------------
+# Phony aliases: forth_smoke_p3 -> forth-smoke-p3 (as before); the assemble-only
+# kind=test ROMs are build-test-rect etc. (plain test-* names are now free);
+# visual and bench ROMs get their dashed stem.
+ALIASES := $(call dash,$(SMOKE_ROMS)) $(call dash,$(VISUAL_ROMS)) \
+           $(call dash,$(BENCH_ROMS)) $(addprefix build-,$(call dash,$(TEST_ROMS))) \
+           boot forth-boot forth-demo-blackjack forth-demo-gallery forth-lros \
+           graphics-exrom forth-boot-cart forth-demo-blackjack-cart
 
-# Phase 8 (stretch goal, part B): 64-column display smoke ROM.
-# kernel/mode64/mode64.asm is recovered, once-shipped 2068-Leap code
-# (removed from that project for its own ROM-budget reasons, not
-# because it didn't work) -- see that file's own header for the real
-# provenance and docs/PROJECT_PLAN.md's Phase 8 section for the full
-# story, including a first attempt here that had the wrong port bit
-# pattern before that code was found.
-forth-smoke-p8b:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p8b.sym --lst=build/forth_smoke_p8b.lst rom/forth_smoke_p8b.asm
-	mv forth_smoke_p8b_rom0.bin build/forth_smoke_p8b_rom0.bin
+define ALIAS_RULE
+$(1): $(2)
+endef
+$(foreach r,$(SMOKE_ROMS) $(VISUAL_ROMS) $(BENCH_ROMS),\
+  $(eval $(call ALIAS_RULE,$(call dash,$(r)),build/$(r)_rom0.bin)))
+$(foreach r,$(TEST_ROMS),\
+  $(eval $(call ALIAS_RULE,build-$(call dash,$(r)),build/$(r)_rom0.bin)))
 
-# Phase 9: full dictionary (every phase's words spliced into one
-# LATEST chain via DICT_CHAIN_POINT -- see core/control.asm's own
-# header) + real IM 1 interrupt wiring (RST $0038 -> KBD_ISR_TICK).
-# Proves the chain and real interrupt firing; does not exercise a live
-# keyboard (see forth-boot for that).
-forth-smoke-p9:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p9.sym --lst=build/forth_smoke_p9.lst rom/forth_smoke_p9.asm
-	mv forth_smoke_p9_rom0.bin build/forth_smoke_p9_rom0.bin
+# Everything `all` built before, plus the visual ROMs (assemble-only checks
+# that were previously never built). Not forth-lros, not the bench ROMs.
+ALL_IMAGES := build/forth_rom0.bin $(SMOKE_BINS) $(VISUAL_BINS) $(TEST_BINS) \
+              build/forth_boot_rom0.bin build/forth_demo_blackjack_rom0.bin \
+              build/forth_demo_gallery_rom0.bin build/graphics_exrom.bin \
+              build/forth_boot.dck build/forth_demo_blackjack.dck
+
+.PHONY: all product cart docs dist check clean $(ALIASES)
+
+all: $(ALL_IMAGES)
+
+build:
+	mkdir -p $@
+
+$(SRC_STAMP): $(SRC_FILES) | build
+	touch $@
+
+# --- generic rules: smoke, test, visual, bench -------------------------------
+# build/<stem>_rom0.bin from rom/<stem>.asm; .sym/.lst land beside it.
+$(SMOKE_BINS) $(TEST_BINS) $(VISUAL_BINS): build/%_rom0.bin: rom/%.asm $(SRC_STAMP) | build
+	$(SJASM) --sym=build/$*.sym --lst=build/$*.lst $<
+
+# Phase 2 benchmark drivers live in rom/bench/.
+$(BENCH_BINS): build/%_rom0.bin: rom/bench/%.asm $(SRC_STAMP) | build
+	$(SJASM) --sym=build/$*.sym --lst=build/$*.lst $<
+
+# --- explicit rules: special / product / exrom -------------------------------
+
+# Milestone 0: boot stub only (rom/main.asm SAVEBINs forth_rom0.bin).
+boot: build/forth_rom0.bin
+build/forth_rom0.bin: rom/main.asm $(SRC_STAMP) | build
+	$(SJASM) --sym=build/main.sym --lst=build/main.lst $<
 
 # The first real, live, bootable 2068-Forth product ROM -- not a smoke
 # test. Boots, prints a banner, plays the startup sound (the product
@@ -106,321 +120,19 @@ forth-smoke-p9:
 # interactive, keyboard-driven prompt (core/editor.asm's
 # EDITOR_LOOP_LIVE). See docs/PROJECT_PLAN.md's Phase 9 section for two
 # real bugs found only by a human actually typing at it.
-forth-boot:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_boot.sym --lst=build/forth_boot.lst rom/forth_boot.asm
-	mv forth_boot_rom0.bin build/forth_boot_rom0.bin
+forth-boot: build/forth_boot_rom0.bin
+build/forth_boot_rom0.bin: rom/forth_boot.asm $(SRC_STAMP) | build
+	$(SJASM) --sym=build/forth_boot.sym --lst=build/forth_boot.lst $<
 	python3 tools/build_stamp.py --write --target forth-boot
-
-# Phase 10: EMIT and . (print) smoke ROM. Five checkpoints: EMIT draws
-# a real pixel and advances the print cursor; . prints positive,
-# negative (including the -32768 signed-magnitude edge case), and zero
-# values with the right trailing-space convention; EMIT's column-wrap
-# arithmetic wraps at exactly column 32. See rom/forth_smoke_p10.asm
-# and core/print.asm's own headers.
-forth-smoke-p10:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p10.sym --lst=build/forth_smoke_p10.lst rom/forth_smoke_p10.asm
-	mv forth_smoke_p10_rom0.bin build/forth_smoke_p10_rom0.bin
-
-# Phase 11: comparisons (=, <, >) smoke ROM. No kernel/ dependency --
-# pure Z80 logic. Signed < and > use a sign-bit case split, not the
-# Z80's own P/V flag after SBC -- see core/compare.asm's own header for
-# the six hand-verified cases, including both 16-bit extremes.
-forth-smoke-p11:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p11.sym --lst=build/forth_smoke_p11.lst rom/forth_smoke_p11.asm
-	mv forth_smoke_p11_rom0.bin build/forth_smoke_p11_rom0.bin
-
-# Phase 12: VARIABLE and CONSTANT smoke ROM. No kernel/ dependency.
-# Neither uses a real CREATE/DOES> (this project doesn't have one) --
-# both are built on core/interp.asm's own DOLIT compiled-literal idiom
-# plus a compiled RET -- see core/variable.asm's own header.
-forth-smoke-p12:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p12.sym --lst=build/forth_smoke_p12.lst rom/forth_smoke_p12.asm
-	mv forth_smoke_p12_rom0.bin build/forth_smoke_p12_rom0.bin
-
-# Phase 13: ." (print a literal string) smoke ROM. Reuses
-# core/interp.asm's own DOLIT inline-data idiom, generalized to a
-# variable-length string -- see core/dotquote.asm's own header.
-forth-smoke-p13:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p13.sym --lst=build/forth_smoke_p13.lst rom/forth_smoke_p13.asm
-	mv forth_smoke_p13_rom0.bin build/forth_smoke_p13_rom0.bin
-
-# Phase 14: BEGIN/WHILE/REPEAT smoke ROM. Reuses core/control.asm's own
-# QBRANCH/BRANCH runtime routines directly rather than modifying that
-# already-shared file -- see core/loop.asm's own header. DO/LOOP
-# remains open (needs its own loop-control storage design).
-forth-smoke-p14:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p14.sym --lst=build/forth_smoke_p14.lst rom/forth_smoke_p14.asm
-	mv forth_smoke_p14_rom0.bin build/forth_smoke_p14_rom0.bin
-
-# Phase 15: INK/PAPER smoke ROM. core/ts2068.asm's PLOT/LINE/CIRCLE now
-# read their attribute from a settable CURRENT_ATTR cell instead of a
-# hardcoded constant -- a shared-file change, re-verified against
-# forth-smoke-p5 and forth-smoke-p9 (both already INCLUDE
-# core/ts2068.asm) under real Fuse when this landed. See
-# core/color.asm and core/ts2068.asm's own headers.
-forth-smoke-p15:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p15.sym --lst=build/forth_smoke_p15.lst rom/forth_smoke_p15.asm
-	mv forth_smoke_p15_rom0.bin build/forth_smoke_p15_rom0.bin
-
-# Phase 16: DO/LOOP/I smoke ROM. The loop's own limit/index live on the
-# real Z80 hardware stack itself -- this project's subroutine threading
-# already uses it as a de facto return stack, so this reuses that same
-# discipline rather than inventing a separate one. Verified including
-# the critical nested-loop stack-discipline case. See
-# core/doloop.asm's own header.
-forth-smoke-p16:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p16.sym --lst=build/forth_smoke_p16.lst rom/forth_smoke_p16.asm
-	mv forth_smoke_p16_rom0.bin build/forth_smoke_p16_rom0.bin
-
-# Phase 17: FILL/AT-XY smoke ROM. FILL wraps kernel/graphics's own
-# proven GFX_FILL flood-fill, picking up CURRENT_ATTR (Phase 15) like
-# PLOT/LINE/CIRCLE. AT-XY moves core/print.asm's own PRINT_ROW/
-# PRINT_COL directly. A real GFX_READ_PIXEL B/C-argument-order bug was
-# caught in the test itself before trusting it -- see
-# core/moregfx.asm's own header.
-forth-smoke-p17:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p17.sym --lst=build/forth_smoke_p17.lst rom/forth_smoke_p17.asm
-	mv forth_smoke_p17_rom0.bin build/forth_smoke_p17_rom0.bin
-
-# Phase 18: F* (float multiply) smoke ROM. Writes its own 32-bit
-# widening multiply and normalization pass (kernel/math's own multiply
-# only gives a 16-bit truncated result) -- a real design mistake (a
-# fixed-position window instead of real normalization) was caught by
-# hand-tracing before ever assembling. See core/floatmul.asm's own
-# header for the three hand-verified cases.
-forth-smoke-p18:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p18.sym --lst=build/forth_smoke_p18.lst rom/forth_smoke_p18.asm
-	mv forth_smoke_p18_rom0.bin build/forth_smoke_p18_rom0.bin
-
-# Phase 19: F/ (float divide) smoke ROM. Scales the dividend up by 2^16
-# before a 32-bit/16-bit restoring division, then reuses
-# core/floatmul.asm's own F_NORMALIZE32 unchanged -- the same
-# normalization problem F* already solved, just approached from the
-# division side. See core/floatdiv.asm's own header for the three
-# hand-verified cases (shrink path twice, grow path once).
-forth-smoke-p19:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p19.sym --lst=build/forth_smoke_p19.lst rom/forth_smoke_p19.asm
-	mv forth_smoke_p19_rom0.bin build/forth_smoke_p19_rom0.bin
-
-# Phase 20: KEY smoke ROM. Simulates a keypress by writing
-# KBD_LASTK/KBD_KEYHIT directly (the same sysvars a real ISR tick would
-# latch) rather than needing a live interrupt running -- see
-# core/key.asm's own header.
-forth-smoke-p20:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p20.sym --lst=build/forth_smoke_p20.lst rom/forth_smoke_p20.asm
-	mv forth_smoke_p20_rom0.bin build/forth_smoke_p20_rom0.bin
-
-# Phase 21: error feedback smoke ROM. Replicates rom/forth_boot.asm's
-# own real (now-updated) INTERPRET_UNKNOWN_WORD hook verbatim, proving
-# an unknown word prints "?" + newline AND that the interpreter
-# recovers to run a subsequent line normally afterward.
-forth-smoke-p21:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p21.sym --lst=build/forth_smoke_p21.lst rom/forth_smoke_p21.asm
-	mv forth_smoke_p21_rom0.bin build/forth_smoke_p21_rom0.bin
-
-# Phase 22: F. (print a float) smoke ROM. Scales by 10000 and reuses
-# core/floatdiv.asm's own F_UDIV32BY16 to split into integer/fractional
-# decimal digits. A real register-clobbering bug (UDIV10 destroys B,
-# which a first draft also used as its own outer loop counter) was
-# caught on the very first real Fuse run -- see core/floatprint.asm's
-# own header.
-forth-smoke-p22:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p22.sym --lst=build/forth_smoke_p22.lst rom/forth_smoke_p22.asm
-	mv forth_smoke_p22_rom0.bin build/forth_smoke_p22_rom0.bin
-
-# Phase 23: decimal number literal parsing smoke ROM. DEFINEs
-# DECIMAL_NUMBER_ENABLED before INCLUDEing core/interp.asm -- the
-# opt-in gate that keeps every OTHER ROM in this project byte-for-byte
-# unaffected (verified directly by diffing rebuilt binaries, not just
-# reasoned about). See core/decimal.asm's own header.
-forth-smoke-p23:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p23.sym --lst=build/forth_smoke_p23.lst rom/forth_smoke_p23.asm
-	mv forth_smoke_p23_rom0.bin build/forth_smoke_p23_rom0.bin
-
-# Phase 24: LEAVE and +LOOP, added to core/doloop.asm.
-forth-smoke-p24:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p24.sym --lst=build/forth_smoke_p24.lst rom/forth_smoke_p24.asm
-	mv forth_smoke_p24_rom0.bin build/forth_smoke_p24_rom0.bin
-
-# Phase 25: ABS, SGN, MOD, SQRT, RND, RANDOMIZE -- thin wrappers around
-# kernel/math/math.asm's own already-verified integer routines.
-forth-smoke-p25:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p25.sym --lst=build/forth_smoke_p25.lst rom/forth_smoke_p25.asm
-	mv forth_smoke_p25_rom0.bin build/forth_smoke_p25_rom0.bin
-
-# Phase 26: ARRAY and CELLS -- a real Forth array, closing the
-# BASIC-audit's DIM gap.
-forth-smoke-p26:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p26.sym --lst=build/forth_smoke_p26.lst rom/forth_smoke_p26.asm
-	mv forth_smoke_p26_rom0.bin build/forth_smoke_p26_rom0.bin
-
-# Phase 27: S", TYPE, STRING, PLACE, COUNT, LEN, VAL -- real string
-# handling, closing the BASIC-audit's biggest remaining gap.
-forth-smoke-p27:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p27.sym --lst=build/forth_smoke_p27.lst rom/forth_smoke_p27.asm
-	mv forth_smoke_p27_rom0.bin build/forth_smoke_p27_rom0.bin
-
-# Phase 28: ACCEPT and INPUT -- line input, closing the last of the
-# BASIC-audit's six real gaps. Uses real IM 1 interrupts (a scripted
-# fake keyboard ISR), not simulated single-keypress sysvar writes --
-# see rom/forth_smoke_p28.asm's own header for why.
-forth-smoke-p28:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p28.sym --lst=build/forth_smoke_p28.lst rom/forth_smoke_p28.asm
-	mv forth_smoke_p28_rom0.bin build/forth_smoke_p28_rom0.bin
-
-# Phase 29: FSQRT -- float square root, the float-side counterpart to
-# Phase 25's own integer SQRT.
-forth-smoke-p29:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p29.sym --lst=build/forth_smoke_p29.lst rom/forth_smoke_p29.asm
-	mv forth_smoke_p29_rom0.bin build/forth_smoke_p29_rom0.bin
-
-forth-smoke-p30:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p30.sym --lst=build/forth_smoke_p30.lst rom/forth_smoke_p30.asm
-	mv forth_smoke_p30_rom0.bin build/forth_smoke_p30_rom0.bin
-
-forth-smoke-p31:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p31.sym --lst=build/forth_smoke_p31.lst rom/forth_smoke_p31.asm
-	mv forth_smoke_p31_rom0.bin build/forth_smoke_p31_rom0.bin
-
-forth-smoke-p32:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p32.sym --lst=build/forth_smoke_p32.lst rom/forth_smoke_p32.asm
-	mv forth_smoke_p32_rom0.bin build/forth_smoke_p32_rom0.bin
-
-forth-smoke-p33:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p33.sym --lst=build/forth_smoke_p33.lst rom/forth_smoke_p33.asm
-	mv forth_smoke_p33_rom0.bin build/forth_smoke_p33_rom0.bin
-
-forth-smoke-p34:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p34.sym --lst=build/forth_smoke_p34.lst rom/forth_smoke_p34.asm
-	mv forth_smoke_p34_rom0.bin build/forth_smoke_p34_rom0.bin
-
-forth-smoke-p35:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p35.sym --lst=build/forth_smoke_p35.lst rom/forth_smoke_p35.asm
-	mv forth_smoke_p35_rom0.bin build/forth_smoke_p35_rom0.bin
-
-forth-smoke-p36:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p36.sym --lst=build/forth_smoke_p36.lst rom/forth_smoke_p36.asm
-	mv forth_smoke_p36_rom0.bin build/forth_smoke_p36_rom0.bin
-
-forth-smoke-p37:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p37.sym --lst=build/forth_smoke_p37.lst rom/forth_smoke_p37.asm
-	mv forth_smoke_p37_rom0.bin build/forth_smoke_p37_rom0.bin
-
-forth-smoke-p38:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p38.sym --lst=build/forth_smoke_p38.lst rom/forth_smoke_p38.asm
-	mv forth_smoke_p38_rom0.bin build/forth_smoke_p38_rom0.bin
-
-forth-smoke-p40:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p40.sym --lst=build/forth_smoke_p40.lst rom/forth_smoke_p40.asm
-	mv forth_smoke_p40_rom0.bin build/forth_smoke_p40_rom0.bin
-
-forth-smoke-p41:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p41.sym --lst=build/forth_smoke_p41.lst rom/forth_smoke_p41.asm
-	mv forth_smoke_p41_rom0.bin build/forth_smoke_p41_rom0.bin
-
-forth-smoke-p42:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p42.sym --lst=build/forth_smoke_p42.lst rom/forth_smoke_p42.asm
-	mv forth_smoke_p42_rom0.bin build/forth_smoke_p42_rom0.bin
-
-forth-smoke-p43:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p43.sym --lst=build/forth_smoke_p43.lst rom/forth_smoke_p43.asm
-	mv forth_smoke_p43_rom0.bin build/forth_smoke_p43_rom0.bin
-
-forth-smoke-p44:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p44.sym --lst=build/forth_smoke_p44.lst rom/forth_smoke_p44.asm
-	mv forth_smoke_p44_rom0.bin build/forth_smoke_p44_rom0.bin
-
-forth-smoke-p45:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p45.sym --lst=build/forth_smoke_p45.lst rom/forth_smoke_p45.asm
-	mv forth_smoke_p45_rom0.bin build/forth_smoke_p45_rom0.bin
-
-forth-smoke-p46:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p46.sym --lst=build/forth_smoke_p46.lst rom/forth_smoke_p46.asm
-	mv forth_smoke_p46_rom0.bin build/forth_smoke_p46_rom0.bin
-
-forth-smoke-p47:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p47.sym --lst=build/forth_smoke_p47.lst rom/forth_smoke_p47.asm
-	mv forth_smoke_p47_rom0.bin build/forth_smoke_p47_rom0.bin
-
-forth-smoke-p48:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p48.sym --lst=build/forth_smoke_p48.lst rom/forth_smoke_p48.asm
-	mv forth_smoke_p48_rom0.bin build/forth_smoke_p48_rom0.bin
-
-# Phase 49 smoke ROM: 1+/1-/NEGATE/MAX/MIN (core/arith.asm), VLIST
-# (core/vlist.asm), EXIT/J (core/loopext.asm).
-forth-smoke-p49:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p49.sym --lst=build/forth_smoke_p49.lst rom/forth_smoke_p49.asm
-	mv forth_smoke_p49_rom0.bin build/forth_smoke_p49_rom0.bin
-
-# Phase 50: the "architectural tier" of the Jupiter Ace word-gap audit
-# -- HERE, , (COMMA), C,, ALLOT, CREATE, DOES>, IMMEDIATE, ABORT, QUIT,
-# IN, OUT, FORGET. See rom/forth_smoke_p50.asm's own header for the
-# full 12-checkpoint pass/fail contract (printed, not border-color
-# coded -- too many topics for PORT_ULA's 3 usable bits).
-forth-smoke-p50:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p50.sym --lst=build/forth_smoke_p50.lst rom/forth_smoke_p50.asm
-	mv forth_smoke_p50_rom0.bin build/forth_smoke_p50_rom0.bin
-
-# Phase 51: UDG (core/udg.asm) smoke ROM. Three checkpoints: address
-# arithmetic (0/1/20 UDG), a real Forth C!/C@ round trip writing an
-# 8-byte "spade" bitmap into slot 0, and a real EMIT + GFX_READ_PIXEL
-# rendering round trip proving the rendered glyph matches those exact
-# bytes — see rom/forth_smoke_p51.asm's own header.
-forth-smoke-p51:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p51.sym --lst=build/forth_smoke_p51.lst rom/forth_smoke_p51.asm
-	mv forth_smoke_p51_rom0.bin build/forth_smoke_p51_rom0.bin
 
 # Blackjack demo ROM: boots directly into a real, playable single-deck
 # Blackjack game showcasing UDG (four hand-drawn suit glyphs), color
 # (INK/PAPER/BORDER), and sound (BEEP/SOUND) together. See
 # rom/forth_demo_blackjack.asm's own header for rules scope, screen
 # layout, and how to play it in Fuse.
-forth-demo-blackjack:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_demo_blackjack.sym --lst=build/forth_demo_blackjack.lst rom/forth_demo_blackjack.asm
-	mv forth_demo_blackjack_rom0.bin build/forth_demo_blackjack_rom0.bin
+forth-demo-blackjack: build/forth_demo_blackjack_rom0.bin
+build/forth_demo_blackjack_rom0.bin: rom/forth_demo_blackjack.asm $(SRC_STAMP) | build
+	$(SJASM) --sym=build/forth_demo_blackjack.sym --lst=build/forth_demo_blackjack.lst $<
 	python3 tools/build_stamp.py --write --target forth-demo-blackjack
 
 # Shooting Gallery demo ROM: boots straight into a real, playable
@@ -428,150 +140,20 @@ forth-demo-blackjack:
 # glyph-block "sprites" (a blaster truck and three moving targets),
 # and BEEP/SOUND (including a raw AY noise-burst explosion cue)
 # together. Needs the graphics EXROM as ROM 1 alongside this ROM's own
-# rom0 image -- see rom/forth_demo_gallery.asm's own header for how to
-# play it and the platform/reliability findings behind its design.
-forth-demo-gallery: graphics-exrom
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_demo_gallery.sym --lst=build/forth_demo_gallery.lst rom/forth_demo_gallery.asm
-	mv forth_demo_gallery_rom0.bin build/forth_demo_gallery_rom0.bin
+# rom0 image (hence the graphics_exrom.bin prerequisite) -- see
+# rom/forth_demo_gallery.asm's own header for how to play it and the
+# platform/reliability findings behind its design.
+forth-demo-gallery: build/forth_demo_gallery_rom0.bin
+build/forth_demo_gallery_rom0.bin: rom/forth_demo_gallery.asm $(SRC_STAMP) build/graphics_exrom.bin | build
+	$(SJASM) --sym=build/forth_demo_gallery.sym --lst=build/forth_demo_gallery.lst $<
 	python3 tools/build_stamp.py --write --target forth-demo-gallery
-
-# Phase 52: SAVE-TEXT/LOAD-TEXT (core/loadtext.asm) smoke ROM. Two
-# checkpoints: a small DOUBLER round trip, then the Blackjack demo's own
-# extracted ~6KB Forth source (rom/forth_smoke_p52_blackjack_test.fs)
-# SAVE-TEXT'd, a simulated fresh boot, LOAD-TEXT'd back, and played
-# through all four scripted rounds -- checked against ground truth
-# independently captured from rom/forth_demo_blackjack.asm's own
-# BLACKJACK_TEST_MODE build. See rom/forth_smoke_p52.asm's own header.
-forth-smoke-p52:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p52.sym --lst=build/forth_smoke_p52.lst rom/forth_smoke_p52.asm
-	mv forth_smoke_p52_rom0.bin build/forth_smoke_p52_rom0.bin
-
-# Real (non-fake) tape round trip: same two checkpoints as
-# forth-smoke-p52, but reads from an actual .TAP file via real,
-# pulse-level STORAGE_RECEIVE_BLOCK decoding under Fuse -- see
-# rom/forth_smoke_p53_realtape.asm's own header.
-forth-smoke-p53-realtape:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p53_realtape.sym --lst=build/forth_smoke_p53_realtape.lst rom/forth_smoke_p53_realtape.asm
-	mv forth_smoke_p53_realtape_rom0.bin build/forth_smoke_p53_realtape_rom0.bin
-
-# Phase 54: * and / (core/mathfn.asm) -- plain integer multiply and
-# divide, thin wrappers around kernel/math/math.asm's own
-# MATH_MULTIPLY16/MATH_DIVIDE16. See rom/forth_smoke_p54.asm's own
-# header for the four-checkpoint pass/fail contract.
-forth-smoke-p54:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p54.sym --lst=build/forth_smoke_p54.lst rom/forth_smoke_p54.asm
-	mv forth_smoke_p54_rom0.bin build/forth_smoke_p54_rom0.bin
-
-# Phase 55: HIRES and NORMAL (core/hires.asm) -- High Resolution
-# Graphics mode, exposing kernel/graphics/graphics.asm's own already-
-# existing GFX_SET_MODE. See rom/forth_smoke_p55.asm's own header for
-# the five-checkpoint pass/fail contract.
-forth-smoke-p55:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p55.sym --lst=build/forth_smoke_p55.lst rom/forth_smoke_p55.asm
-	mv forth_smoke_p55_rom0.bin build/forth_smoke_p55_rom0.bin
-
-# Phase 56: MODE64_PUTCHAR/_XOR/SCROLL_TEXT_UP/CLEAR_ROW
-# (kernel/mode64/mode64.asm) -- the real-64-column-TEXT primitives,
-# step 1/3 of the 64-column TEXT stretch goal (Phase D of the plan; no
-# Forth word wraps these yet, that's Phase 57). See
-# rom/forth_smoke_p56.asm's own header for the five-checkpoint
-# pass/fail contract.
-forth-smoke-p56:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p56.sym --lst=build/forth_smoke_p56.lst rom/forth_smoke_p56.asm
-	mv forth_smoke_p56_rom0.bin build/forth_smoke_p56_rom0.bin
-
-# Phase 57: mode-aware EMIT (core/print.asm) -- step 2/3 of the real
-# 64-column TEXT stretch goal (Phase E of the plan). See
-# rom/forth_smoke_p57.asm's own header for the four-checkpoint
-# pass/fail contract.
-forth-smoke-p57:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p57.sym --lst=build/forth_smoke_p57.lst rom/forth_smoke_p57.asm
-	mv forth_smoke_p57_rom0.bin build/forth_smoke_p57_rom0.bin
-
-# Phase 58: EDITOR_REDRAW64/WRAP_CALC64 (core/editor.asm) -- step 3/3
-# of the real 64-column TEXT stretch goal (Phase F of the plan),
-# closing it out. See rom/forth_smoke_p58.asm's own header for the
-# four-checkpoint pass/fail contract.
-forth-smoke-p58:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p58.sym --lst=build/forth_smoke_p58.lst rom/forth_smoke_p58.asm
-	mv forth_smoke_p58_rom0.bin build/forth_smoke_p58_rom0.bin
-
-# Phase 59: COMPILE_ONLY_CHECK (core/interp.asm) -- IF/DO/." refused
-# cleanly when typed at STATE=0 instead of silently compiling dead
-# bytes. See rom/forth_smoke_p59.asm's own header for the four-
-# checkpoint pass/fail contract.
-forth-smoke-p59:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p59.sym --lst=build/forth_smoke_p59.lst rom/forth_smoke_p59.asm
-	mv forth_smoke_p59_rom0.bin build/forth_smoke_p59_rom0.bin
-
-# Phase 60: BRIGHT (core/color.asm) -- intensity control alongside
-# INK/PAPER. See rom/forth_smoke_p60.asm's own header for the three-
-# checkpoint pass/fail contract (mirrors Phase 15's INK/PAPER proof).
-forth-smoke-p60:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p60.sym --lst=build/forth_smoke_p60.lst rom/forth_smoke_p60.asm
-	mv forth_smoke_p60_rom0.bin build/forth_smoke_p60_rom0.bin
-
-# Phase 61: FLASH (core/color.asm) -- flashing INK/PAPER alongside
-# BRIGHT. See rom/forth_smoke_p61.asm's own header for the three-
-# checkpoint pass/fail contract (mirrors Phase 60's BRIGHT proof).
-forth-smoke-p61:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p61.sym --lst=build/forth_smoke_p61.lst rom/forth_smoke_p61.asm
-	mv forth_smoke_p61_rom0.bin build/forth_smoke_p61_rom0.bin
-
-# Phase 62: BREAK? (core/key.asm) -- CAPS SHIFT+SPACE abort-combo
-# detection. See rom/forth_smoke_p62.asm's own header for the two-
-# checkpoint pass/fail contract and the honest live-keyboard gap.
-forth-smoke-p62:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p62.sym --lst=build/forth_smoke_p62.lst rom/forth_smoke_p62.asm
-	mv forth_smoke_p62_rom0.bin build/forth_smoke_p62_rom0.bin
-
-# Phase 63: TONE, VOLUME, MIXER, NOISE, ENVELOPE (core/sound.asm) -- a
-# channel-aware convenience layer over the AY-3-8912 register map, on
-# top of SOUND's own raw access. See rom/forth_smoke_p63.asm's own
-# header for the seven-checkpoint contract and the honest
-# no-AY-readback gap it shares with SOUND's own Phase 32 smoke ROM.
-forth-smoke-p63:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p63.sym --lst=build/forth_smoke_p63.lst rom/forth_smoke_p63.asm
-	mv forth_smoke_p63_rom0.bin build/forth_smoke_p63_rom0.bin
-
-# Phase 64: LIST-DEFS/RECALL (core/recall.asm) smoke ROM -- see
-# rom/forth_smoke_p64.asm's own header for the six-checkpoint contract
-# and why it deliberately doesn't INCLUDE core/loadtext.asm or
-# core/editor.asm.
-forth-smoke-p64:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p64.sym --lst=build/forth_smoke_p64.lst rom/forth_smoke_p64.asm
-	mv forth_smoke_p64_rom0.bin build/forth_smoke_p64_rom0.bin
-
-# Smoke ROM for the scanline/span FILL rewrite (kernel/graphics/graphics.asm's
-# GFX_FILL) -- see rom/forth_smoke_p65.asm's own header for the four
-# checkpoints, including the historically tricky "recolor an already-solid
-# region" path. Confirmed passing (border green) under real ZEsarUX.
-forth-smoke-p65:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_smoke_p65.sym --lst=build/forth_smoke_p65.lst rom/forth_smoke_p65.asm
-	mv forth_smoke_p65_rom0.bin build/forth_smoke_p65_rom0.bin
 
 # Generated from rom/forth_boot.asm's own GRAPHICS_HOME_TABLE -- see
 # tools/export_home_symbols.py's own header and rom/graphics_exrom.asm's.
-# Regenerated on every graphics-exrom build, never hand-edited or
+# Regenerated whenever its inputs change, never hand-edited or
 # committed (build/ is gitignored).
-build/graphics_home_table.inc: rom/forth_boot.asm tools/export_home_symbols.py
-	mkdir -p build
-	python3 tools/export_home_symbols.py rom/forth_boot.asm build/graphics_home_table.inc
+build/graphics_home_table.inc: rom/forth_boot.asm tools/export_home_symbols.py | build
+	python3 tools/export_home_symbols.py rom/forth_boot.asm $@
 
 # EXROM-resident graphics services (chunk 5, $A000-$BFFF): RECT, POLYGON,
 # POLYGON-FILL, SPRITE-DEFINE/SHOW/HIDE. See rom/graphics_exrom.asm's
@@ -579,58 +161,18 @@ build/graphics_home_table.inc: rom/forth_boot.asm tools/export_home_symbols.py
 # chunk 5. Standalone 8K image, not concatenated with forth-boot's own
 # source -- combine with build/forth_boot_rom0.bin for ZEsarUX the same
 # way README.md's own "Try it" section already does for EXROM.
-graphics-exrom: build/graphics_home_table.inc
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/graphics_exrom.sym --lst=build/graphics_exrom.lst rom/graphics_exrom.asm
-	mv graphics_exrom.bin build/graphics_exrom.bin
+graphics-exrom: build/graphics_exrom.bin
+build/graphics_exrom.bin: rom/graphics_exrom.asm build/graphics_home_table.inc $(SRC_STAMP) | build
+	$(SJASM) --sym=build/graphics_exrom.sym --lst=build/graphics_exrom.lst $<
 	python3 tools/build_stamp.py --write --target graphics-exrom
-
-# Fresh chunk-5 EXROM paging isolation test -- see rom/test_exrom_
-# isolation.asm's own header. Confirmed passing (border green) under real
-# ZEsarUX; combine build/test_exrom_isolation_rom0.bin with any real 8K
-# EXROM image filled with $A5 to re-run it.
-test-exrom-isolation:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/test_exrom_isolation.sym --lst=build/test_exrom_isolation.lst rom/test_exrom_isolation.asm
-	mv test_exrom_isolation_rom0.bin build/test_exrom_isolation_rom0.bin
-
-# RECT smoke ROM -- see rom/test_rect.asm's own header. Combine with
-# build/graphics_exrom.bin for the real pass; combine with any wrong/
-# blank EXROM image to confirm the magic/ABI mismatch path instead.
-test-rect: graphics-exrom
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/test_rect.sym --lst=build/test_rect.lst rom/test_rect.asm
-	mv test_rect_rom0.bin build/test_rect_rom0.bin
-
-# POLYGON smoke ROM -- see rom/test_polygon.asm's own header. Combine with
-# build/graphics_exrom.bin for the real pass.
-test-polygon: graphics-exrom
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/test_polygon.sym --lst=build/test_polygon.lst rom/test_polygon.asm
-	mv test_polygon_rom0.bin build/test_polygon_rom0.bin
-
-# SPRITE-DEFINE/SHOW/HIDE smoke ROM -- see rom/test_sprite.asm's own
-# header. Combine with build/graphics_exrom.bin for the real pass.
-test-sprite: graphics-exrom
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/test_sprite.sym --lst=build/test_sprite.lst rom/test_sprite.asm
-	mv test_sprite_rom0.bin build/test_sprite_rom0.bin
-
-# POLYGON-FILL smoke ROM -- see rom/test_poly_fill.asm's own header.
-# Combine with build/graphics_exrom.bin for the real pass.
-test-poly-fill: graphics-exrom
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/test_poly_fill.sym --lst=build/test_poly_fill.lst rom/test_poly_fill.asm
-	mv test_poly_fill_rom0.bin build/test_poly_fill_rom0.bin
 
 # LROS cartridge boot stub (EXPERIMENTAL) -- see rom/forth_lros.asm's own
 # header. Deliberately NOT part of `all`: it's a separate, unverified
 # distribution channel (DOCK cartridge), not a regression-tested phase of
 # the Home-ROM product build. Pack with tools/pack_dck.sh afterward.
-forth-lros:
-	mkdir -p build
-	tools/sjasmplus_strict.sh --sym=build/forth_lros.sym --lst=build/forth_lros.lst rom/forth_lros.asm
-	mv forth_lros_chunk0.bin build/forth_lros_chunk0.bin
+forth-lros: build/forth_lros_chunk0.bin
+build/forth_lros_chunk0.bin: rom/forth_lros.asm $(SRC_STAMP) | build
+	$(SJASM) --sym=build/forth_lros.sym --lst=build/forth_lros.lst $<
 	python3 tools/build_stamp.py --write --target forth-lros
 
 # The two ROMs people actually run: the live Forth and the Blackjack demo.
@@ -645,18 +187,18 @@ product: forth-boot forth-demo-blackjack
 # EPROM in a real cartridge. This covers only the base dictionary --
 # RECT/POLYGON/POLYGON-FILL/sprites still need the graphics EXROM,
 # which has no cartridge/DOCK path yet (see docs/lros_cartridge.md).
-forth-boot-cart:
-	mkdir -p build
-	tools/sjasmplus_strict.sh -DCARTRIDGE --sym=build/forth_boot_cart.sym --lst=build/forth_boot_cart.lst rom/forth_boot.asm
-	mv forth_boot_cart.bin build/forth_boot_cart.bin
-	python3 tools/make_dck.py build/forth_boot_cart.bin build/forth_boot.dck
+forth-boot-cart: build/forth_boot.dck
+build/forth_boot_cart.bin: rom/forth_boot.asm $(SRC_STAMP) | build
+	$(SJASM) -DCARTRIDGE --sym=build/forth_boot_cart.sym --lst=build/forth_boot_cart.lst $<
+build/forth_boot.dck: build/forth_boot_cart.bin tools/make_dck.py
+	python3 tools/make_dck.py build/forth_boot_cart.bin $@
 	python3 tools/build_stamp.py --write --target forth-boot-cart
 
-forth-demo-blackjack-cart:
-	mkdir -p build
-	tools/sjasmplus_strict.sh -DCARTRIDGE --sym=build/forth_demo_blackjack_cart.sym --lst=build/forth_demo_blackjack_cart.lst rom/forth_demo_blackjack.asm
-	mv forth_demo_blackjack_cart.bin build/forth_demo_blackjack_cart.bin
-	python3 tools/make_dck.py build/forth_demo_blackjack_cart.bin build/forth_demo_blackjack.dck
+forth-demo-blackjack-cart: build/forth_demo_blackjack.dck
+build/forth_demo_blackjack_cart.bin: rom/forth_demo_blackjack.asm $(SRC_STAMP) | build
+	$(SJASM) -DCARTRIDGE --sym=build/forth_demo_blackjack_cart.sym --lst=build/forth_demo_blackjack_cart.lst $<
+build/forth_demo_blackjack.dck: build/forth_demo_blackjack_cart.bin tools/make_dck.py
+	python3 tools/make_dck.py build/forth_demo_blackjack_cart.bin $@
 	python3 tools/build_stamp.py --write --target forth-demo-blackjack-cart
 
 cart: forth-boot-cart forth-demo-blackjack-cart

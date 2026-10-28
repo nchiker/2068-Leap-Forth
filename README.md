@@ -334,11 +334,11 @@ make forth-boot       # the real, live, bootable product ROM
 make graphics-exrom       # Phase 65: the EXROM chunk-5 payload (RECT/
                           # POLYGON/POLYGON-FILL/SPRITE-DEFINE/SHOW/HIDE),
                           # a standalone 8K image at build/graphics_exrom.bin
-make test-exrom-isolation # Phase 65 smoke ROM: chunk-5 paging proof
-make test-rect            # Phase 65 smoke ROM: RECT
-make test-polygon         # Phase 65 smoke ROM: POLYGON (outline)
-make test-sprite          # Phase 65 smoke ROM: SPRITE-DEFINE/SHOW/HIDE
-make test-poly-fill       # Phase 65 smoke ROM: POLYGON-FILL
+make build-test-exrom-isolation # Phase 65 smoke ROM: chunk-5 paging proof
+make build-test-rect            # Phase 65 smoke ROM: RECT
+make build-test-polygon         # Phase 65 smoke ROM: POLYGON (outline)
+make build-test-sprite          # Phase 65 smoke ROM: SPRITE-DEFINE/SHOW/HIDE
+make build-test-poly-fill       # Phase 65 smoke ROM: POLYGON-FILL
 make check            # static asm checks over core/, kernel/, and rom/
 make product          # just the two ROMs people run: forth-boot + forth-demo-blackjack
 make cart             # the same two as DOCK cartridges -> build/*.dck (+ raw *_cart.bin)

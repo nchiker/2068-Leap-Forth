@@ -1,0 +1,94 @@
+# ROM list: the single source of truth for what is built and tested.
+# Read by the Makefile (build, all, .PHONY, test), tools/run_rom_tests.sh and
+# tools/check_test_list.sh. One ROM per line, whitespace separated:
+#   stem   kind   exrom   expect   [note]
+# stem   rom/<stem>.asm (or rom/bench/<stem>.asm for kind bench)
+# kind   smoke|test    self-checking, built by the generic rule, run by `make test`
+#        visual|bench  built by the generic rule, no pass/fail border verdict
+#        product|special|exrom   built by explicit Makefile rules
+# exrom  ROM 1 image for `make test`: none = stock-shaped placeholder (8K of $00),
+#        gfx = build/graphics_exrom.bin, a5 = 8K of $A5, - = not applicable
+# expect final border colour that means PASS (4 for the green convention),
+#        skip = deliberately not run by `make test` (see the note), - = no verdict
+# Keep rom/forth_smoke*.asm and rom/test_*.asm complete here:
+# tools/check_test_list.sh enforces it in `make check`.
+
+main                       special  none  -     M0 boot stub, border cycles forever
+forth_boot                 product  none  -     interactive prompt, no verdict
+forth_demo_blackjack       product  none  -     interactive, border = game outcome
+forth_demo_gallery         product  gfx   -     interactive real-time demo
+forth_lros                 special  none  -     experimental LROS stub, chunk 0 only
+graphics_exrom             exrom    -     -     EXROM image, not runnable alone
+hires_visual_check         visual   none  -     screenshot check, no verdict
+mode64_visual_check        visual   none  -     screenshot check, no verdict
+
+test_rect                  test     gfx   4     
+test_polygon               test     gfx   4     
+test_sprite                test     gfx   4     
+test_poly_fill             test     gfx   4     
+test_exrom_isolation       test     a5    4     needs an 8K EXROM whose byte 0 is $A5
+
+forth_smoke                smoke    none  4     
+forth_smoke_p3             smoke    none  4     
+forth_smoke_p4             smoke    none  4     
+forth_smoke_p5             smoke    none  4     
+forth_smoke_p6             smoke    none  4     
+forth_smoke_p7             smoke    none  4     
+forth_smoke_p8             smoke    none  4     
+forth_smoke_p8b            smoke    none  4     
+forth_smoke_p9             smoke    none  4     
+forth_smoke_p10            smoke    none  4     
+forth_smoke_p11            smoke    none  4     
+forth_smoke_p12            smoke    none  4     
+forth_smoke_p13            smoke    none  4     
+forth_smoke_p14            smoke    none  4     
+forth_smoke_p15            smoke    none  4     
+forth_smoke_p16            smoke    none  4     
+forth_smoke_p17            smoke    none  4     
+forth_smoke_p18            smoke    none  4     
+forth_smoke_p19            smoke    none  4     
+forth_smoke_p20            smoke    none  4     
+forth_smoke_p21            smoke    none  4     
+forth_smoke_p22            smoke    none  4     
+forth_smoke_p23            smoke    none  4     
+forth_smoke_p24            smoke    none  4     
+forth_smoke_p25            smoke    none  4     
+forth_smoke_p26            smoke    none  4     
+forth_smoke_p27            smoke    none  4     
+forth_smoke_p28            smoke    none  4     
+forth_smoke_p29            smoke    none  4     
+forth_smoke_p30            smoke    none  4     
+forth_smoke_p31            smoke    none  4     
+forth_smoke_p32            smoke    none  4     
+forth_smoke_p33            smoke    none  4     
+forth_smoke_p34            smoke    none  4     
+forth_smoke_p35            smoke    none  4     
+forth_smoke_p36            smoke    none  4     
+forth_smoke_p37            smoke    none  4     
+forth_smoke_p38            smoke    none  4     
+forth_smoke_p40            smoke    none  4     
+forth_smoke_p41            smoke    none  4     
+forth_smoke_p42            smoke    none  4     
+forth_smoke_p43            smoke    none  4     
+forth_smoke_p44            smoke    none  4     
+forth_smoke_p45            smoke    none  4     
+forth_smoke_p46            smoke    none  4     
+forth_smoke_p47            smoke    none  4     
+forth_smoke_p49            smoke    none  4     
+forth_smoke_p50            smoke    none  4     
+forth_smoke_p51            smoke    none  4     
+forth_smoke_p52            smoke    none  4     
+forth_smoke_p54            smoke    none  4     
+forth_smoke_p55            smoke    none  4     
+forth_smoke_p56            smoke    none  4     
+forth_smoke_p57            smoke    none  4     
+forth_smoke_p58            smoke    none  4     
+forth_smoke_p59            smoke    none  4     
+forth_smoke_p60            smoke    none  4     
+forth_smoke_p61            smoke    none  4     
+forth_smoke_p62            smoke    none  4     
+forth_smoke_p63            smoke    none  4     
+forth_smoke_p64            smoke    none  4     
+forth_smoke_p65            smoke    none  4     
+forth_smoke_p48            smoke    none  6     visual test: hangs with border yellow(6) after ULAPLUS/PALETTE; no border-4 verdict
+forth_smoke_p53_realtape   smoke    none  skip  needs a real .TAP and Fuse (tools/run_realtape_test.sh); not headless
