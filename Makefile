@@ -234,14 +234,15 @@ build/stock_shaped_exrom.bin: tools/make_exrom_placeholder.sh | build
 build/exrom_a5.bin: | build
 	head -c 8192 /dev/zero | tr '\000' '\245' > $@
 
-test: roms-for-test
-	tools/run_rom_tests.sh
+# Every smoke/test ROM, then the power-on test (both always run; either failing fails the target).
+test: roms-for-test build/forth_boot_rom0.bin
+	tools/run_rom_tests.sh; r=$$?; python3 tools/poweron.py || r=1; exit $$r
 
 # Boots the Home ROM from RAM and register power-on patterns and requires every byte the ROM defines to
 # come out the same as from zeroed RAM (tools/poweron.py's header says what Forth defines). Own port
 # range, 10820-10839.
 poweron: build/forth_boot_rom0.bin build/stock_shaped_exrom.bin
-	python3 -I tools/poweron.py
+	python3 tools/poweron.py
 
 repro:
 	tools/check_repro.sh

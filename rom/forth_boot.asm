@@ -214,8 +214,17 @@ COLD_START:
     ; through DICT_RAM_CEILING, core/free.asm) before anything below
     ; reads or writes into it, so nothing here can show leftover
     ; power-on garbage instead of a clean, empty system.
+    ;
+    ; The clear runs on through UDG_TABLE ($F180-$F227, above
+    ; DICT_RAM_CEILING): nothing initialised it, so CHR$ 144-164 (W_UDG,
+    ; the glyph lookup) showed power-on garbage. Found by tools/poweron.py
+    ; (audit O1). Extending the one fill costs no bytes; a second
+    ; MEM_FILL_ZERO call for the table would cost 9. The $F000-$F17F
+    ; between them is unused by Forth, so clearing it is harmless.
+COLD_CLEAR_END EQU UDG_TABLE + UDG_COUNT * 8
+    ASSERT COLD_CLEAR_END > DICT_RAM_CEILING
     ld   hl, $8000
-    ld   bc, DICT_RAM_CEILING - $8000
+    ld   bc, COLD_CLEAR_END - $8000
     call MEM_FILL_ZERO
 
     ld   hl, DICT_LATEST_INIT_RECALL   ; the full chain's own head —
