@@ -465,58 +465,42 @@ GFX_CHAR_TO_FONT_OFFSET:
     ret
 
 .is_block_graphics:
-    ; Codes 128-143: real TS2068/Spectrum-family hardware never stores
-    ; these as glyph data — PO-GR-1 (MKBLKGR) in the ROM disassembly
-    ; generates the 8-byte bitmap from the low nibble every time one is
-    ; printed, and this mirrors that exact bit-to-quadrant algorithm
-    ; (SBC A,A + mask, confirmed from the disassembly's PO-GR-2/PO-GR-3
-    ; — see docs/programmers_reference.md for the full derivation,
-    ; including the one part — the bottom-half repeat — reconstructed
-    ; from the universal Spectrum-family technique rather than read
-    ; directly, since the source PDF's text extraction cuts out exactly
-    ; at that point). Low nibble bit0=top-right, bit1=top-left,
-    ; bit2=bottom-right, bit3=bottom-left; each quadrant is a solid 4x4
-    ; block, filled or blank, never partial.
-    ld   b, e                          ; E still holds the original
-                                       ; character (this routine's own
-                                       ; convention, see its top) — B is
-                                       ; free here since the punct-scan
-                                       ; loop counter isn't live on this
-                                       ; path
-    rr   b
-    sbc  a, a
+    ; Codes 128-143. The glyph is built in BLOCK_GFX_SCRATCH from the low
+    ; nibble of the code, top half first (bit0 = top-right, bit1 =
+    ; top-left, bit2 = bottom-right, bit3 = bottom-left; each quarter is
+    ; a solid 4x4 block, filled or blank, never partial). Each half is
+    ; four identical rows made from two bits of the code: the low bit
+    ; selects the right-hand nibble ($0F), the next bit the left ($F0).
+    ; E is shifted down two bits between halves (top = bits 1,0 of the
+    ; code, bottom = bits 3,2).
+    ; Body from 2068-Leap-C delta D21, written clean-room from the screen
+    ; format alone (2068-Leap-C docs/TAPE_CLEANROOM.md); oracle:
+    ; rom/test_blockgfx.asm.
+    ld   hl, BLOCK_GFX_SCRATCH
+    ld   b, 2                        ; two halves
+.bg_half:
+    ld   a, e
+    rra                              ; carry = right quarter
+    sbc  a, a                        ; $FF if ink, else $00
     and  $0F
-    ld   c, a                          ; right nibble (bit0 = top-right)
-    rr   b
+    ld   c, a                        ; right nibble
+    ld   a, e
+    rra
+    rra                              ; carry = left quarter
     sbc  a, a
     and  $F0
-    or   c                             ; A = top-half byte (rows 0-3)
+    or   c                           ; A = row pattern for this half
+    ld   c, 4
+.bg_row:
+    ld   (hl), a
+    inc  hl
+    dec  c
+    jr   nz, .bg_row
+    srl  e
+    srl  e                           ; next pair of quarters
+    djnz .bg_half
     ld   hl, BLOCK_GFX_SCRATCH
-    ld   (hl), a
-    inc  hl
-    ld   (hl), a
-    inc  hl
-    ld   (hl), a
-    inc  hl
-    ld   (hl), a
-    inc  hl
-    rr   b
-    sbc  a, a
-    and  $0F
-    ld   c, a                          ; right nibble (bit2 = bottom-right)
-    rr   b
-    sbc  a, a
-    and  $F0
-    or   c                             ; A = bottom-half byte (rows 4-7)
-    ld   (hl), a
-    inc  hl
-    ld   (hl), a
-    inc  hl
-    ld   (hl), a
-    inc  hl
-    ld   (hl), a
-    ld   hl, BLOCK_GFX_SCRATCH
-    or   a
+    or   a                           ; carry clear = success
     ret
 
 .is_udg:

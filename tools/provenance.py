@@ -54,18 +54,12 @@ IMAGES = (
 # 'owner' is the step that owns the decision (e.g. the step that rewrites or justifies the routine).
 # These are DEBT, not clearance: each entry is a stock-ROM-derived run that the owning step removes, and
 # the entry is deleted in that step's commit (the "no longer found" note below reminds when it is stale).
-_GLYPH = {
-    "reason": "block-graphics glyph builder: two 12-byte runs equal to the stock ROM's PO-GR-2 (audit O2, "
-              "kernel/graphics/graphics.asm GFX_CHAR_TO_FONT_OFFSET)",
-    "owner": "step R0 (O2)",
-}
 _TAPE = {
     "reason": "tape block I/O: a port of the stock ROM's SA-BYTES / LD-BYTES (audit section 4.1, "
               "kernel/storage/storage.asm)",
     "owner": "step S (clean-room rebuild)",
 }
 ALLOWED = {
-    ("GFX_CHAR_TO_FONT_OFFSET", 12): _GLYPH,
     ("STORAGE_SEND_BLOCK", 33): _TAPE,
     ("STORAGE_SEND_BLOCK", 19): _TAPE,
     ("STORAGE_SEND_BLOCK", 22): _TAPE,
