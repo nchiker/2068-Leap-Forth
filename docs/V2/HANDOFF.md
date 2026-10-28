@@ -5,9 +5,9 @@ section 9 the ledger, section 10 the owner decisions, and section 6 the per-step
 
 ## Where things stand
 
-- **Branch `v2/step-s-storage`, pushed.** It holds the whole chain T → G → R0 → A → R1 → S plus the S follow-up.
-  **PR #2** (https://github.com/nchiker/2068-Leap-Forth/pull/2) targets master, which is still the audit baseline
-  `fff5259`. Not merged: the owner merges.
+- **Merged into master** (PR #2, merge commit `0d45a2f`, 2026-10-28): the whole chain T → G → R0 → A → R1 → S plus
+  the S follow-up. Merged with a merge commit, so every hash the ledger cites is in master's history; keep merging
+  step PRs that way, not squash or rebase. Branch the next step (`v2/step-e-...`) from master.
 - **Free space [M]:** HOME 626 B, DOCK cartridge 626 B, Blackjack 797/797, Gallery 801, EXROM 6,682. The floors in
   `tools/budget.toml` equal these; raise them when a step recovers space.
 - **All owner decisions 1-6 are decided** (audit section 10). Decision 3, the float format, is the 5-byte
