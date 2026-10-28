@@ -2,6 +2,8 @@
 
 Phase 1 deliverable of `docs/V2/project plan - Leap-Forth V2.md`.
 
+**Current state and next steps:** `docs/V2/HANDOFF.md` (updated at the end of each session).
+
 Revisions audited:
 
 | Repository | Commit | Date |
@@ -829,7 +831,7 @@ E and K.
 
 ## 10. Owner decisions needed
 
-Decided 2026-10-28 (owner): 1, 2, 4, 5, 6. Open: 3.
+Decided 2026-10-28 (owner): all six. Decision 3 was decided at the end of step S.
 
 1. **Reserve target**: adopt 200 B HOME / 150 B EXROM as provisional? **Decided: yes, as a ratchet.**
    The T4 guard floors each section at its current free space (HOME 68, EXROM 6,682) so it blocks
@@ -839,7 +841,13 @@ Decided 2026-10-28 (owner): 1, 2, 4, 5, 6. Open: 3.
    both? **Decided: approved as O5 proposes** (§5): BEEP becomes AY-based and the speaker BEEP is kept
    only as an optional package. Step A runs immediately after R0.
 3. **Float format**: accept 5-byte floats (float-stack depth ~341 → ~204 cells; smoke ROMs
-   regenerated)?
+   regenerated)? **Decided (2026-10-28): yes, the 5-byte Sinclair format** (Leap-C `fpcore` with its
+   bit-exact `fpmodel.py` oracle). Conditions:
+   - If `bench_float` gets slower, its baseline reset needs the owner's approval.
+   - If HOME is short, SIN/COS/TAN move to the EXROM.
+   - The provenance scan runs on `fpcore` when F starts (decision 4's condition).
+
+   F follows E and reuses T11.
 4. **`fpcore` provenance**: accept Leap V2's position (passes the 12-byte scan, MIT) for Forth's
    NOTICE? **Decided: yes, conditional** on the T5 scan coming back clean on the Forth tree.
 5. **Disassembly-informed files** (`core/printer.asm`, `kernel/sound`, `kernel/mode64`,
