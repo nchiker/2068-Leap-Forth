@@ -680,6 +680,8 @@ check:
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm
 	python3 tools/check_z80_opcodes.py core/*.asm kernel/*/*.asm rom/*.asm
 	python3 tools/audit_layout.py
+	# z80sim flag semantics + snapshot/replay (run in-directory: they import sim/snapshot as siblings)
+	cd tools/z80sim && python3 -m unittest test_flags test_snapshot
 
 clean:
 	rm -rf build dist
