@@ -177,9 +177,10 @@ LIB data block: dictionary bytes, then CRC-16 low byte, high byte (D4).
      - for type 3, its identity matches;
      - `2 <= len <= max` for type 3, or `len <= max` for type 0, where `len` is the header's data length.
   5. A header that fails any of these is skipped and counted; nothing is written.
-  6. **A receive that times out ends the search** (the receiver leaves `STORAGE_ENTRY_RETRY` at 0 only when its
-     ~8.6 s budget ran out, `tapeblock.asm` `TR_SEDGE`). No tape now fails after about 8.6 s instead of 137 s;
-     the 15 attempts count only headers that arrived and were refused.
+  6. **A receive that times out counts as an attempt**, as in V1, so with no tape the search gives up after about
+     15 x 8.6 s. (The first draft ended the search at the first timeout. `tools/tapetol.py` refused all 71 cases
+     on that build [M]: the tape started more than 8.6 s after ENTER, as it does when a user types the command
+     and then presses play. Reverted before commit.)
 - **Data block:** receive (mode 0) or verify (mode 1) exactly `len` bytes with flag `$FF` at IX.
 - **Out:**
   - carry clear = success, DE = len, header buffer still holding the header (LATEST for the caller).
@@ -268,7 +269,7 @@ show the defects of section 1.
 | 9 | Data block with the wrong flag byte | `-37`, nothing written | reports success |
 | 10 | Dropout in the middle of the data block | dictionary reset, `-37` | reports success |
 | 11 | SPACE during the header search | `-28` within a second | returns silently, no error |
-| 11a | No tape at all | `-37` after about 8.6 s emulated | silent, after 136.8 s |
+| 11a | No tape at all | `-37` after about 2 minutes emulated | silent, after 136.8 s |
 | 12 | SPACE during the SAVE header | one block captured, `-28` | header + data captured |
 | 13 | Two headers: wrong name, then the right one | the second loads | pass |
 | 14 | `VERIFY-LIB` / `VERIFY-TEXT` against a matching tape and a one-byte-different tape | no error / `-37`, memory untouched | n/a |

@@ -99,8 +99,9 @@ STORAGE_SAVE:
 ; STORAGE_FIND -- the header search
 ; In:  A = header type; STORAGE_NAME_BUF, STORAGE_NAME_LEN (0 = any name)
 ; Out: carry clear = found: the header in STORAGE_HEADER_BUF.
-;      Carry set = not found: B = $FF if SPACE stopped it, else 0 (no signal for the receiver's
-;      whole ~8.6 s budget, or STORAGE_HEADER_ATTEMPTS_MAX headers refused). Interrupts off
+;      Carry set = not found: B = $FF if SPACE stopped it, else 0 (STORAGE_HEADER_ATTEMPTS_MAX
+;      attempts failed: each a refused header or a receive that saw no signal for ~8.6 s, so
+;      about 2 minutes with no tape). Interrupts off
 ; A header of another type or name is refused and the search goes on with the next one.
 ; Destroys: AF, AF', BC, DE, HL, IX
 ; ============================================================================
@@ -134,14 +135,9 @@ STORAGE_FIND:
     dec  c
     jr   nz, .name
     ret                                 ; carry clear: the last cp was equal
-.failed:
-    call STORAGE_SPACE_HELD
+.failed:                                ; a timeout counts as an attempt too, so the search
+    call STORAGE_SPACE_HELD             ;   waits up to 15 x ~8.6 s for the user to press play
     jr   nc, STORAGE_STOPPED
-    ld   hl, (STORAGE_ENTRY_RETRY)      ; 0 only when the receiver's budget ran out
-    ld   a, h
-    or   l
-    jr   nz, .refused
-    ld   b, 1                           ; no signal: end the search (djnz falls through, B = 0)
 .refused:
     djnz .next
     scf
