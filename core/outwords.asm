@@ -44,7 +44,7 @@ H_CR:
     DB   2, "C","R"
 W_CR:
     ld   hl, 13
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     ret
 
@@ -56,7 +56,7 @@ H_SPACE:
     DB   5, "S","P","A","C","E"
 W_SPACE:
     ld   hl, 32
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     ret
 
@@ -67,7 +67,7 @@ H_SPACES:
     DW   H_SPACE
     DB   6, "S","P","A","C","E","S"
 W_SPACES:
-    call DPOP_HL             ; hl = n
+    rst RST_DPOP            ; hl = n
     ld   (SPACES_COUNT), hl
 .loop:
     ld   hl, (SPACES_COUNT)

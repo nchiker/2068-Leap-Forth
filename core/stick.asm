@@ -43,9 +43,9 @@ H_STICK:
                             ; INCLUDEing this file
     DB   5, "S", "T", "I", "C", "K"
 W_STICK:
-    call DPOP_HL           ; hl = device
+    rst RST_DPOP          ; hl = device
     call STICK_READ        ; hl = value
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 DICT_LATEST_INIT_STICK EQU H_STICK   ; head of the dictionary once this

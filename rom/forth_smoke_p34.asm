@@ -32,19 +32,7 @@
 RST_00:
     di
     jp   COLD_START
-    DS   $0008 - $, $FF
-RST_08: ret
-    DS   $0010 - $, $FF
-RST_10: ret
-    DS   $0018 - $, $FF
-RST_18: ret
-    DS   $0020 - $, $FF
-RST_20: ret
-    DS   $0028 - $, $FF
-RST_28: ret
-    DS   $0030 - $, $FF
-RST_30: ret
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 RST_38:
     ei
     ret
@@ -74,7 +62,7 @@ COLD_START:
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
     ld   hl, 42
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_STOF
     ld   hl, 42
     xor  a
@@ -87,7 +75,7 @@ COLD_START:
     ld   a, 2
     ld   (CHECKPOINT_NUM), a
     ld   hl, -17
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_STOF
     call W_FTOS
     ld   de, -17
@@ -151,7 +139,7 @@ CHECK_FTOP:
 ; checkpoint number on any mismatch.
 ; ============================================================================
 CHECK_ITOP:
-    call DPOP_HL
+    rst RST_DPOP
     ld   a, l
     cp   e
     jp   nz, FAIL_TEST

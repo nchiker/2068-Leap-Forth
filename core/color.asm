@@ -52,7 +52,7 @@ H_INK:
                             ; INCLUDEing this file
     DB   3, "I", "N", "K"
 W_INK:
-    call DPOP_HL
+    rst RST_DPOP
     ld   a, l
     and  $07                    ; only the low 3 bits are meaningful
     ld   b, a
@@ -70,7 +70,7 @@ H_PAPER:
     DW   H_INK
     DB   5, "P", "A", "P", "E", "R"
 W_PAPER:
-    call DPOP_HL
+    rst RST_DPOP
     ld   a, l
     and  $07
     add  a, a
@@ -91,7 +91,7 @@ H_BRIGHT:
     DW   H_PAPER
     DB   6, "B", "R", "I", "G", "H", "T"
 W_BRIGHT:
-    call DPOP_HL
+    rst RST_DPOP
     ld   a, l
     and  $01                    ; only bit 0 is meaningful
     add  a, a
@@ -115,7 +115,7 @@ H_FLASH:
     DW   H_BRIGHT
     DB   5, "F", "L", "A", "S", "H"
 W_FLASH:
-    call DPOP_HL
+    rst RST_DPOP
     ld   a, l
     and  $01                    ; only bit 0 is meaningful
     add  a, a

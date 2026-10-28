@@ -56,7 +56,7 @@
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 POLY_POP_VERTICES:
-    call DPOP_HL             ; hl = n
+    rst RST_DPOP            ; hl = n
     ld   a, l
     cp   3
     jr   c, .invalid          ; n<3: refuse, touch nothing else
@@ -67,9 +67,9 @@ POLY_POP_VERTICES:
     dec  a
     ld   (POLY_IDX), a        ; i = n-1, counting down as we pop
 .pop_loop:
-    call DPOP_HL              ; hl = y_i
+    rst RST_DPOP             ; hl = y_i
     ld   d, l                 ; stash y_i (DPOP_HL never touches D)
-    call DPOP_HL              ; hl = x_i
+    rst RST_DPOP             ; hl = x_i
     ld   e, l                 ; E = x_i, D = y_i
 
     ld   a, (POLY_IDX)

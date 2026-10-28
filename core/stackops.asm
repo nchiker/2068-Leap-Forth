@@ -67,9 +67,9 @@ W_2DUP:
     ld   d, (ix+1)          ; de = b (top)
     ld   l, (ix+2)
     ld   h, (ix+3)          ; hl = a
-    call DPUSH_HL           ; push a-copy first (ends up 2nd from top)
+    rst RST_DPUSH          ; push a-copy first (ends up 2nd from top)
     ex   de, hl
-    call DPUSH_HL           ; push b-copy (ends up on top)
+    rst RST_DPUSH          ; push b-copy (ends up on top)
     ret
 
 ; ============================================================================
@@ -105,7 +105,7 @@ H_PICK:
     DW   H_QDUP
     DB   4, "P","I","C","K"
 W_PICK:
-    call DPOP_HL             ; hl = u
+    rst RST_DPOP            ; hl = u
     add  hl, hl               ; hl = u*2 (byte offset)
     push ix
     pop  de                    ; de = ix (already past u's own cell)
@@ -114,7 +114,7 @@ W_PICK:
     inc  hl
     ld   d, (hl)                ; de = the picked value
     ex   de, hl
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 DICT_LATEST_INIT_STACKOPS EQU H_PICK   ; head of the dictionary once

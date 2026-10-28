@@ -168,7 +168,7 @@ W_BEEP:
     inc  hl                      ; frames = half-frames / 2, rounded to the nearest
 .frames:
     push hl
-    call DPOP_HL                 ; HL = semitones
+    rst RST_DPOP                ; HL = semitones
     pop  de                      ; DE = frames
     jp   BEEP_PLAY
 

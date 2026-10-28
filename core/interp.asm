@@ -194,14 +194,14 @@ W_WORD:
     ld   a, b
     ld   (WORD_BUF), a
     ld   hl, WORD_BUF
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 .empty:
     xor  a
     ld   (WORD_BUF), a
     ld   hl, WORD_BUF
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -214,7 +214,7 @@ W_WORD:
 ; string is already uppercase.
 ; ============================================================================
 FIND:
-    call DPOP_HL
+    rst RST_DPOP
     ld   (FIND_SEARCH_ADDR), hl
     ld   hl, (LATEST)
 .loop:
@@ -255,16 +255,16 @@ FIND:
     ld   d, 0
     ld   e, c
     add  hl, de                   ; hl = code address (header + 3 + namelen)
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   a, (FIND_RAW_LENFLAGS)
     and  $80
     ld   hl, 0
     jr   z, .notimm
     ld   hl, 1
 .notimm:
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 1
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 .next:
     ld   hl, (FIND_HEADER_ADDR)
@@ -275,9 +275,9 @@ FIND:
     jr   .loop
 .notfound:
     ld   hl, (FIND_SEARCH_ADDR)
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -287,7 +287,7 @@ FIND:
 ; lone "-", or contains any non-digit.
 ; ============================================================================
 NUMBER:
-    call DPOP_HL
+    rst RST_DPOP
     ld   a, (hl)
     or   a
     jp   z, .fail                 ; JP, not JR -- unconditionally, in
@@ -393,15 +393,15 @@ NUMBER:
     ld   d, a
 .positive:
     ex   de, hl                   ; hl = result
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 1
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 .fail:
     ld   hl, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -422,7 +422,7 @@ DOLIT:
     inc  hl                       ; hl = real continuation address
     push hl
     ex   de, hl
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -489,7 +489,7 @@ H_COLON:
     DB   1, ":"
 W_COLON:
     call W_WORD
-    call DPOP_HL
+    rst RST_DPOP
     ld   (WORD_SRC_ADDR), hl
 
     ld   de, (HERE)
@@ -592,21 +592,21 @@ INTERPRET_RUN:
                          ; touching any individual word's own code
     ENDIF
     call W_WORD
-    call DPOP_HL
+    rst RST_DPOP
     ld   a, (hl)
     or   a
     jr   z, .done                 ; empty word: input exhausted
-    call DPUSH_HL
+    rst RST_DPUSH
     call FIND
-    call DPOP_HL                  ; hl = found flag
+    rst RST_DPOP                 ; hl = found flag
     ld   a, l
     or   a
     jr   z, .trynumber
 
-    call DPOP_HL                  ; hl = immediate flag
+    rst RST_DPOP                 ; hl = immediate flag
     ld   a, l
     ld   (INTERP_IMM_FLAG), a
-    call DPOP_HL                  ; hl = code address
+    rst RST_DPOP                 ; hl = code address
 
     ld   a, (STATE)
     or   a
@@ -625,7 +625,7 @@ INTERPRET_RUN:
 .trynumber:
     call NUMBER                    ; addr is already on top of stack (FIND
                                     ; pushed it back on a miss) -- ( n flag )
-    call DPOP_HL                   ; hl = numeric flag
+    rst RST_DPOP                  ; hl = numeric flag
     ld   a, l
     or   a
     jr   z, .badword
@@ -641,7 +641,7 @@ INTERPRET_RUN:
     ld   a, (STATE)
     or   a
     jr   z, .loop                  ; interpreting: leave n on the stack
-    call DPOP_HL                   ; compiling: take n back off ...
+    rst RST_DPOP                  ; compiling: take n back off ...
     call COMPILE_LITERAL           ; ... and compile it as a literal instead
     jr   .loop
     IFDEF DECIMAL_NUMBER_ENABLED

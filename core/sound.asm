@@ -142,9 +142,9 @@ H_SOUND:
                             ; INCLUDEing this file
     DB   5, "S", "O", "U", "N", "D"
 W_SOUND:
-    call DPOP_HL           ; hl = data
+    rst RST_DPOP          ; hl = data
     ld   c, l
-    call DPOP_HL           ; hl = register
+    rst RST_DPOP          ; hl = register
     ld   b, l
     call SOUND_WRITE
     ret

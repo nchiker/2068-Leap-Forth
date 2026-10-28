@@ -224,11 +224,11 @@ DECIMAL_PARSE_AND_PUSH:
     pop  af                             ; a = final exponent
     call FPUSH
     ld   hl, 2                           ; flag=2: float, already pushed
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 .fail:
     ld   hl, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================

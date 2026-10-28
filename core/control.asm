@@ -148,7 +148,7 @@ W_IF:
     ld   hl, QBRANCH
     call COMPILE_CALL
     ld   hl, (HERE)            ; address of the placeholder about to be written
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 0
     call COMPILE_WORD
     ret
@@ -176,7 +176,7 @@ W_ELSE:
                                  ; not crossing any CALL/RET boundary
     ld   hl, 0
     call COMPILE_WORD
-    call DPOP_HL                ; hl = IF's placeholder address
+    rst RST_DPOP               ; hl = IF's placeholder address
     ld   de, (HERE)
     ld   a, e
     ld   (hl), a
@@ -184,7 +184,7 @@ W_ELSE:
     ld   a, d
     ld   (hl), a
     pop  hl                     ; hl = this BRANCH's placeholder address
-    call DPUSH_HL                ; leave it for THEN
+    rst RST_DPUSH               ; leave it for THEN
     ret
 
 ; ============================================================================
@@ -199,7 +199,7 @@ W_THEN:
     IFDEF COMPILE_ONLY_CHECK_ENABLED
     call COMPILE_ONLY_CHECK    ; see W_IF's own note (this file, above)
     ENDIF
-    call DPOP_HL
+    rst RST_DPOP
     ld   de, (HERE)
     ld   a, e
     ld   (hl), a
@@ -221,7 +221,7 @@ W_BEGIN:
     call COMPILE_ONLY_CHECK    ; see W_IF's own note (this file, above)
     ENDIF
     ld   hl, (HERE)
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -239,7 +239,7 @@ W_UNTIL:
     ENDIF
     ld   hl, QBRANCH
     call COMPILE_CALL
-    call DPOP_HL                ; hl = BEGIN's remembered loop-start address
+    rst RST_DPOP               ; hl = BEGIN's remembered loop-start address
     call COMPILE_WORD
     ret
 

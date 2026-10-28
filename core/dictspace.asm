@@ -60,7 +60,7 @@ H_HERE:
     DB   4, "H","E","R","E"
 W_HERE:
     ld   hl, (HERE)
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -70,7 +70,7 @@ H_COMMA:
     DW   H_HERE
     DB   1, ","
 W_COMMA:
-    call DPOP_HL
+    rst RST_DPOP
     call COMPILE_WORD
     ret
 
@@ -81,7 +81,7 @@ H_CCOMMA:
     DW   H_COMMA
     DB   2, "C", ","
 W_CCOMMA:
-    call DPOP_HL
+    rst RST_DPOP
     ld   a, l
     call COMPILE_BYTE
     ret
@@ -93,7 +93,7 @@ H_ALLOT:
     DW   H_CCOMMA
     DB   5, "A","L","L","O","T"
 W_ALLOT:
-    call DPOP_HL             ; hl = n
+    rst RST_DPOP            ; hl = n
     ld   de, (HERE)
     add  hl, de               ; hl = HERE + n (two's complement handles
                                 ; a negative n correctly with no special

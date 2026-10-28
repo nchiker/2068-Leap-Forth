@@ -126,19 +126,7 @@ RST_00:
     di
     jp   COLD_START
 
-    DS   $0008 - $, $FF
-RST_08: ret
-    DS   $0010 - $, $FF
-RST_10: ret
-    DS   $0018 - $, $FF
-RST_18: ret
-    DS   $0020 - $, $FF
-RST_20: ret
-    DS   $0028 - $, $FF
-RST_28: ret
-    DS   $0030 - $, $FF
-RST_30: ret
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 RST_38:
     ei
     reti                          ; no live keyboard needed -- this test's
@@ -182,9 +170,9 @@ COLD_START:
     ld   (CHECKPOINT_NUM), a
 
     ld   hl, MINI_SRC
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, MINI_SRC_LEN
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, SRC_SAVE_MINI
     ld   de, SRC_SAVE_MINI_LEN
     call INTERPRET_RUN
@@ -208,9 +196,9 @@ COLD_START:
     ld   (CHECKPOINT_NUM), a
 
     ld   hl, BJ_SRC
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, BJ_SRC_LEN
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, SRC_SAVE_BJ
     ld   de, SRC_SAVE_BJ_LEN
     call INTERPRET_RUN
@@ -270,13 +258,13 @@ COLD_START:
     ; a real FIND on "MAIN", not just inferring success from the game
     ; having run ----
     ld   hl, FINDWORD_MAIN
-    call DPUSH_HL
+    rst RST_DPUSH
     call FIND
-    call DPOP_HL                 ; found flag
+    rst RST_DPOP                ; found flag
     dec  l                       ; l==1 (found) -> nz clear; anything
     jr   nz, FAIL_TEST           ; else -> nz set, same test as cp 1
-    call DPOP_HL                 ; imm flag -- discard
-    call DPOP_HL                 ; code addr -- discard
+    rst RST_DPOP                ; imm flag -- discard
+    rst RST_DPOP                ; code addr -- discard
 
     jr   PASS_TEST
 

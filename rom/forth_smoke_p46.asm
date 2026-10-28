@@ -43,19 +43,7 @@
 RST_00:
     di
     jp   COLD_START
-    DS   $0008 - $, $FF
-RST_08: ret
-    DS   $0010 - $, $FF
-RST_10: ret
-    DS   $0018 - $, $FF
-RST_18: ret
-    DS   $0020 - $, $FF
-RST_20: ret
-    DS   $0028 - $, $FF
-RST_28: ret
-    DS   $0030 - $, $FF
-RST_30: ret
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 RST_38:
     ei
     ret
@@ -90,11 +78,11 @@ COLD_START:
     ld   a, 0
     ld   (CHECKPOINT_NUM), a
     ld   hl, 1
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 2
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 3
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_ROT
     ld   de, 1
     call CHECK_TOP
@@ -110,9 +98,9 @@ COLD_START:
     ld   a, 0
     ld   (CHECKPOINT_NUM), a
     ld   hl, 5
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 6
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_2DUP
     ld   de, 6
     call CHECK_TOP
@@ -131,13 +119,13 @@ COLD_START:
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
     ld   hl, 7
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 8
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 9
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 10
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_2DROP
     ld   de, 8
     call CHECK_TOP
@@ -150,7 +138,7 @@ COLD_START:
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
     ld   hl, 5
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_QDUP
     ld   de, 5
     call CHECK_TOP
@@ -159,7 +147,7 @@ COLD_START:
     call CHECK_TOP
     call W_DROP
     ld   hl, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_QDUP
     ld   de, 0
     call CHECK_TOP
@@ -173,19 +161,19 @@ COLD_START:
     ld   a, 2
     ld   (CHECKPOINT_NUM), a
     ld   hl, 10
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 20
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 30
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_PICK                 ; 0 PICK = DUP
     ld   de, 30
     call CHECK_TOP
     call W_DROP
     ld   hl, 2
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_PICK                  ; 2 PICK -- stack is (10 20 30), so
                                    ; depth 2 from top is 10
     ld   de, 10
@@ -199,25 +187,25 @@ COLD_START:
     ld   a, 3
     ld   (CHECKPOINT_NUM), a
     ld   hl, $0FF0
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, $FF00
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_AND
     ld   de, $0F00
     call CHECK_TOP
     call W_DROP
     ld   hl, $0FF0
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, $FF00
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_OR
     ld   de, $FFF0
     call CHECK_TOP
     call W_DROP
     ld   hl, $0FF0
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, $FF00
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_XOR
     ld   de, $F0F0
     call CHECK_TOP
@@ -227,7 +215,7 @@ COLD_START:
     ld   a, 3
     ld   (CHECKPOINT_NUM), a
     ld   hl, $0F0F
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_INVERT
     ld   de, $F0F0
     call CHECK_TOP
@@ -239,14 +227,14 @@ COLD_START:
     call W_SPACE                 ; column 0 -> column 1, cell (0,0)
                                    ; stays blank (a space draws nothing)
     ld   hl, "X"
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT                   ; column 1 -> a real glyph at (1,0)
     call W_CR                     ; row 0 -> row 1, column back to 0
     ld   hl, 3
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_SPACES                 ; columns 0-2 stay blank on row 1
     ld   hl, "Y"
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT                    ; column 3 -> a real glyph at (3,1)
     ld   b, 0                       ; cell (0,0): pixel column 0-7
     ld   c, 0
@@ -278,7 +266,7 @@ COLD_START:
     call CHECK_TOP
     call W_DROP
     ld   hl, TEST_XT_TICK_BAD
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_CATCH
     ld   de, -13
     call CHECK_TOP

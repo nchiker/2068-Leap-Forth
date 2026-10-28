@@ -115,13 +115,13 @@ H_CHR:
                             ; INCLUDEing this file
     DB   3, "C", "H", "R"
 W_CHR:
-    call DPOP_HL             ; hl = code
+    rst RST_DPOP            ; hl = code
     ld   a, l
     ld   (CHR_BUF), a
     ld   hl, CHR_BUF
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 1
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -131,7 +131,7 @@ H_STR:
     DW   H_CHR
     DB   3, "S", "T", "R"
 W_STR:
-    call DPOP_HL              ; hl = n
+    rst RST_DPOP             ; hl = n
     ld   de, STR_BUF
     ld   a, h
     and  $80
@@ -173,12 +173,12 @@ W_STR:
     djnz .writeloop
 .done:
     ld   hl, STR_BUF
-    call DPUSH_HL
+    rst RST_DPUSH
     ex   de, hl                 ; hl = one past the last byte written
     ld   de, STR_BUF
     or   a
     sbc  hl, de                  ; hl = length = end - start
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -243,7 +243,7 @@ H_LEFT:
     DW   H_LOWER
     DB   4, "L", "E", "F", "T"
 W_LEFT:
-    call DPOP_HL                ; hl = n
+    rst RST_DPOP               ; hl = n
     ld   a, l
     ld   d, (ix+0)               ; d = current len (low byte)
     cp   d
@@ -261,7 +261,7 @@ H_RIGHT:
     DW   H_LEFT
     DB   5, "R", "I", "G", "H", "T"
 W_RIGHT:
-    call DPOP_HL                 ; hl = n
+    rst RST_DPOP                ; hl = n
     ld   a, l
     ld   c, (ix+0)                ; c = current len (low byte)
     cp   c
@@ -290,10 +290,10 @@ H_SEARCH:
     DW   H_RIGHT
     DB   6, "S", "E", "A", "R", "C", "H"
 W_SEARCH:
-    call DPOP_HL                  ; hl = len2
+    rst RST_DPOP                 ; hl = len2
     ld   a, l
     ld   (SRCH_LEN2), a
-    call DPOP_HL                   ; hl = addr2
+    rst RST_DPOP                  ; hl = addr2
     ld   (SRCH_ADDR2), hl
     ld   a, (ix+0)                  ; peek len1 -- addr1/len1 stay on
     ld   (SRCH_LEN1), a              ; the stack, popped only once the
@@ -344,15 +344,15 @@ W_SEARCH:
     ld   (SRCH_POS), a
     jr   .outer
 .found:
-    call DPOP_HL                                ; discard len1 (already
-    call DPOP_HL                                 ; captured); discard
+    rst RST_DPOP                               ; discard len1 (already
+    rst RST_DPOP                                ; captured); discard
                                                  ; addr1 too
     ld   hl, (SRCH_ADDR1)
     ld   a, (SRCH_POS)
     ld   d, 0
     ld   e, a
     add  hl, de
-    call DPUSH_HL                                 ; addr3
+    rst RST_DPUSH                                ; addr3
     ld   a, (SRCH_LEN1)
     sub  e                                          ; len3 = len1 - pos
                                                     ; (e still holds pos
@@ -360,21 +360,21 @@ W_SEARCH:
                                                     ; touches DE)
     ld   l, a
     ld   h, 0
-    call DPUSH_HL                                    ; len3
+    rst RST_DPUSH                                   ; len3
     ld   hl, -1
-    call DPUSH_HL                                     ; flag = true
+    rst RST_DPUSH                                    ; flag = true
     ret
 .notfound:
-    call DPOP_HL                                       ; discard len1
-    call DPOP_HL                                        ; discard addr1
+    rst RST_DPOP                                      ; discard len1
+    rst RST_DPOP                                       ; discard addr1
     ld   hl, (SRCH_ADDR1)
-    call DPUSH_HL                                         ; addr3 = addr1
+    rst RST_DPUSH                                        ; addr3 = addr1
     ld   a, (SRCH_LEN1)
     ld   l, a
     ld   h, 0
-    call DPUSH_HL                                           ; len3 = len1
+    rst RST_DPUSH                                          ; len3 = len1
     ld   hl, 0
-    call DPUSH_HL                                            ; flag = false
+    rst RST_DPUSH                                           ; flag = false
     ret
 
 ; ============================================================================
@@ -385,12 +385,12 @@ H_CODE:
     DW   H_SEARCH
     DB   4, "C", "O", "D", "E"
 W_CODE:
-    call DPOP_HL                 ; hl = len (discarded)
-    call DPOP_HL                  ; hl = addr
+    rst RST_DPOP                ; hl = len (discarded)
+    rst RST_DPOP                 ; hl = addr
     ld   a, (hl)
     ld   l, a
     ld   h, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 DICT_LATEST_INIT_STRINGEXT EQU H_CODE   ; head of the dictionary once

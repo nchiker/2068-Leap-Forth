@@ -36,19 +36,7 @@
 RST_00:
     di
     jp   COLD_START
-    DS   $0008 - $, $FF
-RST_08: ret
-    DS   $0010 - $, $FF
-RST_10: ret
-    DS   $0018 - $, $FF
-RST_18: ret
-    DS   $0020 - $, $FF
-RST_20: ret
-    DS   $0028 - $, $FF
-RST_28: ret
-    DS   $0030 - $, $FF
-RST_30: ret
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 RST_38:
     ei
     ret
@@ -84,9 +72,9 @@ COLD_START:
     ld   de, SRC_SQUARE1_LEN
     call INTERPRET_RUN
     ld   hl, 20
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 20
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_FILL
     ld   b, 20
     ld   c, 20
@@ -103,9 +91,9 @@ COLD_START:
     ld   de, SRC_SQUARE2_LEN
     call INTERPRET_RUN
     ld   hl, 120
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 120
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_FILL
     ld   b, 120
     ld   c, 120
@@ -119,9 +107,9 @@ COLD_START:
     xor  a
     ld   (GFX_MODE), a
     ld   hl, 120
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 120
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_FILL
     ld   b, 120
     ld   c, 120

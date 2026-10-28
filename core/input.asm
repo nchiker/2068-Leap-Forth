@@ -80,10 +80,10 @@ H_ACCEPT:
                             ; INCLUDEing this file
     DB   6, "A", "C", "C", "E", "P", "T"
 W_ACCEPT:
-    call DPOP_HL             ; hl = maxlen
+    rst RST_DPOP            ; hl = maxlen
     ld   a, l
     ld   (ACCEPT_MAX), a
-    call DPOP_HL              ; hl = dest
+    rst RST_DPOP             ; hl = dest
     ld   (ACCEPT_DEST), hl
     xor  a
     ld   (ACCEPT_LEN), a
@@ -113,7 +113,7 @@ W_ACCEPT:
 
     ld   l, a
     ld   h, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT                  ; echo it
 
     ld   a, (ACCEPT_LEN)
@@ -137,7 +137,7 @@ W_ACCEPT:
     dec  a
     ld   (PRINT_COL), a
     ld   hl, ' '
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT                   ; blank the character on screen --
                                    ; W_EMIT's own advance leaves
                                    ; PRINT_COL one past where it should
@@ -151,7 +151,7 @@ W_ACCEPT:
     ld   a, (ACCEPT_LEN)
     ld   l, a
     ld   h, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -162,11 +162,11 @@ H_INPUT:
     DB   5, "I", "N", "P", "U", "T"
 W_INPUT:
     ld   hl, FINPUT_BUF
-    call DPUSH_HL              ; push dest
+    rst RST_DPUSH             ; push dest
     ld   hl, 8
-    call DPUSH_HL               ; push maxlen
+    rst RST_DPUSH              ; push maxlen
     call W_ACCEPT                 ; ( -- len )
-    call DPOP_HL                    ; hl = len
+    rst RST_DPOP                   ; hl = len
     push hl                           ; stashed briefly on the Z80
                                        ; hardware stack -- safe:
                                        ; symmetric push/pop within this
@@ -174,9 +174,9 @@ W_INPUT:
                                        ; technique core/array.asm's own
                                        ; W_ARRAY uses
     ld   hl, FINPUT_BUF
-    call DPUSH_HL                       ; push addr
+    rst RST_DPUSH                      ; push addr
     pop  hl                               ; hl = len, restored
-    call DPUSH_HL                           ; push len -- stack is now
+    rst RST_DPUSH                          ; push len -- stack is now
                                              ; (addr len), VAL's own
                                              ; expected order
     call W_VAL

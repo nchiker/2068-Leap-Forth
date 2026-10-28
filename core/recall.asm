@@ -298,10 +298,10 @@ W_LISTDEFS:
     ld   h, b
     call PRINT_UDEC16
     ld   hl, ":"
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     ld   hl, " "
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     pop  bc
 
@@ -330,7 +330,7 @@ W_LISTDEFS:
     push bc
     ld   l, a
     ld   h, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     pop  bc
     pop  hl
@@ -339,7 +339,7 @@ W_LISTDEFS:
     jr   .printloop
 .printdone:
     ld   hl, 13
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
 
     ld   a, (RECALL_LIST_IDX)
@@ -368,7 +368,7 @@ H_RECALL:
     DB   6, "R","E","C","A","L","L"
 W_RECALL:
     call SCAN_DEFS
-    call DPOP_HL
+    rst RST_DPOP
     ld   a, l
     ld   c, a
     ld   a, (DEF_COUNT)

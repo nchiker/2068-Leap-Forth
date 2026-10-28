@@ -26,19 +26,7 @@
 RST_00:
     di
     jp   COLD_START
-    DS   $0008 - $, $FF
-RST_08: ret
-    DS   $0010 - $, $FF
-RST_10: ret
-    DS   $0018 - $, $FF
-RST_18: ret
-    DS   $0020 - $, $FF
-RST_20: ret
-    DS   $0028 - $, $FF
-RST_28: ret
-    DS   $0030 - $, $FF
-RST_30: ret
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 RST_38:
     ei
     ret
@@ -65,7 +53,7 @@ COLD_START:
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
     ld   hl, 4242
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, TEST_SRC_VALID
     ld   de, TEST_SRC_VALID_LEN
     call INTERPRET_RUN
@@ -77,7 +65,7 @@ COLD_START:
     ld   a, 2
     ld   (CHECKPOINT_NUM), a
     ld   hl, 4242
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, TEST_SRC_LOW
     ld   de, TEST_SRC_LOW_LEN
     call INTERPRET_RUN
@@ -89,7 +77,7 @@ COLD_START:
     ld   a, 3
     ld   (CHECKPOINT_NUM), a
     ld   hl, 4242
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, TEST_SRC_HIGH
     ld   de, TEST_SRC_HIGH_LEN
     call INTERPRET_RUN
