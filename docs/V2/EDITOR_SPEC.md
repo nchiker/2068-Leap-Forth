@@ -357,6 +357,47 @@ about 0.3 s a scrolled line at 3.5 MHz.
 - The HOME dictionary has 158 words, counted by walking the chain in the image (the header's 150 was stale before
   step E).
 
+### 5.4 The view's redraw on a row shadow (step E follow-up, decided 2026-10-29)
+
+**Why.** Measured on item 7's build [M]: a DOWN that scrolls a 60-line store costs 1,032,460 T, of which drawing
+(`VIEW_DRAW_FROM`, all 23 rows) is 893,682; `VIEW_FIT` 66k, the key itself 32k. Drawing costs about 35-40k T a screen
+row (about 1,000 T a cell in HOME's `GFX_PUTCHAR`), while copying a row of pixels with `LDIR` costs about 5.5k. Item
+6's policy picks what to redraw from the kind of key (levels 0-3) and redraws from the upper changed line down, so a
+DOWN between two lines of a full screen redraws about 20 rows. The references avoid this: Leap V2 keeps a row shadow
+(`ROW_SHADOW_POS`/`FLAGS`, `basic/editor_integration.asm`), skips rows whose shadow matches and pixel-scrolls when the
+view moves; Leap-C keeps V2's safeguards (`SH_REDRAW_ACTIVE`, `SH_REDRAW_NAV`, `src/shell/shell.asm`). This replaces
+item 6's policy with V2's method, rebuilt for Forth's store.
+
+**The shadow.** For each of rows 0-22: the line index shown there (2 bytes; `$FFFF` = a blank row, `$FFFE` = unknown)
+and the row within that line (1 byte). 69 B of view RAM after `EDIT_LINE_NO` (`$8AF3` up). Keyed by line index and
+row, not by store address (V2's key): a write-back that changes a line's length moves the addresses of every line
+below without changing what they show.
+
+**Rendering (`VIEW_RENDER`).** The desired map is the lines from `VIEW_TOP` down, each `WRAP_CALC_AT` from the store
+(`WRAP_CALC` for the cursor line, E10's row included), cut at row 22, blank rows after the last line. Then:
+1. *Shift.* If the top line moved down and the old shadow shows (new top, row 0) at row d, the screen's rows d-22 are
+   copied up by d (bitmap only, `GFX_ROW_BASE_ADDR` through slot 3 and `LDIR`) and the shadow with them; if it moved
+   up by lines whose rows total e (at most 22), rows 0-(22-e) are copied down by e. Vacated shadow entries become
+   unknown. Attributes are not copied: every cell is `ATTR_DEFAULT` except the cursor's, which `VIEW_CURSOR` resets.
+2. *Diff.* Walking the desired map row by row, a row whose (line, row) differs from the shadow is drawn (its line
+   wrapped once, only the differing rows drawn through `ED_ROW_JP`) and the shadow updated.
+3. The cursor (`VIEW_CURSOR`) and the status row, as item 6.
+
+**Invalidation.** The cursor line's entries become unknown when its text changes (so they redraw). After an insert at
+line k, shadow entries with index ≥ k are incremented; after a delete of line k, entries for k become unknown and those
+above k decremented, so that unchanged lines keep matching. `VIEW_REDRAW_ALL` (the oracle's) is: every entry unknown,
+then `VIEW_RENDER`.
+
+**Fast paths kept.** A key that changes nothing draws nothing; one that moves the cursor within its line, or to
+another line without changing any line's rows, draws only the cursor cell (the shadow already matches); one that
+changes only the cursor line's text without changing its row count or the top line redraws that line's rows directly
+(no map walk), as item 6 does.
+
+**Judged by** N9 (after every key the screen equals `VIEW_REDRAW_ALL`'s) and N7; **measured by** N12, which gains three
+scenarios that item 6's set hides: DOWN between two lines in the middle of a full 60-line store, UP that scrolls at
+the top of the view, and ENTER on the last line of a full screen. HOME: 0 B (slot 3 exists). EXROM: replaces
+`VIEW_DRAW_FROM`, `VIEW_POST`'s policy and `VIEW_BOTTOM`; about the same size [E].
+
 ## 6. Words
 
 `EDIT` (new), `RECALL` (retired), `LIST-DEFS`, `SAVE-TEXT`, `VERIFY-TEXT`, `LOAD-TEXT` (format unchanged, CRs kept).

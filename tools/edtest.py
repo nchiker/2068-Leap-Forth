@@ -2746,6 +2746,13 @@ def vcost_spec(which):
         return short, "BB", 1, K((RIGHT, 3)), DELETE_LINE
     if which == "scroll-down":
         return big_store(), "W01", 0, K((DOWN, 22)), DOWN
+    # spec section 5.4: the cases item 6's set hid (a full 60-line store)
+    if which == "down-mid-full":
+        return big_store(), "W10", 9, K((DOWN, 2)), DOWN
+    if which == "up-scroll":
+        return big_store(), "W40", 39, K((UP, 30)), UP
+    if which == "enter-bottom":
+        return big_store(), "W60", 59, K((RIGHT, 12)), ENTER
     raise KeyError(which)
 
 
@@ -2754,7 +2761,10 @@ VCOST_CASES = [("key-end-short", "a key at the end of a short line"), ("key-mid-
                ("left", "LEFT in a short line"), ("up-in-line", "UP inside a wrapped line"),
                ("down-line", "DOWN to the next line"), ("enter", "ENTER at the end of a line (a line is inserted)"),
                ("insert-line", "insert-line"), ("delete-line", "delete-line"),
-               ("scroll-down", "DOWN that scrolls a 60-line store")]
+               ("scroll-down", "DOWN that scrolls a 60-line store"),
+               ("down-mid-full", "DOWN between two lines mid-screen, 60-line store"),
+               ("up-scroll", "UP that scrolls the view up, 60-line store"),
+               ("enter-bottom", "ENTER on the last line of a full screen")]
 
 
 def vcost_once(env, ck, which):
