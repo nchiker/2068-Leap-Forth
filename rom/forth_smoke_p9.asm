@@ -18,7 +18,8 @@
 ;      DICT_CHAIN_POINT (a DEFL, redefinable, unlike EQU), which this
 ;      file sets three times below, once per branch, to splice the
 ;      whole tree into one line: dict -> interp -> control -> ts2068 ->
-;      storage -> float -> mode64. Every existing smoke ROM (Phases
+;      storage -> float (-> mode64 until step M6 removed the 64-column
+;      mode, docs/V2/MODE6_REMOVAL_SPEC.md). Every existing smoke ROM (Phases
 ;      4/5/7/8/8b) was updated to set DICT_CHAIN_POINT = H_SEMICOLON
 ;      right before its own single relevant INCLUDE, preserving their
 ;      exact prior behavior — rebuilt and re-confirmed passing under
@@ -38,9 +39,9 @@
 ;   1. FIND (not execute — SAVE-LIB/LOAD-LIB would attempt a real, slow
 ;      tape operation this automated test has no reason to trigger;
 ;      Phase 7's own smoke ROM already proved that wiring against a
-;      fake transport) locates SAVE-LIB, LOAD-LIB, F+, F-, 64COL,
-;      32COL, PALETTE64, and PLOT64 — one word from each of the phases
-;      that only reach LATEST through a DICT_CHAIN_POINT splice.
+;      fake transport) locates SAVE-LIB, LOAD-LIB, F+ and F- — one word from each of
+;      the phases that only reach LATEST through a DICT_CHAIN_POINT
+;      splice (64COL, 32COL, PALETTE64 and PLOT64 went with step M6).
 ;   2. Interprets a real source string exercising DUP/+ (Phase 2),
 ;      : ; IF ELSE THEN (Phases 3/4), and PLOT/BORDER (Phase 5)
 ;      together, checking the final stack value.
@@ -87,7 +88,7 @@ COLD_START:
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
-    ld   hl, DICT_LATEST_INIT_P8B   ; mode64.asm's own tail (H_PLOT64) —
+    ld   hl, H_FMINUS             ; core/float.asm's own tail —
                                     ; now correctly the head of the
                                     ; WHOLE chain, all phases included,
                                     ; thanks to the DICT_CHAIN_POINT
@@ -118,14 +119,6 @@ COLD_START:
     ld   hl, NAME_FPLUS
     call CHECK_FIND
     ld   hl, NAME_FMINUS
-    call CHECK_FIND
-    ld   hl, NAME_64COL
-    call CHECK_FIND
-    ld   hl, NAME_32COL
-    call CHECK_FIND
-    ld   hl, NAME_PALETTE64
-    call CHECK_FIND
-    ld   hl, NAME_PLOT64
     call CHECK_FIND
 
 ; ---- checkpoint 2: execute words spanning Phases 2-5 together ----
@@ -235,10 +228,6 @@ NAME_SAVELIB:   DB 8, "S", "A", "V", "E", "-", "L", "I", "B"
 NAME_LOADLIB:   DB 8, "L", "O", "A", "D", "-", "L", "I", "B"
 NAME_FPLUS:     DB 2, "F", "+"
 NAME_FMINUS:    DB 2, "F", "-"
-NAME_64COL:     DB 5, "6", "4", "C", "O", "L"
-NAME_32COL:     DB 5, "3", "2", "C", "O", "L"
-NAME_PALETTE64: DB 9, "P", "A", "L", "E", "T", "T", "E", "6", "4"
-NAME_PLOT64:    DB 6, "P", "L", "O", "T", "6", "4"
 
 SRC_COMBO:      DB ": COMBOTEST 0= IF 111 ELSE 222 THEN ; 0 COMBOTEST 10 20 PLOT "
 SRC_COMBO_LEN   EQU $ - SRC_COMBO
@@ -253,7 +242,6 @@ SRC_COMBO_LEN   EQU $ - SRC_COMBO
     INCLUDE "kernel/graphics/graphics.asm"
     INCLUDE "kernel/sound/sound.asm"
     INCLUDE "kernel/storage/storage.asm"
-    INCLUDE "kernel/mode64/mode64.asm"
     INCLUDE "core/dict.asm"
     DEFINE THROW_CATCH_ENABLED   ; core/storage.asm's own SAVE-LIB now
                                   ; THROWs -8 on overflow (see that
@@ -270,8 +258,7 @@ DICT_CHAIN_POINT DEFL H_BORDER
     INCLUDE "core/storage.asm"
 DICT_CHAIN_POINT DEFL H_LOADLIB
     INCLUDE "core/float.asm"
-    INCLUDE "core/mode64.asm"
-DICT_CHAIN_POINT DEFL DICT_LATEST_INIT_P8B   ; satisfies core/print.asm's
+DICT_CHAIN_POINT DEFL H_FMINUS              ; satisfies core/print.asm's
                                               ; own chain requirement
                                               ; below; LATEST itself
                                               ; stays seeded to this
@@ -287,7 +274,7 @@ DICT_CHAIN_POINT DEFL H_DOT   ; core/throwcatch.asm below is needed
                                ; after core/print.asm's own tail, same
                                ; "doesn't change what checkpoint 1
                                ; FINDs" reasoning as above (LATEST is
-                               ; still seeded to DICT_LATEST_INIT_P8B,
+                               ; still seeded to H_FMINUS,
                                ; well before this point in the chain)
     INCLUDE "core/throwcatch.asm"
     INCLUDE "core/editor.asm"
@@ -296,4 +283,4 @@ DICT_CHAIN_POINT DEFL H_DOT   ; core/throwcatch.asm below is needed
 
     SAVEBIN "forth_smoke_p9_rom0.bin", $0000, $4000
 
-DICT_LATEST_COLD EQU DICT_LATEST_INIT_P8B   ; LATEST of an empty user dictionary (core/storage.asm LOAD-LIB)
+DICT_LATEST_COLD EQU H_FMINUS   ; LATEST of an empty user dictionary (core/storage.asm LOAD-LIB)

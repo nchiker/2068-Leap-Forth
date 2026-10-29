@@ -19,7 +19,7 @@ Console.press() is the one path that goes through the emulated keyboard matrix a
 The API (a library; `python3 -I tools/fharness.py --selftest` is its self-test):
   Machine(build, port, snapdir=None).start() / .stop()   boot, snapshot, glyph tables;  .restore()
   .sym(n) .xsym(n) .read .write .w16 .poke16 .setreg .regs .pc .run .run_to .call .tstates_reset .tstates
-  .screen_rows(scr=None, nrows=24, mode64=False)          the screen as text rows
+  .screen_rows(scr=None, nrows=24)                        the screen as text rows
   .expect_mem(where, data, what)  .ram_diff(before, after, base)
   .checkpoint(name) / .rollback(path)                     snapshot the live machine and put it back exactly (oracles)
   Console(machine)                                         key/type/press/wait/edit_line/rows (Forth's editor)
@@ -175,13 +175,10 @@ def load_syms(*paths):
     return out
 
 
-def cell_from(scr, row, col, mode64=False):
-    """The 8 bitmap bytes of character cell (row, col).  `scr` starts at $4000; in 64-column mode it holds both
-    display files ($4000-$77FF: the Second Display File is $2000 above the Primary) and col is 0-63."""
+def cell_from(scr, row, col):
+    """The 8 bitmap bytes of character cell (row, col).  `scr` starts at $4000."""
     y0 = row * 8
     base = ((y0 & 0xC0) << 5) | ((y0 & 0x38) << 2) | (col & 31)
-    if mode64 and col >= 32:
-        base += 0x2000
     return bytes(scr[base + 0x100 * k] for k in range(8))
 
 
@@ -247,7 +244,6 @@ class Machine:
         self.proc = None
         self.c = None
         self.glyphs = None          # {8-byte cell: char} of the 32-column text screen
-        self.glyphs64 = None        # the same, rendered by MODE64_PUTCHAR (None if the build has no 64-column mode)
         self.plain_cells = {}       # {char: cell} for every character GFX_PUTCHAR draws
         self.keys = key_map(self.rom_home, self.S)
         self.boot = {}
@@ -365,9 +361,7 @@ class Machine:
             if not self.boot["reached"]:
                 raise AssertionError("boot did not reach IO_READ_KEY (PC=%04X)" % pc)
             self.cmd("snapshot-save " + self.snap)
-            self.glyphs, self.plain_cells = self._glyph_table(self.sym("GFX_PUTCHAR"), 32)
-            if "MODE64_PUTCHAR" in self.S:
-                self.glyphs64, _ = self._glyph_table(self.sym("MODE64_PUTCHAR"), 64)
+            self.glyphs, self.plain_cells = self._glyph_table(self.sym("GFX_PUTCHAR"))
             self.restore()
         except BaseException:
             self.stop()
@@ -410,9 +404,9 @@ class Machine:
         self._enable_bp()
 
     # ------------------------------------------------------------- the screen
-    def _glyph_table(self, putchar, cols):
-        """Render chars 32..143 with the real putchar routine (A=char, B=row, C=col; GFX_PUTCHAR, 32 columns, or
-        MODE64_PUTCHAR, 64) and map each 8x8 cell bitmap back to its character (as lcharness).  GFX_PUTCHAR draws a
+    def _glyph_table(self, putchar):
+        """Render chars 32..143 with the real putchar routine (A=char, B=row, C=col; GFX_PUTCHAR, 32 columns) and map
+        each 8x8 cell bitmap back to its character (as lcharness).  GFX_PUTCHAR draws a
         glyph for space, 0-9, A-Z, a-z, the 23 PUNCT_CHAR_TABLE characters and 128-143 (block graphics); any other
         code is drawn as a space, so those cells read blank and `[ \\ ] ^ ` { | } ~` have no cell (plain_cells
         lacks them).  Codes 128-143 map to U+2580 + (code - 128).  UDG codes 144-164 are not rendered: UDG_TABLE
@@ -423,7 +417,7 @@ class Machine:
         src = ["    DEVICE ZXSPECTRUM48", "    ORG $%04X" % GLYPH_PROG, "    ld   hl,codes", "    ld   b,0", "    ld   c,0",
                "    ld   d,%d" % len(codes), "loop:", "    push de", "    push bc", "    push hl", "    ld   a,(hl)",
                "    call $%04X" % putchar, "    pop  hl", "    pop  bc", "    pop  de", "    inc  hl", "    inc  c",
-               "    ld   a,c", "    cp   %d" % cols, "    jr   nz,nx", "    ld   c,0", "    inc  b",
+               "    ld   a,c", "    cp   32", "    jr   nz,nx", "    ld   c,0", "    inc  b",
                "nx: dec  d", "    jr   nz,loop", "done: jr done",
                "codes: DB " + ",".join(str(c) for c in codes),
                '    SAVEBIN "%s/g.bin", $%04X, $-$%04X' % (d, GLYPH_PROG, GLYPH_PROG)]
@@ -437,11 +431,10 @@ class Machine:
         self.setreg("SP", RET_SLOT)
         self.setreg("PC", GLYPH_PROG)
         assert self.run_to([done], 5_000_000) == done, "glyph render did not finish"
-        mode64 = cols == 64
-        scr = self.read(0x4000, 0x3800 if mode64 else 6144)
+        scr = self.read(0x4000, 6144)
         table, plain = {}, {}
         for i, ch in enumerate(codes):
-            cell = cell_from(scr, i // cols, i % cols, mode64)
+            cell = cell_from(scr, i // 32, i % 32)
             table.setdefault(cell, chr(ch) if ch < 128 else chr(0x2580 + ch - 128))
             if ch < 127 and any(cell):
                 plain[chr(ch)] = cell
@@ -450,28 +443,24 @@ class Machine:
         shutil.rmtree(d, ignore_errors=True)
         return table, plain
 
-    def screen(self, mode64=False):
-        """The bitmap(s) screen_rows reads: $4000-$57FF, or both display files $4000-$77FF in 64-column mode."""
-        return self.read(0x4000, 0x3800 if mode64 else 6144)
+    def screen(self):
+        """The bitmap screen_rows reads: $4000-$57FF."""
+        return self.read(0x4000, 6144)
 
-    def screen_rows(self, scr=None, nrows=24, mode64=False):
+    def screen_rows(self, scr=None, nrows=24):
         """The screen's text rows (trailing spaces dropped).  A cell that is no glyph reads as UNKNOWN; an inverse
         glyph (every pixel flipped) reads as INVERSE_MARK followed by its character (Forth has a real lower case font,
         so lcharness's inverse-as-lower-case would be ambiguous here); a cell equal to a nonblank
-        entry of the live UDG_TABLE reads as chr(UDG_BASE + i) for UDG code 144 + i.  `scr` from screen()
-        (mode64=True: 64 columns, glyphs rendered by MODE64_PUTCHAR); the UDG_TABLE is read when needed, from the
-        machine as it is now."""
-        table = self.glyphs64 if mode64 else self.glyphs
-        if table is None:
-            raise HarnessError("this build has no 64-column mode (no MODE64_PUTCHAR)")
-        scr = scr if scr is not None else self.screen(mode64)
-        cols = 64 if mode64 else 32
+        entry of the live UDG_TABLE reads as chr(UDG_BASE + i) for UDG code 144 + i.  `scr` from screen(); the UDG_TABLE is
+        read when needed, from the machine as it is now."""
+        table = self.glyphs
+        scr = scr if scr is not None else self.screen()
         udg = None
         rows = []
         for r in range(nrows):
             s = ""
-            for col in range(cols):
-                cell = cell_from(scr, r, col, mode64)
+            for col in range(32):
+                cell = cell_from(scr, r, col)
                 ch = table.get(cell)
                 if ch is None:
                     if udg is None:
@@ -812,19 +801,6 @@ def _check_press(m, _):
     return dict(ok=ok, detail="matrix: rows 1-22 = %r; edit line %r (row 23 %r)" % (shown, got, last))
 
 
-def _check_mode64(m, _):
-    text = "FORTH 64:ok"
-    for i, ch in enumerate(text):
-        r = m.call("MODE64_PUTCHAR", regs=dict(AF=ord(ch) << 8, BC=(5 << 8) | (28 + i)))
-        if not r["ok"]:
-            return dict(ok=False, detail="MODE64_PUTCHAR did not return (PC=%04X)" % r["pc"])
-    rows = m.screen_rows(mode64=True)
-    want = " " * 28 + text
-    banner = m.screen_rows(nrows=1, mode64=True)[0]        # (the booted screen's banner is in the Primary file only)
-    ok = rows[5] == want and not any(rows[1:5]) and not any(rows[6:]) and banner == banner_text() and m.glyphs64 == m.glyphs
-    return dict(ok=ok, detail="64-column row 5 = %r (columns 28-38 across the display-file boundary), glyphs as in 32 columns" % rows[5])
-
-
 def _check_checkpoint(m, _):
     con = Console(m)
     con.boot()
@@ -862,10 +838,11 @@ def _check_mem(m, _):
     return dict(ok=ok, detail="expect_mem diff names $%04X; ram_diff %s" % (ft + 15, ["$%04X-$%04X" % x for x in d]))
 
 
+# (letter i, the 64-column screen, was retired in step M6 with the mode; the letters are not renumbered)
 CHECKS = [("a", "boot", _check_boot), ("b", "glyph table", _check_glyphs), ("c", "banner", _check_banner),
           ("d", "restore determinism", _check_restore), ("e", "call GFX_CLS", _check_call),
           ("f", "Console.type", _check_type), ("g", "Console.press", _check_press),
-          ("i", "64-column screen", _check_mode64), ("j", "memory assertions", _check_mem),
+          ("j", "memory assertions", _check_mem),
           ("k", "checkpoint/rollback", _check_checkpoint)]
 
 

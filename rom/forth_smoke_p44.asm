@@ -1,28 +1,30 @@
 ; ============================================================================
 ; rom/forth_smoke_p44.asm — Phase 44 smoke ROM: dictionary-ceiling
-; reclaim (FILL's relocated scratch + its new 64-column guard)
+; reclaim (FILL's relocated scratch + its non-Normal-mode guard)
 ;
 ; Phase 43's FILL correctness itself is NOT re-tested here from
 ; scratch — rom/forth_smoke_p17.asm (rebuilt against the relocated
 ; GFX_FILL_VISITED/GFX_FILL_STACK addresses) already proves that, and
 ; was re-run in real Fuse as part of this phase's own verification
 ; (see docs/PROJECT_PLAN.md). This file is specifically about what's
-; NEW in Phase 44: the 64-column guard core/moregfx.asm's FILL now has.
+; NEW in Phase 44: the guard core/moregfx.asm's FILL has against any
+; non-Normal video mode (HIRES's attribute file shares FILL's scratch).
+; Written for the 64-column mode (GFX_MODE=2), removed in step M6
+; (docs/V2/MODE6_REMOVAL_SPEC.md); the guard is `or a`, so it now
+; pokes HIRES's GFX_MODE=1.
 ;
 ; THREE CHECKPOINTS, GFX_MODE poked directly rather than going through
-; the real 64COL/32COL words (core/mode64.asm) — the guard only reads
-; that one byte, and pulling in core/mode64.asm's own prerequisite
-; chain (core/float.asm) here would test nothing extra:
+; HIRES/NORMAL (core/hires.asm) — the guard only reads that one byte:
 ;   1. Baseline, GFX_MODE=0 (normal mode): FILL a small enclosed square
 ;      -- the seed pixel and its interior must be SET afterward,
 ;      proving FILL still works correctly at its new addresses.
-;   2. GFX_MODE=2 (64-column mode simulated): FILL a DIFFERENT enclosed
+;   2. GFX_MODE=1 (HIRES simulated): FILL a DIFFERENT enclosed
 ;      square -- its interior must stay CLEAR, proving the guard
 ;      refused to run (not that FILL happened to fail for some other
 ;      reason -- checkpoint 1 already proved it works when unguarded).
 ;   3. GFX_MODE restored to 0: FILL the same square from checkpoint 2
 ;      again -- it must now fill correctly, proving the guard only
-;      blocks while 64-column mode is actually active, not permanently.
+;      blocks while a non-Normal mode is actually active, not permanently.
 ;
 ; Border goes GREEN (4) if all three pass; otherwise it shows the
 ; failing checkpoint's number.
@@ -82,10 +84,10 @@ COLD_START:
     or   a
     jp   z, FAIL_TEST
 
-; ---- checkpoint 2: GFX_MODE=2 (64-column simulated) -- FILL refuses ----
+; ---- checkpoint 2: GFX_MODE=1 (HIRES simulated) -- FILL refuses ----
     ld   a, 2
     ld   (CHECKPOINT_NUM), a
-    ld   a, 2
+    ld   a, 1
     ld   (GFX_MODE), a
     ld   hl, SRC_SQUARE2
     ld   de, SRC_SQUARE2_LEN
