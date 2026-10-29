@@ -172,9 +172,8 @@ FWRAP_OVERFLOW   EQU $88F5 ; 1 byte: set by WRAP_CALC — 0 normally, 1
                            ; wrap-table entry at all. Ends at $88F6.
 
 FWRAP_WIDTH_MINUS1 EQU $88F7  ; 1 byte: the wrap width minus one
-                           ; (32-1=31 or 64-1=63) -- set by WRAP_CALC_AT
-                           ; from GFX_MODE, read by the drawing and the
-                           ; cursor. $88F6 is free
+                           ; (32-1=31) -- set by WRAP_CALC_AT, read by
+                           ; the drawing and the cursor. $88F6 is free
                            ; (Phase 64's RECALL_PENDING, retired at step
                            ; E item 7).
 
@@ -187,9 +186,9 @@ FWRAP_CURSOR_AT_END EQU $88F9 ; 1 byte: WRAP_CALC's own scratch -- 0 when
                            ; the cursor is at the end of the text (E10)
 FWRAP_BASE         EQU $88FA  ; 2 bytes: the text the wrap table describes
                            ; (EDIT_BUF, or a line of the store)
-ED_ROW_JP          EQU $88FC  ; 3 bytes: JP ED_ROW32 / JP ED_ROW64, written
-                           ; by WRAP_CALC -- the row drawer for the width
-                           ; in force (ED_DRAW_ROWS' header)
+ED_ROW_JP          EQU $88FC  ; 3 bytes: JP ED_ROW32, written by
+                           ; WRAP_CALC -- the row drawer (ED_DRAW_ROWS'
+                           ; header; the full-screen view calls it)
 
 ; ============================================================================
 ; INSERT_CHAR ( A = character )
@@ -328,9 +327,9 @@ WRAP_STORE_ROW:
 ;
 ; Populates FWRAP_COUNT/FWRAP_START/FWRAP_LEN (offsets from FWRAP_BASE,
 ; which is set to HL) and FWRAP_OVERFLOW. Each row holds up to W
-; characters, W = 64 when GFX_MODE is 2 (64-column text) and 32
-; otherwise; the width and the row drawer (ED_ROW_JP) are set here, so the room check, the drawing and the cursor all use the
-; width in force (step E, E10). A row breaks at the LAST space at or
+; characters, W = 32; the width and the row drawer (ED_ROW_JP) are set
+; here, so the room check, the drawing and the cursor all use the same
+; width (step E, E10). A row breaks at the LAST space at or
 ; before its column limit (the space itself is consumed but never drawn
 ; — matching ts2068rom's own EDITOR_WRAP_CALC exactly), so a word is
 ; never split across rows UNLESS a single word alone is too long to fit
@@ -369,20 +368,7 @@ WRAP_CALC_AT:
     ld   a, $C3                     ; JP: ED_ROW_JP is a RAM veneer
     ld   (ED_ROW_JP), a
     ld   hl, ED_ROW32
-    IFDEF KERNEL_MODE64_ASM         ; real 64-column TEXT mode only
-                                    ; exists once kernel/mode64/mode64.asm
-                                    ; is INCLUDEd (several smoke ROMs use
-                                    ; the editor without it)
-    ld   a, (GFX_MODE)
-    cp   2
     ld   a, 31
-    jr   nz, .width_set
-    ld   hl, ED_ROW64
-    ld   a, 63
-.width_set:
-    ELSE
-    ld   a, 31
-    ENDIF
     ld   (ED_ROW_JP + 1), hl
     ld   (FWRAP_WIDTH_MINUS1), a
     xor  a
@@ -390,7 +376,7 @@ WRAP_CALC_AT:
     ld   (FWRAP_OVERFLOW), a
 .row_loop:
     ld   a, (FWRAP_WIDTH_MINUS1)
-    inc  a                             ; a = WIDTH (32 or 64)
+    inc  a                             ; a = WIDTH (32)
     ld   c, a
     ld   a, (FWRAP_REMAIN)
     cp   c
@@ -542,15 +528,15 @@ EDIT_CURSOR_TO_ROWCOL:
 ; ============================================================================
 ; EDITOR_REDRAW ( -- )
 ; Redraws the whole (possibly multi-row) input line from scratch every
-; time, at the width in force (one routine for 32 and 64 columns, E3):
+; time (E3):
 ; WRAP_CALC, the grow/shrink of the input area, ED_DRAW_ROWS from
 ; FWRAP_TOP = EDIT_ROW+1-FWRAP_COUNT, then the cursor.
 ;
 ; GROW/SHRINK HANDLING: compares the freshly-computed FWRAP_COUNT
 ; against FWRAP_OLD_COUNT (the value as of the LAST redraw), one row at
-; a time, reading both cells afresh on every pass (the 64-column scroll
-; destroys every register; the two-copy version kept FWRAP_OLD_COUNT's
-; address in HL across it and hung, E10).
+; a time, reading both cells afresh on every pass (the scroll destroys
+; every register; the two-copy version kept FWRAP_OLD_COUNT's address
+; in HL across it and hung, E10).
 ;   - GREW: the newly claimed row 23-old may still hold RECENT output
 ;     from the program that ran just before this input line started
 ;     (input and output never change on screen at the same moment, so
@@ -601,36 +587,23 @@ EDITOR_REDRAW:
 
 ; ============================================================================
 ; ED_DRAW_CURSOR ( -- ) — the cursor of the edit line, from the wrap table
-; and FWRAP_TOP: a FLASH cell with ink and paper swapped in 32 columns,
-; a static XOR block in 64 (Mode 6 has no attribute byte to flash).
+; and FWRAP_TOP: a FLASH cell with ink and paper swapped.
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 ED_DRAW_CURSOR:
     call EDIT_CURSOR_TO_ROWCOL
-    IFDEF KERNEL_MODE64_ASM
-    ld   a, (GFX_MODE)
-    cp   2
-    jp   z, MODE64_PUTCHAR_XOR
-    ENDIF
     jp   GFX_INVERT_ATTR
 
-; ED_SCROLL_UP ( -- ): the whole screen up one row at the width in force.
+; ED_SCROLL_UP ( -- ): the whole screen up one row.
 ED_SCROLL_UP:
-    IFDEF KERNEL_MODE64_ASM
-    ld   a, (GFX_MODE)
-    cp   2
-    jp   z, MODE64_SCROLL_OUTPUT_UP
-    ENDIF
     jp   GFX_SCROLL_OUTPUT_UP
 
 ; ============================================================================
 ; ED_DRAW_ROWS ( -- ) — draws the FWRAP_COUNT rows of the wrap table from
 ; screen row FWRAP_TOP down, each blank-padded to the width WRAP_CALC set.
-; ED_ROW_JP (ED_ROW32 or ED_ROW64, chosen by WRAP_CALC) draws one row:
+; ED_ROW_JP (JP ED_ROW32, written by WRAP_CALC) draws one row:
 ; B = screen row, HL = text, D = characters (0: a blank row); keeps B,
-; destroys AF, C, DE, HL. One loop per width, not one cell writer for
-; both, because a call through the veneer on every cell cost 64 columns
-; up to 12,700 T a key (typing-cost case).
+; destroys AF, C, DE, HL.
 ; ============================================================================
 ED_DRAW_ROWS:
     ld   a, (FWRAP_TOP)
@@ -690,37 +663,6 @@ ED_CELL32:
     pop  bc
     ld   a, ATTR_DEFAULT
     jp   GFX_SET_ATTR                    ; keeps BC
-
-    IFDEF KERNEL_MODE64_ASM
-ED_ROW64:
-    ld   c, EDIT_COL_START
-.char:
-    ld   a, d
-    or   a
-    jr   z, .pad
-    ld   a, (hl)
-    push hl
-    push de
-    push bc
-    call MODE64_PUTCHAR
-    pop  bc
-    pop  de
-    pop  hl
-    inc  hl
-    inc  c
-    dec  d
-    jr   .char
-.pad:
-    ld   a, c
-    cp   64
-    ret  nc
-    push bc
-    ld   a, " "
-    call MODE64_PUTCHAR
-    pop  bc
-    inc  c
-    jr   .pad
-    ENDIF
 
 ; ============================================================================
 ; EDITOR_EDIT_KEY ( A = key code -- ) -- the console's editing without a

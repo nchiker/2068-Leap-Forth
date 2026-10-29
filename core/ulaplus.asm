@@ -7,7 +7,7 @@
 ; PORTED FROM 2068-LEAP'S OWN ALREADY-WORKING IMPLEMENTATION
 ; (~/ts2068rom/basic/basic.asm's BASIC_ULAPLUS_DISABLE and its EXROM
 ; body), not designed from scratch — same "recover proven, tested
-; code" approach Phase 8's mode64 recovery used. The real hardware
+; code" approach. The real hardware
 ; mechanics: ULAPlus is controlled by two 16-bit ports (both already
 ; declared in include/hardware.inc, inherited unchanged from that same
 ; project): write a register number to PORT_ULAPLUS_SELECT, then the

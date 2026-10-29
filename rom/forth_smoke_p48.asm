@@ -3,8 +3,8 @@
 ;
 ; NOT a border-color pass/fail smoke ROM like every other phase — this
 ; is a VISUAL test, matching the project's own established convention
-; for color/palette features (Phase 8's PALETTE64 smoke ROM, which
-; also hangs at a single final state for a screenshot rather than
+; for color/palette features (the visual-check ROMs, which
+; also hang at a single final state for a screenshot rather than
 ; checking a register). There is no register-level way to confirm a
 ; palette swap actually changed what the hardware displays.
 ;

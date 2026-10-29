@@ -20,7 +20,6 @@ forth_demo_gallery         product  gfx   -     interactive real-time demo
 forth_lros                 special  none  -     experimental LROS stub, chunk 0 only
 graphics_exrom             exrom    -     -     EXROM image, not runnable alone
 hires_visual_check         visual   none  -     screenshot check, no verdict
-mode64_visual_check        visual   none  -     screenshot check, no verdict
 
 test_blockgfx              test     none  4     block-graphics glyphs 128-143 (oracle for audit O2)
 test_sound_reg0            test     none  4     SOUND reaches AY chip register 0, read back (audit O9)
@@ -37,7 +36,6 @@ forth_smoke_p5             smoke    none  4
 forth_smoke_p6             smoke    none  4     
 forth_smoke_p7             smoke    none  4     
 forth_smoke_p8             smoke    none  4     
-forth_smoke_p8b            smoke    none  4     
 forth_smoke_p9             smoke    none  4     
 forth_smoke_p10            smoke    none  4     
 forth_smoke_p11            smoke    none  4     
@@ -82,9 +80,6 @@ forth_smoke_p51            smoke    none  4
 forth_smoke_p52            smoke    none  4     
 forth_smoke_p54            smoke    none  4     
 forth_smoke_p55            smoke    none  4     
-forth_smoke_p56            smoke    none  4     
-forth_smoke_p57            smoke    none  4     
-forth_smoke_p58            smoke    none  4     
 forth_smoke_p59            smoke    none  4     
 forth_smoke_p60            smoke    none  4     
 forth_smoke_p61            smoke    none  4     

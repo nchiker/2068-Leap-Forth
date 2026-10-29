@@ -50,8 +50,8 @@ PORT_BANK_HOME      EQU $F4
 ; other). Real confirmed byte values (see kernel/graphics's GFX_SET_
 ; MODE for the full mapping): 0 = Normal, 2 = High Resolution
 ; Graphics. (Bits 3-5, which the manual also documents as selecting a
-; 64-Column-mode ink/paper pair, are unused now that mode was removed
-; 2026-08-20.)
+; 64-Column-mode ink/paper pair, are never written: that mode was removed
+; at step M6.)
 PORT_SCLD           EQU $FF
 
 ; ---- Screen geometry ----
@@ -66,8 +66,8 @@ SECOND_DISPLAY_ADDR EQU $6000     ; The Second Display File, confirmed
                                  ; scanline row per character column,
                                  ; not per 8x8 cell). (64-Column mode,
                                  ; which used this same region as a
-                                 ; second BITMAP, was removed
-                                 ; 2026-08-20.)
+                                 ; second BITMAP, was removed at step
+                                 ; M6.)
 SCREEN_WIDTH_CHARS  EQU 32
 SCREEN_HEIGHT_CHARS EQU 24
 

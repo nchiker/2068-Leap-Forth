@@ -34,7 +34,7 @@
 ; a hypothetical one. A mismatch pages back out and returns with carry
 ; SET; RECT then silently does nothing, matching this project's own
 ; established "silently do nothing on unavailable/out-of-range"
-; convention (SOUND, STICK, FILL's own 64-column guard) rather than a
+; convention (SOUND, STICK, FILL's own HIRES guard) rather than a
 ; new error path.
 ; ============================================================================
 

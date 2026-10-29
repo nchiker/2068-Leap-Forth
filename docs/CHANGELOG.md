@@ -947,3 +947,32 @@ this is the condensed one-paragraph-per-phase version.
   typing on a real keyboard are not exercised. See
   `docs/V2/EDITOR_SPEC.md` for the design, the as-built sizes and the
   view's typing-cost table.
+- V2 step M6 (Mode 6 removal; `docs/V2/MODE6_REMOVAL_SPEC.md`, decided by
+  the owner 2026-10-29): the 64-column text and 512-pixel graphics mode
+  is gone, since nothing here could check how a real hi-res display
+  presents the two display files and the feature was not worth proving.
+  Removed: the words `64COL`, `32COL`, `PALETTE64` and `PLOT64`
+  (`core/mode64.asm`), `kernel/mode64/mode64.asm`, the editor's
+  64-column branches (the `GFX_MODE` = 2 width choice, `ED_ROW64`, the
+  cursor and scroll code for it), `EMIT`'s 64-column branches, and
+  `EDIT`'s `32COL FIRST` refusal; `ED_ROW_JP` stays and always holds
+  `ED_ROW32`. A program that uses `64COL` or `PLOT64` now gets
+  `64COL ?` or `PLOT64 ?`. Not touched: `HIRES`/`NORMAL` (the TS2068
+  high-colour mode, not Mode 6), `GFX_SET_MODE` 0 and 1, `FILL`'s guard,
+  and the ULAplus `PALETTE` words. Measured: HOME ROM free space grows
+  from 1,042 to 1,629 bytes (+587: `kernel/mode64` 394, the four words
+  60, the editor's 64-column branches 63, `EMIT`'s 70); the DOCK
+  cartridge build the same; the graphics EXROM from 4,224 to 4,247
+  (+23, the `32COL FIRST` refusal); the demo ROMs are unchanged. The
+  dictionary chain before `core/floatmul.asm` now starts at `H_FMINUS`.
+  Tests: smoke ROMs `p8b`, `p56`, `p57`, `p58` and
+  `rom/mode64_visual_check.asm` are retired (and their rows in
+  `tools/rom_list.txt`); smoke `p44` now tests `FILL`'s guard with
+  `HIRES`'s `GFX_MODE` = 1, and `p9` no longer `FIND`s the four words.
+  `tools/edtest.py` has 30 cases: the 64-column parts of the others
+  are gone, case 14 now checks that the four words are unknown (`64COL`
+  prints `64COL ?`), and N11 (`edit-64col`) is retired. Tutorial
+  section 13 ("A wider screen") is deleted, sections 14-18 become
+  13-17, and the `EDIT` refusal table and Appendix A lose their
+  64-column rows; `forth_tutorial.docx` is regenerated. Checked under
+  ZEsarUX, Fuse and TSRun only; no hardware.

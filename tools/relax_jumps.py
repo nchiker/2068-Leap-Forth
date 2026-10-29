@@ -38,7 +38,7 @@ def main():
         m = re.match(r"# file opened: (.*)", line)
         if m:
             name = m.group(1).strip()
-            # two files can share a basename (core/mode64.asm, kernel/mode64/mode64.asm): the INCLUDE line
+            # two files can share a basename (in different directories): the INCLUDE line
             # just before the open gives the path
             stack.append(last_include if last_include and last_include.endswith(name) else name)
             last_include = None

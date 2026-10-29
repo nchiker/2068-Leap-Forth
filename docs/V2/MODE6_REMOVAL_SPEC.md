@@ -69,3 +69,18 @@ Done when `make edtest` (31 cases less N11, so 30), `make test`, `make harness`,
 
 ZEsarUX, Fuse and TSRun only. The removal makes the ROM 32-column only; a program that used `64COL` or `PLOT64` gets
 `64COL ?` / `PLOT64 ?`.
+
+## 7. As built [M]
+
+Re-measured on the step's starting build (`832ac09`, `build/forth_boot.lst`): the section 2 figures held. The editor's
+65 B are gross: its `ELSE` branch (`ld a, 31`, 2 B) becomes unconditional, so the editor saves 63 and the total is
+**587 B** HOME (394 + 60 + 63 + 70), the same in the DOCK cartridge build; EXROM **23 B** (the refusal 10, the message
+13). HOME 1,042 → 1,629 free, EXROM 4,224 → 4,247; the demo images are byte-identical (they never included the mode).
+
+- **Removal only.** The old and new listings (HOME, cartridge, EXROM), paired line by line on their emitted source,
+  differ only by deleted lines: no instruction was added or changed.
+- **Spec points that did not match:** `include/exrom_home_ram.inc` held no `GFX_MODE` copy, and the 5 B of RAM at
+  `$87BF-$87C3` were declared in `kernel/mode64/mode64.asm` itself, so neither needed a change elsewhere. Smoke `p9`
+  stays: it seeds `LATEST` with `H_FMINUS` and no longer includes the mode's files (the oracle commit).
+- **Test changes beyond the spec:** case 14 (`no-64col`) also checks that `32COL`, `PALETTE64` and `PLOT64` are unknown
+  words (section 6). `make test` has 66 ROMs (70 less p8b, p56, p57, p58).

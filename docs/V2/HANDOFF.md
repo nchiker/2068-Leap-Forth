@@ -1,42 +1,46 @@
-# Leap-Forth V2 — session handoff (2026-10-29, step E complete with the review follow-up)
+# Leap-Forth V2 — session handoff (2026-10-29, step M6 complete: Mode 6 removed)
 
 Read this first in a new session. Then `docs/V2/EDITOR_SPEC.md` (step E: decisions, line store contract in section 3,
-view behaviour, sections 4 and 5.1-5.5 as built, oracle table), `docs/V2/MODE6_REMOVAL_SPEC.md` (the next step),
+view behaviour, sections 4 and 5.1-5.5 as built, oracle table), `docs/V2/MODE6_REMOVAL_SPEC.md` (step M6, section 7 as
+built),
 `docs/V2/LEAPC_COMPARISON_AUDIT.md` (on branch `v2/step-l-leapc-audit`) and `docs/V2/FORTH_V2_REUSE_AUDIT.md`
 (section 8 sequence, section 9 ledger, section 10 owner decisions).
 
 ## Where things stand
 
 - **master** is `af61e35`: PR #2 (T → G → R0 → A → R1 → S, `0d45a2f`) and PR #3 (a three-line edit of this file).
-  When the E branch merges into master, this file conflicts with PR #3's version: keep the E branch's.
-- **Step E is done** on `v2/step-e-console-editor`, including the owner-review follow-up (the view's row-shadow
-  redraw, `SAVE-TEXT` on the line store). Not pushed; no PR yet (push and open PRs only when the owner asks; merge step
-  PRs with merge commits).
+- **PR #4** (`v2/step-e-console-editor` → master, step E with the follow-up, tip `832ac09`) is **open**. When it merges,
+  this file conflicts with PR #3's version: keep the E branch's (or this branch's, once M6 merges).
+- **Step M6 is done** on `v2/step-m6-mode6-removal`, branched from the E branch's tip `832ac09` (PR #4 was still open):
+  `aa113bf` oracle, `b531f70` code with ledger row and floors, then the docs commit. Not pushed; no PR yet. Its PR
+  targets master after PR #4 merges (or the E branch, if the owner wants it reviewed first).
 
   | Branch | State |
   |---|---|
-  | `v2/step-e-console-editor` | **Step E complete** with the follow-up. Ready for a PR to master |
-  | `v2/e-item6-wip`, `v2/e-shadow-wip`, `v2/e-savetext-wip` | work branches, merged into the E branch; can be deleted |
+  | `v2/step-m6-mode6-removal` | **Step M6 complete**. Ready for a PR once PR #4 merges |
+  | `v2/step-e-console-editor` | step E complete, PR #4 open |
+  | `v2/m6-oracle-wip`, `v2/m6-code-wip`, `v2/m6-docs-wip` | M6 work branches (scratch worktrees), merged; can be deleted |
+  | `v2/e-item6-wip`, `v2/e-shadow-wip`, `v2/e-savetext-wip` | E work branches, merged into the E branch; can be deleted |
   | `v2/step-o13-rst-stack` | O13, already merged into the E branch (`9a1d570`) |
   | `v2/step-l-leapc-audit` | step L, docs only (`9391422`, decisions `f5a36c5`), from master |
 
-  Merging L and E into master: both append rows to the audit's section 9 ledger (and L adds section 5 rows O13-O19
-  and section 10 decisions 7-9), so the second merge conflicts there; keep both sides' rows, in step order.
-- **Free space [M]:** HOME 1,042 B, DOCK cartridge 1,042, Blackjack 1,096/1,096, Gallery 1,021, EXROM 4,224. The floors
+  Merging L, E and M6 into master: all append rows to the audit's section 9 ledger (and L adds section 5 rows O13-O19
+  and section 10 decisions 7-9), so the merges after the first conflict there; keep every side's rows, in step order
+  (L's rows, then E's, then M6).
+- **Free space [M]:** HOME 1,629 B, DOCK cartridge 1,629, Blackjack 1,096/1,096, Gallery 1,021, EXROM 4,247. The floors
   in `tools/budget.toml` equal these.
-- **Step E in bytes [M]:** items 3-7 and the follow-up cost HOME +90 B (1,132 → 1,042 free, after O13's −506; the
-  owner accepts HOME bytes that a ledger row justifies) and EXROM +2,458 B (6,682 → 4,224: the view 1,676, its
-  row-shadow redraw +841 against an estimate of about 0, less `VIEW_TRIM` 56).
-- **Last full run [M]** (the follow-up's commit): `make edtest` **31/31**; `make test` 70 PASS, 0 FAIL, 1 SKIP,
-  POWERON 7/7; `make tapetest` 16/16; `make harness` 0 failed; `make cartdiff` 26/26;
-  `make fusesave` 42 checks, 0 failed (the Fuse tape_write abort and retry, as known); `make bench` within 1% (sieve
-  −1.6%, string −1.2%, the rest faster); `make repro` 266 files identical; `make check` passes.
+- **Step M6 in bytes [M]:** HOME +587 (kernel/mode64 394, the four words 60, the editor's branches 63, `EMIT`'s 70),
+  EXROM +23 (the `32COL FIRST` refusal). The listings differ only by deleted lines; the demo images are byte-identical.
+- **Last full run [M]** (M6's code commit): `make edtest` **30/30** (N11 retired); `make test` 66 PASS, 0 FAIL, 1 SKIP,
+  POWERON 7/7; `make tapetest` 16/16; `make harness` 0 failed; `make cartdiff` 26/26; `make fusesave` 41 checks,
+  0 failed (no Fuse abort this time, so no retry and one check fewer than step E's 42); `make bench` within 1% (sieve
+  −1.6%, string −1.2%, the rest faster); `make repro` 251 files identical; `make check` passes.
 
-## Owner decisions this session (2026-10-29)
+## Owner decisions (2026-10-29)
 
 - **Mode 6 dropped entirely** (64COL, 32COL, PALETTE64, PLOT64, the 64-column kernel and every 64-column path):
   the layout is unverifiable here and not worth the effort. **HIRES/NORMAL stay** (the TS2068 high-colour mode, not
-  Mode 6). Plan: `docs/V2/MODE6_REMOVAL_SPEC.md` (about −589 B HOME).
+  Mode 6). Done in step M6 (`docs/V2/MODE6_REMOVAL_SPEC.md`, −587 B HOME).
 - **HOME bytes** may be spent when a ledger row justifies them.
 - **One authoritative source:** the line store. `SAVE-TEXT name`/`VERIFY-TEXT name` save and check it (the `addr len`
   forms were a defect left from before step E; spec section 3 had required the store). Command lines (`SAVE-TEXT`,
@@ -47,7 +51,7 @@ view behaviour, sections 4 and 5.1-5.5 as built, oracle table), `docs/V2/MODE6_R
 ## What step E built (details in EDITOR_SPEC.md 3, 4, 5.1-5.5)
 
 - **Console:** one width-parameterised redraw (`WRAP_CALC_AT`, `ED_DRAW_ROWS`, `ED_DRAW_CURSOR`, the RAM `JP`
-  `ED_ROW_JP` at `$88FC`); E10 fixed (64-column hang, 64-column room check, cursor on a full row).
+  `ED_ROW_JP` at `$88FC`); E10 fixed (64-column hang, 64-column room check, cursor on a full row; the 64-column paths went in M6).
 - **View:** `EDIT name` / `EDIT` (core/edit.asm, HOME) calls `VIEW_SESSION`, EXROM service slot 6; veneers 5-12 in
   `GRAPHICS_HOME_TABLE`; HOME cells the EXROM uses are copies in `include/exrom_home_ram.inc`, checked by
   `tools/audit_layout.py`. View RAM `$8AC0-$8B39` (row shadow `$8AF3-$8B37`). Leaving runs the marked (`$8D`) lines
@@ -62,16 +66,12 @@ view behaviour, sections 4 and 5.1-5.5 as built, oracle table), `docs/V2/MODE6_R
 
 ## Next work, in order
 
-1. **Owner:** review step E and ask for the PR (E branch → master), and decide on L's PR.
-2. **Step M6: Mode 6 removal** (`docs/V2/MODE6_REMOVAL_SPEC.md`), its own branch from the E branch's tip: spec,
-   oracle (edtest's 64-column parts and N11, fharness check `i`, smoke ROMs p8b/p56/p57/p58 and the visual check,
-   p44 to HIRES), the code in one commit (re-point the chain before `floatmul.asm` to `H_FMINUS`), docs (tutorial
-   section 13 goes, 14-17 renumber).
-3. **O15:** FILL and CIRCLE kernels to the EXROM (about −820 B HOME; the EXROM has 4,224 B free).
-4. **Step F: float rebuild** (audit section 4.2) with O10 and T13.
-5. **K** (with O16, O17; also the text-drawing speed-up the owner may approve: an ASCII-indexed font, about
+1. **Owner:** review step E (PR #4) and step M6, and ask for M6's PR; decide on L's PR.
+2. **O15:** FILL and CIRCLE kernels to the EXROM (about −820 B HOME; the EXROM has 4,247 B free).
+3. **Step F: float rebuild** (audit section 4.2) with O10 and T13.
+4. **K** (with O16, O17; also the text-drawing speed-up the owner may approve: an ASCII-indexed font, about
    byte-neutral against K's planned +80 B, and a row text primitive, about 2x on every redraw), **D** (O18), **B**.
-6. **Step Z** (audit section 4.4) with O14, O19, and `W_EMIT` through `rst $28`.
+5. **Step Z** (audit section 4.4) with O14, O19, and `W_EMIT` through `rst $28`.
 
 ## Open points (not blocking)
 
@@ -93,15 +93,27 @@ view behaviour, sections 4 and 5.1-5.5 as built, oracle table), `docs/V2/MODE6_R
 - **Budget floors:** never lower one without a ledger row and a history line in `tools/budget.toml`.
 - **Keep `IFDEF CARTRIDGE` code the same length in both builds** (`rom_identity.py --shared` in `make check`).
 
-## Facts that cost time to find (steps E and O13; the older ones follow)
+## Facts that cost time to find (steps M6, E and O13; the older ones follow)
+
+- **Step M6.**
+  - **Suite times:** `make cartdiff` takes about 16 minutes on its own and `make tapetest` about 5; give an agent that runs
+    them a timeout of 20 minutes or more each. With edtest, test and bench running at the same time, tapetest case 3
+    once dropped two typed characters ("typing slip", a harness error, not a ROM failure); it passed run alone.
+  - **fusesave's count** is 41 checks when Fuse records the first cross tape, 42 when Fuse aborts in `tape_write` and
+    the retry repeats the boot check.
+  - **What is gone:** `GFX_MODE` 2, port `$FF` bits 3-5 (never written now), `fharness` check `i` and its 64-column
+    screen reader, edtest's 64-column parts and N11, smoke p8b/p56/p57/p58 and `mode64_visual_check`. RAM
+    `$87BF-$87C3` (the mode's 5 B) is unused. Smoke p9 seeds `LATEST` with `H_FMINUS`.
+  - **Byte check for a removal:** pair the old and new listings on their emitted source lines (difflib over
+    (file, instruction)); a pure removal shows only `delete` blocks.
 
 - **Test tools.**
   - `tools/fharness.py` (T11): Machine (boot to the first `IO_READ_KEY`, snapshot, restore 3-5 ms, `call`,
-    `checkpoint`/`rollback`, `screen_rows` incl. 64 columns, `expect_mem`, `ram_diff`), Console (keys through the
+    `checkpoint`/`rollback`, `screen_rows` (32 columns since M6), `expect_mem`, `ram_diff`), Console (keys through the
     ISR latch, or `press` on the matrix with the map read from the ROM's key tables), `run_pool`. Ports 10900-10919.
     RAM it uses: `$FF00` return slot, `$FF02` stop, `$FF10` glyph program (above the machine stack).
     It boots only images that reach `IO_READ_KEY`; the demo ROMs do not.
-  - `tools/edtest.py` (T12): `--group old|new|both`, case numbers or name substrings to select, `--selftest` (the
+  - `tools/edtest.py` (T12; 30 cases since M6): `--group old|new|both`, case numbers or name substrings to select, `--selftest` (the
     view model, no emulator), `--build DIR` for an old build. Open spec details it chose are marked `READING:` in the
     code. Make: `make edtest EDTEST_GROUP=old`.
   - Other ports: `make test` 10760 up, bench 10780, poweron 10820-10839, ay_audio 10880-10899, harness/edtest

@@ -46,8 +46,8 @@ rom/graphics_exrom.asm include/, step G, 2026-10-28):
     headroom starts at $F600" (include/sysvars.inc);
   * $FF00-$FFFF: above the initial SP, nothing allocates there (sysvars.inc ASSERTs keep cells < $FF00);
   * $5B00-$7FFF: GFX_FILL_VISITED / GFX_FILL_STACK (GFX_FILL clears the first with LDIR and sets its stack
-    pointer on entry, kernel/graphics), display file 2 at $6000 (displayed only in HIRES / MODE64, which
-    clear it on entry: kernel/graphics .clear_highres, kernel/mode64) and ZX_SYSVAR_CHARS $5C36 (only
+    pointer on entry, kernel/graphics), display file 2 at $6000 (displayed only in HIRES, which
+    clears it on entry: kernel/graphics .clear_highres) and ZX_SYSVAR_CHARS $5C36 (only
     written, core/printer.asm);
   * $F000-$F17F: no Forth symbol ($F000-$F0FF) and LABEL_TABLE ($F100-$F17F, BASIC labels): no reader;
   * $F228-$F3C3 and $F400-$F5FF: EDIT_LINE_BUF, DETOK_BUF, STR_FUNC_POOL, DEF_FN / extension state and the
@@ -107,7 +107,7 @@ UNDEFINED_REGIONS = [
     ("above initial SP", 0xFF00, 0x10000,
      "above COLD_START's SP=$FF00; nothing allocates here (sysvars.inc ASSERTs <= $FF00)"),
     ("GFX_FILL scratch, display file 2, ZX sysvar", 0x5B00, 0x8000,
-     "FILL clears its visited map and resets its stack on entry; HIRES/MODE64 clear display file 2 on "
+     "FILL clears its visited map and resets its stack on entry; HIRES clears display file 2 on "
      "entry; $5C36 is write-only"),
     ("unreferenced / BASIC label table", 0xF000, 0xF180,
      "no Forth symbol at $F000-$F0FF; LABEL_TABLE has no reader in the Forth sources"),

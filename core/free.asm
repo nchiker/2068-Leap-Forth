@@ -36,7 +36,7 @@
 ; 2068-Forth's own dictionary range entirely, into the idle "second
 ; display file" video-RAM pool at $5B00-$7FFF (see include/sysvars.inc's
 ; own GFX_FILL_VISITED header for the full relocation writeup, including
-; the new 64-column-mode hazard that move creates and how
+; the new second-display-file (HIRES) hazard that move creates and how
 ; core/moregfx.asm's own FILL guards against it). With that hazard gone,
 ; the only other live thing found in $C000-$FEFF (via the same
 ; grep-the-real-build's-own-.sym-table method Phase 43 used) is

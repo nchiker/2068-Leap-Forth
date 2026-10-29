@@ -41,8 +41,6 @@ Highlights:
   (`SPRITE-DEFINE`/`SPRITE-SHOW`/`SPRITE-HIDE`) dispatched through a
   second, real 8K ROM bank, so the core dictionary doesn't pay for
   functionality a given build doesn't need.
-- **64-column text mode** (`64COL`/`32COL`/`PLOT64`), recovered from
-  once-shipped 2068-Leap code most TS2068 software never used.
 - **Real error handling**, not silent failure or a crash: `THROW`/
   `CATCH`, runtime stack-underflow/overflow detection, and a `?`
   printed on an unrecognized word with a prompt that recovers cleanly
@@ -300,7 +298,6 @@ make forth-smoke-p5   # Phase 5 TS2068 vocabulary smoke ROM
 make forth-smoke-p6   # Phase 6 line-editing smoke ROM
 make forth-smoke-p7   # Phase 7 storage (SAVE-LIB/LOAD-LIB) smoke ROM
 make forth-smoke-p8   # Phase 8 stretch: floating point smoke ROM
-make forth-smoke-p8b  # Phase 8 stretch: 64-column display smoke ROM
 make forth-smoke-p9   # Phase 9 smoke ROM: full dictionary + real interrupts
 make forth-smoke-p10  # Phase 10 smoke ROM: EMIT/.
 make forth-smoke-p11  # Phase 11 smoke ROM: =/</>
@@ -381,7 +378,6 @@ core/       language-layer code, not hardware-facing:
                           name parsing, THROW on failure)
               loadtext.asm (Phase 52 — SAVE-TEXT/VERIFY-TEXT/LOAD-TEXT)
               float.asm   (Phase 8 stretch — F+/F-)
-              mode64.asm  (Phase 8 stretch — 64COL/32COL/PALETTE64/PLOT64)
               print.asm   (Phase 10 — EMIT/.)
               compare.asm (Phase 11 — =/</>)
               variable.asm (Phase 12 — VARIABLE/CONSTANT)
@@ -412,12 +408,11 @@ core/       language-layer code, not hardware-facing:
               polygon.asm (Phase 65 — POLYGON/POLYGON-FILL, EXROM chunk 5)
               sprite.asm  (Phase 65 — SPRITE-DEFINE/SHOW/HIDE, EXROM chunk 5)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
-            io, graphics, interrupt, math, sound, storage, bank) plus
-            2068-Leap-Forth's own addition, mode64/ (recovered, once-shipped
-            2068-Leap code — see that module's own header). bank/bank.asm
-            is 2068-Leap's own EXROM paging trampoline, retargeted from
-            its original chunk 6 to chunk 5 in Phase 65 — see that file's
-            own header for the chunk-by-chunk audit behind the choice.
+            io, graphics, interrupt, math, sound, storage, bank).
+            bank/bank.asm is 2068-Leap's own EXROM paging trampoline,
+            retargeted from its original chunk 6 to chunk 5 in Phase 65
+            — see that file's own header for the chunk-by-chunk audit
+            behind the choice.
 include/    hardware/keyboard constants and the inherited kernel API
             contract (include/kernel_api.inc)
 rom/        ROM image assembly:
@@ -429,7 +424,6 @@ rom/        ROM image assembly:
               forth_smoke_p6.asm  Phase 6 smoke ROM
               forth_smoke_p7.asm  Phase 7 smoke ROM
               forth_smoke_p8.asm  Phase 8 stretch smoke ROM (floating point)
-              forth_smoke_p8b.asm Phase 8 stretch smoke ROM (64-column)
               forth_smoke_p9.asm  Phase 9 smoke ROM (dictionary + interrupts)
               forth_smoke_p10.asm Phase 10 smoke ROM (EMIT/.)
               forth_smoke_p11.asm Phase 11 smoke ROM (=/</>)

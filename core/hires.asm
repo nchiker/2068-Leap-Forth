@@ -26,20 +26,19 @@
 ;
 ; WORD CHOICE: TS2068 BASIC's own statement is `MODE n` (0/1/2), with
 ; the caller responsible for validating `n` first (see GFX_SET_MODE's
-; own header). This project's mode64 stretch goal (Phase 8) already
-; departed from that shape in favor of zero-argument flag words (64COL/
-; 32COL) rather than a validated-argument MODE, and HIRES/NORMAL follow
-; that same established precedent — no invalid-mode-number case to
-; guard against at all, since neither word takes a stack argument.
+; own header). This project's zero-argument flag words (HIRES/NORMAL;
+; the removed 64COL/32COL pair, step M6, were the first) depart from that
+; shape rather than take a validated-argument MODE — no
+; invalid-mode-number case to guard against at all, since neither word takes a stack argument.
 ;
 ; TWO REAL HAZARDS FOUND AND FIXED WHILE WIRING THIS IN (both because
 ; GFX_MODE=1 was UNREACHABLE from any Forth word before this phase, so
 ; neither one had ever actually triggered in a shipped ROM):
 ;
 ;   1. core/moregfx.asm's FILL only ever guarded against GFX_MODE=2
-;      (64-column mode) sharing its relocated scratch RAM with the
-;      Second Display File — HIRES's GFX_MODE=1 shares the exact same
-;      RAM ($6000-$77FF) for the exact same reason (real per-scanline
+;      (64-column mode, since removed at step M6) sharing its relocated
+;      scratch RAM with the Second Display File — HIRES's GFX_MODE=1
+;      shares the exact same RAM ($6000-$77FF) for the exact same reason (real per-scanline
 ;      attribute data instead of 64-column's second bitmap plane) and
 ;      was NOT guarded against. Widened that check from `cp 2` to
 ;      `or a` (any nonzero mode) — see that file's own header and

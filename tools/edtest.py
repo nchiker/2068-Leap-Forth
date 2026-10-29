@@ -6,8 +6,10 @@ memory, so that step E (a rebuild of the console and editor, audit section 4.3) 
 asserts what the current build does, exactly (screen rows, edit line, cursor cell, memory); a case that looks like a
 defect still asserts the current behaviour (the defects are listed in the report that came with this file, not fixed).
 Since step E item 5 (the merged redraw) the points of E10 -- the room check at the display width, the cursor on
-a full row, no hang at 64 columns -- are asserted as the NEW build does them (cases 7, 8, 9, 10, 14, 18; the old build fails
-them).  A rebuilt editor is expected to FAIL the cases that describe behaviour step E changes on purpose; each such failure is a
+a full row -- are asserted as the NEW build does them (cases 7, 8, 9, 10, 18; the old build fails them).  Step M6 removed the
+64-column mode (docs/V2/MODE6_REMOVAL_SPEC.md): case 14 asserts that `64COL` is an unknown word, N11 is retired, and the
+64-column parts of cases 8, 9, 10, 18 and 19 are gone; the 32-column parts are unchanged.
+A rebuilt editor is expected to FAIL the cases that describe behaviour step E changes on purpose; each such failure is a
 line to decide on, not a regression by itself.
 
 RUN   python3 -I tools/edtest.py [--build DIR] [--group old|new|both] [--workers N] [--port P] [--json OUT] [-v] [--selftest] [substring ...]
@@ -17,7 +19,7 @@ RUN   python3 -I tools/edtest.py [--build DIR] [--group old|new|both] [--workers
       numbers, the wall times.  Exit 0 = all cases pass, 1 = any case fails, 2 = harness error (bad build directory, port
       in use, no emulator could run a task).  Ports P .. P+workers-1, default 10900-10919 (fharness.py's range).
       TWO GROUPS.  `old` = the 19 cases of T12 described below (what the console editor of the audit baseline does); `new` =
-      the cases step E adds (docs/V2/EDITOR_SPEC.md section 8, second table: N1-N3 and N5-N13; N4 is case N4 of
+      the cases step E adds (docs/V2/EDITOR_SPEC.md section 8, second table: N1-N3, N5-N10 and N12-N13; N4 is case N4 of
       tools/tapetest.py) which describe what the REBUILT console, store and full-screen view must do and so FAIL on the old
       build, each with the detail of the first thing that differs.  Default: both.  Every output line and the JSON carry the
       group (`PASS old 7 line-full`, `FAIL new N5 dict-ceiling`); a substring may also be a case number (N5).  `--selftest` needs no
@@ -32,19 +34,17 @@ the editor (core/editor.asm), the interpreter, the workspace (core/recall.asm), 
 matrix scan.  What is substituted: every case runs from the snapshot of the booted machine (fharness.Machine.restore);
 `key()` writes the interrupt routine's latch (KBD_LASTK, KBD_KEYHIT) and `press()` holds keys on the emulated matrix
 (ISR, debounce and IO_DECODE_KEY real); the screen is read from RAM and decoded with the ROM's own font by the real
-GFX_PUTCHAR / MODE64_PUTCHAR (fharness.screen_rows).  The cases run on fharness.run_pool: one ZEsarUX per worker, a
+GFX_PUTCHAR (fharness.screen_rows).  The cases run on fharness.run_pool: one ZEsarUX per worker, a
 restored machine for every task; a case with several parts (widths, batches, scenarios) is several tasks.
 
-HOW THE CURSOR IS SHOWN  32 columns: not in the bitmap.  EDITOR_REDRAW draws the line (GFX_PUTCHAR, then GFX_SET_ATTR
+HOW THE CURSOR IS SHOWN  Not in the bitmap.  EDITOR_REDRAW draws the line (GFX_PUTCHAR, then GFX_SET_ATTR
 ATTR_DEFAULT on every cell of every input row, padded to column 31) and then GFX_INVERT_ATTR on the cursor cell: ink and
 paper swapped and FLASH set, so ATTR_DEFAULT $44 (bright, black paper, green ink) becomes $E0; the ULA blinks it.  The cursor
-column is never W (E10, THE WRAP MODEL below): a cursor cell is always shown.  64
-columns (GFX_MODE 2): the attribute byte does not exist; MODE64_PUTCHAR_XOR flips all 64 bits of the cell, a static block.
-The screen reader shows it as INVERSE_MARK + the character under it, or as the block character (U+258F, code 143's glyph)
-over a blank; `view()` below turns that back into a cursor cell and the plain text.
+column is never W (E10, THE WRAP MODEL below): a cursor cell is always shown.
+`view()` below reads the cursor cell from the FLASH attribute and the plain text from the bitmap.
 
 THE WRAP MODEL (wrap_model, shown_rows, cursor_model, Ed) is the new build's (step E item 5, E10), asserted by the wrap-model
-case.  WRAP_CALC picks the width from GFX_MODE (WRAP_CALC64 no longer exists): a row holds W = 32 (64) characters.  From the row's first character: if no more
+case.  A row holds W = 32 characters (the models keep W as a parameter; every case passes 32).  From the row's first character: if no more
 than W characters remain, they are the last row.  Otherwise look at the characters at offsets W-1 down to 1 (offset 0 and
 offset W are NOT looked at) for the last space: found at offset p -> the row shows p characters and p + 1 are consumed (the
 space is never drawn); none found -> the row shows W characters and W are consumed (a hard break; a space that is the
@@ -59,8 +59,8 @@ first row i for which i is the last row or EDIT_CURSOR < the start of row i + 1;
 clamped to W - 1 (so a cursor on a consumed space shows right after the row's last character, and a cursor at the end of a full
 hard-broken row is on the extension row's column 0; it is never W, so a cell always shows).  The screen row of row i is
 24 - FWRAP_COUNT + i.  EDITOR_PROCESS_KEY: printable
-codes 32-126 are inserted at EDIT_CURSOR if EDIT_LEN < EDIT_MAX_LEN (128); WRAP_CALC is run on the result at the width in
-force (32, or 64 when GFX_MODE is 2; cursor after the inserted character), and if
+codes 32-126 are inserted at EDIT_CURSOR if EDIT_LEN < EDIT_MAX_LEN (128); WRAP_CALC is run on the result at the width
+(32; cursor after the inserted character), and if
 FWRAP_OVERFLOW is set the insert is undone and the key ignored (the wrap table is then left describing the refused
 line, at that width: FWRAP_OVERFLOW stays 1 until the next redraw; a refusal means 4 rows with overflow, so there is no extension).  DELETE (8) removes the character left of the cursor, LEFT (1) and
 RIGHT (4) move it, ENTER (13) ends the line; every other code below 32 is ignored.  Grow: when the new FWRAP_COUNT is
@@ -70,16 +70,15 @@ output row).  Shrink: the rows no longer used are cleared (GFX_CLEAR_ROW); nothi
 
 THE FULL REDRAW (the reference of the redraw-oracle case; full_reference).  From the editor waiting for a key, with the
 whole machine put on a checkpoint first (fharness.Machine.checkpoint / rollback), the reference screen is drawn by:
-  1. call WRAP_CALC (it picks the width from GFX_MODE, in both modes) for the current EDIT_BUF / EDIT_LEN / EDIT_CURSOR, which
+  1. call WRAP_CALC for the current EDIT_BUF / EDIT_LEN / EDIT_CURSOR, which
      sets FWRAP_COUNT (with E10's extra row);
   2. FWRAP_OLD_COUNT := FWRAP_COUNT, so the redraw decides "no growth, no shrink": nothing scrolls, no row is cleared by it;
   3. rows 20-23 (the 4 rows the input can ever use, 24 - FWRAP_MAX_ROWS ... 23) are blanked directly: all 8 pixel lines
-     of every cell zero (both display files in 64 columns) and, in 32 columns, every attribute byte of those rows set to
+     of every cell zero and every attribute byte of those rows set to
      ATTR_DEFAULT;
-  4. call EDITOR_REDRAW (one routine for both widths since the merge; EDITOR_REDRAW64 no longer exists), which draws every wrapped row, blank-padded and
+  4. call EDITOR_REDRAW, which draws every wrapped row, blank-padded and
      with ATTR_DEFAULT, and the cursor;
-  5. read the screen: $4000-$5AFF (32 columns: bitmap and attributes, 6912 bytes) or $4000-$77FF (64 columns: both display
-     files and the attribute area, 14336 bytes), then roll the machine back.
+  5. read the screen: $4000-$5AFF (bitmap and attributes, 6912 bytes), then roll the machine back.
 The rows above row 20 are the screen as the incremental editor left them: the oracle scenarios keep their output on the
 upper rows (PRINT_ROW 2 or 3, no scroll), so a key that scrolls, or a stale cell above or below the input area, shows as
 a difference.  The reference cannot predict a scroll; the cases where the editor scrolls (wrap-scroll) are asserted with
@@ -95,18 +94,15 @@ which keys that is depends on the frame phase at the idle prompt, which depends 
 that changes the cold start moves the phase: compare figures within about one interrupt service (and the 20 ms-class
 differences, not the small ones).
 
-BEHAVIOURS THAT LOOK LIKE DEFECTS (the old build's; the first three are fixed by step E item 5 and asserted fixed)
-  * [fixed, E10] 64 columns: the old EDITOR_REDRAW64 hung when the line grew onto a row that holds output and the screen had to scroll
-    (PRINT_ROW 22, 2 -> 3 rows): it kept FWRAP_OLD_COUNT's address in HL across MODE64_SCROLL_OUTPUT_UP [wrap-scroll].
-  * [fixed, E10] 64 columns: the old room check called the 32-column WRAP_CALC, so a line that fits 3 rows of 64 was refused at the
-    character that needed a 5th 32-column row [console-64col limit].
+BEHAVIOURS THAT LOOK LIKE DEFECTS (the old build's; the first is fixed by step E item 5 and asserted fixed; the 64-column
+defects of E10 died with the mode in step M6)
   * [fixed, E10] A line that exactly fills its last row (32, 64, 96, 128 characters) put the cursor at column W: no cursor shown
     [line-full hard, wrap-model].
   * WORKSPACE_APPEND tests the high byte of the new length against LOADTEXT_MAX_LEN / 256 + 1, so it writes up to 255 bytes
     past LOADTEXT_BUF + 8192 [workspace-append limit]; an empty line appends a separator space each time [workspace-append].
   * Forth has no BREAK check in the interpreter: only the word BREAK? sees the key [break-running].
   * After a refused key the wrap table keeps the refused line (FWRAP_OVERFLOW stays 1) and the
-    screen is not redrawn until the next accepted key; harmless as far as seen [line-full, console-64col].
+    screen is not redrawn until the next accepted key; harmless as far as seen [line-full].
 
 STEP E CASES (group new; EDITOR_SPEC.md sections 3 and 5 are the specification of every assertion; a comment `READING:` in the
 code marks each place where the text leaves a detail open and says which reading was taken, the strictest the text supports; where
@@ -148,7 +144,7 @@ the text allows several outcomes the case accepts exactly those and reports whic
   N10 edit-refusals  NO EXROM (the stock-shaped EXROM, build/stock_shaped_exrom.bin: a temporary copy of the build directory is made
                      for it and removed afterwards), LONG LINE (a 199-character line in the store), `NOSUCH ?`: one message, nothing changed
                      (the store may gain the typed line), console still works.
-  N11 edit-64col     `EDIT` in 64-column mode prints 32COL FIRST and changes nothing.
+  N11                retired in step M6 (`EDIT` in 64-column mode printed 32COL FIRST: there is no 64-column mode).
   N12 edit-typing-cost  T-states per key in the view (same method as typing-cost), 11 scenarios, each taken twice from a restored
                      machine; passes when the two are equal; no threshold (the first measurement sets the gate); printed as a table.
   N13 edit-store-full  with 0, 1 and 3 bytes of room: a change that would overflow the store (a grown line written back, a line
@@ -184,11 +180,10 @@ ROOT = fh.ROOT
 BANNER = "2068-FORTH"                   # rom/forth_boot.asm BANNER
 LEFT, DOWN, UP, RIGHT, DELETE, INSERT_LINE, DELETE_LINE, BREAK, ENTER = 1, 2, 3, 4, 8, 0x0B, 0x0F, 0x10, 13
 MAX_LEN, MAX_ROWS = 128, 4              # EDIT_MAX_LEN, FWRAP_MAX_ROWS
-CURSOR_BLOCK = "▏"                 # screen_rows' reading of an all-ones cell (the 64-column cursor over a blank)
 LOADTEXT_BUF = 0xD000                   # LOADTEXT_BUF (checked against the symbol in the cases)
 UNTYPEABLE = "[\\]^`{|}~"               # printable ASCII Forth's keyboard has no key for (audit step K)
 GROW = "abcdefghi " * 10                # 100 characters, 4 rows at 32 columns
-GROW64 = "a " + "b" * 64 + "  " + "c" * 29      # 97 characters, 3 rows at 64 columns (and 4 at 32: the room check's)
+GROW97 = "a " + "b" * 64 + "  " + "c" * 29      # 97 characters, 4 rows at 32 columns (a line of the wrap-model set, and the typing cost's)
 
 
 # ---------------------------------------------------------------------------------------------------- the models
@@ -320,36 +315,17 @@ class View:
         self.rows, self.cursor, self.odd = rows, cursor, odd
 
 
-def view(m, mode64=False):
-    """The screen as text with the cursor taken out: View(rows, cursor cells, odd attributes).  32 columns: rows are
-    plain text (an inverse or unknown cell would show in them), cursor cells are those with FLASH set (their attribute must
-    be the swapped ATTR_DEFAULT; `odd` lists any other attribute that is not ATTR_DEFAULT).  64 columns: the cursor is
-    the XOR block (INVERSE_MARK + character, or the block over a blank), taken out of the text; `odd` is empty."""
-    if not mode64:
-        attrs = m.read(0x5800, 768)
-        dflt = m.S.get("ATTR_DEFAULT", 0x44)
-        cur = [(i // 32, i % 32) for i, a in enumerate(attrs) if a & 0x80]
-        want = ((dflt & 7) << 3 | (dflt >> 3) & 7 | (dflt & 0x40) | 0x80)       # ink and paper swapped, FLASH
-        odd = [(i // 32, i % 32, a) for i, a in enumerate(attrs)
-               if (a & 0x80 and a != want) or (not a & 0x80 and a != dflt)]
-        return View(m.screen_rows(), cur, odd)
-    rows, cur = [], []
-    for r, s in enumerate(m.screen_rows(mode64=True)):
-        out, i = "", 0
-        while i < len(s):
-            ch = s[i]
-            if ch == INVERSE_MARK and i + 1 < len(s):
-                cur.append((r, len(out)))
-                out += s[i + 1]
-                i += 2
-                continue
-            if ch == CURSOR_BLOCK:
-                cur.append((r, len(out)))
-                ch = " "
-            out += ch
-            i += 1
-        rows.append(out.rstrip(" "))
-    return View(rows, cur, [])
+def view(m):
+    """The screen as text with the cursor taken out: View(rows, cursor cells, odd attributes).  Rows are plain text (an
+    inverse or unknown cell would show in them), cursor cells are those with FLASH set (their attribute must be the
+    swapped ATTR_DEFAULT; `odd` lists any other attribute that is not ATTR_DEFAULT)."""
+    attrs = m.read(0x5800, 768)
+    dflt = m.S.get("ATTR_DEFAULT", 0x44)
+    cur = [(i // 32, i % 32) for i, a in enumerate(attrs) if a & 0x80]
+    want = ((dflt & 7) << 3 | (dflt >> 3) & 7 | (dflt & 0x40) | 0x80)       # ink and paper swapped, FLASH
+    odd = [(i // 32, i % 32, a) for i, a in enumerate(attrs)
+           if (a & 0x80 and a != want) or (not a & 0x80 and a != dflt)]
+    return View(m.screen_rows(), cur, odd)
 
 
 def row_cell(m, row, col):
@@ -365,12 +341,12 @@ def wrap_table(m):
     return n, [(st[i], ln[i]) for i in range(min(n, 4))], m.read(S("FWRAP_OVERFLOW"), 1)[0]
 
 
-def read_screen(m, mode64=False):
-    """The bytes the oracle compares: $4000-$5AFF, or $4000-$77FF in 64 columns."""
-    return m.read(0x4000, 0x3800 if mode64 else 6912)
+def read_screen(m):
+    """The bytes the oracle compares: $4000-$5AFF (bitmap and attributes)."""
+    return m.read(0x4000, 6912)
 
 
-def first_diff(a, b, mode64=False):
+def first_diff(a, b):
     """Describe the first difference of two read_screen images."""
     for i, (x, y) in enumerate(zip(a, b)):
         if x != y:
@@ -378,11 +354,9 @@ def first_diff(a, b, mode64=False):
             if addr >= 0x5800 and addr < 0x5B00:
                 return "attribute row %d col %d: %02X, reference %02X (%d byte(s) differ)" % (
                     (addr - 0x5800) // 32, (addr - 0x5800) % 32, x, y, sum(p != q for p, q in zip(a, b)))
-            second = addr >= 0x6000
-            a0 = addr - 0x2000 if second else addr
-            line = (a0 >> 8) & 7
-            row = ((a0 >> 11) & 3) * 8 + ((a0 >> 5) & 7)
-            col = (a0 & 31) + (32 if second else 0)
+            line = (addr >> 8) & 7
+            row = ((addr >> 11) & 3) * 8 + ((addr >> 5) & 7)
+            col = addr & 31
             return "bitmap row %d col %d line %d: %02X, reference %02X (%d byte(s) differ)" % (
                 row, col, line, x, y, sum(p != q for p, q in zip(a, b)))
     return None
@@ -432,14 +406,9 @@ class Env:
         self.S = m.sym
         self.con = fh.Console(m)
 
-    def boot(self, w=32):
-        """The booted machine; w=64: after `64COL`.  Returns the base rows (the output rows above the input area)."""
+    def boot(self):
+        """The booted machine.  Returns the base rows (the output rows above the input area)."""
         self.con.boot()
-        if w == 64:
-            self.con.type("64COL")
-            if not self.con.in_editor():
-                raise RuntimeError("no editor after 64COL")
-            return [BANNER, "OK"] + [""] * 22
         return [BANNER] + [""] * 23
 
     def u8(self, name):
@@ -462,7 +431,7 @@ class Env:
         ck.eq(label + " edit line", text, ed.text)
         ck.eq(label + " EDIT_CURSOR", cur, ed.cursor)
         exp, cells = screen_model(base, ed.text, ed.cursor, ed.w)
-        v = view(m, ed.w == 64)
+        v = view(m)
         if v.rows != exp:
             bad = [(r, v.rows[r], exp[r]) for r in range(24) if v.rows[r] != exp[r]]
             ck.true(label + " screen rows", False, "row %d got %s, want %s (%d rows differ)" % (
@@ -473,8 +442,8 @@ class Env:
             ck.eq(label + " wrap table", wrap_table(m), ed.table())
 
 
-def screen_sig(m, w=32):
-    return m.read(0x4000, 0x3800 if w == 64 else 6912)
+def screen_sig(m):
+    return m.read(0x4000, 6912)
 
 
 def type_keys(env, ed, text, ck=None, label="", base=None):
@@ -494,7 +463,7 @@ def step(env, ck, label, base, ed, code):
 
 # ---------------------------------------------------------------------------------------------------- the registry
 CASES = []          # (name, title, fn, parts)
-GROUPS = {}         # case name -> (group, number): "old" = the 19 cases of T12 (numbered in order), "new" = step E's N1-N3, N5-N13
+GROUPS = {}         # case name -> (group, number): "old" = the 19 cases of T12 (numbered in order), "new" = step E's N1-N3, N5-N10, N12-N13
 
 
 def case(name, title, parts=("-",), group="old", num=None):
@@ -776,7 +745,7 @@ def model_lines(w):
     out += [a(w - 1) + " b", a(w) + " b", a(w + 1) + " b", a(w - 2) + " " + a(5), a(w - 3) + " " + a(w - 3)]
     out += ["see " + a(w + 8) + " end", a(w + 8) + " tail", "x " + a(2 * w - 10), a(w + 20), a(w + 8) + " " + a(w + 8)]
     out += ["word" + " " * 5, a(w) + "   ", a(w - 1) + "   ", " " * (w + 8) + "x", " " * (w + 8), "foo  bar   baz    qux", " lead"]
-    out += [("w" * (w // 2)) + " " + ("v" * (w // 2)) + " " + ("u" * (w // 2)) + " tail", GROW, GROW64]
+    out += [("w" * (w // 2)) + " " + ("v" * (w // 2)) + " " + ("u" * (w // 2)) + " tail", GROW, GROW97]
     rnd = random.Random(2068 + w)
     for _ in range(8):
         words, n = [], 0
@@ -800,14 +769,14 @@ def walk_keys(w, n=130):
     return keys
 
 
-@case("wrap-model", "the Python model of WRAP_CALC (word-boundary rule, 32 and 64 columns; the cursor on a full last row gets a row "
+@case("wrap-model", "the Python model of WRAP_CALC (word-boundary rule, 32 columns; the cursor on a full last row gets a row "
                     "of its own) predicts the wrap table, the screen rows and the cursor cell of every line of a set (assorted "
-                    "words, a word longer than a row, trailing spaces, exactly 32 / 64 characters), and of a seeded random walk "
-                    "of keys", parts=("lines32a", "lines32b", "lines64a", "lines64b", "walk32", "walk64"))
+                    "words, a word longer than a row, trailing spaces, exactly 32 characters), and of a seeded random walk "
+                    "of keys", parts=("lines32a", "lines32b", "walk32"))
 def wrap_model_case(env, part):
     ck, m = Check(), env.m
-    w = 32 if "32" in part else 64
-    base = env.boot(w)
+    w = 32
+    base = env.boot()
     if part.startswith("lines"):
         lines, shapes = [], []
         for line in model_lines(w):
@@ -818,7 +787,7 @@ def wrap_model_case(env, part):
         ck.true("lines the room check accepts", len(lines) >= 25, "only %d" % len(lines))
         lines = lines[0::2] if part.endswith("a") else lines[1::2]
         for line in lines:
-            base = env.boot(w)
+            base = env.boot()
             ed = Ed(w)
             type_keys(env, ed, line)
             ck.eq("accepted line %r" % line[:24], env.edit_state()[0], line)
@@ -840,15 +809,14 @@ def wrap_model_case(env, part):
 GS_TEXT = ("alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega")
 
 
-@case("wrap-grow-shrink", "the input area grows upward row by row as the line wraps (hard breaks and word wrap, 32 and 64 "
+@case("wrap-grow-shrink", "the input area grows upward row by row as the line wraps (hard breaks and word wrap, 32 "
                           "columns), the rows above stay as they were, and deleting back clears the rows it no longer uses "
-                          "(bitmap and attributes)", parts=("hard32", "words32", "words64"))
+                          "(bitmap and attributes)", parts=("hard32", "words32"))
 def wrap_grow_shrink(env, part):
     ck, m = Check(), env.m
-    w = 64 if part.endswith("64") else 32
-    base = env.boot(w)
-    ed = Ed(w)
-    text = "a" * 100 if part == "hard32" else (GS_TEXT if w == 32 else GROW64)
+    base = env.boot()
+    ed = Ed(32)
+    text = "a" * 100 if part == "hard32" else GS_TEXT
     counts = []
     for ch in text:
         env.con.key(ord(ch))
@@ -857,7 +825,7 @@ def wrap_grow_shrink(env, part):
         counts.append(ed.nrows())
     ck.eq("growth steps", sorted(set(counts)), list(range(1, max(counts) + 1)))
     ck.eq("rows grow one at a time", [b - a for a, b in zip(counts, counts[1:]) if b != a and b - a != 1], [])
-    ck.eq("PRINT_ROW untouched", env.print_pos(), (1 if w == 32 else 2, 0))
+    ck.eq("PRINT_ROW untouched", env.print_pos(), (1, 0))
     shrink = []
     for _ in range(len(ed.text)):
         env.con.key(DELETE)
@@ -865,7 +833,7 @@ def wrap_grow_shrink(env, part):
         env.check_view(ck, "shrink %d" % len(ed.text), base, ed)
         shrink.append(ed.nrows())
     ck.eq("empty again", env.edit_state(), ("", 0))
-    ck.eq("rows 20-23 blank, banner intact", [r for r in view(m, w == 64).rows[2:] if r], [])
+    ck.eq("rows 20-23 blank, banner intact", [r for r in view(m).rows[2:] if r], [])
     ck.note("%d chars, rows used 1..%d on the way up, back to 1 on the way down; every key checked against the model" % (
         len(text), max(counts)))
     return ck.result()
@@ -874,25 +842,22 @@ def wrap_grow_shrink(env, part):
 # ===================================================================== 10 scroll
 @case("wrap-scroll", "with output on the rows just above the edit line, a line growing to 2-4 rows scrolls the whole screen up "
                      "(row 0, the banner, is lost) only when the row it claims is not blank, PRINT_ROW follows; shrinking "
-                     "does not scroll back; the next output starts at PRINT_ROW.  The same in 64 columns (MODE64_SCROLL_OUTPUT_UP, "
-                     "PRINT_ROW follows; the merged redraw keeps its grow pointer across the scroll, no hang)",
-      parts=("pr3-32", "pr20-32", "pr22-32", "pr3-64", "pr22-64"))
+                     "does not scroll back; the next output starts at PRINT_ROW",
+      parts=("pr3-32", "pr20-32", "pr22-32"))
 def wrap_scroll(env, part):
     ck, m = Check(), env.m
-    scen, w = part.split("-")
-    w = int(w)
-    start_pr = int(scen[2:])
-    base = env.boot(w)
-    for i in range(start_pr - (1 if w == 32 else 2)):          # PRINT_ROW starts at 1 (32) or 2 (64: the OK of 64COL)
+    start_pr = int(part.split("-")[0][2:])
+    base = env.boot()
+    for i in range(start_pr - 1):                              # PRINT_ROW starts at 1
         env.con.type("%d ." % i)
     pr = env.print_pos()[0]
     ck.eq("PRINT_ROW before", pr, start_pr)
-    base = list(view(m, w == 64).rows)
-    ed = Ed(w)
-    text = "a" * 97 if w == 32 else GROW64
+    base = list(view(m).rows)
+    ed = Ed(32)
+    text = "a" * 97
     old, log = 1, []
     for ch in text:
-        nxt = Ed(w, ed.text, ed.cursor)
+        nxt = Ed(32, ed.text, ed.cursor)
         nxt.key(ord(ch))
         new = nxt.nrows()
         env.con.key(ord(ch))
@@ -911,7 +876,7 @@ def wrap_scroll(env, part):
     env.con.key(KEY_ENTER)
     base = list(base)
     base[pr] = "A ?"
-    ck.eq("after ENTER: rows", view(m, w == 64).rows[:pr + 2], base[:pr + 2])
+    ck.eq("after ENTER: rows", view(m).rows[:pr + 2], base[:pr + 2])
     ck.eq("after ENTER: PRINT_ROW", env.print_pos()[0], pr + 1)
     ck.true("editor waiting", env.con.in_editor())
     ck.note("%s: PRINT_ROW %d at the start; growth steps (chars, rows, PRINT_ROW after; a scroll shows as PRINT_ROW falling): %s; the next output went to "
@@ -1041,70 +1006,33 @@ def recall(env, part):
     return ck.result()
 
 
-# ===================================================================== 14 64 columns
-@case("console-64col", "after `64COL` the editor wraps at 64 columns (the screen equals the model; the cursor is the XOR block); output "
-                       "goes on in 64 columns; `32COL` returns to 32 columns with the screen kept; the room check counts rows of 64, so "
-                       "a line of three 40-character words (122 characters, 3 rows of 64) is accepted whole and typing on is "
-                       "refused only where 4 rows of 64 would overflow or at 128 characters, whichever comes first",
-      parts=("type", "mode", "limit"))
-def console_64col(env, part):
+# ===================================================================== 14 no 64 columns
+@case("no-64col", "the 64-column mode was removed in step M6: `64COL` is an unknown word (the console answers `64COL ?`, no OK), "
+                  "the screen stays 32 columns (GFX_MODE 0, the editor and its cursor as before, typing wraps at 32) and "
+                  "`32COL`, `PALETTE64` and `PLOT64` are unknown too",
+      parts=("64col", "others"))
+def no_64col(env, part):
     ck, m = Check(), env.m
     con = env.con
     con.boot()
     ck.eq("GFX_MODE before", env.u8("GFX_MODE"), 0)
-    con.type("64COL")
-    ck.eq("GFX_MODE after 64COL", env.u8("GFX_MODE"), 2)
-    rows64 = m.screen_rows(mode64=True)
-    ck.eq("64-column rows 0-2", rows64[:3], [BANNER, "OK", ""])
-    v = view(m, True)
+    words = ["64COL"] if part == "64col" else ["32COL", "PALETTE64", "PLOT64"]
+    rows = [BANNER]
+    for w in words:
+        con.type(w)
+        rows.append("%s ?" % w)              # the console prints an unknown word in upper case, then ` ?` and no OK
+        ck.eq("%s: GFX_MODE" % w, env.u8("GFX_MODE"), 0)
+        ck.eq("%s: rows" % w, view(m).rows[:len(rows) + 1], rows + [""])
+        ck.eq("%s: INTERP_ERROR_FLAG" % w, env.u8("INTERP_ERROR_FLAG"), 1)
+        ck.eq("%s: edit line" % w, env.edit_state(), ("", 0))
+        ck.true("%s: editor waiting" % w, con.in_editor())
+    v = view(m)
     ck.eq("cursor at row 23 column 0", v.cursor, [(23, 0)])
-    ck.true("editor waiting", con.in_editor())
-    base = [BANNER, "OK"] + [""] * 22
-    if part == "type":
-        ed = Ed(64)
-        text = "the quick brown fox jumps over the lazy dog " + "and then it sleeps in the sun until it is dark outside. ok"
-        type_keys(env, ed, text, ck, "64", base)
-        ck.eq("rows used", ed.nrows(), 2)
-        for code in [LEFT] * 20 + [ord("Q"), DELETE, DELETE]:
-            step(env, ck, "64 edit", base, ed, code)
-        ck.note("%d characters typed, 2 rows of up to 64 columns; wrap table, rows and cursor block equal the model" % len(text))
-    elif part == "limit":
-        ed = Ed(64)
-        text = ("x" * 40 + " ") * 2 + "x" * 40
-        ck.eq("the 64-column wrap of the whole line", len(wrap_model(text, 64)[0]), 3)
-        ck.eq("the 32-column wrap of it overflows (the old room check refused it at the 106th character)", wrap_model(text, 32)[1], True)
-        type_keys(env, ed, text, ck, "limit", base)
-        ck.eq("accepted characters", len(env.edit_state()[0]), len(text))
-        ck.eq("the whole line is accepted: edit line", env.edit_state(), (text, len(text)))
-        # the first n at which the model refuses an 'x' typed at the end: 4 rows of 64 overflow, or the line is 128 long
-        limit = next(n for n in range(len(text), MAX_LEN + 1)
-                     if n == MAX_LEN or wrap_model(text + "x" * (n + 1 - len(text)), 64)[1])
-        took = len(text)
-        for _ in range(MAX_LEN + 2 - len(text)):
-            env.con.key(ord("x"))
-            if not ed.key(ord("x")):
-                break
-            took += 1
-            env.check_view(ck, "limit %d" % took, base, ed)
-        env.check_view(ck, "limit refused at %d" % took, base, ed)
-        ck.eq("typing stops where the model says", (took, len(env.edit_state()[0]), ed.refused), (limit, limit, "full" if limit == MAX_LEN else "rows"))
-        n, rows, ov = ed.table()
-        ck.eq("FWRAP_OVERFLOW, FWRAP_COUNT as the model says", (env.u8("FWRAP_OVERFLOW"), env.u8("FWRAP_COUNT")), (ov, n))
-        ck.note("the 3-row line of 122 characters is accepted whole and 'x' goes on being accepted to %d characters (%s); the next is "
-                "refused with FWRAP_OVERFLOW %d, FWRAP_COUNT %d (the room check runs WRAP_CALC at 64 columns)" % (
-                    limit, "the 128-character limit: 4 rows of 64 never overflow before it" if limit == MAX_LEN else "4 rows of 64 overflow", ov, n))
-    else:
-        con.type("1 2 + .")
-        ck.eq("output in 64 columns", m.screen_rows(mode64=True)[:4], [BANNER, "OK", "3 OK", ""])
-        con.type("32COL")
-        ck.eq("GFX_MODE after 32COL", env.u8("GFX_MODE"), 0)
-        ck.eq("32-column rows 0-4", m.screen_rows()[:5], [BANNER, "OK", "3 OK", "OK", ""])
-        ck.eq("32-column cursor", view(m).cursor, [(23, 0)])
-        ck.eq("32-column attributes", view(m).odd, [])
-        ed = Ed(32)
-        type_keys(env, ed, "x" * 40, ck, "32 again", [BANNER, "OK", "3 OK", "OK"] + [""] * 20)
-        ck.note("64COL: GFX_MODE 2 and the screen redrawn in 64 columns (banner, OK); 32COL back to GFX_MODE 0 with rows "
-                "[banner, OK, '3 OK', OK] kept; typing wraps at 32 again")
+    ck.eq("stray attributes", v.odd, [])
+    ed = Ed(32)
+    type_keys(env, ed, "x" * 40, ck, "32 columns", rows + [""] * (24 - len(rows)))
+    ck.note("%s: answered '%s ?' (no OK), GFX_MODE 0, the screen and the editor still 32 columns" % (
+        ", ".join(words), words[-1]))
     return ck.result()
 
 
@@ -1236,35 +1164,31 @@ def colour_state(env, part):
 
 
 # ===================================================================== 18 redraw oracle
-def blank_rows(m, r0, r1, mode64):
-    """Rows r0..r1-1 blanked directly: all pixel lines zero (both display files in 64 columns), 32 columns: attributes
-    ATTR_DEFAULT."""
+def blank_rows(m, r0, r1):
+    """Rows r0..r1-1 blanked directly: all pixel lines zero and the attributes ATTR_DEFAULT."""
     for r in range(r0, r1):
         y0 = r * 8
         base = 0x4000 + (((y0 & 0xC0) << 5) | ((y0 & 0x38) << 2))
         for k in range(8):
             m.write(base + 0x100 * k, bytes(32))
-            if mode64:
-                m.write(base + 0x100 * k + 0x2000, bytes(32))
-        if not mode64:
-            m.write(0x5800 + r * 32, bytes([m.S.get("ATTR_DEFAULT", 0x44)]) * 32)
+        m.write(0x5800 + r * 32, bytes([m.S.get("ATTR_DEFAULT", 0x44)]) * 32)
 
 
-def full_reference(m, mode64):
+def full_reference(m):
     """The screen a full redraw draws from the current editor state (header, THE FULL REDRAW); the machine is put back
     exactly as it was.  Returns the bytes of read_screen."""
     S = m.sym
     cp = m.checkpoint("oracle")
     try:
-        r = m.call("WRAP_CALC")                  # picks the width from GFX_MODE
+        r = m.call("WRAP_CALC")
         if not r["ok"]:
             raise RuntimeError("WRAP_CALC did not return (PC=%04X)" % r["pc"])
         m.write(S("FWRAP_OLD_COUNT"), m.read(S("FWRAP_COUNT"), 1))
-        blank_rows(m, 24 - MAX_ROWS, 24, mode64)
+        blank_rows(m, 24 - MAX_ROWS, 24)
         r = m.call("EDITOR_REDRAW")
         if not r["ok"]:
             raise RuntimeError("EDITOR_REDRAW did not return (PC=%04X)" % r["pc"])
-        return read_screen(m, mode64)
+        return read_screen(m)
     finally:
         m.rollback(cp)
 
@@ -1278,18 +1202,12 @@ def oracle_scenarios():
         "wrap4-shrink32": (32, [DELETE] * 100, k(GROW)),
         "boundary32": (32, [LEFT] * 14 + [LEFT, LEFT, LEFT] + [RIGHT] * 4 + [LEFT] * 12 + [DELETE, DELETE] + [RIGHT] * 6
                        + [ord("c")] + [LEFT] * 20 + [DELETE] + [RIGHT] * 4, k("a" * 28 + " " + "b" * 12 + "d" * 31)),
-        "short64": (64, k("hello world") + [DELETE] * 3 + [LEFT] * 2 + [RIGHT, RIGHT, RIGHT] + k("!"), []),
-        "middle64": (64, k("abcdef ghi") + [LEFT] * 6 + k("XYZ ") + [DELETE] * 2 + [RIGHT] * 3 + k("!"), []),
-        "wrap3-grow64": (64, k(GROW64), []),
-        "wrap3-shrink64": (64, [DELETE] * 128, k(GROW64)),
-        "boundary64": (64, [LEFT] * 12 + [LEFT] * 6 + [RIGHT] * 4 + [DELETE, DELETE] + [RIGHT] * 6 + [LEFT] * 25 + [DELETE]
-                       + [RIGHT] * 4, k("a" * 60 + " " + "b" * 14 + "d" * 60)),
     }
 
 
 @case("redraw-oracle", "after EVERY key of the scenarios (a short line; typing into the middle; a line wrapping to 4 rows and back; "
-                       "DELETE, LEFT and RIGHT across a wrap boundary; the same in 64 columns) the whole screen (bitmap and "
-                       "attributes, 6912 bytes; both display files in 64 columns) equals the screen a full redraw draws from the "
+                       "DELETE, LEFT and RIGHT across a wrap boundary) the whole screen (bitmap and "
+                       "attributes, 6912 bytes) equals the screen a full redraw draws from the "
                        "same editor state; and the oracle sees a stray pixel and a stray FLASH attribute",
       parts=list(oracle_scenarios()) + ["control"])
 def redraw_oracle(env, part):
@@ -1299,7 +1217,7 @@ def redraw_oracle(env, part):
         env.con.type("1 2 + .")
         for ch in "ab":
             env.con.key(ord(ch))
-        now, ref = read_screen(m), full_reference(m, False)
+        now, ref = read_screen(m), full_reference(m)
         ck.eq("clean screen equals its reference", first_diff(now, ref), None)
         stray = bytearray(now)
         stray[0x0000 + ((21 * 8 & 0xC0) << 5) + ((21 * 8 & 0x38) << 2) + 0x100 * 3 + 5] ^= 0x10     # row 21, line 3, col 5
@@ -1313,8 +1231,7 @@ def redraw_oracle(env, part):
         ck.note("control: the reference of a clean screen matches; a stray pixel, a stray FLASH cell and a missing cursor each differ")
         return ck.result()
     w, keys, setup = oracle_scenarios()[part]
-    mode64 = w == 64
-    env.boot(w)
+    env.boot()
     env.con.type("1 2 + .")
     for code in setup:
         env.con.key(code)
@@ -1325,8 +1242,8 @@ def redraw_oracle(env, part):
     for code in keys:
         env.con.key(code)
         n += 1
-        now, ref = read_screen(m, mode64), full_reference(m, mode64)
-        d = first_diff(now, ref, mode64)
+        now, ref = read_screen(m), full_reference(m)
+        d = first_diff(now, ref)
         if d:
             bad.append("key %d (code %d): %s" % (n, code, d))
     ck.eq("the scenario ends as the model says", env.edit_state(), (ed.text, ed.cursor))
@@ -1341,10 +1258,10 @@ COST_CASES = [("key-end-short", "a key at the end of a short line"), ("key-mid-1
               ("left", "LEFT in the middle of a short line"), ("enter", "ENTER on `1 2 + .`")]
 
 
-def cost_once(env, which, w):
+def cost_once(env, which):
     """T-states from the latch write to the next key wait for one key, after its setup."""
     m, con = env.m, env.con
-    env.boot(w)
+    env.boot()
     if which == "key-end-short":
         for ch in "hello":
             con.key(ord(ch))
@@ -1356,7 +1273,7 @@ def cost_once(env, which, w):
             con.key(LEFT)
         key = ord("x")
     elif which == "key-3row":
-        for ch in ("a" * 70 if w == 32 else GROW64):
+        for ch in "a" * 70:
             con.key(ord(ch))
         key = ord("x")
     elif which == "delete":
@@ -1380,18 +1297,18 @@ def cost_once(env, which, w):
 
 @case("typing-cost", "T-states from key delivery (latch write) to the next key wait, interrupts included, for a key at the end of a "
                      "short line, in the middle of a 100-character line, on a 3-row wrapped line, DELETE, LEFT and ENTER on "
-                     "`1 2 + .`, in 32 and 64 columns; each figure taken twice and equal; the baseline, no threshold",
-      parts=("32", "64"))
+                     "`1 2 + .`; each figure taken twice and equal; the baseline, no threshold",
+      parts=("32",))
 def typing_cost(env, part):
     ck = Check()
     w = int(part)
     table = {}
     for which, what in COST_CASES:
-        a = cost_once(env, which, w)
-        b = cost_once(env, which, w)
+        a = cost_once(env, which)
+        b = cost_once(env, which)
         table[which] = [a, b]
         ck.eq("%s repeatable" % which, a, b)
-    env.boot(w)
+    env.boot()
     env.m.tstates_reset()
     env.m.call("KBD_ISR_TICK")
     isr = env.m.tstates()
@@ -1402,7 +1319,7 @@ def typing_cost(env, part):
 
 
 # ====================================================================================================================
-# STEP E: THE NEW CASES (group "new", EDITOR_SPEC.md section 8, second table, N1-N3 and N5-N13; N4 is in tapetest.py)
+# STEP E: THE NEW CASES (group "new", EDITOR_SPEC.md section 8, second table, N1-N3, N5-N10 and N12-N13; N4 is in tapetest.py)
 # ====================================================================================================================
 # Written from the spec before the ROM code exists: they FAIL on the old build, each with the detail of the first thing
 # that differs.  Where the spec leaves a detail open the strictest reading its text supports is asserted and a comment
@@ -1484,19 +1401,19 @@ def digits(rows):
     return re.findall(r"-?\d+", " ".join(rows[:SCREEN_ROWS]))
 
 
-def out_rows(env, mode64=False):
+def out_rows(env):
     """The non-blank output rows (rows 0-22)."""
-    return [r for r in env.m.screen_rows(mode64=mode64)[:SCREEN_ROWS] if r]
+    return [r for r in env.m.screen_rows()[:SCREEN_ROWS] if r]
 
 
-def last_out_row(env, mode64=False):
+def last_out_row(env):
     """The row the last console line printed its result on (PRINT_ROW is the next output row)."""
     pr = env.print_pos()[0]
-    return env.m.screen_rows(mode64=mode64)[pr - 1] if pr >= 1 else ""
+    return env.m.screen_rows()[pr - 1] if pr >= 1 else ""
 
 
-def count_row(env, text, mode64=False):
-    return sum(1 for r in out_rows(env, mode64) if r == text)
+def count_row(env, text):
+    return sum(1 for r in out_rows(env) if r == text)
 
 
 def seed_above_limit(env):
@@ -1943,7 +1860,7 @@ class VS:
         return self.model
 
 
-def open_view(env, ck, cmd, mode64=False):
+def open_view(env, ck, cmd):
     """Type `cmd` (an EDIT command) and ENTER.  Returns the status row's (n, m) when the view is open; otherwise records
     the failure (quickly: on the old build the console answers `EDIT ?`) and returns None."""
     m, con = env.m, env.con
@@ -1957,7 +1874,7 @@ def open_view(env, ck, cmd, mode64=False):
     mt = STATUS_RE.match(m.screen_rows()[SCREEN_ROWS])
     if mt:
         return int(mt.group(1)), int(mt.group(2))
-    rows = out_rows(env, mode64)
+    rows = out_rows(env)
     if "EDIT ?" in rows:
         ck.true("no EDIT", False, "the console answers 'EDIT ?'")
     else:
@@ -2657,30 +2574,30 @@ def edit_redraw_oracle(env, part, ck):
 
 
 # ===================================================================== N10 / N11 refusals
-def refusal(env, ck, cmd, msg, mode64=False):
+def refusal(env, ck, cmd, msg):
     """`cmd` (an EDIT command that must be refused): exactly the message `msg` is printed (an OK after it is allowed), no view
     opens, the store, HERE, LATEST and the display mode are as they were, and the console works afterwards.  Returns False
     when the console does not know EDIT (the old build): the failure is recorded and the case ends quickly."""
     m, con, S = env.m, env.con, env.S
     before = store_read(env)
     h0, l0, g0 = m.w16(S("HERE")), m.w16(S("LATEST")), env.u8("GFX_MODE")
-    rows0 = out_rows(env, mode64)
+    rows0 = out_rows(env)
     for ch in cmd:
         con.key(ord(ch), maxi=VIEW_MAXI)
     con.key(KEY_ENTER, maxi=VIEW_MAXI * 3)
-    new = out_rows(env, mode64)[len(rows0):]
+    new = out_rows(env)[len(rows0):]
     if new == ["EDIT ?"]:
         ck.true("no EDIT", False, "the console answers 'EDIT ?'")
         return False
     ck.true("%s: output is %r (an OK after it is allowed)" % (cmd, msg), new in ([msg], [msg, "OK"]), "got %s" % _short(new))
-    ck.true("%s: no view opened" % cmd, STATUS_RE.match(m.screen_rows(mode64=mode64)[SCREEN_ROWS]) is None)
+    ck.true("%s: no view opened" % cmd, STATUS_RE.match(m.screen_rows()[SCREEN_ROWS]) is None)
     # READING: the console appends every committed line (E5); "changing nothing" is read as: the store's bytes are what they
     # were, with the typed `EDIT ...` line at the end if the console appended it (the spec does not say if it does).
     ck.true("%s: store unchanged" % cmd, store_read(env) in typed_line_variants(before, cmd), _short(store_read(env)[-30:]))
     ck.eq("%s: HERE, LATEST, GFX_MODE" % cmd, (m.w16(S("HERE")), m.w16(S("LATEST")), env.u8("GFX_MODE")), (h0, l0, g0))
     ck.true("%s: console waiting in the editor, empty line" % cmd, con.in_editor() and env.edit_state() == ("", 0))
     con.type("1 2 + .")
-    ck.eq("%s: the console still works" % cmd, last_out_row(env, mode64), "3 OK")
+    ck.eq("%s: the console still works" % cmd, last_out_row(env), "3 OK")
     return True
 
 
@@ -2706,18 +2623,6 @@ def edit_refusals(env, part, ck):
             names = "EDIT nosuch / sq2 / dup (no `: name` line)"
     if ok:
         ck.note("%s: refused, store/HERE/LATEST unchanged, console works" % names)
-
-
-@new_case("edit-64col", "N11", "in 64-column mode `EDIT SQ` and `EDIT` print 32COL FIRST and change nothing (E9): no view, still 64 columns, "
-                               "store, HERE and LATEST as they were, the console works", )
-@guarded
-def edit_64col(env, part, ck):
-    env.boot(64)
-    store_set(env, store_bytes(N6_STORE))
-    ok = refusal(env, ck, "EDIT SQ", "32COL FIRST", True) and refusal(env, ck, "EDIT", "32COL FIRST", True)
-    if ok:
-        ck.eq("GFX_MODE still 2 (64 columns)", env.u8("GFX_MODE"), 2)
-        ck.note("EDIT SQ / EDIT refused with 32COL FIRST in 64 columns")
 
 
 # ===================================================================== N12 typing cost in the view
@@ -3072,10 +2977,10 @@ def run_all(build, workers, port0, only, json_out, verbose=False, group="both"):
 def print_typing(typing):
     print("typing cost, T-states from key delivery to the next key wait (two runs each, equal):")
     names = [k for k, _ in COST_CASES]
-    print("  %-14s %12s %12s    %s" % ("", "32 columns", "64 columns", "what"))
+    print("  %-14s %12s    %s" % ("", "32 columns", "what"))
     for k in names:
-        c = [typing.get(w, {}).get("t_states", {}).get(k, [None])[0] for w in ("32", "64")]
-        print("  %-14s %12s %12s    %s" % (k, c[0], c[1], dict(COST_CASES)[k]))
+        c = typing.get("32", {}).get("t_states", {}).get(k, [None])[0]
+        print("  %-14s %12s    %s" % (k, c, dict(COST_CASES)[k]))
 
 
 def print_view_typing(vtyping):
@@ -3089,7 +2994,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--build", default=os.path.join(ROOT, "build"), help="directory with forth_boot_rom0.bin (DIR or DIR/build)")
     ap.add_argument("--group", choices=("old", "new", "both"), default="both",
-                    help="old: the 19 cases that characterise the console editor; new: the step-E cases N1-N3, N5-N13; both (default)")
+                    help="old: the 19 cases that characterise the console editor; new: the step-E cases N1-N3, N5-N10, N12-N13; both (default)")
     ap.add_argument("--workers", type=int, default=None, help="emulators in parallel (default: fharness.default_workers())")
     ap.add_argument("--port", type=int, default=fh.PORT_LO, help="first ZRCP port (%d-%d)" % (fh.PORT_LO, fh.PORT_HI))
     ap.add_argument("--json", default=os.path.join(ROOT, "build", "edtest.json"), help="write the results here (default build/edtest.json)")

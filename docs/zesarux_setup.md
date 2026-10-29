@@ -13,8 +13,8 @@ project's own environment, not assumed:
 
 The base 143-word dictionary never pages EXROM in at all (only the six
 Phase 65 graphics words do), so almost everything in 2068-Leap-Forth —
-the whole interpreter, editor, floating point, storage, sound, 64-column
-mode, ULAplus palette words — runs correctly under a completely
+the whole interpreter, editor, floating point, storage, sound,
+ULAplus palette words — runs correctly under a completely
 unmodified, stock ZEsarUX 13.0 download. Only the six graphics words
 need the patch below.
 

@@ -39,8 +39,9 @@ fill logic of provenance.py is ported from it.
 Source comments cite, without reproducing them: the "Timex Sinclair 2068 ROM Disassembly" (David Anderson,
 2023) and the stock ROM's routine names. The files whose comments mention the disassembly are: core/printer.asm,
 core/sound.asm, core/stick.asm, include/hardware.inc, include/sysvars.inc, kernel/graphics/graphics.asm,
-kernel/interrupt/interrupt.asm, kernel/io/io.asm, kernel/mode64/mode64.asm and kernel/sound/sound.asm (grep,
-updated in step S: core/beep.asm no longer mentions it since step A, kernel/storage/storage.asm since step S). A comment that cites the
+kernel/interrupt/interrupt.asm, kernel/io/io.asm and kernel/sound/sound.asm (grep, updated in step S:
+core/beep.asm no longer mentions it since step A, kernel/storage/storage.asm since step S; kernel/mode64/mode64.asm
+was on this list until step M6 removed it, 2026-10-29). A comment that cites the
 disassembly does not by itself show that the code was copied or not copied; section 3 is the measurement.
 
 kernel/storage/tapeblock.asm (since step S) is 2068-Leap-C's clean-room tape block I/O
@@ -88,8 +89,9 @@ Until step S, item a was recorded in tools/provenance.py as allowed debt owned b
 empty, so any new run fails make check.
 
 No run of 12 bytes or more was found anywhere else. In particular none falls in core/printer.asm,
-kernel/sound, kernel/mode64 or core/stick.asm. The scan does not detect code that was rewritten from the
-disassembly with different bytes, and it does not examine runs shorter than 12 bytes.
+kernel/sound or core/stick.asm, nor did one fall in kernel/mode64 before step M6 removed it. The scan
+does not detect code that was rewritten from the disassembly with different bytes, and it does not
+examine runs shorter than 12 bytes.
 
 The font (kernel/graphics/graphics.asm, FONT_TABLE) has no 12-byte run in common with these ROMs. That is all
 this file claims about it; the glyph-by-glyph comparison Leap-C's NOTICE makes has not been done here.
@@ -107,9 +109,9 @@ Both positions are conditional on the scan and are recorded here as conditions, 
   the float code when it exists, is for the owner; this file does not decide it.
 
 - Decision 5 (files written while reading the disassembly: core/printer.asm, kernel/sound, kernel/mode64,
-  core/stick.asm): the owner accepted them as they are for now, and a clean-room rewrite is to be scheduled
-  only for one of them that the scan flags. The scan flags none of them. That is a measurement at one
-  commit, not a permanent clearance; it is re-run by make check whenever the stock ROMs are available.
+  core/stick.asm; step M6 has since removed kernel/mode64): the owner accepted them as they are for now,
+  and a clean-room rewrite is to be scheduled only for one of them that the scan flags. The scan flags
+  none of them. That is a measurement at one commit, not a permanent clearance; it is re-run by make check whenever the stock ROMs are available.
   The audit's list names four files; section 2 lists others whose comments cite the disassembly (for example
   core/sound.asm and kernel/io/io.asm). Decision 5 does not mention them, and the scan flags
   none of them.

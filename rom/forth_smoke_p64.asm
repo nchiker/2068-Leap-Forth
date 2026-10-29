@@ -19,10 +19,9 @@
 ; PRINT_UDEC16 is stubbed to a bare `ret` -- W_LISTDEFS references it
 ; (so core/recall.asm can't assemble without SOME definition existing),
 ; but this smoke ROM's own checkpoints never call W_LISTDEFS: its output
-; is screen text, not a boolean pass/fail condition, the same honest-gap
-; class as rom/mode64_visual_check.asm (no PASS/FAIL, reviewed by eye
-; only) -- W_LISTDEFS was manually reviewed running under the real
-; rom/forth_boot.asm build instead. GET_DEF_SPAN and SCAN_DEFS, the
+; is screen text, not a boolean pass/fail condition, an honest gap
+; (no PASS/FAIL, reviewed by eye only) -- W_LISTDEFS was manually
+; reviewed running under the real rom/forth_boot.asm build instead. GET_DEF_SPAN and SCAN_DEFS, the
 ; logic W_LISTDEFS is actually built on, ARE fully checked below.
 ;
 ; TEST PAYLOAD: ": AA DUP + ; : BB DUP - ;" (25 bytes), hand-indexed:
