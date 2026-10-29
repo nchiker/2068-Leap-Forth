@@ -184,7 +184,7 @@ arithmetic, no overflow or divide-by-zero error, `F.` prints 4 truncated decimal
 | Rounding | truncate | nearest | nearest |
 | Errors | none | error on overflow / ÷0 | same |
 | Transcendentals | table, ~1e-3 | none | SQR, SIN, COS, TAN, ~2 ulp |
-| Size | 2,129 B [M] | 1,464 B core [L] | +~150 B SQR, ~413 B trig [L] |
+| Size | 2,129 B [M] (2,100 B [M] at step F's start, `b4a05b0`) | 1,461 B core [M, Leap-C listing] | +~150 B SQR, ~413 B trig [L] |
 | Test oracle | smoke ROMs | `tools/fpmodel.py` (bit-exact), `tools/floattest.py` | 16,000/16,000 match Leap-C model [L] |
 
 **Rebuild contents.**
@@ -198,7 +198,7 @@ arithmetic, no overflow or divide-by-zero error, `F.` prints 4 truncated decimal
 5. New words where cheap: `FNEGATE`, `F<`, `F=`, `FDUP`, `F@`, `F!`, `FVARIABLE`.
 6. **O10, integer multiply and divide** (added to F by the owner, 2026-10-28).
    - Replace `MATH_UMUL16`, `MATH_UDIV16`, `MATH_MULTIPLY16`, `MATH_DIVIDE16` and `MATH_MOD16` in
-     `kernel/math/math.asm` (412 B [M]) with Leap-C's register-only helpers in `src/runtime/helpers.asm`
+     `kernel/math/math.asm` (178 B [M] at step F's start; the 412 B was the whole file) with Leap-C's register-only helpers in `src/runtime/helpers.asm`
      (`RT_UMUL`, `RT_UDIV`, `RT_DIVS`, `RT_MODS`, `RT_MUL`).
    - Leap-C's delta D3 deleted 351 B of the V2 routines for them: 1.4-2.3× faster [L], 60000/7 from 3,584 to
      1,479 T [L].
@@ -207,14 +207,14 @@ arithmetic, no overflow or divide-by-zero error, `F.` prints 4 truncated decimal
      measures smaller.
    - `make bench` must hold or improve: sieve and string are the integer gates. Measure the bytes; no estimate yet.
 
-**Budget.** Replace 2,129 B with ~1,464 + ~150 + ~450 + ~200 glue ≈ 2,260 B [E], roughly flat.
+**Budget.** (Re-estimated in `docs/V2/FLOAT_SPEC.md` section 14.) Replace 2,129 B with ~1,464 + ~150 + ~450 + ~200 glue ≈ 2,260 B [E], roughly flat.
 Measure; if HOME is short, the transcendentals move to the EXROM.
 
 **Costs and risks.**
 
 - Float-stack depth falls from ~341 to ~204 cells in the same 1 KB.
 - Smoke ROMs that hard-code 3-byte expectations must be regenerated: p8, p18, p19, p22, p23, p29,
-  p30, p34, p35, p42 [L, from the audit].
+  p30, p34, p35, p42 [L, from the audit], and p31, p38, p50 (found at step F's start, `FLOAT_SPEC.md` 10.2).
 - `fpcore`'s RAM cells must fit Forth's free $8xxx gaps; re-run `tools/audit_layout.py`.
 - Speed: a 5-byte multiply (~20 kT [L]) is likely no faster than today's; record before and after
   in `bench_float`.

@@ -1,40 +1,34 @@
-# Leap-Forth V2 — session handoff (2026-10-29: E merged, M6 and L in review, cartdiff fast; next is step F)
+# Leap-Forth V2 — session handoff (2026-10-29: M6 and L merged, cartdiff PR #7 open, step F spec waiting for the owner)
 
-Read this first in a new session. **Next step: F, the float rebuild** (section "Step F: where to start" below). Then `docs/V2/EDITOR_SPEC.md` (step E: decisions, line store contract in section 3,
-view behaviour, sections 4 and 5.1-5.5 as built, oracle table), `docs/V2/MODE6_REMOVAL_SPEC.md` (step M6, section 7 as
-built),
-`docs/V2/LEAPC_COMPARISON_AUDIT.md` (on branch `v2/step-l-leapc-audit`) and `docs/V2/FORTH_V2_REUSE_AUDIT.md`
-(section 8 sequence, section 9 ledger, section 10 owner decisions).
+Read this first in a new session. **Next step: the owner's answers to `docs/V2/FLOAT_SPEC.md` section 15 (F1-F10),
+then T13 and step F's code** (section "Step F: where to start" below). Then `docs/V2/EDITOR_SPEC.md`,
+`docs/V2/MODE6_REMOVAL_SPEC.md`, `docs/V2/LEAPC_COMPARISON_AUDIT.md` and `docs/V2/FORTH_V2_REUSE_AUDIT.md` (section 8
+sequence, section 9 ledger, section 10 owner decisions).
 
 ## Where things stand
 
-- **master** is `1d84127`: PR #4 (step E with the follow-up) merged with a merge commit on 2026-10-29.
-- **Open PRs, waiting for the owner's review; Claude merges them (owner: "you do the merges"), with merge commits:**
-  - **PR #5** `v2/step-m6-mode6-removal` (step M6: `aa113bf` oracle, `b531f70` code, `50b4b2a` docs).
-  - **PR #6** `v2/step-l-leapc-audit` (step L, docs only; master merged in as `0f2675f`, the ledger rows in step order).
-  - A trial merge of #5 and #6 is clean in either order.
-- **`v2/t-cartdiff-speed`** (from M6's tip, not pushed, no PR yet): `make cartdiff` 16 min → 1 min 13 s (spec
-  `docs/V2/CARTDIFF_SPEED_SPEC.md`; `bc16b55` spec, `056aab9` oracle, `f7c1ad8` change, then the ledger/HANDOFF
-  commit). Open its PR to master after #5 merges (so it shows only its own commits). This file is newest there.
+- **master** is `0e8476b`: PR #5 (M6) merged as `96d1426`, PR #6 (L) as `0e8476b`, both with merge commits on
+  2026-10-29 after the owner's review. `make test` on merged master: exit 0 (no FAIL), POWERON 7/7.
+- **PR #7** `v2/t-cartdiff-speed` (cartdiff 16 min → 75 s; pushed, trial merge onto master clean): **waiting for the
+  owner's approval; Claude merges it with a merge commit once approved**.
+- **`v2/step-f-float`** (from `v2/t-cartdiff-speed`'s tip `b4a05b0`, since #7 is not merged yet; not pushed): the spec
+  commit (`docs/V2/FLOAT_SPEC.md`, decisions F1-F10 open) and the audit 4.2 corrections. Nothing else built.
 
   | Branch | State |
   |---|---|
-  | `v2/t-cartdiff-speed` | cartdiff speed-up done; PR after #5 merges |
-  | `v2/step-m6-mode6-removal` | PR #5 open |
-  | `v2/step-l-leapc-audit` | PR #6 open |
+  | `v2/step-f-float` | spec draft; waits for the owner's F1-F10 |
+  | `v2/t-cartdiff-speed` | PR #7 open |
+  | `v2/step-m6-mode6-removal`, `v2/step-l-leapc-audit` | merged (PRs #5, #6) |
   | `v2/step-e-console-editor` | merged (PR #4) |
   | `v2/t-cartdiff-wip`, `v2/m6-*-wip`, `v2/e-*-wip`, `v2/step-o13-rst-stack` | merged work branches; can be deleted |
 
 - **Free space [M]:** HOME 1,629 B, DOCK cartridge 1,629, Blackjack 1,096/1,096, Gallery 1,021, EXROM 4,247. The floors
   in `tools/budget.toml` equal these.
-- **Step M6 in bytes [M]:** HOME +587 (kernel/mode64 394, the four words 60, the editor's branches 63, `EMIT`'s 70),
-  EXROM +23 (the `32COL FIRST` refusal). The listings differ only by deleted lines; the demo images are byte-identical.
-- **Last full run [M]** (M6's code commit): `make edtest` **30/30** (N11 retired); `make test` 66 PASS, 0 FAIL, 1 SKIP,
-  POWERON 7/7; `make tapetest` 16/16; `make harness` 0 failed; `make cartdiff` 26/26; `make fusesave` 41 checks,
-  0 failed (no Fuse abort this time, so no retry and one check fewer than step E's 42); `make bench` within 1% (sieve
-  −1.6%, string −1.2%, the rest faster); `make repro` 251 files identical; `make check` passes. On the cartdiff branch
-  (tools only, ROM images unchanged): `make cartdiff` 26/26 in 1 min 13 s, `--selftest` 7/7, `make test` 66/0/1,
-  `make check` passes.
+- **Step F baseline [M]** (`b4a05b0`, 2026-10-29): `make test` 66/0/1, POWERON 7/7; `make edtest` 30/30; `make harness`
+  0 failed; `make cartdiff` 26/26 in 1 min 16 s; `make check` passes. `make bench` (T-states, region): float
+  174,699,150; pixel 54,339,227; sieve 143,773,830; string 1,969,307 (all within 1% of `tools/bench_baseline.json`,
+  saved as F's "before"). Float code 2,100 B (audit said 2,129); O10's five routines 178 B (audit said 412: the whole
+  file).
 
 ## Owner decisions (2026-10-29)
 
@@ -66,33 +60,41 @@ built),
 
 ## Next work, in order
 
-1. **Owner:** review PRs #5 (M6) and #6 (L); Claude merges them, then opens the cartdiff PR and merges it on approval.
-2. **Step F: float rebuild** (audit section 4.2) with O10 and T13, on its own branch from master once #5 and the
-   cartdiff branch are merged (or from `v2/t-cartdiff-speed` if they are still open). See "Step F: where to start".
-3. **O15:** FILL and CIRCLE kernels to the EXROM (about −820 B HOME; the EXROM has 4,247 B free). Less urgent now:
-   HOME has 1,629 B free against the 200 B target.
+1. **Owner:** answer `FLOAT_SPEC.md` section 15 (F1-F10); approve PR #7 (Claude merges it).
+2. **Step F** in the spec's order (section 16): T13 oracle run on the old build, O10, the engine and the 14 words on
+   the 5-byte format (with the smoke ROMs), new words, provenance/NOTICE/docs; each a commit with a ledger row.
+3. **O15:** FILL and CIRCLE kernels to the EXROM (about −820 B HOME; the EXROM has 4,247 B free).
 4. **K** (with O16, O17; also the text-drawing speed-up the owner may approve: an ASCII-indexed font, about
    byte-neutral against K's planned +80 B, and a row text primitive, about 2x on every redraw), **D** (O18), **B**.
 5. **Step Z** (audit section 4.4) with O14, O19, and `W_EMIT` through `rst $28`.
 
 ## Step F: where to start
 
-- **Decided (owner, decision 3, 2026-10-28):** 5-byte Sinclair floats through Leap-C's `fpcore`, with its bit-exact
-  `tools/fpmodel.py` oracle. Conditions: the owner's OK is needed to re-baseline `bench_float` if it gets slower; the
-  transcendentals go to the EXROM if HOME is short; the provenance scan runs on `fpcore` in step F (decision 4: Leap
-  V2's MIT position goes in NOTICE only if the 12-byte scan is clean).
-- **The plan** is the audit's section 4.2 (items 1-6, budget about 2,260 B against 2,129 today, risks: float-stack
-  depth ~341 → ~204 cells, smoke ROMs p8, p18, p19, p22, p23, p29, p30, p34, p35, p42 hard-code 3-byte floats,
-  `fpcore`'s RAM cells must fit Forth's `$8xxx` gaps). O10 (Leap-C `RT_UMUL`/`RT_UDIV`/`RT_DIVS`/`RT_MODS`/`RT_MUL`
-  replacing `kernel/math/math.asm`'s multiply/divide, 412 B) is item 6; sieve and string are its bench gates. T13 is
-  the float oracle (audit section 6.3: Leap-C `tools/fpmodel.py`, `tools/floattest.py`).
-- **Study before designing** (the rule from step E): Leap-C `fpcore` and its tools, Leap V2's SQR (`54cd877`) and
-  SIN/COS/TAN, and today's `core/float.asm` and `core/floatmul.asm`/`floatdiv.asm` (the chain point before
-  `floatmul.asm` is `H_FMINUS` since M6). Write `docs/V2/FLOAT_SPEC.md` (decisions the owner must take marked as
-  such), then T13 and the oracle on the old build, then the code, each with a measured ledger row.
-- **Free space to work with:** HOME 1,629 B, EXROM 4,247 B.
+- **Spec:** `docs/V2/FLOAT_SPEC.md` (references studied in section 2; decisions in section 15, each with a
+  recommendation). Do not start T13 before the owner answers.
+- **Facts found while writing it:**
+  - `fpcore` is 1,461 B in Leap-C's listing; its byte-loop FMUL/FDIV cost about 19 kT / 34 kT [E], about 3x on
+    `bench_float`, hence decision F1 (register kernels, bit-exact with `fpmodel` because `mul` is ⌊x·y / 2^24⌋ and `div`
+    the exact restoring quotient). Before writing them: check in ZEsarUX that the stock ROM's interrupt routine
+    (cartridge build) leaves the alternate registers alone.
+  - `bench_float`'s expected RESULT `-0.6523` (`tools/bench.py`) is the 3-byte format's error: the exact value is
+    −0.1453125, and `fpmodel` gives `-0.1453` (decision F10).
+  - Smoke ROMs to regenerate: p8, p18, p19, p22, p23, p29, p30, p31, p34, p35, p38, p42, p50 (the audit missed p31,
+    p38, p50). `tools/cart_diff.py` divides the float-stack span by 2 for its depth figure; `NOT_ADDRESS` in it and in
+    `tools/poweron.py` names today's float constants. `PRINT_UDEC16` (in `floatprint.asm`) is used by `LIST-DEFS` and
+    must move to `print.asm`. Both demos include the float files for BEEP literals: they lose about 290 B each.
+  - RAM: `FP_RAM` and the transcendental cells go at `$8594-$85CB` (a 524 B gap, `FLOAT_SPEC.md` section 9).
+  - Ports for `make floattest`: 10840-10859.
+- **Scratch tools** (not committed, in the session scratchpad): a listing size attributor (address deltas per file and
+  label) and a `fpmodel` run of the bench program.
 
 ## Open points (not blocking)
+
+- **`CATCH_STACK` overlap** (found by step F's RAM map, not fixed): `CATCH_STACK` `$8916` + 8 × 6 B reaches `$8945`, over
+  `SPACES_COUNT` (`$8940`) and `PRINT_LINE_BUF`'s first 4 bytes (`$8942`): the 8th nested CATCH and SPACES/LPRINT share
+  bytes. A free 48 B gap exists (`$8316-$84FF` and others, `FLOAT_SPEC.md` section 9).
+- **`LATEST`/`HERE` inside the data stack's range** (`$9002`/`$9004`, `DSTACK_LIMIT` `$9000`): a data stack about 1,020
+  cells deep overwrites them before `STACK_CHECK` objects; `core/dict.asm`'s comment says 1,024 B (floor `$9400`).
 
 - **The view's ENTER at the bottom** is still 421k T: about 122k is `STORE_LINE` scanning a 60-line store from
   `STORE_START` per key; a cached cursor-line address would cut it. An insert or delete mid-screen redraws the rows
