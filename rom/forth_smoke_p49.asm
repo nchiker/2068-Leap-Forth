@@ -44,19 +44,7 @@
 RST_00:
     di
     jp   COLD_START
-    DS   $0008 - $, $FF
-RST_08: ret
-    DS   $0010 - $, $FF
-RST_10: ret
-    DS   $0018 - $, $FF
-RST_18: ret
-    DS   $0020 - $, $FF
-RST_20: ret
-    DS   $0028 - $, $FF
-RST_28: ret
-    DS   $0030 - $, $FF
-RST_30: ret
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 RST_38:
     ei
     ret
@@ -90,28 +78,28 @@ COLD_START:
     ld   a, 0
     ld   (CHECKPOINT_NUM), a
     ld   hl, 5
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_ONEPLUS
     ld   de, 6
     call CHECK_TOP
     call W_DROP
 
     ld   hl, 5
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_ONEMINUS
     ld   de, 4
     call CHECK_TOP
     call W_DROP
 
     ld   hl, $7FFF          ; 1+ across the signed-wrap boundary
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_ONEPLUS
     ld   de, $8000
     call CHECK_TOP
     call W_DROP
 
     ld   hl, $8000           ; 1- back across the same boundary
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_ONEMINUS
     ld   de, $7FFF
     call CHECK_TOP
@@ -121,28 +109,28 @@ COLD_START:
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
     ld   hl, 5
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_NEGATE
     ld   de, -5
     call CHECK_TOP
     call W_DROP
 
     ld   hl, -5
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_NEGATE
     ld   de, 5
     call CHECK_TOP
     call W_DROP
 
     ld   hl, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_NEGATE
     ld   de, 0
     call CHECK_TOP
     call W_DROP
 
     ld   hl, $8000            ; -32768 -- two's complement wrap, see
-    call DPUSH_HL              ; core/arith.asm's own header
+    rst RST_DPUSH             ; core/arith.asm's own header
     call W_NEGATE
     ld   de, $8000
     call CHECK_TOP
@@ -152,45 +140,45 @@ COLD_START:
     ld   a, 2
     ld   (CHECKPOINT_NUM), a
     ld   hl, 5
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 3
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_MAX
     ld   de, 5
     call CHECK_TOP
     call W_DROP
 
     ld   hl, 3
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 5
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_MIN
     ld   de, 3
     call CHECK_TOP
     call W_DROP
 
     ld   hl, -1               ; mixed sign -- MAX(-1,3) = 3
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 3
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_MAX
     ld   de, 3
     call CHECK_TOP
     call W_DROP
 
     ld   hl, -5                ; both negative -- MAX(-5,-1) = -1
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, -1
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_MAX
     ld   de, -1
     call CHECK_TOP
     call W_DROP
 
     ld   hl, $7FFF              ; the real reason this is signed, not
-    call DPUSH_HL                ; unsigned: unsigned, $7FFF < $8000;
+    rst RST_DPUSH               ; unsigned: unsigned, $7FFF < $8000;
     ld   hl, $8000                ; signed, $7FFF (32767) > $8000
-    call DPUSH_HL                  ; (-32768). MIN must pick $8000.
+    rst RST_DPUSH                 ; (-32768). MIN must pick $8000.
     call W_MIN
     ld   de, $8000
     call CHECK_TOP

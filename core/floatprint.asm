@@ -107,7 +107,7 @@ PRINT_UDEC16:
     or   l
     jr   nz, .hasdigits
     ld   hl, "0"
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     ret
 .hasdigits:
@@ -128,7 +128,7 @@ PRINT_UDEC16:
     ld   l, a
     ld   h, 0
     push bc
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     pop  bc
     djnz .printloop
@@ -165,7 +165,7 @@ PRINT_UDEC16_PAD4:
     ld   l, a
     ld   h, 0
     push bc
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     pop  bc
     djnz .printloop
@@ -210,7 +210,7 @@ W_FDOT:
     or   a
     jr   z, .nosign
     ld   hl, "-"
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
 .nosign:
     ld   hl, (F_PROD_HI)
@@ -229,12 +229,12 @@ W_FDOT:
                                   ; guarded, matching this project's
                                   ; standing "no error recovery" scope)
     ld   hl, "."
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     ld   hl, (F_DIV_REM)
     call PRINT_UDEC16_PAD4
     ld   hl, " "
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     ret
 

@@ -49,13 +49,13 @@ H_UDG:
                              ; splice convention) before this INCLUDE
     DB   3, "U","D","G"
 W_UDG:
-    call DPOP_HL
+    rst RST_DPOP
     add  hl, hl              ; n*2
     add  hl, hl              ; n*4
     add  hl, hl              ; n*8
     ld   de, UDG_TABLE
     add  hl, de               ; UDG_TABLE + n*8
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 DICT_LATEST_INIT_UDG EQU H_UDG   ; head of the dictionary once this

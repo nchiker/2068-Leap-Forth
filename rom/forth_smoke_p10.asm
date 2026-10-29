@@ -44,31 +44,7 @@ RST_00:
     di
     jp   COLD_START
 
-    DS   $0008 - $, $FF
-RST_08:
-    ret
-
-    DS   $0010 - $, $FF
-RST_10:
-    ret
-
-    DS   $0018 - $, $FF
-RST_18:
-    ret
-
-    DS   $0020 - $, $FF
-RST_20:
-    ret
-
-    DS   $0028 - $, $FF
-RST_28:
-    ret
-
-    DS   $0030 - $, $FF
-RST_30:
-    ret
-
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 RST_38:
     ei
     ret
@@ -160,7 +136,7 @@ COLD_START:
 .emitloop:
     push bc
     ld   hl, "X"
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     pop  bc
     djnz .emitloop

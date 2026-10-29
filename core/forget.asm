@@ -94,7 +94,7 @@ FORGET_PRINT_MSG:
     push hl
     ld   l, a
     ld   h, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     pop  hl
     inc  hl
@@ -111,7 +111,7 @@ H_FORGET:
     DB   6, "F","O","R","G","E","T"
 W_FORGET:
     call W_WORD
-    call DPOP_HL
+    rst RST_DPOP
     ld   (WORD_SRC_ADDR), hl
 
     ld   hl, (LATEST)

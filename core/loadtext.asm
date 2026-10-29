@@ -38,10 +38,10 @@ H_SAVETEXT:
     DB   9, "S","A","V","E","-","T","E","X","T"
 W_SAVETEXT:
     call STORAGE_PARSE_NAME
-    call DPOP_HL                        ; len
+    rst RST_DPOP                       ; len
     ld   d, h
     ld   e, l
-    call DPOP_HL                        ; addr
+    rst RST_DPOP                       ; addr
     push ix
     push hl
     pop  ix
@@ -60,10 +60,10 @@ H_VERIFYTEXT:
     DB   11, "V","E","R","I","F","Y","-","T","E","X","T"
 W_VERIFYTEXT:
     call STORAGE_PARSE_NAME
-    call DPOP_HL                        ; len
+    rst RST_DPOP                       ; len
     ld   d, h
     ld   e, l
-    call DPOP_HL                        ; addr
+    rst RST_DPOP                       ; addr
     push ix
     push hl
     push de

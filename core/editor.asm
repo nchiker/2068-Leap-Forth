@@ -1083,13 +1083,13 @@ EDITOR_LOOP_LIVE:
     or   a
     jr   nz, .no_ok
     ld   hl, "O"
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     ld   hl, "K"
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     ld   hl, 13
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
 .no_ok:
     jr   EDITOR_LOOP_LIVE

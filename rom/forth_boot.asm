@@ -116,31 +116,7 @@ RST_00:
     ENDIF
     ASSERT $ <= ROM_ID_SKIP_RESET_END
 
-    DS   $0008 - $, $FF
-RST_08:
-    ret
-
-    DS   $0010 - $, $FF
-RST_10:
-    ret
-
-    DS   $0018 - $, $FF
-RST_18:
-    ret
-
-    DS   $0020 - $, $FF
-RST_20:
-    ret
-
-    DS   $0028 - $, $FF
-RST_28:
-    ret
-
-    DS   $0030 - $, $FF
-RST_30:
-    ret
-
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 ; ---- RST 38 / IM 1 maskable interrupt entry point — real wiring,
 ; confirmed from 2068-Leap's own working ROM files (e.g.
 ; rom/test_arr3.asm's own RST_38), not guessed. ----
@@ -454,20 +430,20 @@ INTERPRET_UNKNOWN_WORD:
     push bc
     ld   l, a
     ld   h, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     pop  bc
     pop  hl
     inc  hl
     djnz .printword
     ld   hl, " "
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     ld   hl, "?"
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     ld   hl, 13
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
 REPORT_INTERP_ERROR:              ; shared tail with RUNTIME_ERROR_HOOK's
                                    ; own .msgdone below -- byte-identical,
@@ -501,14 +477,14 @@ RUNTIME_ERROR_HOOK:
     push hl
     ld   l, a
     ld   h, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     pop  hl
     inc  hl
     jr   .msgloop
 .msgdone:
     ld   hl, 13
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     ; same fix as INTERPRET_UNKNOWN_WORD's own STATE reset -- an
     ; IMMEDIATE word's runtime error while compiling could otherwise

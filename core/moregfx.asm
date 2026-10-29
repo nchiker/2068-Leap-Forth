@@ -54,10 +54,10 @@ H_FILL:
                             ; INCLUDEing this file
     DB   4, "F", "I", "L", "L"
 W_FILL:
-    call DPOP_HL           ; hl = y
+    rst RST_DPOP          ; hl = y
     ld   a, l
     ld   (GFX_FILL_Y), a
-    call DPOP_HL           ; hl = x
+    rst RST_DPOP          ; hl = x
     ld   a, l
     ld   (GFX_FILL_X), a
     ld   a, (GFX_MODE)
@@ -89,10 +89,10 @@ H_ATXY:
     DW   H_FILL
     DB   5, "A", "T", "-", "X", "Y"
 W_ATXY:
-    call DPOP_HL           ; hl = row
+    rst RST_DPOP          ; hl = row
     ld   a, l
     ld   (PRINT_ROW), a
-    call DPOP_HL           ; hl = col
+    rst RST_DPOP          ; hl = col
     ld   a, l
     ld   (PRINT_COL), a
     ret

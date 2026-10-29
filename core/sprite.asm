@@ -48,13 +48,13 @@ H_SPRITEDEFINE:
                             ; INCLUDEing this file
     DB   13, "S", "P", "R", "I", "T", "E", "-", "D", "E", "F", "I", "N", "E"
 W_SPRITEDEFINE:
-    call DPOP_HL              ; hl = col
+    rst RST_DPOP             ; hl = col
     ld   a, l
     ld   (SPRITE_OP_COL), a
-    call DPOP_HL              ; hl = row
+    rst RST_DPOP             ; hl = row
     ld   a, l
     ld   (SPRITE_OP_ROW), a
-    call DPOP_HL              ; hl = slot
+    rst RST_DPOP             ; hl = slot
     ld   a, l
     ld   (SPRITE_OP_SLOT), a
     ld   hl, $A000 + (2 * 3)   ; slot 2 = SPRITE_DEFINE_IMPL
@@ -68,13 +68,13 @@ H_SPRITESHOW:
     DW   H_SPRITEDEFINE
     DB   11, "S", "P", "R", "I", "T", "E", "-", "S", "H", "O", "W"
 W_SPRITESHOW:
-    call DPOP_HL              ; hl = col
+    rst RST_DPOP             ; hl = col
     ld   a, l
     ld   (SPRITE_OP_COL), a
-    call DPOP_HL              ; hl = row
+    rst RST_DPOP             ; hl = row
     ld   a, l
     ld   (SPRITE_OP_ROW), a
-    call DPOP_HL              ; hl = slot
+    rst RST_DPOP             ; hl = slot
     ld   a, l
     ld   (SPRITE_OP_SLOT), a
     ld   hl, $A000 + (3 * 3)   ; slot 3 = SPRITE_SHOW_IMPL
@@ -88,7 +88,7 @@ H_SPRITEHIDE:
     DW   H_SPRITESHOW
     DB   11, "S", "P", "R", "I", "T", "E", "-", "H", "I", "D", "E"
 W_SPRITEHIDE:
-    call DPOP_HL              ; hl = slot
+    rst RST_DPOP             ; hl = slot
     ld   a, l
     ld   (SPRITE_OP_SLOT), a
     ld   hl, $A000 + (4 * 3)   ; slot 4 = SPRITE_HIDE_IMPL

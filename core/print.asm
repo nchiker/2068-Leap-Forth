@@ -78,7 +78,7 @@ H_EMIT:
     DW   DICT_CHAIN_POINT
     DB   4, "E", "M", "I", "T"
 W_EMIT:
-    call DPOP_HL
+    rst RST_DPOP
     ld   a, l
     cp   13                    ; CR: move to a new line instead of printing
     jr   z, .newline
@@ -221,13 +221,13 @@ H_DOT:
     DW   H_EMIT
     DB   1, "."
 W_DOT:
-    call DPOP_HL
+    rst RST_DPOP
     ld   a, h
     and  $80
     jr   z, .positive
     push hl
     ld   hl, "-"
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     pop  hl
     xor  a                       ; negate hl -- correct even for $8000,
@@ -241,7 +241,7 @@ W_DOT:
     or   l
     jr   nz, .hasdigits
     ld   hl, "0"
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     jr   .donedigits
 .hasdigits:
@@ -266,13 +266,13 @@ W_DOT:
     push bc                       ; W_EMIT (via GFX_PUTCHAR) destroys BC
                                   ; -- preserve our own djnz counter
                                   ; around the call
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     pop  bc
     djnz .printloop
 .donedigits:
     ld   hl, " "
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     ret
 

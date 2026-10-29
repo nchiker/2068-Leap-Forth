@@ -68,19 +68,7 @@
 RST_00:
     di
     jp   COLD_START
-    DS   $0008 - $, $FF
-RST_08: ret
-    DS   $0010 - $, $FF
-RST_10: ret
-    DS   $0018 - $, $FF
-RST_18: ret
-    DS   $0020 - $, $FF
-RST_20: ret
-    DS   $0028 - $, $FF
-RST_28: ret
-    DS   $0030 - $, $FF
-RST_30: ret
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 RST_38:
     ei
     ret
@@ -124,7 +112,7 @@ COLD_START:
     ld   hl, (HERE)
     ld   (CK_TMP1), hl
     ld   hl, $ABCD
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_COMMA
     ld   hl, (CK_TMP1)
     ld   de, 2
@@ -143,7 +131,7 @@ COLD_START:
     ld   hl, (HERE)
     ld   (CK_TMP1), hl
     ld   hl, $42
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_CCOMMA
     ld   hl, (CK_TMP1)
     inc  hl
@@ -160,7 +148,7 @@ COLD_START:
     ld   hl, (HERE)
     ld   (CK_TMP1), hl
     ld   hl, 10
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_ALLOT
     ld   hl, (CK_TMP1)
     ld   de, 10
@@ -172,7 +160,7 @@ COLD_START:
     ld   hl, (HERE)               ; negative ALLOT: dictionary shrinks
     ld   (CK_TMP1), hl
     ld   hl, -4
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_ALLOT
     ld   hl, (CK_TMP1)
     ld   de, -4
@@ -454,7 +442,7 @@ FAIL_TEST:
     ld   a, (CHECKPOINT_NUM)
     ld   l, a
     ld   h, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_DOT                     ; prints the failing checkpoint number
 .hang:
     jr   .hang
@@ -471,7 +459,7 @@ INTERPRET_UNKNOWN_WORD:
     push hl
     ld   l, a
     ld   h, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     pop  hl
     inc  hl
@@ -498,7 +486,7 @@ RUNTIME_ERROR_HOOK:
     push hl
     ld   l, a
     ld   h, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     pop  hl
     inc  hl

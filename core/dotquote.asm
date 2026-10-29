@@ -71,7 +71,7 @@ DOSTR:
                               ; calls)
     ld   l, a
     ld   h, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     pop  bc
     pop  hl

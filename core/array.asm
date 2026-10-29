@@ -56,7 +56,7 @@ H_ARRAY:
                             ; INCLUDEing this file
     DB   5, "A", "R", "R", "A", "Y"
 W_ARRAY:
-    call DPOP_HL            ; hl = n (cell count)
+    rst RST_DPOP           ; hl = n (cell count)
     push hl                 ; stashed briefly on the Z80 hardware stack
                              ; -- safe: symmetric push/pop within this
                              ; one routine's own body, and everything
@@ -67,7 +67,7 @@ W_ARRAY:
                              ; for its own value-across-name-parsing
                              ; case)
     call W_WORD
-    call DPOP_HL
+    rst RST_DPOP
     ld   (WORD_SRC_ADDR), hl
 
     ld   de, (HERE)
@@ -144,9 +144,9 @@ H_CELLS:
     DW   H_ARRAY
     DB   5, "C", "E", "L", "L", "S"
 W_CELLS:
-    call DPOP_HL
+    rst RST_DPOP
     add  hl, hl
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 DICT_LATEST_INIT_ARRAY EQU H_CELLS   ; head of the dictionary once this

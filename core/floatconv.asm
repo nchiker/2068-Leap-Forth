@@ -156,7 +156,7 @@ H_STOF:
                             ; INCLUDEing this file
     DB   3, "S", ">", "F"
 W_STOF:
-    call DPOP_HL            ; hl = n
+    rst RST_DPOP           ; hl = n
     xor  a                  ; exponent = 0 -- n * 2^0 = n, exactly
     call FPUSH
     ret
@@ -184,7 +184,7 @@ W_FTOS:
                               ; if the true value doesn't fit 16 bits
                               ; -- see this file's own header)
 .push:
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 DICT_LATEST_INIT_FLOATCONV EQU H_FTOS   ; head of the dictionary as of

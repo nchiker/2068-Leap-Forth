@@ -57,7 +57,7 @@ H_EXECUTE:
                             ; INCLUDEing this file
     DB   7, "E", "X", "E", "C", "U", "T", "E"
 W_EXECUTE:
-    call DPOP_HL            ; hl = xt (a code address)
+    rst RST_DPOP           ; hl = xt (a code address)
     jp   (hl)                ; NOT a call -- see this file's own header
 
 DICT_LATEST_INIT_EXECUTE EQU H_EXECUTE   ; head of the dictionary once

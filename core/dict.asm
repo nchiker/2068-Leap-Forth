@@ -269,18 +269,11 @@ DICT_LATEST_INIT EQU H_STORE       ; value LATEST must be seeded with at cold st
 ; instructions each — sharing this pair there is clearer, not slower
 ; in any way that matters.
 ; ============================================================================
-DPUSH_HL:                  ; push HL onto the data stack
-    dec  ix
-    dec  ix
-    ld   (ix+0), l
-    ld   (ix+1), h
-    ret
-
-DPOP_HL:                   ; pop the data stack into HL
-    ld   l, (ix+0)
-    ld   h, (ix+1)
-    inc  ix
-    inc  ix
-    ret
+; O13: the two routines themselves now live in page zero, in
+; include/rst_vectors.inc (DPOP_HL at $0008 = RST_DPOP, DPUSH_HL at $0018
+; = RST_DPUSH). Callers use `rst RST_DPOP` / `rst RST_DPUSH` (1 byte,
+; 11 T instead of 3 bytes, 17 T). The labels still exist, so any
+; reference to DPOP_HL / DPUSH_HL still resolves. Every ROM that includes
+; this file must INCLUDE include/rst_vectors.inc in its page zero.
 
     ENDIF

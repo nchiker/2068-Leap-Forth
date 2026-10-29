@@ -39,19 +39,7 @@
 RST_00:
     di
     jp   COLD_START
-    DS   $0008 - $, $FF
-RST_08: ret
-    DS   $0010 - $, $FF
-RST_10: ret
-    DS   $0018 - $, $FF
-RST_18: ret
-    DS   $0020 - $, $FF
-RST_20: ret
-    DS   $0028 - $, $FF
-RST_28: ret
-    DS   $0030 - $, $FF
-RST_30: ret
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 RST_38:
     ei
     ret
@@ -78,11 +66,11 @@ COLD_START:
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
     ld   hl, 4242
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 1                    ; channel = 1 (B)
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, $0AB0                ; period
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_TONE
     ld   de, 4242
     call CHECK_ITOP
@@ -91,11 +79,11 @@ COLD_START:
     ld   a, 2
     ld   (CHECKPOINT_NUM), a
     ld   hl, 4242
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 3                    ; channel = 3 -- out of range
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, $0AB0
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_TONE
     ld   de, 4242
     call CHECK_ITOP
@@ -104,11 +92,11 @@ COLD_START:
     ld   a, 3
     ld   (CHECKPOINT_NUM), a
     ld   hl, 4242
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 2                    ; channel = 2 (C)
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 15                   ; level
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_VOLUME
     ld   de, 4242
     call CHECK_ITOP
@@ -117,11 +105,11 @@ COLD_START:
     ld   a, 4
     ld   (CHECKPOINT_NUM), a
     ld   hl, 4242
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 200                  ; channel = 200 -- out of range
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 15
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_VOLUME
     ld   de, 4242
     call CHECK_ITOP
@@ -130,11 +118,11 @@ COLD_START:
     ld   a, 5
     ld   (CHECKPOINT_NUM), a
     ld   hl, 4242
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 253                  ; mask -- only Channel B's tone
                                   ; enabled, same value SOUND's own
                                   ; header cites as user-confirmed
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_MIXER
     ld   de, 4242
     call CHECK_ITOP
@@ -143,9 +131,9 @@ COLD_START:
     ld   a, 6
     ld   (CHECKPOINT_NUM), a
     ld   hl, 4242
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 31                   ; period
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_NOISE
     ld   de, 4242
     call CHECK_ITOP
@@ -154,11 +142,11 @@ COLD_START:
     ld   a, 7
     ld   (CHECKPOINT_NUM), a
     ld   hl, 4242
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 1000                 ; period
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 14                   ; shape
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_ENVELOPE
     ld   de, 4242
     call CHECK_ITOP
@@ -172,7 +160,7 @@ COLD_START:
 ; rom/forth_smoke_p62.asm's own CHECK_ITOP.
 ; ============================================================================
 CHECK_ITOP:
-    call DPOP_HL
+    rst RST_DPOP
     ld   a, l
     cp   e
     jp   nz, FAIL_TEST

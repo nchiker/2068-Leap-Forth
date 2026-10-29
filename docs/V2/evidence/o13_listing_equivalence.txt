@@ -1,0 +1,23 @@
+O13 listing equivalence (scratch tool lstequiv.py; old = build at 7da3ba6, new = this commit's build)
+== forth_boot
+old lines dropped (the bodies moved to page zero): 10 bytes 22
+BAD 246E c634 | 23D6 c69c | 'add  a, (BEEP_TABLE + 24) & $FF' | 'add  a, (BEEP_TABLE + 24) & $FF'
+BAD 2471 3e23 | 23D9 3e22 | 'ld   a, ((BEEP_TABLE + 24) >> 8) - 1' | 'ld   a, ((BEEP_TABLE + 24) >> 8) - 1'
+BAD 3429 21c40c | 326F 21b80c | 'ld   hl, FONT_TABLE - 256' | 'ld   hl, FONT_TABLE - 256'
+{'equal': 6007, 'rst': 242, 'reloc': 1309, 'bad': 3} unpaired: 0 0
+== forth_boot_cart
+old lines dropped (the bodies moved to page zero): 10 bytes 22
+BAD 246E c634 | 23D6 c69c | 'add  a, (BEEP_TABLE + 24) & $FF' | 'add  a, (BEEP_TABLE + 24) & $FF'
+BAD 2471 3e23 | 23D9 3e22 | 'ld   a, ((BEEP_TABLE + 24) >> 8) - 1' | 'ld   a, ((BEEP_TABLE + 24) >> 8) - 1'
+BAD 3429 21c40c | 326F 21b80c | 'ld   hl, FONT_TABLE - 256' | 'ld   hl, FONT_TABLE - 256'
+{'equal': 6006, 'rst': 242, 'reloc': 1310, 'bad': 3} unpaired: 0 0
+== forth_demo_blackjack
+old lines dropped (the bodies moved to page zero): 10 bytes 22
+BAD 199D c663 | 1929 c6ef | 'add  a, (BEEP_TABLE + 24) & $FF' | 'add  a, (BEEP_TABLE + 24) & $FF'
+BAD 19A0 3e18 | 192C 3e17 | 'ld   a, ((BEEP_TABLE + 24) >> 8) - 1' | 'ld   a, ((BEEP_TABLE + 24) >> 8) - 1'
+{'equal': 3782, 'rst': 150, 'reloc': 711, 'bad': 2} unpaired: 0 0
+== forth_demo_gallery
+old lines dropped (the bodies moved to page zero): 10 bytes 22
+BAD 19EB c6b1 | 1977 c63d | 'add  a, (BEEP_TABLE + 24) & $FF' | 'add  a, (BEEP_TABLE + 24) & $FF'
+{'equal': 3521, 'rst': 109, 'reloc': 655, 'bad': 1} unpaired: 0 0
+The BAD lines are label expressions, checked by hand: BEEP_TABLE+24 low byte and high byte-1, FONT_TABLE-256 (old/new BEEP_TABLE $241C/$2384, FONT_TABLE $0DC4/$0DB8 in HOME; demos likewise).
