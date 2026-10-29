@@ -28,5 +28,6 @@ STORE_END          EQU $8A74    ; core/loadtext.asm: the line store
 STORE_START        EQU $D000
 STORE_LIMIT        EQU $F000
 ATTR_DEFAULT       EQU $44      ; kernel/graphics/graphics.asm
+VIEW_RESULT        EQU $8AC0    ; core/edit.asm: what VIEW_SESSION reports
 
     ENDIF

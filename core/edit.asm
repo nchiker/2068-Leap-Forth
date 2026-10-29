@@ -1,0 +1,120 @@
+; ============================================================================
+; core/edit.asm -- EDIT ( "name" -- ): the full-screen view (audit step E item
+; 6, docs/V2/EDITOR_SPEC.md sections 5 and 5.1)
+;
+; The view itself lives in the graphics EXROM (rom/graphics_exrom.asm,
+; VIEW_SESSION, service slot 6). EDIT parses the name after it into WORD_BUF
+; (no name: bare EDIT), calls the session through EXROM_CALL_SLOT, and then, if
+; the session ran, clears the screen and interprets the lines the session
+; changed. Needs core/interp.asm (W_WORD, INTERPRET_NESTED), core/rectfill.asm
+; (EXROM_CALL_SLOT), core/forget.asm (FORGET_PRINT_MSG), core/loadtext.asm
+; (STORE_START, STORE_END) and core/print.asm first.
+;
+; The session's answer is VIEW_RESULT: Home sets it to 0 before the call, the
+; EXROM to 1 (name not found), 2 (refused; it printed the message) or 3 (the
+; session ran). A stock EXROM, or one whose slot 6 is still the 1-byte RET,
+; leaves 0 (or answers with carry): NO EXROM.
+; ============================================================================
+
+    IFNDEF CORE_EDIT_ASM
+    DEFINE CORE_EDIT_ASM
+
+VIEW_RESULT EQU $8AC0       ; 1 byte; the EXROM's copy is include/exrom_home_ram.inc
+
+H_EDIT:
+    DW   DICT_CHAIN_POINT   ; the including ROM sets this (DEFL)
+    DB   4, "E","D","I","T"
+W_EDIT:
+    call W_WORD
+    rst  RST_DPOP                   ; the name is in WORD_BUF
+    xor  a
+    ld   (VIEW_RESULT), a           ; no view, until the EXROM says otherwise
+    ld   hl, $A000 + (6 * 3)        ; slot 6 = VIEW_SESSION
+    call EXROM_CALL_SLOT
+    jr   c, .noexrom
+    ld   a, (VIEW_RESULT)
+    or   a
+    jr   z, .noexrom
+    dec  a
+    jp   z, INTERPRET_UNKNOWN_WORD  ; 1: `name ?`, as for an unknown word
+    dec  a
+    ret  z                          ; 2: refused (the EXROM printed why)
+    call GFX_CLS                    ; 3: the session ran
+    xor  a
+    ld   (PRINT_ROW), a
+    ld   (PRINT_COL), a
+    ld   hl, (SRC_END)              ; the console line goes on afterwards
+    push hl
+    ld   hl, (SRC_PTR)
+    push hl
+.restart:
+    ld   hl, STORE_START
+.line:
+    ld   de, (STORE_END)
+    or   a
+    sbc  hl, de
+    add  hl, de
+    jr   z, .end
+    push hl                         ; this line's start
+.byte:
+    ld   a, (hl)
+    inc  hl
+    cp   13
+    jr   z, .plain
+    cp   $8D
+    jr   nz, .byte
+    dec  hl                         ; a changed line: clear its mark, run it,
+    ld   (hl), 13                   ; and look again from the start (it may
+    pop  de                         ; have changed the store)
+    or   a
+    sbc  hl, de
+    ex   de, hl                     ; hl = the text, de = its length
+    call INTERPRET_NESTED
+    jr   .restart
+.plain:
+    pop  de
+    jr   .line
+.end:
+    pop  hl
+    ld   (SRC_PTR), hl
+    pop  hl
+    ld   (SRC_END), hl
+    ret
+.noexrom:
+    ld   hl, .msg
+    jp   FORGET_PRINT_MSG
+.msg:
+    DB   "NO EXROM", 13, 0
+
+; ============================================================================
+; EDIT_CLEAR_MARKS -- every changed-line mark ($8D) in the store back to $0D;
+; EDITOR_LOOP_LIVE calls it when EDIT was the last thing to run (VIEW_RESULT
+; not 0): the commit loop above clears a line's mark just before it runs, so
+; marks are left only when a line raised an error (or ABORT/QUIT) and the
+; whole run unwound to the console, and they must not outlive the session.
+; Out: VIEW_RESULT = 0
+; Destroys: AF, BC, HL
+; ============================================================================
+EDIT_CLEAR_MARKS:
+    xor  a
+    ld   (VIEW_RESULT), a
+    ld   hl, (STORE_END)
+    ld   bc, STORE_START
+    sbc  hl, bc                     ; (carry is clear after XOR)
+    ret  z
+    ld   b, h
+    ld   c, l
+    ld   hl, STORE_START
+    ld   a, $8D
+.next:
+    cpir
+    ret  nz
+    dec  hl
+    ld   (hl), 13
+    inc  hl
+    jp   pe, .next                  ; bytes left
+    ret
+
+DICT_LATEST_INIT_EDIT EQU H_EDIT    ; head of the dictionary once this file is the last one INCLUDEd
+
+    ENDIF

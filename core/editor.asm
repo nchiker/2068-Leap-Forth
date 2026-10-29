@@ -910,6 +910,11 @@ EDITOR_LOOP_LIVE:
     ld   d, 0
     ld   e, a
     call INTERPRET_RUN
+    IFDEF CORE_EDIT_ASM
+    ld   a, (VIEW_RESULT)           ; core/edit.asm: EDIT ran, and an error may have left
+    or   a                          ; changed-line marks in the store
+    call nz, EDIT_CLEAR_MARKS
+    ENDIF
     ; found live by the user: a successfully-run line gave no visible
     ; confirmation at all -- it just vanished, indistinguishable from
     ; nothing having happened. An error already prints "?"/"STACK?"
@@ -928,6 +933,6 @@ EDITOR_LOOP_LIVE:
     rst RST_DPUSH
     call W_EMIT
 .no_ok:
-    jr   EDITOR_LOOP_LIVE
+    jp   EDITOR_LOOP_LIVE
 
     ENDIF

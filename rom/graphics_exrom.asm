@@ -1383,8 +1383,8 @@ POLY_FILL_IMPL:
 ; header does not list as Out; none touches IX or IY.
 ; ============================================================================
 
-; ---- the view's RAM, $8AC0 up (free: $8ABD-$8BFF) ----
-VIEW_RESULT        EQU $8AC0    ; 1: what VIEW_SESSION reports to Home (EDIT)
+; ---- the view's RAM, $8AC0 up (free: $8ABD-$8BFF; VIEW_RESULT at $8AC0 is
+; in include/exrom_home_ram.inc) ----
 VIEW_CUR           EQU $8AC1    ; 2: the cursor line (its text is in EDIT_BUF)
 VIEW_TOP           EQU $8AC3    ; 2: the first line on screen
 VIEW_COUNT         EQU $8AC5    ; 2: lines in the store
@@ -2375,8 +2375,6 @@ VIEW_KEY:
     ; UP, DOWN: a row of the wrapped line, else the previous or next line
 .up_post:
     jp   .post
-.up_lines:
-    jp   .lines
 .updown:
     call GRAPHICS_HOME_WRAP_CALC
     xor  a
@@ -2441,7 +2439,7 @@ VIEW_KEY:
     ld   a, (VIEW_COL)
     ld   c, a
     call VIEW_ROW_POS
-    jr   .up_lines
+    jp   .lines
 
 ; ============================================================================
 ; VIEW_POST -- bring the screen up to date after a key. VIEW_LEVEL says what

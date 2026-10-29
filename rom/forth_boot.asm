@@ -655,6 +655,8 @@ DICT_CHAIN_POINT DEFL H_UDG
                                  ; unconditional
     INCLUDE "core/loadtext.asm"
 DICT_CHAIN_POINT DEFL H_LOADTEXT
+    INCLUDE "core/edit.asm"
+DICT_CHAIN_POINT DEFL H_EDIT
     INCLUDE "core/recall.asm"
 DICT_LATEST_COLD EQU DICT_LATEST_INIT_RECALL  ; LATEST of an empty user dictionary: cold start,
                                               ; and core/storage.asm's LOAD-LIB after a failure
