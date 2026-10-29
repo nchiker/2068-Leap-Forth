@@ -398,6 +398,55 @@ scenarios that item 6's set hides: DOWN between two lines in the middle of a ful
 the top of the view, and ENTER on the last line of a full screen. HOME: 0 B (slot 3 exists). EXROM: replaces
 `VIEW_DRAW_FROM`, `VIEW_POST`'s policy and `VIEW_BOTTOM`; about the same size [E].
 
+### 5.5 The row shadow as built [M, S]
+
+Built to 5.4 (HOME 0 B: `make check`'s `rom_identity` and the HOME floors unchanged, both HOME images byte-identical to
+the build before). The shadow is 23 records of 3 bytes at `$8AF3` (`VIEW_SH`), `VIEW_STOP` at `$8B38`; `VIEW_BOTTOM`
+is gone. `VIEW_DRAW_FROM` became `VIEW_RENDER`, `VIEW_REDRAW_ALL` is "all records unknown, then `VIEW_RENDER`".
+Departures from 5.4, each judged by N7, N9 and a random-key run (about 5,000 keys on 60-line and shorter stores, the
+model and the redraw oracle checked after every key):
+
+- **No separate desired map.** `VIEW_RENDER` walks the lines once, wraps each once and compares each row's record
+  with `(line, row)` as it goes; the same drawing, no 69-byte scratch map.
+- **The walk starts at the upper of the old and new cursor lines** and, with the top unchanged, **stops after the
+  lower one once the shadow already shows the next line's first row where the walk has reached** (`VIEW_STOP`): the
+  lines below are then what they were. A DOWN between two lines of a full screen wraps two lines and draws nothing.
+  After a scroll (`VIEW_SHIFT`) the walk starts at the upper cursor line's row after the move (or the top, when that
+  line left the screen) and runs to the end after a move down: the rows vacated at the bottom are unknown.
+- **`VIEW_BLANK_ROW`**: a blank row (and a row of no text, such as an empty line or E10's extra row) is made with
+  8 fills and one attribute fill, 6.3k T against 37k through `ED_ROW_JP` with D = 0; the screen is identical (N9).
+- **The row copy is 32 unrolled `LDI` a scanline**, not `LDIR`: 6.2k T a row, not 7.9k; 64 B of code for 28k T on a
+  22-row scroll.
+- **`VIEW_FIT_KEY`** (not in 5.4): after a key the cursor moved at most one line and the lines above the old cursor
+  line are unchanged, so the new cursor line's first row is `VIEW_OLDROW` plus (or less) the rows of one line, and the
+  top lines go one at a time until the cursor line is whole; the same top as `VIEW_FIT`'s (N7 checks it against the
+  model). `VIEW_FIT` stays for the opening (no old row) and for a cursor further than one line away. It cut the
+  walk from the top, 66k T on a scroll.
+- `VIEW_SH_MAP` is as 5.4 (insert: records of the line and above move up one; delete: the line unknown, those above
+  down one); a text change with a changed row count, and the emptied only line, make the line's records unknown.
+
+Sizes (EXROM, from the `.sym`): added `VIEW_SHIFT` 259, `VIEW_RENDER` 275, `VIEW_FIT_KEY` 120 with `VIEW_ROWS` 13,
+`VIEW_COPY_ROW` 89, `VIEW_SH_MAP` 73, `VIEW_BLANK_ROW` 42, `VIEW_MOVE_ROWS` 33, `VIEW_SH_REC` and `VIEW_SH_UNK` 24;
+`VIEW_POST` 113 -> 138, `VIEW_KEY` 366 -> 391, `VIEW_REDRAW_ALL` 20 -> 29; removed `VIEW_DRAW_FROM` 146. Net +841 B
+(free 5,006 -> 4,165), against "about the same" in 5.4 [E]: the estimate had no room for the shift's start rule, the
+fit, the blank row or the unrolled copy.
+
+View typing cost (N12), item 7's build [M] -> this one [M]:
+
+| Key | T before | T after | Key | T before | T after |
+|---|---:|---:|---|---:|---:|
+| at the end of a short line | 42,198 | 40,282 | ENTER | 162,624 | 106,648 |
+| in the middle of a 100-character line | 173,393 | 173,450 | insert-line | 160,395 | 138,836 |
+| at the end of a 3-row line | 176,278 | 174,312 | delete-line | 118,588 | 101,348 |
+| DELETE | 38,241 | 38,386 | DOWN to the next line | 126,049 | 56,883 |
+| LEFT | 3,304 | 3,300 | UP inside a line | 10,564 | 8,535 |
+| scroll down one line (60-line store) | 1,032,460 | 270,736 | DOWN mid-screen, full store | 551,135 | 76,943 |
+| UP that scrolls (60-line store) | 963,585 | 242,640 | ENTER on the last line of a full screen | 1,184,534 | 421,336 |
+
+What remains in the scrolls: the move of 20-22 rows (about 140k T), the key (two `STORE_LINE` scans, 15-30k T) and the
+status row (37k T, always drawn when the line number changes). ENTER at the bottom also pays three more scans of the
+store (122k T) before the fit; a cached address of the cursor line would cut those.
+
 ## 6. Words
 
 `EDIT` (new), `RECALL` (retired), `LIST-DEFS`, `SAVE-TEXT`, `VERIFY-TEXT`, `LOAD-TEXT` (format unchanged, CRs kept).
