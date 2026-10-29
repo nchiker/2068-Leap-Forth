@@ -30,6 +30,8 @@ H_EDIT:
 W_EDIT:
     call W_WORD
     rst  RST_DPOP                   ; the name is in WORD_BUF
+    call STORE_TRIM                 ; the EDIT line is not source (core/recall.asm); also
+                                    ; retires its append position before the session moves lines
     xor  a
     ld   (VIEW_RESULT), a           ; no view, until the EXROM says otherwise
     ld   hl, $A000 + (6 * 3)        ; slot 6 = VIEW_SESSION
