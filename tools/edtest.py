@@ -5,7 +5,9 @@ Characterises the console editor of the build it is given: what the CURRENT code
 memory, so that step E (a rebuild of the console and editor, audit section 4.3) can be checked against it.  Every case
 asserts what the current build does, exactly (screen rows, edit line, cursor cell, memory); a case that looks like a
 defect still asserts the current behaviour (the defects are listed in the report that came with this file, not fixed).
-A rebuilt editor is expected to FAIL the cases that describe behaviour step E changes on purpose; each such failure is a
+Since step E item 5 (the merged redraw) the points of E10 -- the room check at the display width, the cursor on
+a full row, no hang at 64 columns -- are asserted as the NEW build does them (cases 7, 8, 9, 10, 14, 18; the old build fails
+them).  A rebuilt editor is expected to FAIL the cases that describe behaviour step E changes on purpose; each such failure is a
 line to decide on, not a regression by itself.
 
 RUN   python3 -I tools/edtest.py [--build DIR] [--group old|new|both] [--workers N] [--port P] [--json OUT] [-v] [--selftest] [substring ...]
@@ -35,25 +37,32 @@ restored machine for every task; a case with several parts (widths, batches, sce
 
 HOW THE CURSOR IS SHOWN  32 columns: not in the bitmap.  EDITOR_REDRAW draws the line (GFX_PUTCHAR, then GFX_SET_ATTR
 ATTR_DEFAULT on every cell of every input row, padded to column 31) and then GFX_INVERT_ATTR on the cursor cell: ink and
-paper swapped and FLASH set, so ATTR_DEFAULT $44 (bright, black paper, green ink) becomes $E0; the ULA blinks it.  A cursor
-column of 32 (the line fills its last row) is out of range: GFX_INVERT_ATTR does nothing and NO cursor is shown.  64
+paper swapped and FLASH set, so ATTR_DEFAULT $44 (bright, black paper, green ink) becomes $E0; the ULA blinks it.  The cursor
+column is never W (E10, THE WRAP MODEL below): a cursor cell is always shown.  64
 columns (GFX_MODE 2): the attribute byte does not exist; MODE64_PUTCHAR_XOR flips all 64 bits of the cell, a static block.
 The screen reader shows it as INVERSE_MARK + the character under it, or as the block character (U+258F, code 143's glyph)
 over a blank; `view()` below turns that back into a cursor cell and the plain text.
 
-THE WRAP MODEL (wrap_model, cursor_model, Ed) is derived from core/editor.asm and confirmed on this build by the
-wrap-model case.  WRAP_CALC / WRAP_CALC64: a row holds W = 32 (64) characters.  From the row's first character: if no more
+THE WRAP MODEL (wrap_model, shown_rows, cursor_model, Ed) is the new build's (step E item 5, E10), asserted by the wrap-model
+case.  WRAP_CALC picks the width from GFX_MODE (WRAP_CALC64 no longer exists): a row holds W = 32 (64) characters.  From the row's first character: if no more
 than W characters remain, they are the last row.  Otherwise look at the characters at offsets W-1 down to 1 (offset 0 and
 offset W are NOT looked at) for the last space: found at offset p -> the row shows p characters and p + 1 are consumed (the
 space is never drawn); none found -> the row shows W characters and W are consumed (a hard break; a space that is the
 (W+1)th character then starts the next row).  At most FWRAP_MAX_ROWS = 4 rows; if after the 4th row characters remain,
-FWRAP_OVERFLOW = 1 (a 5th row would be needed) and FWRAP_COUNT is still 4.  EDIT_CURSOR_TO_ROWCOL: the cursor is on the
-first row i for which i is the last row or EDIT_CURSOR < the start of row i + 1; its column is EDIT_CURSOR - start of row i
-(so a cursor on a consumed space shows right after the row's last character, and a cursor at the end of a full hard-broken
-row rolls onto the next row's column 0).  The screen row of row i is 24 - FWRAP_COUNT + i.  EDITOR_PROCESS_KEY: printable
-codes 32-126 are inserted at EDIT_CURSOR if EDIT_LEN < EDIT_MAX_LEN (128); WRAP_CALC is run on the result, and if
+FWRAP_OVERFLOW = 1 (a 5th row would be needed) and FWRAP_COUNT is still 4.  wrap_model is exactly this rule (it is also the room
+check's overflow test).  E10, the cursor on a full row (shown_rows): when EDIT_CURSOR = EDIT_LEN, the last row's length = W and
+there are fewer than 4 rows, the wrap table in memory (FWRAP_COUNT, FWRAP_START, FWRAP_LEN) has one more row (start = EDIT_LEN,
+length 0): the input area is a row taller and the cursor is at column 0 of that row; the grow, scroll and shrink rules treat it
+as any other row.  With 4 rows and the last full there is no 5th row: the cursor is on the last character's cell (23, W - 1).  The
+extension is made whenever WRAP_CALC runs for the edit line.  EDIT_CURSOR_TO_ROWCOL: the cursor is on the
+first row i for which i is the last row or EDIT_CURSOR < the start of row i + 1; its column is EDIT_CURSOR - start of row i,
+clamped to W - 1 (so a cursor on a consumed space shows right after the row's last character, and a cursor at the end of a full
+hard-broken row is on the extension row's column 0; it is never W, so a cell always shows).  The screen row of row i is
+24 - FWRAP_COUNT + i.  EDITOR_PROCESS_KEY: printable
+codes 32-126 are inserted at EDIT_CURSOR if EDIT_LEN < EDIT_MAX_LEN (128); WRAP_CALC is run on the result at the width in
+force (32, or 64 when GFX_MODE is 2; cursor after the inserted character), and if
 FWRAP_OVERFLOW is set the insert is undone and the key ignored (the wrap table is then left describing the refused
-line: FWRAP_OVERFLOW stays 1 until the next redraw).  DELETE (8) removes the character left of the cursor, LEFT (1) and
+line, at that width: FWRAP_OVERFLOW stays 1 until the next redraw; a refusal means 4 rows with overflow, so there is no extension).  DELETE (8) removes the character left of the cursor, LEFT (1) and
 RIGHT (4) move it, ENTER (13) ends the line; every other code below 32 is ignored.  Grow: when the new FWRAP_COUNT is
 larger than FWRAP_OLD_COUNT, for each new row the whole screen scrolls up one row (GFX_SCROLL_OUTPUT_UP, row 0 is lost)
 and PRINT_ROW is decremented if PRINT_ROW >= 24 - old count, i.e. if the new row is not still blank (PRINT_ROW is the next
@@ -61,12 +70,13 @@ output row).  Shrink: the rows no longer used are cleared (GFX_CLEAR_ROW); nothi
 
 THE FULL REDRAW (the reference of the redraw-oracle case; full_reference).  From the editor waiting for a key, with the
 whole machine put on a checkpoint first (fharness.Machine.checkpoint / rollback), the reference screen is drawn by:
-  1. call WRAP_CALC (WRAP_CALC64 in 64 columns) for the current EDIT_BUF / EDIT_LEN, which sets FWRAP_COUNT;
+  1. call WRAP_CALC (it picks the width from GFX_MODE, in both modes) for the current EDIT_BUF / EDIT_LEN / EDIT_CURSOR, which
+     sets FWRAP_COUNT (with E10's extra row);
   2. FWRAP_OLD_COUNT := FWRAP_COUNT, so the redraw decides "no growth, no shrink": nothing scrolls, no row is cleared by it;
   3. rows 20-23 (the 4 rows the input can ever use, 24 - FWRAP_MAX_ROWS ... 23) are blanked directly: all 8 pixel lines
      of every cell zero (both display files in 64 columns) and, in 32 columns, every attribute byte of those rows set to
      ATTR_DEFAULT;
-  4. call EDITOR_REDRAW (it dispatches on GFX_MODE to EDITOR_REDRAW64), which draws every wrapped row, blank-padded and
+  4. call EDITOR_REDRAW (one routine for both widths since the merge; EDITOR_REDRAW64 no longer exists), which draws every wrapped row, blank-padded and
      with ATTR_DEFAULT, and the cursor;
   5. read the screen: $4000-$5AFF (32 columns: bitmap and attributes, 6912 bytes) or $4000-$77FF (64 columns: both display
      files and the attribute area, 14336 bytes), then roll the machine back.
@@ -85,17 +95,17 @@ which keys that is depends on the frame phase at the idle prompt, which depends 
 that changes the cold start moves the phase: compare figures within about one interrupt service (and the 20 ms-class
 differences, not the small ones).
 
-CURRENT BEHAVIOURS THAT LOOK LIKE DEFECTS (asserted as they are; the case that shows each in brackets)
-  * 64 columns: EDITOR_REDRAW64 hangs when the line grows onto a row that holds output and the screen must scroll (PRINT_ROW
-    22, 2 -> 3 rows): it keeps FWRAP_OLD_COUNT's address in HL across MODE64_SCROLL_OUTPUT_UP, which destroys HL [wrap-scroll].
-  * 64 columns: EDITOR_PROCESS_KEY's room check calls WRAP_CALC (32 columns), so a line that fits 3 rows of 64 is refused at the
-    character that needs a 5th 32-column row [console-64col limit].
-  * A line that exactly fills its last row (32, 64, 96, 128 characters) puts the cursor at column 32 (64): out of range, no
-    cursor is shown [line-full hard, wrap-model].
+BEHAVIOURS THAT LOOK LIKE DEFECTS (the old build's; the first three are fixed by step E item 5 and asserted fixed)
+  * [fixed, E10] 64 columns: the old EDITOR_REDRAW64 hung when the line grew onto a row that holds output and the screen had to scroll
+    (PRINT_ROW 22, 2 -> 3 rows): it kept FWRAP_OLD_COUNT's address in HL across MODE64_SCROLL_OUTPUT_UP [wrap-scroll].
+  * [fixed, E10] 64 columns: the old room check called the 32-column WRAP_CALC, so a line that fits 3 rows of 64 was refused at the
+    character that needed a 5th 32-column row [console-64col limit].
+  * [fixed, E10] A line that exactly fills its last row (32, 64, 96, 128 characters) put the cursor at column W: no cursor shown
+    [line-full hard, wrap-model].
   * WORKSPACE_APPEND tests the high byte of the new length against LOADTEXT_MAX_LEN / 256 + 1, so it writes up to 255 bytes
     past LOADTEXT_BUF + 8192 [workspace-append limit]; an empty line appends a separator space each time [workspace-append].
   * Forth has no BREAK check in the interpreter: only the word BREAK? sees the key [break-running].
-  * After a refused key the wrap table keeps the refused line (FWRAP_OVERFLOW stays 1, 64 columns: 32-column rows) and the
+  * After a refused key the wrap table keeps the refused line (FWRAP_OVERFLOW stays 1) and the
     screen is not redrawn until the next accepted key; harmless as far as seen [line-full, console-64col].
 
 STEP E CASES (group new; EDITOR_SPEC.md sections 3 and 5 are the specification of every assertion; a comment `READING:` in the
@@ -183,7 +193,7 @@ GROW64 = "a " + "b" * 64 + "  " + "c" * 29      # 97 characters, 3 rows at 64 co
 
 # ---------------------------------------------------------------------------------------------------- the models
 def wrap_model(buf, w):
-    """WRAP_CALC / WRAP_CALC64 for `buf` (a str): ([(start, length) ...], overflow).  See the header."""
+    """WRAP_CALC (the width w from GFX_MODE) for `buf` (a str): ([(start, length) ...], overflow).  See the header."""
     rows, pos, remain = [], 0, len(buf)
     while True:
         if remain <= w:
@@ -202,41 +212,62 @@ def wrap_model(buf, w):
             return rows, remain != 0
 
 
-def cursor_model(rows, cursor):
-    """EDIT_CURSOR_TO_ROWCOL: (screen row, column) of the cursor for a wrap table."""
+def shown_rows(buf, cursor, w):
+    """The wrap table in memory for the edit line `buf` with the cursor at `cursor` (WRAP_CALC with E10): wrap_model's
+    rows, plus one empty row (start = len(buf), length 0) when the cursor is at the end of a last row that is full and the
+    line has fewer than 4 rows, so that the cursor has a cell at column 0 of the next row.  With 4 full rows there is no
+    fifth row (the cursor sits on the last character's cell, see cursor_model).  This is the number of rows the input area
+    occupies; wrap_model alone is the pure WRAP_CALC rule (the room check's overflow test)."""
+    rows = wrap_model(buf, w)[0]
+    if cursor == len(buf) and rows[-1][1] == w and len(rows) < MAX_ROWS:
+        rows = rows + [(len(buf), 0)]
+    return rows
+
+
+def cursor_model(rows, cursor, w):
+    """EDIT_CURSOR_TO_ROWCOL: (screen row, column) of the cursor for a wrap table (shown_rows); the column is clamped to w - 1."""
     n, i = len(rows), 0
     while i != n - 1 and cursor >= rows[i + 1][0]:
         i += 1
-    return 24 - n + i, cursor - rows[i][0]
+    return 24 - n + i, min(cursor - rows[i][0], w - 1)
 
 
 def screen_model(base, text, cursor, w):
     """(expected 24 rows, expected cursor cells) for a line `text` with the cursor at offset `cursor`, the output rows
-    above the input area being `base` (24 rows; those the input area covers are replaced).  A cursor column W is no cell."""
-    rows, _ = wrap_model(text, w)
+    above the input area being `base` (24 rows; those the input area covers are replaced).  The cursor always has a cell."""
+    rows = shown_rows(text, cursor, w)
     n = len(rows)
     exp = list(base)
     for r in range(24 - n, 24):
         exp[r] = ""
     for i, (s, ln) in enumerate(rows):
         exp[24 - n + i] = text[s:s + ln].rstrip(" ")
-    r, c = cursor_model(rows, cursor)
-    return exp, ([(r, c)] if c < w else [])
+    return exp, [cursor_model(rows, cursor, w)]
 
 
 class Ed:
-    """The editor's state as the code above defines it: text, cursor, the display width, and the text (and width) the wrap
-    table currently describes: it differs from `text` after a key refused because the line would need a 5th row.  The
-    room check of EDITOR_PROCESS_KEY calls WRAP_CALC, the 32-column routine, in 64-column mode too (core/editor.asm
-    `call WRAP_CALC` after INSERT_CHAR), so a key is accepted by the 32-column rule (ACCEPT_W) whatever the display width,
-    and after a refusal the table holds the 32-column rows of the refused line."""
-    ACCEPT_W = 32
+    """The editor's state as the code above defines it: text, cursor, the display width, and the text, cursor and width the
+    wrap table currently describes: they differ from `text`, `cursor` and `w` after a key refused because the line would need
+    a 5th row.  The room check of EDITOR_PROCESS_KEY runs WRAP_CALC at the width in force (GFX_MODE), on the line with the
+    character inserted and the cursor after it; after a refusal the table holds that refused line."""
 
     def __init__(self, w, text="", cursor=None):
         self.w, self.text = w, text
         self.cursor = len(text) if cursor is None else cursor
-        self.table_text, self.table_w = text, w
+        self.table_text, self.table_cursor, self.table_w = text, self.cursor, w
         self.refused = None
+
+    def rows(self):
+        """The rows the input area shows now (shown_rows)."""
+        return shown_rows(self.text, self.cursor, self.w)
+
+    def nrows(self):
+        return len(self.rows())
+
+    def table(self):
+        """(FWRAP_COUNT, [(start, length) ...], FWRAP_OVERFLOW) the wrap table in memory must hold."""
+        rows = shown_rows(self.table_text, self.table_cursor, self.table_w)
+        return len(rows), rows, int(wrap_model(self.table_text, self.table_w)[1])
 
     def key(self, code):
         """Apply a key code; returns True if the editor took it (False: refused or ignored)."""
@@ -259,13 +290,13 @@ class Ed:
                 self.refused = "full"
                 return False
             nb = t[:c] + chr(code) + t[c:]
-            if wrap_model(nb, self.ACCEPT_W)[1]:
-                self.refused, self.table_text, self.table_w = "rows", nb, self.ACCEPT_W
+            if wrap_model(nb, self.w)[1]:
+                self.refused, self.table_text, self.table_cursor, self.table_w = "rows", nb, c + 1, self.w
                 return False
             self.text, self.cursor = nb, c + 1
         else:
             return False
-        self.table_text, self.table_w = self.text, self.w
+        self.table_text, self.table_cursor, self.table_w = self.text, self.cursor, self.w
         return True
 
     def type(self, s):
@@ -439,8 +470,7 @@ class Env:
         ck.eq(label + " cursor cell", v.cursor, cells)
         ck.eq(label + " stray attributes", v.odd, [])
         if wrap:
-            rows, ov = wrap_model(ed.table_text, ed.table_w)
-            ck.eq(label + " wrap table", wrap_table(m), (len(rows), rows, int(ov)))
+            ck.eq(label + " wrap table", wrap_table(m), ed.table())
 
 
 def screen_sig(m, w=32):
@@ -659,21 +689,25 @@ def _refusal_candidate():
     return None
 
 
-@case("line-full", "128 characters without spaces fit (hard breaks, 4 rows, no cursor shown); the 129th is refused, line and screen "
-                   "unchanged; a word-wrapped line that would need a 5th row refuses the character that would (FWRAP_OVERFLOW "
-                   "stays set), also in the middle of the line", parts=("hard", "words", "middle"))
+@case("line-full", "128 characters without spaces fit (hard breaks, 4 rows) and the cursor is shown: on a full last row it is at column 0 "
+                   "of one more row (32, 64, 96 characters: the area is a row taller than the wrap) and on the last character's "
+                   "cell (23, 31) at 128; the 129th is refused, line and screen unchanged; a word-wrapped line that would need a "
+                   "5th row refuses the character that would (FWRAP_OVERFLOW stays set), also in the middle of the line",
+      parts=("hard", "words", "middle"))
 def line_full(env, part):
     ck, m = Check(), env.m
     base = env.boot()
     ed = Ed(32)
     if part == "hard":
-        type_keys(env, ed, "a" * 127)
-        env.check_view(ck, "127 chars", base, ed)
-        env.con.key(ord("a"))
-        ed.key(ord("a"))
-        env.check_view(ck, "128 chars", base, ed)
-        ck.eq("rows used", wrap_table(m)[0], 4)
-        ck.eq("cursor cells at 128", view(m).cursor, [])
+        rows_at = {31: 1, 32: 2, 33: 2, 63: 2, 64: 3, 65: 3, 95: 3, 96: 4, 97: 4, 127: 4, 128: 4}     # FWRAP_COUNT, cursor at the end
+        for n in range(1, 129):
+            env.con.key(ord("a"))
+            ed.key(ord("a"))
+            if n in rows_at:
+                env.check_view(ck, "%d chars" % n, base, ed)
+                ck.eq("rows used at %d" % n, wrap_table(m)[0], rows_at[n])
+                ck.eq("model rows at %d" % n, ed.nrows(), rows_at[n])
+        ck.eq("cursor cells at 128", view(m).cursor, [(23, 31)])
         sig = screen_sig(m)
         env.con.key(ord("b"))
         ed.key(ord("b"))
@@ -685,12 +719,14 @@ def line_full(env, part):
         step(env, ck, "type b", base, ed, ord("b"))
         env.con.key(ord("c"))
         ck.eq("128 again, c refused", env.edit_state(), ("a" * 126 + "ba", 127))
-        ck.note("127 + 1 = 128 'a' fit in 4 hard-broken rows (no cursor cell at column 32); the 129th 'b' leaves the screen "
+        ck.note("128 'a' fit in 4 hard-broken rows; at 32 / 64 / 96 characters the area is one row taller (cursor at column 0 of "
+                "it), at 128 the cursor is on the last character's cell (23, 31); the 129th 'b' leaves the screen "
                 "bytes unchanged; DELETE frees one place and 'b' goes in at the cursor")
     elif part == "words":
         type_keys(env, ed, _words_text())
         env.check_view(ck, "95 chars", base, ed)
         ck.eq("rows, overflow", wrap_table(m)[0::2], (4, 0))
+        ck.eq("4th row full, no 5th row: cursor on its last cell", view(m).cursor, [(23, 31)])
         sig = screen_sig(m)
         env.con.key(ord("z"))
         ed.key(ord("z"))
@@ -705,8 +741,9 @@ def line_full(env, part):
         step(env, ck, "DELETE", base, ed, DELETE)
         ck.eq("overflow cleared by the redraw", env.u8("FWRAP_OVERFLOW"), 0)
         step(env, ck, "type z", base, ed, ord("z"))
-        ck.note("3 words of 20 + the 4th and 11 more = 95 characters fill the 4th row; the 96th (z or space) needs a 5th row "
-                "and is refused, FWRAP_OVERFLOW stays 1 and the screen is not redrawn until the next accepted key")
+        ck.note("3 words of 20 + the 4th and 11 more = 95 characters fill the 4th row (cursor on (23, 31), no 5th row); the 96th "
+                "(z or space) needs a 5th row and is refused, FWRAP_OVERFLOW stays 1 and the screen is not redrawn until the "
+                "next accepted key")
     else:
         t = _words_text()
         cand = _refusal_candidate()
@@ -763,9 +800,10 @@ def walk_keys(w, n=130):
     return keys
 
 
-@case("wrap-model", "the Python model of WRAP_CALC (word-boundary rule, 32 and 64 columns) predicts the wrap table, the screen rows "
-                    "and the cursor cell of every line of a set (assorted words, a word longer than a row, trailing spaces, "
-                    "exactly 32 / 64 characters), and of a seeded random walk of keys", parts=("lines32a", "lines32b", "lines64a", "lines64b", "walk32", "walk64"))
+@case("wrap-model", "the Python model of WRAP_CALC (word-boundary rule, 32 and 64 columns; the cursor on a full last row gets a row "
+                    "of its own) predicts the wrap table, the screen rows and the cursor cell of every line of a set (assorted "
+                    "words, a word longer than a row, trailing spaces, exactly 32 / 64 characters), and of a seeded random walk "
+                    "of keys", parts=("lines32a", "lines32b", "lines64a", "lines64b", "walk32", "walk64"))
 def wrap_model_case(env, part):
     ck, m = Check(), env.m
     w = 32 if "32" in part else 64
@@ -775,7 +813,7 @@ def wrap_model_case(env, part):
         for line in model_lines(w):
             ed = Ed(w)
             ed.type(line)
-            if ed.text == line:                  # (at 64 columns the 32-column room check refuses some lines: console-64col)
+            if ed.text == line:                  # (the room check, at the display width, refuses the lines that need a 5th row)
                 lines.append(line)
         ck.true("lines the room check accepts", len(lines) >= 25, "only %d" % len(lines))
         lines = lines[0::2] if part.endswith("a") else lines[1::2]
@@ -785,8 +823,8 @@ def wrap_model_case(env, part):
             type_keys(env, ed, line)
             ck.eq("accepted line %r" % line[:24], env.edit_state()[0], line)
             env.check_view(ck, "line %r" % line[:30], base, ed)
-            shapes.append(len(wrap_model(line, w)[0]))
-        ck.note("%d lines at %d columns, rows used %s; wrap table, rows and cursor cell equal the model" % (
+            shapes.append(ed.nrows())
+        ck.note("%d lines at %d columns, rows used (cursor at the end) %s; wrap table, rows and cursor cell equal the model" % (
             len(lines), w, " ".join(str(n) for n in shapes)))
     else:
         ed = Ed(w)
@@ -794,7 +832,7 @@ def wrap_model_case(env, part):
         for code in keys:
             step(env, ck, "walk", base, ed, code)
         ck.note("%d seeded keys at %d columns, final line %r (%d chars, %d rows)" % (
-            len(keys), w, ed.text[-30:], len(ed.text), len(wrap_model(ed.text, w)[0])))
+            len(keys), w, ed.text[-30:], len(ed.text), ed.nrows()))
     return ck.result()
 
 
@@ -816,7 +854,7 @@ def wrap_grow_shrink(env, part):
         env.con.key(ord(ch))
         ed.key(ord(ch))
         env.check_view(ck, "grow %d" % len(ed.text), base, ed)
-        counts.append(len(wrap_model(ed.text, w)[0]))
+        counts.append(ed.nrows())
     ck.eq("growth steps", sorted(set(counts)), list(range(1, max(counts) + 1)))
     ck.eq("rows grow one at a time", [b - a for a, b in zip(counts, counts[1:]) if b != a and b - a != 1], [])
     ck.eq("PRINT_ROW untouched", env.print_pos(), (1 if w == 32 else 2, 0))
@@ -825,7 +863,7 @@ def wrap_grow_shrink(env, part):
         env.con.key(DELETE)
         ed.key(DELETE)
         env.check_view(ck, "shrink %d" % len(ed.text), base, ed)
-        shrink.append(len(wrap_model(ed.text, w)[0]))
+        shrink.append(ed.nrows())
     ck.eq("empty again", env.edit_state(), ("", 0))
     ck.eq("rows 20-23 blank, banner intact", [r for r in view(m, w == 64).rows[2:] if r], [])
     ck.note("%d chars, rows used 1..%d on the way up, back to 1 on the way down; every key checked against the model" % (
@@ -836,9 +874,8 @@ def wrap_grow_shrink(env, part):
 # ===================================================================== 10 scroll
 @case("wrap-scroll", "with output on the rows just above the edit line, a line growing to 2-4 rows scrolls the whole screen up "
                      "(row 0, the banner, is lost) only when the row it claims is not blank, PRINT_ROW follows; shrinking "
-                     "does not scroll back; the next output starts at PRINT_ROW.  In 64 columns the same scroll HANGS the editor "
-                     "(EDITOR_REDRAW64 keeps FWRAP_OLD_COUNT's address in HL across MODE64_SCROLL_OUTPUT_UP, which destroys HL): "
-                     "asserted as the current behaviour",
+                     "does not scroll back; the next output starts at PRINT_ROW.  The same in 64 columns (MODE64_SCROLL_OUTPUT_UP, "
+                     "PRINT_ROW follows; the merged redraw keeps its grow pointer across the scroll, no hang)",
       parts=("pr3-32", "pr20-32", "pr22-32", "pr3-64", "pr22-64"))
 def wrap_scroll(env, part):
     ck, m = Check(), env.m
@@ -853,20 +890,11 @@ def wrap_scroll(env, part):
     base = list(view(m, w == 64).rows)
     ed = Ed(w)
     text = "a" * 97 if w == 32 else GROW64
-    old, log, hung = 1, [], None
+    old, log = 1, []
     for ch in text:
         nxt = Ed(w, ed.text, ed.cursor)
         nxt.key(ord(ch))
-        new = len(wrap_model(nxt.text, w)[0])
-        scrolls = new > old and pr >= 24 - old
-        if w == 64 and scrolls:
-            try:
-                env.con.key(ord(ch), maxi=2_000_000)
-            except RuntimeError:
-                hung = (len(ed.text) + 1, m.pc())
-                break
-            ck.true("the 64-column scroll hangs", False, "the key returned")
-            break
+        new = nxt.nrows()
         env.con.key(ord(ch))
         ed.key(ord(ch))
         if new > old:
@@ -875,19 +903,6 @@ def wrap_scroll(env, part):
         old = max(old, new)
         env.check_view(ck, "grow %d" % len(ed.text), base, ed)
         ck.eq("PRINT_ROW at %d" % len(ed.text), env.print_pos()[0], pr)
-    if w == 64 and part.endswith("pr22-64"):
-        ck.true("the editor hung in EDITOR_REDRAW64's grow loop", hung is not None)
-        if hung:
-            lo, hi = env.S("EDITOR_REDRAW64.grow_loop64"), env.S("EDITOR_REDRAW64.count_settled64")
-            ck.true("PC inside EDITOR_REDRAW64.grow_loop64 .. count_settled64", lo <= hung[1] < hi, "PC=%04X" % hung[1])
-            ck.eq("HL is no longer FWRAP_OLD_COUNT's address", m.regs()["HL"] != env.S("FWRAP_OLD_COUNT"), True)
-            ck.eq("FWRAP_OLD_COUNT, FWRAP_COUNT, PRINT_ROW at the hang", (env.u8("FWRAP_OLD_COUNT"), env.u8("FWRAP_COUNT"),
-                                                                       env.u8("PRINT_ROW")), (2, 3, pr - 1))
-            ck.note("%s: the %dth character grows the line from 2 to 3 rows with PRINT_ROW 22: the scroll is done (PRINT_ROW 21), "
-                    "then HL (clobbered by MODE64_SCROLL_OUTPUT_UP) is used as FWRAP_OLD_COUNT's address and the loop never "
-                    "ends (PC in grow_loop64); the machine never returns to the key wait" % (part, hung[0]))
-        return ck.result()
-    ck.true("no hang", hung is None)
     for _ in range(len(ed.text) - 1):
         env.con.key(DELETE)
         ed.key(DELETE)
@@ -1044,8 +1059,9 @@ def recall(env, part):
 
 # ===================================================================== 14 64 columns
 @case("console-64col", "after `64COL` the editor wraps at 64 columns (the screen equals the model; the cursor is the XOR block); output "
-                       "goes on in 64 columns; `32COL` returns to 32 columns with the screen kept; the room check still counts "
-                       "32-column rows, so a line of three 40-character words (3 rows of 64) is refused at its 106th character",
+                       "goes on in 64 columns; `32COL` returns to 32 columns with the screen kept; the room check counts rows of 64, so "
+                       "a line of three 40-character words (122 characters, 3 rows of 64) is accepted whole and typing on is "
+                       "refused only where 4 rows of 64 would overflow or at 128 characters, whichever comes first",
       parts=("type", "mode", "limit"))
 def console_64col(env, part):
     ck, m = Check(), env.m
@@ -1064,7 +1080,7 @@ def console_64col(env, part):
         ed = Ed(64)
         text = "the quick brown fox jumps over the lazy dog " + "and then it sleeps in the sun until it is dark outside. ok"
         type_keys(env, ed, text, ck, "64", base)
-        ck.eq("rows used", len(wrap_model(ed.text, 64)[0]), 2)
+        ck.eq("rows used", ed.nrows(), 2)
         for code in [LEFT] * 20 + [ord("Q"), DELETE, DELETE]:
             step(env, ck, "64 edit", base, ed, code)
         ck.note("%d characters typed, 2 rows of up to 64 columns; wrap table, rows and cursor block equal the model" % len(text))
@@ -1072,12 +1088,27 @@ def console_64col(env, part):
         ed = Ed(64)
         text = ("x" * 40 + " ") * 2 + "x" * 40
         ck.eq("the 64-column wrap of the whole line", len(wrap_model(text, 64)[0]), 3)
-        ck.eq("the 32-column wrap of it overflows", wrap_model(text, 32)[1], True)
+        ck.eq("the 32-column wrap of it overflows (the old room check refused it at the 106th character)", wrap_model(text, 32)[1], True)
         type_keys(env, ed, text, ck, "limit", base)
-        ck.eq("accepted characters", len(env.edit_state()[0]), 105)
-        ck.eq("refused: FWRAP_OVERFLOW, FWRAP_COUNT", (env.u8("FWRAP_OVERFLOW"), env.u8("FWRAP_COUNT")), (1, 4))
-        ck.note("the 106th character of 'x'*40 + ' ' twice + 'x'*40 (122 characters, 3 rows of 64) is refused: WRAP_CALC (32 columns) "
-                "is what the room check runs; the table is left with the 32-column rows (count 4, overflow 1)")
+        ck.eq("accepted characters", len(env.edit_state()[0]), len(text))
+        ck.eq("the whole line is accepted: edit line", env.edit_state(), (text, len(text)))
+        # the first n at which the model refuses an 'x' typed at the end: 4 rows of 64 overflow, or the line is 128 long
+        limit = next(n for n in range(len(text), MAX_LEN + 1)
+                     if n == MAX_LEN or wrap_model(text + "x" * (n + 1 - len(text)), 64)[1])
+        took = len(text)
+        for _ in range(MAX_LEN + 2 - len(text)):
+            env.con.key(ord("x"))
+            if not ed.key(ord("x")):
+                break
+            took += 1
+            env.check_view(ck, "limit %d" % took, base, ed)
+        env.check_view(ck, "limit refused at %d" % took, base, ed)
+        ck.eq("typing stops where the model says", (took, len(env.edit_state()[0]), ed.refused), (limit, limit, "full" if limit == MAX_LEN else "rows"))
+        n, rows, ov = ed.table()
+        ck.eq("FWRAP_OVERFLOW, FWRAP_COUNT as the model says", (env.u8("FWRAP_OVERFLOW"), env.u8("FWRAP_COUNT")), (ov, n))
+        ck.note("the 3-row line of 122 characters is accepted whole and 'x' goes on being accepted to %d characters (%s); the next is "
+                "refused with FWRAP_OVERFLOW %d, FWRAP_COUNT %d (the room check runs WRAP_CALC at 64 columns)" % (
+                    limit, "the 128-character limit: 4 rows of 64 never overflow before it" if limit == MAX_LEN else "4 rows of 64 overflow", ov, n))
     else:
         con.type("1 2 + .")
         ck.eq("output in 64 columns", m.screen_rows(mode64=True)[:4], [BANNER, "OK", "3 OK", ""])
@@ -1241,7 +1272,7 @@ def full_reference(m, mode64):
     S = m.sym
     cp = m.checkpoint("oracle")
     try:
-        r = m.call("WRAP_CALC64" if mode64 else "WRAP_CALC")
+        r = m.call("WRAP_CALC")                  # picks the width from GFX_MODE
         if not r["ok"]:
             raise RuntimeError("WRAP_CALC did not return (PC=%04X)" % r["pc"])
         m.write(S("FWRAP_OLD_COUNT"), m.read(S("FWRAP_COUNT"), 1))

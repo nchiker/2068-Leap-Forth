@@ -180,6 +180,17 @@ prints the console's error text (today `STACK?` for every code), so N5 observes 
 Unchanged keys and screen behaviour, except: CR-ended lines in the store (E1, E5) and the merged redraw (E3). Every
 T12 case that passes today must pass afterwards, except those section 8 lists as changed.
 
+**The merged redraw as built (item 5) [M, S].** One `WRAP_CALC` for both widths: `WRAP_CALC_AT` takes HL = text, A =
+length, C = cursor offset (`$FF`: none), keeps the table's offsets from `FWRAP_BASE`, and sets the width
+(`FWRAP_WIDTH_MINUS1`) and the row drawer (`ED_ROW_JP`, a 3-byte RAM `JP` to `ED_ROW32` or `ED_ROW64`) from `GFX_MODE`;
+`WRAP_CALC` is that for the edit line. A full last row with the cursor at its end is stored as a hard break, so the
+table has the cursor's row (E10); `EDIT_CURSOR_TO_ROWCOL` places the cursor from `FWRAP_TOP` and clamps column W to
+W - 1. `EDITOR_REDRAW` resizes the input area one row at a time, reading `FWRAP_OLD_COUNT` and `FWRAP_COUNT` afresh on
+every pass (the 64-column hang), sets `FWRAP_TOP` = 24 - count and calls `ED_DRAW_ROWS` and `ED_DRAW_CURSOR`. These four
+(`WRAP_CALC`, `WRAP_CALC_AT`, `ED_DRAW_ROWS`, `ED_DRAW_CURSOR`) with `FWRAP_TOP` are what the view needs to draw its
+lines (item 6). The row drawer is chosen once per row, not per cell: a cell writer called through the veneer cost
+64 columns up to 12,700 T a key. Sizes: wrap 165 → 196 B, drawing 410 → 199 B, HOME −178 B; RAM `$88F8-$88FE`.
+
 ## 5. Full-screen view
 
 **Entry.** `EDIT name` finds the last line in the store in which the words `:` and `name` follow each other (words
@@ -235,7 +246,7 @@ when it scrolls. After every key the screen equals a full view redraw from the s
 
 | Change | HOME | EXROM |
 |---|---:|---:|
-| Merged redraw (E3) | about −150 | |
+| Merged redraw (E3) | about −150 [E]; measured −178 (item 5) | |
 | `RECALL` retired (E6) | −74 | |
 | CR as whitespace (E1) | 0 | |
 | Store room check, dictionary ceiling check (E2a, E5) | +20-40 [E]; measured +16 (item 3) and +66 (item 4) | |
