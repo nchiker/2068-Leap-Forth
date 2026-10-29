@@ -7,7 +7,7 @@
 ; STORAGE_NO_AUTOSTART, parameter 2 = the length), then the text bytes (the format V1 used, which is
 ; not a requirement: spec D2) and the format tools/tape_gen_forth.py writes.
 ;
-; LOAD-TEXT receives into STORE_START = LOADTEXT_BUF (the top LOADTEXT_MAX_LEN bytes below DICT_RAM_CEILING),
+; LOAD-TEXT receives into STORE_START = LOADTEXT_BUF (LOADTEXT_MAX_LEN bytes from DICT_RAM_CEILING up),
 ; which stays resident afterwards as the line store (core/recall.asm), and interprets it.
 ;
 ; Errors are THROWn as in core/storage.asm (-28 SPACE, -37 any other tape failure; core/tapeword.asm).
@@ -28,9 +28,13 @@ STORE_END EQU $8A74         ; 2 bytes: one past the last valid byte in the store
                             ; leave it alone
 
 LOADTEXT_MAX_LEN EQU 8192
-LOADTEXT_BUF     EQU DICT_RAM_CEILING - LOADTEXT_MAX_LEN   ; $D000 with today's $F000 ceiling
+LOADTEXT_BUF     EQU $D000                             ; defined on its own (step E2a): it is also DICT_RAM_CEILING
+    ASSERT LOADTEXT_BUF == DICT_RAM_CEILING                ; the dictionary ends where the store begins
 STORE_START      EQU LOADTEXT_BUF
 STORE_LIMIT      EQU STORE_START + LOADTEXT_MAX_LEN        ; $F000: the store never writes at or above it
+    ASSERT STORE_LIMIT <= UDG_TABLE   ; the store region ends below every other thing at $F000 and up (LABEL_TABLE_TOP, UDG_TABLE ...)
+    ; NOT clear: the sprite slot buffers, SPRITE_SLOT_IMG_BUF/_BG_BUF ($E800-$E91F, include/sysvars.inc, used by the
+    ; graphics EXROM's SPRITE words), lie inside $D000-$EFFF. Reported to the owner at step E item 4.
     ASSERT (STORE_LIMIT & $FF) == 0   ; LOAD-TEXT's room test below looks at the high byte only
 
 ; ============================================================================

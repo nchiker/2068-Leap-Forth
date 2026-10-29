@@ -160,6 +160,12 @@ lines. Each moves the tail of the store with HOME's block-move routine (through 
 reports a full store by carry without changing anything. Registers are set by the code and recorded in the
 routines' headers.
 
+**The sprite buffers moved** (found at item 4): `SPRITE_SLOT_IMG_BUF` and `SPRITE_SLOT_BG_BUF` (288 B, the graphics
+EXROM's SPRITE words) were at `$E800-$E91F`, inside the store region, so a store over 6 KB and SPRITE-DEFINE/SHOW
+overwrote each other (in the old build too). They are now at `$F000-$F11F`, between the store and `UDG_TABLE`, a
+range nothing used (`LABEL_TABLE_TOP` there is BASIC scaffolding no Forth code references); the cold start still clears
+them. Asserted in `include/sysvars.inc`. 0 B of code.
+
 **Dictionary ceiling (E2a).** `DICT_RAM_CEILING` becomes `$D000`; `LOADTEXT_BUF` stays `$D000` and is defined on its
 own, no longer as the ceiling minus 8 KB. Every place that starts a definition or a data field (the header builder
 behind `:`, `CREATE`, `VARIABLE`, `CONSTANT`, `STRING`, `ARRAY`), `ALLOT`, `,` and `C,` refuses with THROW -8 when
@@ -232,7 +238,7 @@ when it scrolls. After every key the screen equals a full view redraw from the s
 | Merged redraw (E3) | about −150 | |
 | `RECALL` retired (E6) | −74 | |
 | CR as whitespace (E1) | 0 | |
-| Store room check, dictionary ceiling check (E2a, E5) | +20-40 | |
+| Store room check, dictionary ceiling check (E2a, E5) | +20-40 [E]; measured +16 (item 3) and +66 (item 4) | |
 | Engine veneers for the view (E3) | +15-25 | |
 | `EDIT` word and EXROM call | +40-60 | |
 | View, navigation, redraw, store routines (E4) | | +2,200-2,600 |
@@ -307,7 +313,10 @@ implements (all of them by the last step, when plain `make edtest` must pass); `
 - **Fuse 1.9.1 crash** (found at step E item 3): with one particular image layout (item 3's first draft, HOME 1,114 B
   free), `make fusesave-cross` dies: Fuse aborts with a glibc malloc assertion inside its own `tape_write` while
   recording `SAVE-LIB` of `: CUBE DUP DUP * * ;`. The same layout's `SAVE-LIB` captured on ZEsarUX decodes
-  correctly and round-trips (`tools/tapetest.py --case 4`), and 1 or 3 bytes more or less make Fuse pass. A Fuse
-  defect, not the ROM's; if a later layout trips it, check `tapetest --case 4` on that build before suspecting the ROM.
+  correctly and round-trips (`tools/tapetest.py --case 4`), and 1 or 3 bytes more or less make Fuse pass. At item 4
+  it came back on two more layouts, and on the same ROM `: CUBE DUP DUP * * 0 + ;` records fine: the trigger is the
+  recorded signal, inside Fuse's tape writer. `tools/fusesave.py`'s cross phase now prints the abort and records both
+  machines again with that equivalent definition (`CROSS_SETUPS`). If another recording trips it, check
+  `tapetest --case 4` on that build before suspecting the ROM.
 - The screen is read from video RAM; flicker is judged by the full-redraw oracle (no intermediate frame differs from
   a full redraw at the key wait), not by watching a display.

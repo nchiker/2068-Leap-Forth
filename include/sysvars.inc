@@ -1997,7 +1997,8 @@ SPRITE_SLOT_ROW:     DEFS SPRITE_SLOT_MAX   ; 4 bytes (1/slot) — top-left
 SPRITE_SLOT_COL:     DEFS SPRITE_SLOT_MAX   ; 4 bytes (1/slot) — same,
                                    ; column
 
-SPRITE_SLOT_IMG_BUF  EQU $E800         ; 144 bytes — captured sprite
+SPRITE_SLOT_IMG_BUF  EQU $F000         ; 144 bytes — captured sprite (step E item 4: moved from $E800,
+                                   ; which lies in the line store $D000-$EFFF; $F000-$F17F was unused)
                                    ; image itself (SPRITE_SLOT_MAX *
                                    ; SPRITE_SLOT_BYTES), filled once
                                    ; per SPRITE-DEFINE, read (never
@@ -2007,16 +2008,10 @@ SPRITE_SLOT_BG_BUF   EQU SPRITE_SLOT_IMG_BUF + (SPRITE_SLOT_MAX * SPRITE_SLOT_BY
                                    ; the sprite, captured fresh by each
                                    ; SHOW, consumed by the matching HIDE
 
-    ASSERT SPRITE_SLOT_BG_BUF + (SPRITE_SLOT_MAX * SPRITE_SLOT_BYTES) < $F000
-                                   ; stays comfortably below DICT_RAM_
-                                   ; CEILING (core/free.asm) — same
-                                   ; headroom convention LOADTEXT_BUF
-                                   ; and the extension-registry region
-                                   ; already established, even though
-                                   ; nothing actually enforces that
-                                   ; ceiling against HERE today (core/
-                                   ; dictspace.asm's own header notes
-                                   ; this gap)
+    ASSERT SPRITE_SLOT_IMG_BUF >= $F000  ; above the line store (core/loadtext.asm STORE_LIMIT)
+    ASSERT SPRITE_SLOT_BG_BUF + (SPRITE_SLOT_MAX * SPRITE_SLOT_BYTES) <= UDG_TABLE
+                                   ; both buffers sit between the line store and the UDG table;
+                                   ; the cold start clears them ($8000 up to COLD_CLEAR_END)
 
 ; ---- rom/graphics_exrom.asm's own sprite transfer scratch ----
 ; Staged by core/sprite.asm's Home-resident words before paging chunk

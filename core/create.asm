@@ -161,6 +161,7 @@ H_CREATE:
                             ; INCLUDEing this file
     DB   6, "C","R","E","A","T","E"
 W_CREATE:
+    call DICT_ROOM0
     call W_WORD
     rst RST_DPOP
     ld   (WORD_SRC_ADDR), hl

@@ -63,6 +63,7 @@ H_VARIABLE:
                             ; INCLUDEing this file
     DB   8, "V", "A", "R", "I", "A", "B", "L", "E"
 W_VARIABLE:
+    call DICT_ROOM0
     call W_WORD
     rst RST_DPOP
     ld   (WORD_SRC_ADDR), hl
@@ -126,6 +127,7 @@ H_CONSTANT:
     DW   H_VARIABLE
     DB   8, "C", "O", "N", "S", "T", "A", "N", "T"
 W_CONSTANT:
+    call DICT_ROOM0
     rst RST_DPOP
     push hl                        ; stash the value across name
                                     ; parsing on the Z80 hardware stack

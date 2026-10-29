@@ -300,6 +300,7 @@ W_STRING:
                               ; within this one routine's own body,
                               ; matching core/array.asm's own W_ARRAY
                               ; (same technique, same justification)
+    call DICT_ROOM                 ; hl = n: the buffer must fit below the ceiling guard (E2a)
     call W_WORD
     rst RST_DPOP
     ld   (WORD_SRC_ADDR), hl

@@ -2,14 +2,14 @@
 ; rom/forth_smoke_p43.asm — Phase 43/44 smoke ROM: FREE
 ;
 ; TWO CHECKPOINTS:
-;   1. FREE right after cold start = DICT_RAM_CEILING ($F000, raised
+;   1. FREE right after cold start = DICT_RAM_CEILING ($D000 since step E2a; $F000, raised
 ;      from Phase 43's $C000 by Phase 44's FILL-scratch relocation)
-;      minus FORTH_DICT_RAM ($9800) = $5800 = 22528 exactly — the
+;      minus FORTH_DICT_RAM ($9800) = $3800 = 14336 exactly — the
 ;      honest number for this project's real RAM topology (see
 ;      core/free.asm's own header for the full ceiling/floor history).
 ;   2. After HERE is advanced by 100 bytes (simulating dictionary growth
-;      from a real CREATE/compile), FREE tracks it exactly: 22528-100 =
-;      22428. Proves FREE re-reads HERE live rather than caching the
+;      from a real CREATE/compile), FREE tracks it exactly: 14336-100 =
+;      14236. Proves FREE re-reads HERE live rather than caching the
 ;      cold-start value.
 ;
 ; Border goes GREEN (4) if both pass; otherwise it shows the failing
@@ -49,11 +49,11 @@ COLD_START:
 
     call GFX_CLS
 
-; ---- checkpoint 1: FREE = 22528 right after cold start ----
+; ---- checkpoint 1: FREE = 14336 right after cold start ----
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
     call W_FREE
-    ld   de, 22528
+    ld   de, DICT_RAM_CEILING - FORTH_DICT_RAM   ; $3800 = 14336 since step E2a (was $5800 = 22528)
     call CHECK_TOP
     call W_DROP
 
@@ -65,7 +65,7 @@ COLD_START:
     add  hl, de
     ld   (HERE), hl
     call W_FREE
-    ld   de, 22428
+    ld   de, DICT_RAM_CEILING - FORTH_DICT_RAM - 100
     call CHECK_TOP
     call W_DROP
 

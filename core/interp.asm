@@ -464,6 +464,37 @@ COMPILE_LITERAL:
     ret
 
 ; ============================================================================
+; DICT_ROOM ( HL = n bytes about to be reserved -- ) the dictionary ceiling (audit step E2a).
+; Returns, with HL unchanged, if HERE + n does not pass DICT_RAM_CEILING - 256; otherwise THROW -8.
+; The 256 bytes below the ceiling are what a definition's body may still use before its `;`
+; (a body is compiled with COMPILE_CALL/_BYTE/_WORD, which are not checked). Called at the top of
+; every word that starts a definition or a data field (`:` CREATE VARIABLE CONSTANT ARRAY STRING;
+; DICT_ROOM0 is n = 0) and by `,` `C,` ALLOT; it runs before the word changes HERE or LATEST.
+; Unsigned: HERE + n carrying past $FFFF fails. Destroys: AF, DE. A ROM without THROW (the early
+; smoke ROMs) gets a bare RET.
+; ============================================================================
+DICT_ROOM0:
+    ld   hl, 0
+DICT_ROOM:
+    IFDEF THROW_CATCH_ENABLED
+    push hl
+    ld   de, (HERE)
+    add  hl, de
+    jr   c, .full
+    ld   de, DICT_RAM_CEILING - 255
+    sbc  hl, de                   ; carry clear from the add
+    jr   nc, .full                ; HERE + n >= ceiling - 255
+    pop  hl
+    ret
+.full:
+    ld   hl, -8                   ; dictionary overflow (the SP left by the push is reset by THROW)
+    rst  RST_DPUSH
+    jp   W_THROW
+    ELSE
+    ret
+    ENDIF
+
+; ============================================================================
 ; COMPILE_BYTE ( A = byte -- )  compiles one raw byte at HERE. Used by
 ; `;` to compile a bare RET ($C9) — see W_SEMICOLON below.
 ; ============================================================================
@@ -489,6 +520,7 @@ H_COLON:
     DW   H_STORE
     DB   1, ":"
 W_COLON:
+    call DICT_ROOM0
     call W_WORD
     rst RST_DPOP
     ld   (WORD_SRC_ADDR), hl

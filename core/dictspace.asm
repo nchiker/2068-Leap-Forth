@@ -37,13 +37,10 @@
 ;             most direct implementation, not a deliberately added
 ;             feature.
 ;
-; NO RANGE CHECKING against core/free.asm's own DICT_RAM_CEILING for any
-; of these — matching every other HERE-advancing word in this project
-; (`:`, VARIABLE, CONSTANT, ARRAY): FREE ( -- n ) already exists for a
-; program to check headroom itself before a large ALLOT/CREATE if it
-; cares, and adding an automatic check here that none of those earlier,
-; already-shipped words have would be a wider, inconsistent behavior
-; change this phase has no mandate to make.
+; RANGE CHECK (audit step E2a): `,` `C,` and a growing ALLOT call DICT_ROOM
+; (core/interp.asm), which THROWs -8 if HERE + the size would pass
+; DICT_RAM_CEILING - 256, as the defining words do. (This phase originally
+; had no range checking; FREE reports the headroom.)
 ; ============================================================================
 
     IFNDEF CORE_DICTSPACE_ASM
@@ -70,6 +67,8 @@ H_COMMA:
     DW   H_HERE
     DB   1, ","
 W_COMMA:
+    ld   hl, 2
+    call DICT_ROOM               ; E2a: refuses (THROW -8) past DICT_RAM_CEILING - 256
     rst RST_DPOP
     call COMPILE_WORD
     ret
@@ -81,6 +80,8 @@ H_CCOMMA:
     DW   H_COMMA
     DB   2, "C", ","
 W_CCOMMA:
+    ld   hl, 1
+    call DICT_ROOM               ; E2a
     rst RST_DPOP
     ld   a, l
     call COMPILE_BYTE
@@ -94,6 +95,9 @@ H_ALLOT:
     DB   5, "A","L","L","O","T"
 W_ALLOT:
     rst RST_DPOP            ; hl = n
+    bit  7, h
+    call z, DICT_ROOM         ; E2a: a growing ALLOT must stay below DICT_RAM_CEILING - 256
+                              ; (a negative n shrinks, as before)
     ld   de, (HERE)
     add  hl, de               ; hl = HERE + n (two's complement handles
                                 ; a negative n correctly with no special
