@@ -2084,17 +2084,17 @@ SPRITE_CELL_COL:     DEFS 1           ; 1 byte — same, column
 ;
 ; HAZARD THIS CREATES, and how it's handled: $6000-$77FF of this same
 ; idle pool is where the Second Display File lives (hardware-fixed, not
-; relocatable — see docs/memory_map.md) — used by BOTH 64-column mode
-; (kernel/mode64's own second bitmap plane, GFX_MODE=2) AND High
-; Resolution Graphics mode (core/hires.asm's HIRES, GFX_MODE=1; real
-; per-scanline attribute data, kernel/graphics's GFX_SET_ATTR_EXT).
-; FILL and either video mode can only run one at a time (single-
+; relocatable — see docs/memory_map.md) — used by High Resolution
+; Graphics mode (core/hires.asm's HIRES, GFX_MODE=1; real per-scanline
+; attribute data, kernel/graphics's GFX_SET_ATTR_EXT; the removed
+; 64-column mode, step M6, used it as a second bitmap plane).
+; FILL and the video mode can only run one at a time (single-
 ; threaded, no interrupt-driven redraw), so the real hazard is FILL
-; corrupting a currently-ACTIVE non-Normal screen (or vice versa) if
+; corrupting a currently-ACTIVE HIRES screen (or vice versa) if
 ; called while that mode's data is live — core/moregfx.asm's own FILL
-; wrapper checks GFX_MODE and refuses to run whenever it's nonzero (any
-; non-Normal mode), rather than relying on the caller to know not to
-; mix them (see that file's own header).
+; wrapper checks GFX_MODE and refuses to run whenever it's nonzero (HIRES
+; is the only non-Normal mode), rather than relying on the caller to know
+; not to mix them (see that file's own header).
 GFX_FILL_VISITED     EQU $5B00         ; 6144 bytes, through $72FF
 
     ASSERT GFX_FILL_VISITED + 6144 == GFX_FILL_STACK

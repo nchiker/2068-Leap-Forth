@@ -212,11 +212,11 @@ H_FSTAR:
                             ; not EQU) to whatever word chain this
                             ; file should extend, immediately before
                             ; INCLUDEing this file — NOT hardcoded to
-                            ; H_FMINUS, unlike core/mode64.asm's own
-                            ; H_64COL: both this file and that one
-                            ; extend core/float.asm's tail, and a ROM
-                            ; including both (rom/forth_boot.asm does)
-                            ; would silently make one of them
+                            ; H_FMINUS: another file extending
+                            ; core/float.asm's tail (core/mode64.asm's
+                            ; H_64COL did, until step M6 removed it),
+                            ; in a ROM including both (rom/forth_boot.asm
+                            ; did), would silently make one of them
                             ; unreachable by FIND if this one also
                             ; hardcoded the same anchor — exactly the
                             ; tree-vs-chain bug DICT_CHAIN_POINT itself

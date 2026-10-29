@@ -23,7 +23,7 @@
 ; LOAD-TEXT, F+/F-, F*, F., F/, EMIT/., .", CR/SPACE/SPACES, FSQRT,
 ; S>F/F>S/FROUND, PI/SIN/COS/RAD/DEG, BEEP, SOUND, ULAPLUS/PALETTE,
 ; =/</>, VARIABLE/CONSTANT, INK/PAPER/BRIGHT/FLASH, HIRES/NORMAL,
-; 64COL/32COL/PALETTE64/PLOT64, DO/LOOP/LEAVE/+LOOP/I/J, FILL/AT-XY,
+; DO/LOOP/LEAVE/+LOOP/I/J, FILL/AT-XY,
 ; KEY/KEY?/BREAK?, ABS/SGN/MOD/SQRT/RND/RANDOMIZE, 1+/1-/NEGATE/MAX/MIN,
 ; ARRAY/CELLS, S"/TYPE/STRING/PLACE/COUNT/LEN/VAL, C@/C!, STICK,
 ; ACCEPT/INPUT, CHR/STR/UPPER/LOWER/LEFT/RIGHT/SEARCH/CODE, EXECUTE,
@@ -191,8 +191,8 @@ COLD_START:
     ld   iy, FSTACK_TOP
 
     ; Establish a known DECR (port $FF) baseline before anything reads
-    ; or read-modify-writes PORT_FF_SHADOW (kernel/graphics, kernel/
-    ; mode64, kernel/bank all do). The MEM_FILL_ZERO call below happens
+    ; or read-modify-writes PORT_FF_SHADOW (kernel/graphics and kernel/
+    ; bank both do). The MEM_FILL_ZERO call below happens
     ; to zero PORT_FF_SHADOW's own RAM byte too ($81C7 falls in its
     ; $8000-DICT_RAM_CEILING range), but that only fixes the shadow --
     ; real hardware's actual port $FF is a hardware register with its
@@ -523,7 +523,6 @@ RUNTIME_ERROR_MSG: DB "STACK?", 0
     INCLUDE "kernel/interrupt/interrupt.asm"
     INCLUDE "kernel/graphics/graphics.asm"
     INCLUDE "kernel/storage/storage.asm"
-    INCLUDE "kernel/mode64/mode64.asm"
     INCLUDE "kernel/bank/bank.asm"
     INCLUDE "core/dict.asm"
     DEFINE DECIMAL_NUMBER_ENABLED
@@ -545,8 +544,7 @@ DICT_CHAIN_POINT DEFL H_CLS
     INCLUDE "core/storage.asm"
 DICT_CHAIN_POINT DEFL H_LOADLIB
     INCLUDE "core/float.asm"
-    INCLUDE "core/mode64.asm"
-DICT_CHAIN_POINT DEFL H_PLOT64
+DICT_CHAIN_POINT DEFL H_FMINUS
     INCLUDE "core/floatmul.asm"
 DICT_CHAIN_POINT DEFL H_FSTAR
     INCLUDE "core/floatdiv.asm"

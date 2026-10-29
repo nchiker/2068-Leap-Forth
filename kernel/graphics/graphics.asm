@@ -928,11 +928,8 @@ GFX_SET_ATTR_EXT:
 ; ============================================================================
 ; GFX_SET_MODE
 ; Switches video mode via port $FF (PORT_SCLD) — 0 (Normal) or 1 (High
-; Resolution Graphics). Mode 2 (64-Column) was removed 2026-08-20 —
-; real overhead vs. value trade-off, freed for more core language
-; features (see this project's own working memory for the accounting;
-; the routine itself, GFX_SET_PALETTE, and the PALETTE statement were
-; the only things that existed purely to serve it).
+; Resolution Graphics). Mode 2 (64-Column) was removed at step M6
+; (docs/V2/MODE6_REMOVAL_SPEC.md); the mode value 2 is not used.
 ; In:  A = mode (0 or 1 — BASIC_STMT_MODE validates this before
 ;      calling)
 ; Out: none

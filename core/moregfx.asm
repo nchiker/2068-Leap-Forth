@@ -27,16 +27,16 @@
 ; out-of-range position just means the next EMIT/./."-drawn character
 ; lands somewhere unintended, not a crash.
 ;
-; FILL REFUSES TO RUN IN 64-COLUMN MODE (added Phase 44 — see
+; FILL REFUSES TO RUN IN HIRES MODE (added Phase 44 — see
 ; include/sysvars.inc's own GFX_FILL_VISITED header for the full
 ; writeup): to raise the dictionary's own ceiling (core/free.asm),
 ; GFX_FILL's scratch buffers were relocated into the idle video-RAM
-; pool at $5B00-$7FFF — the same physical range 64-column mode's
-; second display file lives in ($6000-$77FF, hardware-fixed). Running
-; FILL while 64COL mode is active would corrupt whichever one runs
-; second. Checked via GFX_MODE (2 = 64-column, set by MODE64_ON in
-; kernel/mode64/mode64.asm) before calling GFX_FILL; if active, FILL
-; still consumes its (x y) arguments (this project's established
+; pool at $5B00-$7FFF — the same physical range HIRES's attribute
+; file lives in ($6000-$77FF, hardware-fixed). Running
+; FILL while HIRES is active would corrupt whichever one runs
+; second. Checked via GFX_MODE (1 = HIRES, set by core/hires.asm's
+; HIRES, the only non-Normal mode) before calling GFX_FILL; if active,
+; FILL still consumes its (x y) arguments (this project's established
 ; convention — SOUND/STICK do the same for out-of-range input) but
 ; silently does nothing instead of running.
 ; ============================================================================
@@ -61,19 +61,14 @@ W_FILL:
     ld   a, l
     ld   (GFX_FILL_X), a
     ld   a, (GFX_MODE)
-    or   a                  ; nonzero = some non-Normal video mode is
-                             ; active: 1 (core/hires.asm's HIRES, Phase
-                             ; 55) or 2 (kernel/mode64's MODE64_ON) --
+    or   a                  ; nonzero = HIRES (1, core/hires.asm, Phase
+                             ; 55), the only non-Normal video mode --
                              ; FILL's own relocated scratch
                              ; (GFX_FILL_VISITED/GFX_FILL_STACK,
                              ; $5B00-$7FFF) overlaps SECOND_DISPLAY_ADDR
-                             ; ($6000-$77FF), which BOTH of those modes
-                             ; use for real, live screen data -- see
-                             ; this file's own header. Originally just
-                             ; `cp 2` (only 64-column mode existed when
-                             ; this guard was written); widened to `or a`
-                             ; when HIRES made mode 1 reachable too, same
-                             ; hazard either way.
+                             ; ($6000-$77FF), which HIRES uses for real,
+                             ; live screen data -- see this file's own
+                             ; header.
     ret  nz                 ; arguments already consumed above; silently
                              ; do nothing, matching this project's own
                              ; established out-of-range convention

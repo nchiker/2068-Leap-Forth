@@ -71,7 +71,7 @@
 ; for this file's embedded Forth game source on top of it. This ROM
 ; therefore INCLUDEs a deliberately TRIMMED subset of core/ and
 ; kernel/: no SAVE/LOAD (kernel/storage, core/storage — tape I/O,
-; unused), no 64COL (kernel/mode64, core/mode64 — unused), no
+; unused), no
 ; editor.asm (this ROM never runs the live line editor — it drives the
 ; game directly via INTERPRET_RUN, never EDITOR_LOOP_LIVE), no
 ; FSQRT/SIN/COS/PI/RAD/DEG/F./F>S/FROUND (core/floatsqrt/floattrig/
@@ -187,8 +187,8 @@ COLD_START:
     ld   iy, FSTACK_TOP
 
     ; Establish a known DECR (port $FF) baseline before anything reads
-    ; or read-modify-writes PORT_FF_SHADOW (kernel/graphics, kernel/
-    ; mode64, kernel/bank all do) -- unlike rom/forth_boot.asm, this
+    ; or read-modify-writes PORT_FF_SHADOW (kernel/graphics and kernel/
+    ; bank both do) -- unlike rom/forth_boot.asm, this
     ; file has no bulk RAM-zeroing pass that would incidentally zero
     ; PORT_FF_SHADOW's own RAM byte either, so this is the only thing
     ; that initializes it. Real hardware's actual port $FF is a

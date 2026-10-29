@@ -1,9 +1,9 @@
 ; ============================================================================
-; rom/hires_visual_check.asm — NOT a smoke ROM. Companion to
-; rom/mode64_visual_check.asm: same idea (two solid blocks, wide gap
-; between them, real per-scanline attribute set on each), but for
-; HIRES (GFX_MODE=1, port $FF bits %010) instead of 64COL (%110), to
-; separately check that hardware mode's own visual rendering.
+; rom/hires_visual_check.asm — NOT a smoke ROM. A visual check: two
+; solid blocks, wide gap between them, real per-scanline attribute set
+; on each, for HIRES (GFX_MODE=1, port $FF bits %010), to check that
+; hardware mode's own visual rendering. (Its 64COL companion went with
+; step M6.)
 ;
 ; Left block: (50,80)-(69,99), ink 2. Right block: (200,80)-(219,99),
 ; ink 5. Both fully inside the NORMAL 256-pixel-wide bitmap (HIRES
@@ -14,12 +14,9 @@
 ;
 ; RESULT (already run — see docs/PROJECT_PLAN.md's "Future stretch
 ; goal" section for the full writeup): renders CORRECTLY in ZEsarUX --
-; both blocks appear as real, distinctly colored solid squares, unlike
-; this file's own rom/mode64_visual_check.asm companion (64COL), which
-; renders as one flat rectangle regardless of its own bitmap content.
-; See rom/mode64_visual_check.asm's own header for the exact ZEsarUX
-; invocation (--romfile format, ZRCP commands) -- identical for this
-; file, just point --romfile at THIS binary's own concatenated image.
+; both blocks appear as real, distinctly colored solid squares. Run it
+; with --romfile pointed at THIS binary's own concatenated image and
+; take a screenshot over ZRCP.
 ; ============================================================================
 
     INCLUDE "include/hardware.inc"

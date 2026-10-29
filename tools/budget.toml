@@ -24,13 +24,13 @@ pad = 0xFF
 [[image]]
 file   = "forth_boot_rom0.bin"
 title  = "HOME ROM (Forth)"
-floor  = 1042
+floor  = 1629
 target = 200
 
 [[image]]
 file   = "forth_boot_cart.bin"
 title  = "HOME, DOCK cartridge build (Forth)"
-floor  = 1042
+floor  = 1629
 target = 200
 
 [[image]]
@@ -54,7 +54,7 @@ target = 200
 [[image]]
 file   = "graphics_exrom.bin"
 title  = "Graphics EXROM (chunk 5)"
-floor  = 4224
+floor  = 4247
 target = 150
 
 # Every floor change after the first commit of this file, newest last:
@@ -85,3 +85,7 @@ target = 150
 #   forth_boot_rom0.bin and forth_boot_cart.bin: 1090 -> 1042 (-48 B), graphics_exrom.bin: 5006 -> 4224 (-782 B), step E
 #     follow-up: SAVE-TEXT/VERIFY-TEXT save the line store and STORE_TRIM keeps command lines out of it (HOME), the
 #     view's row-shadow renderer (+841 EXROM), VIEW_TRIM removed (-56 EXROM); the audit's section 9 row "E follow-up".
+#   forth_boot_rom0.bin and forth_boot_cart.bin: 1042 -> 1629 (+587 B, raised), graphics_exrom.bin: 4224 -> 4247 (+23 B,
+#     raised), step M6: Mode 6 removed (kernel/mode64 394, 64COL/32COL/PALETTE64/PLOT64 60, the editor's 64-column
+#     branches 63, EMIT's 70; the EXROM's 32COL FIRST refusal 23); docs/V2/MODE6_REMOVAL_SPEC.md, the audit's section 9
+#     row "M6".

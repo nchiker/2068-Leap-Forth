@@ -95,7 +95,7 @@ GRAPHICS_EXROM_UNIMPLEMENTED:
 ; a different one) means the caller pages back out without calling
 ; anything, matching this project's own established "silently do
 ; nothing" convention for out-of-range/unavailable input (SOUND/
-; STICK/FILL's own 64-col guard).
+; STICK/FILL's own HIRES guard).
 ; ============================================================================
     DB   GRAPHICS_EXROM_MAGIC
     DB   GRAPHICS_EXROM_ABI
@@ -466,7 +466,7 @@ RECT_RIGHTMASK_TABLE:
 ;
 ; Fewer than 3 points or more than POLY_MAXPTS silently draws nothing
 ; — same "silently do nothing on invalid input" convention every other
-; word in this project already uses (SOUND/STICK/FILL's own 64-col
+; word in this project already uses (SOUND/STICK/FILL's own HIRES
 ; guard, RECT_FILL_IMPL's own out-of-range handling).
 ; In:  POLY_COUNT (3-POLY_MAXPTS), POLY_VERTS (that many (x,y) pairs),
 ;      POLY_ATTR — all pre-set by the Home-side POLYGON word
@@ -1626,7 +1626,6 @@ STORE_DELETE:
 ; ============================================================================
     INCLUDE "include/keys.inc"
 
-VIEW_MSG_32COL:    DB "32COL FIRST", 13, 0
 VIEW_MSG_LONG:     DB "LONG LINE", 13, 0
 VIEW_MSG_FULL:     DB "STORE FULL", 13, 0      ; also the status row's text (10)
 VIEW_COLON:        DB 1, ":"                   ; counted, like WORD_BUF
@@ -1636,16 +1635,12 @@ VIEW_COLON:        DB 1, ":"                   ; counted, like WORD_BUF
 ; In:  WORD_BUF = the name after EDIT (count 0: bare EDIT); the console's line
 ;      is still in EDIT_BUF/EDIT_LEN
 ; Out: VIEW_RESULT
-; Refusals, in this order, change nothing: 64-column mode (32COL FIRST), an
-; unterminated tail, a line over EDIT_MAX_LEN or needing a 5th row (LONG LINE),
-; no `: name` line (result 1, Home prints `name ?`). Bare EDIT adds an empty
-; marked line after the last (no room: STORE FULL).
+; Refusals, in this order, change nothing: an unterminated tail, a line over
+; EDIT_MAX_LEN or needing a 5th row (LONG LINE), no `: name` line (result 1,
+; Home prints `name ?`). Bare EDIT adds an empty marked line after the last
+; (no room: STORE FULL).
 ; ============================================================================
 VIEW_SESSION:
-    ld   a, (GFX_MODE)
-    cp   2
-    ld   hl, VIEW_MSG_32COL
-    jr   z, .refuse
     ld   hl, (STORE_END)
     ld   de, STORE_START
     or   a

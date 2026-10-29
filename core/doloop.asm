@@ -254,7 +254,7 @@ PATCH_LEAVE_CHAIN:
 ; PRINT_ROW/PRINT_COL/EMIT_CHAR_TMP occupy $87C8-$87CA, and a real
 ; +LOOP body almost always prints on every pass (as this project's own
 ; smoke test does), so its scratch is LIVE at the same time as
-; PRINT_ROW/PRINT_COL, unlike the float/mode64 scratch blocks earlier
+; PRINT_ROW/PRINT_COL, unlike the float scratch blocks earlier
 ; in this same $87xx range, which safely overlap each other only
 ; because those features never run interleaved with one another. This
 ; block instead starts right after core/ts2068.asm's own CURRENT_ATTR
