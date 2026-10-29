@@ -169,6 +169,16 @@ GRAPHICS_HOME_TABLE:
     jp   GFX_ROW_BASE_ADDR        ; slot 3 — A=row -> HL=that row's
                                   ; bitmap base address (scanline 0)
     jp   GFX_CELL_ATTR_ADDR       ; slot 4 — B=row, C=col -> HL=addr
+; Step E item 6 (docs/V2/EDITOR_SPEC.md section 5.1): the full-screen view
+; in the EXROM edits and draws with the console's own engine.
+    jp   WRAP_CALC                ; slot 5 — the edit line's wrap table
+    jp   WRAP_CALC_AT             ; slot 6 — HL=text, A=length, C=cursor/$FF
+    jp   ED_DRAW_ROWS             ; slot 7 — the table's rows from FWRAP_TOP
+    jp   ED_DRAW_CURSOR           ; slot 8 — the cursor from table, FWRAP_TOP
+    jp   EDITOR_EDIT_KEY          ; slot 9 — A=key; carry=ENTER, NZ=changed
+    jp   IO_READ_KEY              ; slot 10 — the key wait -> A
+    jp   EDIT_CURSOR_TO_ROWCOL    ; slot 11 — B=row, C=col
+    jp   FORGET_PRINT_MSG         ; slot 12 — HL=zero-terminated text
 
 ; ============================================================================
 ; COLD_START
