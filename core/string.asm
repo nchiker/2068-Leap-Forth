@@ -151,11 +151,11 @@ DOSSTR:
                                  ; address + length)
     push hl                      ; restore as the real return address
     ld   hl, (DOSSTR_ADDR)
-    call DPUSH_HL                 ; push addr
+    rst RST_DPUSH                ; push addr
     ld   a, (DOSSTR_LEN)
     ld   l, a
     ld   h, 0
-    call DPUSH_HL                  ; push len
+    rst RST_DPUSH                 ; push len
     ret
 
 ; ============================================================================
@@ -240,12 +240,12 @@ W_SQUOTE:
                                  ; still holds the length byte's own
                                  ; address from just above; the actual
                                  ; text starts right after it)
-    call DPUSH_HL                ; push addr
+    rst RST_DPUSH               ; push addr
     ld   a, b                    ; len -- still intact; nothing since
                                  ; the scan loop ended has touched B
     ld   l, a
     ld   h, 0
-    call DPUSH_HL                 ; push len
+    rst RST_DPUSH                ; push len
 
     ; also reclaim the dictionary space "CALL DOSSTR" and the string's
     ; own inline bytes used -- none of it is needed when interpreting,
@@ -261,11 +261,11 @@ H_TYPE:
     DW   H_SQUOTE
     DB   4, "T", "Y", "P", "E"
 W_TYPE:
-    call DPOP_HL              ; hl = len
+    rst RST_DPOP             ; hl = len
     ld   a, l
     ld   b, a                  ; b = len (this project's strings are
                                 ; always well under 256 chars)
-    call DPOP_HL                ; hl = addr
+    rst RST_DPOP               ; hl = addr
     ld   a, b
     or   a
     ret  z                       ; empty string -- nothing to print
@@ -279,7 +279,7 @@ W_TYPE:
     push bc
     ld   l, a
     ld   h, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     pop  bc
     pop  hl
@@ -294,14 +294,15 @@ H_STRING:
     DW   H_TYPE
     DB   6, "S", "T", "R", "I", "N", "G"
 W_STRING:
-    call DPOP_HL             ; hl = n (max characters)
+    rst RST_DPOP            ; hl = n (max characters)
     push hl                  ; stashed briefly on the Z80 hardware
                               ; stack -- safe: symmetric push/pop
                               ; within this one routine's own body,
                               ; matching core/array.asm's own W_ARRAY
                               ; (same technique, same justification)
+    call DICT_ROOM                 ; hl = n: the buffer must fit below the ceiling guard (E2a)
     call W_WORD
-    call DPOP_HL
+    rst RST_DPOP
     ld   (WORD_SRC_ADDR), hl
 
     ld   de, (HERE)
@@ -378,14 +379,14 @@ H_PLACE:
     DW   H_STRING
     DB   5, "P", "L", "A", "C", "E"
 W_PLACE:
-    call DPOP_HL              ; hl = dest
+    rst RST_DPOP             ; hl = dest
     push hl                    ; stashed on the Z80 hardware stack --
                                 ; safe, symmetric within this routine
-    call DPOP_HL                 ; hl = len
+    rst RST_DPOP                ; hl = len
     ld   a, l
     push af                       ; stash len the same way (this
                                    ; project's strings fit in a byte)
-    call DPOP_HL                    ; hl = addr (source)
+    rst RST_DPOP                   ; hl = addr (source)
     pop  af
     ld   b, a                        ; b = len
     pop  de                           ; de = dest
@@ -410,15 +411,15 @@ H_COUNT:
     DW   H_PLACE
     DB   5, "C", "O", "U", "N", "T"
 W_COUNT:
-    call DPOP_HL              ; hl = caddr
+    rst RST_DPOP             ; hl = caddr
     ld   a, (hl)                ; a = the count byte (len) -- safe to
                                  ; hold across DPUSH_HL below, which
                                  ; never touches AF
     inc  hl                      ; hl = the data address
-    call DPUSH_HL                 ; push addr
+    rst RST_DPUSH                ; push addr
     ld   l, a
     ld   h, 0
-    call DPUSH_HL                  ; push len
+    rst RST_DPUSH                 ; push len
     ret
 
 ; ============================================================================
@@ -428,11 +429,11 @@ H_LEN:
     DW   H_COUNT
     DB   3, "L", "E", "N"
 W_LEN:
-    call DPOP_HL
+    rst RST_DPOP
     ld   a, (hl)
     ld   l, a
     ld   h, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -451,12 +452,12 @@ H_VAL:
     DW   H_LEN
     DB   3, "V", "A", "L"
 W_VAL:
-    call DPOP_HL              ; hl = len
+    rst RST_DPOP             ; hl = len
     ld   a, l
     or   a
     jr   z, .fail               ; empty string -- 0
     ld   (VAL_COUNT), a
-    call DPOP_HL                  ; hl = addr
+    rst RST_DPOP                 ; hl = addr
     ld   (VAL_PTR), hl
     xor  a
     ld   (VAL_NEG), a
@@ -513,11 +514,11 @@ W_VAL:
 .positive:
     ex   de, hl                   ; hl = result
 .pushresult:
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 .fail:
     ld   hl, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 DICT_LATEST_INIT_STRING EQU H_VAL   ; head of the dictionary once this

@@ -64,31 +64,7 @@ RST_00:
     di
     jp   COLD_START
 
-    DS   $0008 - $, $FF
-RST_08:
-    ret
-
-    DS   $0010 - $, $FF
-RST_10:
-    ret
-
-    DS   $0018 - $, $FF
-RST_18:
-    ret
-
-    DS   $0020 - $, $FF
-RST_20:
-    ret
-
-    DS   $0028 - $, $FF
-RST_28:
-    ret
-
-    DS   $0030 - $, $FF
-RST_30:
-    ret
-
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 ; ---- RST 38 / IM 1 maskable interrupt entry point — real wiring this
 ; time, not a stub. Exact pattern confirmed from 2068-Leap's own
 ; working ROM files (e.g. rom/test_arr3.asm's RST_38), not guessed. ----
@@ -204,14 +180,14 @@ COLD_START:
 
 ; ---- test-harness-only helpers: NOT dictionary words ----
 CHECK_FIND:                       ; HL = counted-string name address
-    call DPUSH_HL
+    rst RST_DPUSH
     call FIND
-    call DPOP_HL                   ; found flag
+    rst RST_DPOP                  ; found flag
     ld   a, l
     or   a
     jp   z, FAIL_TEST
-    call DPOP_HL                    ; imm flag, discard
-    call DPOP_HL                     ; code addr, discard
+    rst RST_DPOP                   ; imm flag, discard
+    rst RST_DPOP                    ; code addr, discard
     ret
 
 CHECK_TOP:                        ; DE = expected top-of-stack value

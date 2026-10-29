@@ -371,9 +371,9 @@ H_LPRINT:
                             ; INCLUDEing this file
     DB   6, "L","P","R","I","N","T"
 W_LPRINT:
-    call DPOP_HL             ; hl = len
+    rst RST_DPOP            ; hl = len
     ld   (PRINT_REMAINING), hl
-    call DPOP_HL              ; hl = addr
+    rst RST_DPOP             ; hl = addr
     ld   (PRINT_CUR_ADDR), hl
 .lineloop:
     ld   hl, (PRINT_REMAINING)

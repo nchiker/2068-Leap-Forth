@@ -131,16 +131,16 @@ H_RECT:
                             ; INCLUDEing this file
     DB   4, "R", "E", "C", "T"
 W_RECT:
-    call DPOP_HL            ; hl = y1
+    rst RST_DPOP           ; hl = y1
     ld   a, l
     ld   (RECT_Y1), a
-    call DPOP_HL            ; hl = x1
+    rst RST_DPOP           ; hl = x1
     ld   a, l
     ld   (RECT_X1), a
-    call DPOP_HL            ; hl = y0
+    rst RST_DPOP           ; hl = y0
     ld   a, l
     ld   (RECT_Y0), a
-    call DPOP_HL            ; hl = x0
+    rst RST_DPOP           ; hl = x0
     ld   a, l
     ld   (RECT_X0), a
     ld   a, (CURRENT_ATTR)

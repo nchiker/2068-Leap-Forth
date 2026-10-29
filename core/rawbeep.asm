@@ -36,11 +36,11 @@ H_BEEP:
                             ; INCLUDEing this file
     DB   4, "B", "E", "E", "P"
 W_BEEP:
-    call DPOP_HL           ; hl = duration
+    rst RST_DPOP          ; hl = duration
     push hl                ; stashed briefly -- symmetric push/pop within
                             ; this one routine, safe (same pattern
                             ; core/control.asm's W_ELSE already uses)
-    call DPOP_HL           ; hl = pitch
+    rst RST_DPOP          ; hl = pitch
     ld   b, h
     ld   c, l               ; bc = pitch
     pop  de                 ; de = duration

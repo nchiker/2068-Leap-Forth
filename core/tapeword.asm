@@ -27,7 +27,7 @@ STORAGE_END:
     ld   hl, -28                        ; user interrupt
 STORAGE_THROW:
     IFDEF THROW_CATCH_ENABLED
-    call DPUSH_HL
+    rst RST_DPUSH
     jp   W_THROW
     ELSE
     ret                                 ; a ROM without THROW (p52, p53): the word just returns
@@ -40,7 +40,7 @@ STORAGE_THROW:
 ; ============================================================================
 STORAGE_PARSE_NAME:
     call W_WORD
-    call DPOP_HL                        ; HL = the counted string
+    rst RST_DPOP                       ; HL = the counted string
     ld   a, (hl)
     cp   STORAGE_HEADER_FILENAME_LEN + 1
     jr   c, .len_ok

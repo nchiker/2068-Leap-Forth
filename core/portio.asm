@@ -45,13 +45,13 @@ H_IN:
                             ; INCLUDEing this file
     DB   2, "I","N"
 W_IN:
-    call DPOP_HL             ; hl = port
+    rst RST_DPOP            ; hl = port
     ld   b, h
     ld   c, l                 ; bc = port -- full 16-bit form
     in   a, (c)
     ld   l, a
     ld   h, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -61,10 +61,10 @@ H_OUT:
     DW   H_IN
     DB   3, "O","U","T"
 W_OUT:
-    call DPOP_HL             ; hl = port
+    rst RST_DPOP            ; hl = port
     ld   b, h
     ld   c, l                 ; bc = port
-    call DPOP_HL              ; hl = value
+    rst RST_DPOP             ; hl = value
     ld   a, l
     out  (c), a
     ret

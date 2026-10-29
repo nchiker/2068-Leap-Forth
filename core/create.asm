@@ -139,7 +139,7 @@ DODOES:
                                   ; own address (the JP instruction is
                                   ; exactly 3 bytes: opcode + 2-byte
                                   ; operand)
-    call DPUSH_HL                 ; push the data field address onto
+    rst RST_DPUSH                ; push the data field address onto
                                     ; the FORTH data stack -- this is
                                     ; the one visible effect of every
                                     ; CREATE'd word's own runtime, DOES>
@@ -161,8 +161,9 @@ H_CREATE:
                             ; INCLUDEing this file
     DB   6, "C","R","E","A","T","E"
 W_CREATE:
+    call DICT_ROOM0
     call W_WORD
-    call DPOP_HL
+    rst RST_DPOP
     ld   (WORD_SRC_ADDR), hl
 
     ld   de, (HERE)

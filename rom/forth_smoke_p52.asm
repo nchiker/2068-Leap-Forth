@@ -22,7 +22,8 @@
 ;
 ; TWO CHECKPOINTS:
 ;   1. A small, self-contained round trip (": DOUBLER DUP + ;") proving
-;      the basic wiring: SAVE-TEXT the definition's own source text,
+;      the basic wiring: SAVE-TEXT the definition's own source text
+;      (put in the line store first: SAVE-TEXT saves the store since step E),
 ;      simulate a fresh boot (dictionary pointers reset AND the RAM
 ;      dictionary region poisoned with $FF — stronger than
 ;      rom/forth_smoke_p7.asm's own pointer-only reset, since this
@@ -126,19 +127,7 @@ RST_00:
     di
     jp   COLD_START
 
-    DS   $0008 - $, $FF
-RST_08: ret
-    DS   $0010 - $, $FF
-RST_10: ret
-    DS   $0018 - $, $FF
-RST_18: ret
-    DS   $0020 - $, $FF
-RST_20: ret
-    DS   $0028 - $, $FF
-RST_28: ret
-    DS   $0030 - $, $FF
-RST_30: ret
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 RST_38:
     ei
     reti                          ; no live keyboard needed -- this test's
@@ -182,9 +171,8 @@ COLD_START:
     ld   (CHECKPOINT_NUM), a
 
     ld   hl, MINI_SRC
-    call DPUSH_HL
-    ld   hl, MINI_SRC_LEN
-    call DPUSH_HL
+    ld   bc, MINI_SRC_LEN
+    call SET_STORE                  ; SAVE-TEXT saves the line store (step E)
     ld   hl, SRC_SAVE_MINI
     ld   de, SRC_SAVE_MINI_LEN
     call INTERPRET_RUN
@@ -208,9 +196,8 @@ COLD_START:
     ld   (CHECKPOINT_NUM), a
 
     ld   hl, BJ_SRC
-    call DPUSH_HL
-    ld   hl, BJ_SRC_LEN
-    call DPUSH_HL
+    ld   bc, BJ_SRC_LEN
+    call SET_STORE
     ld   hl, SRC_SAVE_BJ
     ld   de, SRC_SAVE_BJ_LEN
     call INTERPRET_RUN
@@ -270,17 +257,23 @@ COLD_START:
     ; a real FIND on "MAIN", not just inferring success from the game
     ; having run ----
     ld   hl, FINDWORD_MAIN
-    call DPUSH_HL
+    rst RST_DPUSH
     call FIND
-    call DPOP_HL                 ; found flag
+    rst RST_DPOP                ; found flag
     dec  l                       ; l==1 (found) -> nz clear; anything
     jr   nz, FAIL_TEST           ; else -> nz set, same test as cp 1
-    call DPOP_HL                 ; imm flag -- discard
-    call DPOP_HL                 ; code addr -- discard
+    rst RST_DPOP                ; imm flag -- discard
+    rst RST_DPOP                ; code addr -- discard
 
     jr   PASS_TEST
 
 ; ---- test-harness-only helpers: NOT dictionary words ----
+SET_STORE:                       ; HL = text, BC = length (> 0): the line store
+    ld   de, STORE_START          ; holds exactly it, as typed or loaded lines
+    ldir                          ; would leave it (SAVE-TEXT's source since
+    ld   (STORE_END), de          ; step E: docs/V2/EDITOR_SPEC.md section 3)
+    ret
+
 RESET_AND_POISON:                ; simulates a fresh boot: RAM dictionary
                                   ; pointers reset AND the RAM dictionary
                                   ; region actually overwritten with $FF,
@@ -531,6 +524,7 @@ DICT_CHAIN_POINT DEFL H_INVERT
     INCLUDE "core/udg.asm"
 DICT_CHAIN_POINT DEFL H_UDG
     INCLUDE "core/loadtext.asm"
+STORE_TRIM: ret                 ; no console append here (core/recall.asm): nothing to trim
 
     DS   $4000 - $, $FF
 

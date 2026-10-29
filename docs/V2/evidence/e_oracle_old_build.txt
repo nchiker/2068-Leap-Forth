@@ -1,0 +1,105 @@
+Step E oracle on the old build (v2/step-e-console-editor, ROM unchanged since master 0d45a2f), 2026-10-28.
+make edtest (both groups):
+python3 -I tools/edtest.py --build build --group both
+PASS old 1   boot-console           row 0 '2068-FORTH', rows 1-23 blank, cursor (23, 0) attribute $E0, other attributes $44, PRINT_ROW 1, workspace empty  [1.2 s]
+PASS old 2   keys-charset           3 parts (0, 1, 2): batch 0: ' !"#$%&\'()*+,-./0123456789:;<='  [4.7 s]
+PASS old 3   keys-editing-matrix    matrix: LEFT LEFT insert RIGHT DELETE ENTER as the model; codes seen for CAPS+6/7/1/ENTER: CAPS+6=2, CAPS+7=3, CAPS+1=15, CAPS+ENTER=11, all ignored  [1.6 s]
+PASS old 4   break-key-console      BREAK latched as $10, ignored by EDITOR_PROCESS_KEY (code below 32), no redraw  [1.5 s]
+PASS old 5   left-right-insert      ace <-<- b -> d ->->->-> f, <-x10 z <-<- -> !  gives 'z!abcdef', cursor 2; checked after every key  [1.5 s]
+PASS old 6   delete                 abcdef: DELETE x1, LEFT x3, DELETE x4 (the 4th at column 0 does nothing), RIGHT x3, DELETE x3: emptied; abcdef LEFT x3 DELETE x2 -> 'adef', cursor ...  [0.4 s]
+PASS old 7   line-full              3 parts (hard, words, middle): 127 + 1 = 128 'a' fit in 4 hard-broken rows (no cursor cell at column 32); the 129th 'b' leaves the screen ...  [4.7 s]
+PASS old 8   wrap-model             6 parts (lines32a, lines32b, lines64a, lines64b, walk32, walk64): 18 lines at 32 columns, rows used 1 3 1 2 2 2 2 2 2 1 2 2 1 4 3 4 4 4; wrap table, rows and cursor cell equ...  [70.7 s]
+PASS old 9   wrap-grow-shrink       3 parts (hard32, words32, words64): 100 chars, rows used 1..4 on the way up, back to 1 on the way down; every key checked against the model  [23.6 s]
+PASS old 10  wrap-scroll            5 parts (pr3-32, pr20-32, pr22-32, pr3-64, pr22-64): pr3-32: PRINT_ROW 3 at the start; growth steps (chars, rows, PRINT_ROW after; a scroll shows as PRINT_ROW f...  [44.3 s]
+PASS old 11  enter-interprets       `1 2 + .` -> '3 OK'; `foo` -> 'FOO ?' (no OK), `drop` -> 'STACK?'; typing and ENTER still work  [0.4 s]
+PASS old 12  workspace-append       2 parts (append, limit): workspace '1 2 + . 5 6 *  foo DROP 7 . aaaaaaa aaaaaaa ', 128-char line appended whole (workspace 156 bytes...  [6.5 s]
+PASS old 13  recall                 recalled ': SQ DUP * ;' cursor 12; edited to ': SQ DUP * DUP * ;'; 3 SQ . gave 9 before, 81 after; both copies listed; workspace ': SQ DUP * ; 3 SQ...  [6.1 s]
+PASS old 14  console-64col          3 parts (type, mode, limit): 102 characters typed, 2 rows of up to 64 columns; wrap table, rows and cursor block equal the model  [17.2 s]
+PASS old 15  scroll-output          30 lines: rows 0-21 = '8 OK'..'29 OK', PRINT_ROW 22 (the last output row is 21); the banner is lost with the 22nd line  [2.1 s]
+PASS old 16  break-running          2 parts (plain, polled): the loop was never broken: Forth has no BREAK check in the interpreter (only the word BREAK?); the key stay...  [14.3 s]
+PASS old 17  colour-state           INK/PAPER change CURRENT_ATTR ($44 -> $72) which output (OK, error text) uses; the editor ignores it (ATTR_DEFAULT $44, cursor $E0); the border is ...  [0.4 s]
+PASS old 18  redraw-oracle          11 parts (short32, middle32, wrap4-grow32, wrap4-shrink32, boundary32, short64, middle64, wrap3-grow64, wrap3-shrink64, boundary64, control): short32: 20 keys, 6912 bytes compared after each, all equal the full redraw  [77.7 s]
+PASS old 19  typing-cost            2 parts (32, 64): 32 columns: key-end-short 40632, key-mid-100 172440, key-3row 131554, delete 39571, left 40657, enter 16871...  [23.4 s]
+FAIL new N1  store-lines            store after '1 2 + .': got b'1 2 + .', want b'1 2 + .\r'  [0.1 s]
+FAIL new N2  store-full             [exact] store: the line and a CR at the old end: differs at byte 8169 (got 8192 bytes, want 8192): got b' 1 2 + .      ', want b'1 2 + .       ' | [over] STORE FULL printed once on its own row: got 0, want 1 | [edge] store: differs at byte 8190 (got 8192 bytes, want 8192): got b' 5', want b'5\r'  [1.1 s]
+FAIL new N3  cr-whitespace          [interp] CR-separated source: row 1: got ':', want '49' | [mixed] mixed-separated source: row 1: got '', want '49' | [load-cr] 49 printed by the loaded program (rows below the banner): got [], want ['49'] | [load-nocr] the machine kept running: LOAD-TEXT restarted the machine (cold start: seed an...  [57.9 s]
+FAIL new N5  dict-ceiling           [defs] accepted definition 5 started at HERE $CF05, past $CF00 (ceiling - 256) | [data] past the guard: VARIABLE V1: refused (row, error flag): got ('OK', 0), want ('STACK?', 1) | [allot] 1 ALLOT past the guard: THROW code: got 0, want -8 | [body] `: BIG2 ;` past the guard: refused (row, error fl...  [10.4 s]
+FAIL new N6  edit-open              3 of 3 parts: no EDIT: the console answers 'EDIT ?'  [0.3 s]
+FAIL new N7  edit-keys              9 of 9 parts: no EDIT: the console answers 'EDIT ?'  [1.0 s]
+FAIL new N8  edit-commit            4 of 4 parts: no EDIT: the console answers 'EDIT ?'  [0.5 s]
+FAIL new N9  edit-redraw-oracle     4 of 4 parts: no VIEW_REDRAW_ALL: the EXROM routine the oracle calls is not in the symbols (the old build has no view)  [0.0 s]
+FAIL new N10 edit-refusals          3 of 3 parts: no EDIT: the console answers 'EDIT ?'  [1.3 s]
+FAIL new N11 edit-64col             no EDIT: the console answers 'EDIT ?'  [0.3 s]
+FAIL new N12 edit-typing-cost       2 of 2 parts: no EDIT: the console answers 'EDIT ?'  [0.3 s]
+FAIL new N13 edit-store-full        3 of 3 parts: no EDIT: the console answers 'EDIT ?'  [0.4 s]
+typing cost, T-states from key delivery to the next key wait (two runs each, equal):
+                   32 columns   64 columns    what
+  key-end-short         40632        60316    a key at the end of a short line
+  key-mid-100          172440       138840    a key in the middle of a 100-character line
+  key-3row             131554       200745    a key at the end of a 3-row wrapped line
+  delete                39571        59234    DELETE at the end of a short line
+  left                  40657        60184    LEFT in the middle of a short line
+  enter                168712       187446    ENTER on `1 2 + .`
+edtest: 19/31 cases pass (old 19/19, new 0/12); 92 tasks; wall 69.2 s (7 worker(s))
+make: *** [Makefile:308: edtest] Error 1
+
+python3 -I tools/tapetest.py --build build (case N4 added):
+  [1 done in 19 s]
+  [N4 done in 26 s]
+  [3 done in 30 s]
+  [5 done in 17 s]
+  [4 done in 34 s]
+  [2 done in 62 s]
+  [7 done in 20 s]
+  [8 done in 18 s]
+  [11 done in 8 s]
+  [9 done in 19 s]
+  [10 done in 22 s]
+  [12 done in 9 s]
+  [13 done in 25 s]
+  [11L done in 8 s]
+  [6 done in 111 s]
+  [11a done in 69 s]
+  [14 done in 141 s]
+tapetest: build /home/charlie.day/2068-forth/build (ROM_IDENTITY $CA30)
+case 1 text_doubler: PASS
+    obs: loaded in 13.4 s emulated; screen ['2068-FORTH', '42 OK']
+case 2 blackjack_p53: PASS
+    obs: 67 s emulated; screen ['YOU WIN!', 'THANKS FOR PLAYING!    OK']
+case 3 savetext_roundtrip: PASS
+    obs: 11984 edges, 2 blocks, 7.3 s emulated
+case N4 text_tape_roundtrip: PASS
+    obs: N4 12432 edges, 2 blocks, 7.5 s emulated
+    obs: N4 old build (CR is part of a word): expected 42 on the screen, store 50 bytes identical to the saved ones
+case 4 savelib_roundtrip: PASS
+    obs: 12272 edges, dictionary 38 B, header type 3
+case 5 foreign_identity: PASS
+    obs: foreign identity: code -37, 9.7 s emulated, HERE 9809->9809 LATEST 9800->9800
+case 6 v1_lib_tape: PASS
+    obs: V1 type-0 lib tape: code -37, 118.2 s emulated, HERE 9809->9809 LATEST 9800->9800
+case 7 crc_mismatch: PASS
+    obs: CRC mismatch (XOR fixed up): code -37, 13.5 s emulated, HERE 9809->9800 LATEST 9800->3960
+case 8 header_length_0_1: PASS
+    obs: header length 0 and 1: code -37, 10.0 s emulated, HERE 9809->9809 LATEST 9800->9800
+case 9 wrong_flag: PASS
+    obs: data block with the wrong flag: code -37, 13.3 s emulated, HERE 9809->9809 LATEST 9800->9800
+case 10 dropout: PASS
+    obs: dropout in the data block: code -37, 13.2 s emulated, HERE 9809->9800 LATEST 9800->3960
+case 11 space_in_search: PASS
+    obs: code -28, 0.105 s emulated from SPACE to the prompt, idle True, screen ['2068-FORTH', 'OK', 'OK']
+case 11a no_tape: PASS
+    obs: code -37, 129.8 s emulated from ENTER to the prompt; dictionary RAM bytes changed: 11
+case 12 space_in_save: PASS
+    obs: code -28; 8083 edges, decoded blocks (bytes, checksum ok) [(1, True)], about 1 further edges (a pilot that was cut short); SPACE down after 5168 edges (1.5 s into the header)
+case 13 two_headers: PASS
+    obs: 21.8 s emulated
+case 14 verify: PASS
+    obs: VERIFY-LIB match: code 0
+    obs: VERIFY-LIB one byte differs: code -37
+    obs: VERIFY-TEXT match: code 0
+    obs: VERIFY-TEXT one byte differs: code -37
+case 11L space_in_search_loadlib: PASS
+    obs: code -28, 0.050 s emulated from SPACE to the prompt, idle True, screen ['2068-FORTH', 'OK', 'OK']
+TAPETEST: PASS 16 FAIL 0
+extras (not in the tally): PASS 1 FAIL 0
+wall 232 s

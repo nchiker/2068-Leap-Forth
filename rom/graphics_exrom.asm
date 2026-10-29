@@ -57,6 +57,7 @@
 
     INCLUDE "include/sysvars.inc"
     INCLUDE "include/graphics_exrom_abi.inc"
+    INCLUDE "include/exrom_home_ram.inc"
 
 ; ---- Home-side stable call targets (rom/forth_boot.asm, $0100) ----
 ; Generated, not hand-typed — see this file's own header above.
@@ -79,7 +80,7 @@ GRAPHICS_EXROM_TABLE:
     jp   SPRITE_SHOW_IMPL            ; slot 3 ($A009) — SPRITE-SHOW
     jp   SPRITE_HIDE_IMPL            ; slot 4 ($A00C) — SPRITE-HIDE
     jp   POLY_FILL_IMPL               ; slot 5 ($A00F) — POLYGON-FILL
-    jp   GRAPHICS_EXROM_UNIMPLEMENTED ; slot 6 — reserved
+    jp   VIEW_SESSION                ; slot 6 ($A012) — VIEW_SESSION (EDIT's full-screen view)
     jp   GRAPHICS_EXROM_UNIMPLEMENTED ; slot 7 — reserved
     ASSERT $ - GRAPHICS_EXROM_TABLE == GRAPHICS_EXROM_MAX_SLOTS * 3
 
@@ -1372,6 +1373,1651 @@ POLY_FILL_IMPL:
     jp   .row_loop
 .all_rows_done:
     ret
+
+; ============================================================================
+; The line store for the full-screen view (step E, docs/V2/EDITOR_SPEC.md
+; sections 3 and 5.1). Lines are text + one terminator, STORE_START up to
+; STORE_END (HOME cell); a terminator is $0D, or $8D for a line changed in
+; the view (bit 7 is ignored when scanning). Lines are numbered from 0 here
+; (the status row shows n + 1). Every routine below destroys the registers its
+; header does not list as Out; none touches IX or IY.
+; ============================================================================
+
+; ---- the view's RAM, $8AC0 up (free: $8ABD-$8BFF; VIEW_RESULT at $8AC0 is
+; in include/exrom_home_ram.inc) ----
+VIEW_CUR           EQU $8AC1    ; 2: the cursor line (its text is in EDIT_BUF)
+VIEW_TOP           EQU $8AC3    ; 2: the first line on screen
+VIEW_COUNT         EQU $8AC5    ; 2: lines in the store
+VIEW_OLDCUR        EQU $8AC7    ; 2: VIEW_CUR / VIEW_TOP / VIEW_CROW before the key
+VIEW_OLDTOP        EQU $8AC9    ; 2
+VIEW_PTR           EQU $8ACB    ; 2: a line's address, walking the store
+VIEW_IDX           EQU $8ACD    ; 2: its index
+VIEW_CELL          EQU $8ACF    ; 2: the cursor cell last drawn: column, row
+VIEW_MSG           EQU $8AD1    ; 1: STORE FULL is on the status row
+VIEW_OLDMSG        EQU $8AD2    ; 1: VIEW_MSG before the key
+VIEW_CROW          EQU $8AD3    ; 1: screen row of the cursor line's first row
+VIEW_CROWS         EQU $8AD4    ; 1: its rows (the wrap table's count)
+VIEW_OLDROW        EQU $8AD5    ; 1
+VIEW_ROW           EQU $8AD6    ; 1: the screen row a walk has reached
+VIEW_LEVEL         EQU $8AD7    ; 1: what the key changed: 0 nothing, 1 the
+                                ;    cursor, 2 the cursor line's text, 3 lines
+VIEW_COL           EQU $8AD8    ; 1: the column UP/DOWN carries to a line
+VIEW_KEYCODE       EQU $8AD9    ; 1
+VIEW_EXTRA         EQU $8ADA    ; 1: bytes a caller adds right after VIEW_LEAVE
+VIEW_FOUND         EQU $8ADB    ; 2: 1 + the last line the name matched, or 0
+VIEW_T1            EQU $8ADD    ; 2: scratch
+VIEW_T2            EQU $8ADF    ; 2: scratch
+VIEW_FLAG          EQU $8AE1    ; 1: scratch
+VIEW_TEXT          EQU $8AE2    ; 14: the status row's text
+                                ; $8AF1-$8AF2: EDIT_LINE_NO (core/edit.asm)
+VIEW_SH            EQU $8AF3    ; 69: the row shadow, 23 records (rows 0-22) of 3 bytes: the
+                                ;    line index shown there (2; $FFFF a blank row, $FFFE
+                                ;    unknown) and the row within that line (1)
+VIEW_SH_END        EQU $8B38
+VIEW_STOP          EQU $8B38    ; 2: VIEW_RENDER may stop after this line once the shadow agrees
+    ASSERT (VIEW_TEXT & $FF) + 14 < $100
+    ASSERT VIEW_TEXT + 14 <= $8AF1
+    ASSERT VIEW_SH_END == VIEW_SH + 69
+    ASSERT VIEW_STOP + 2 <= $8C00
+
+; ============================================================================
+; STORE_NEXT -- the line at HL.
+; In:  HL = the line's address (a terminated line: the store ends with one)
+; Out: DE = the line's address, HL = the next line's address, BC = its text
+;      length (terminator not counted)
+; Destroys: AF
+; ============================================================================
+STORE_NEXT:
+    ld   d, h
+    ld   e, l
+.scan:
+    ld   a, (hl)
+    inc  hl
+    and  $7F
+    cp   13
+    jr   nz, .scan
+    push hl
+    dec  hl
+    or   a
+    sbc  hl, de
+    ld   b, h
+    ld   c, l
+    pop  hl
+    ret
+
+; ============================================================================
+; STORE_LINE -- line n.
+; In:  DE = n (0 to the line count; the count itself is the end of the store)
+; Out: HL = the line's address (STORE_END for n = count), BC = its length (0)
+; Destroys: AF, DE
+; ============================================================================
+STORE_LINE:
+    ld   hl, STORE_START
+.skip:
+    ld   a, d
+    or   e
+    jr   z, .here
+    push de
+    call STORE_NEXT
+    pop  de
+    dec  de
+    jr   .skip
+.here:
+    ld   bc, 0
+    ld   de, (STORE_END)
+    or   a
+    sbc  hl, de
+    add  hl, de
+    ret  z                          ; the end of the store: an empty line
+    push hl
+    call STORE_NEXT
+    pop  hl
+    ret
+
+; ============================================================================
+; STORE_ROOM -- does the store take DELTA more bytes?
+; In:  DE = delta (signed)
+; Out: carry set if STORE_END + delta would pass STORE_LIMIT; HL = room
+; Destroys: AF, BC, HL
+; ============================================================================
+STORE_ROOM:
+    ld   a, d
+    rla
+    ccf
+    ret  nc                         ; negative: always fits
+    ld   hl, STORE_LIMIT
+    ld   bc, (STORE_END)
+    or   a
+    sbc  hl, bc                     ; room (STORE_END never passes STORE_LIMIT)
+    or   a
+    sbc  hl, de                     ; carry if delta > room
+    ret
+
+; ============================================================================
+; STORE_GAP -- open or close a gap: the bytes from POS to STORE_END move by
+; DELTA and STORE_END follows. The one routine every change is built on.
+; In:  HL = position (STORE_START to STORE_END), DE = delta (signed): positive
+;      opens a gap of that size at POS; negative removes the bytes
+;      [POS + delta, POS)
+; Out: carry set if there is no room (STORE_END + delta > STORE_LIMIT):
+;      nothing changed; else carry clear
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+STORE_GAP:
+    ld   a, d
+    or   e
+    ret  z                          ; no change
+    ld   (VIEW_T1), hl
+    ld   (VIEW_T2), de
+    call STORE_ROOM
+    ret  c
+    ld   hl, (STORE_END)
+    ld   de, (VIEW_T1)
+    or   a
+    sbc  hl, de
+    ld   b, h
+    ld   c, l                       ; bc = bytes to move
+    ld   hl, (VIEW_T1)              ; closing: from POS
+    ld   de, (VIEW_T2)
+    ld   a, d
+    rla
+    jr   c, .go
+    ld   hl, (STORE_END)            ; opening: from the last byte down
+    dec  hl
+.go:
+    push hl
+    add  hl, de
+    ex   de, hl                     ; de = the destination
+    pop  hl                         ; hl = the source
+    ld   a, b
+    or   c
+    jr   z, .end                    ; nothing to move
+    ld   a, (VIEW_T2 + 1)
+    rla
+    jr   c, .down
+    lddr
+    jr   .end
+.down:
+    ldir
+.end:
+    ld   hl, (STORE_END)
+    ld   de, (VIEW_T2)
+    add  hl, de
+    ld   (STORE_END), hl
+    or   a
+    ret
+
+; ============================================================================
+; STORE_REPLACE -- replace a line's text by EDIT_BUF (EDIT_LEN bytes) and mark
+; it ($8D). Unconditional: the caller decides whether the line changed.
+; In:  HL = the line's address, BC = its text length
+; Out: carry set if the new text does not fit: nothing changed; else clear
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+STORE_REPLACE:
+    push hl
+    add  hl, bc                     ; the terminator
+    ld   a, (EDIT_LEN)
+    ld   e, a
+    ld   d, 0
+    ex   de, hl                     ; hl = new length, de = the terminator
+    or   a
+    sbc  hl, bc                     ; hl = delta
+    ex   de, hl                     ; hl = the terminator, de = delta
+    call STORE_GAP
+    pop  de
+    ret  c
+    ld   hl, EDIT_BUF
+    ld   a, (EDIT_LEN)
+    ld   c, a
+    ld   b, 0
+    or   a
+    jr   z, .mark
+    ldir
+.mark:
+    ld   a, $8D
+    ld   (de), a
+    or   a
+    ret
+
+; ============================================================================
+; STORE_INSERT -- a new empty line, marked ($8D), at an address.
+; In:  HL = the address (a line's, or STORE_END for a new last line)
+; Out: carry set if there is no room: nothing changed; else clear
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+STORE_INSERT:
+    push hl
+    ld   de, 1
+    call STORE_GAP
+    pop  hl
+    ret  c
+    ld   (hl), $8D
+    ret
+
+; ============================================================================
+; STORE_DELETE -- remove a line, terminator included.
+; In:  HL = the line's address, BC = its text length
+; Out: carry clear
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+STORE_DELETE:
+    ld   a, c
+    cpl
+    ld   e, a
+    ld   a, b
+    cpl
+    ld   d, a                       ; de = -(length + 1)
+    add  hl, bc
+    inc  hl                         ; the next line
+    jp   STORE_GAP
+
+; ============================================================================
+; The full-screen view (step E item 6, docs/V2/EDITOR_SPEC.md section 5.1).
+; Home's EDIT (core/edit.asm) calls VIEW_SESSION through service slot 6; the
+; session runs here, with this image paged in, until BREAK. The cursor line is
+; copied to EDIT_BUF and edited by the console's own engine (Home, through the
+; GRAPHICS_HOME_TABLE veneers); every other line is drawn in place from the
+; store. Home draws nothing, the console's keys are Home's; this file owns the
+; layout, the redraw and the keys the engine does not know (UP, DOWN, ENTER,
+; insert-line, delete-line, BREAK, DELETE at column 0).
+; Result (VIEW_RESULT, set to 0 by Home before the call): 1 name not found,
+; 2 refused (the message is printed), 3 session done.
+; ============================================================================
+    INCLUDE "include/keys.inc"
+
+VIEW_MSG_32COL:    DB "32COL FIRST", 13, 0
+VIEW_MSG_LONG:     DB "LONG LINE", 13, 0
+VIEW_MSG_FULL:     DB "STORE FULL", 13, 0      ; also the status row's text (10)
+VIEW_COLON:        DB 1, ":"                   ; counted, like WORD_BUF
+
+; ============================================================================
+; VIEW_SESSION (service slot 6)
+; In:  WORD_BUF = the name after EDIT (count 0: bare EDIT); the console's line
+;      is still in EDIT_BUF/EDIT_LEN
+; Out: VIEW_RESULT
+; Refusals, in this order, change nothing: 64-column mode (32COL FIRST), an
+; unterminated tail, a line over EDIT_MAX_LEN or needing a 5th row (LONG LINE),
+; no `: name` line (result 1, Home prints `name ?`). Bare EDIT adds an empty
+; marked line after the last (no room: STORE FULL).
+; ============================================================================
+VIEW_SESSION:
+    ld   a, (GFX_MODE)
+    cp   2
+    ld   hl, VIEW_MSG_32COL
+    jr   z, .refuse
+    ld   hl, (STORE_END)
+    ld   de, STORE_START
+    or   a
+    sbc  hl, de
+    add  hl, de
+    jr   z, .counting               ; an empty store
+    dec  hl
+    ld   a, (hl)
+    and  $7F
+    cp   13
+    jr   nz, .long                  ; the last line has no terminator
+.counting:
+    ld   hl, 0
+    ld   (VIEW_COUNT), hl
+    ld   (VIEW_FOUND), hl
+    ld   hl, STORE_START
+    ld   (VIEW_PTR), hl
+.scan:
+    ld   hl, (VIEW_PTR)
+    ld   de, (STORE_END)
+    or   a
+    sbc  hl, de
+    jr   z, .scanned
+    add  hl, de
+    call STORE_NEXT                 ; de = line, hl = next, bc = length
+    ld   (VIEW_PTR), hl
+    ld   (VIEW_T1), de
+    ld   a, b
+    or   a
+    jr   nz, .long
+    ld   a, c
+    cp   EDIT_MAX_LEN + 1
+    jr   nc, .long
+    ld   (VIEW_T2), a
+    ex   de, hl
+    ld   c, $FF
+    call GRAPHICS_HOME_WRAP_CALC_AT
+    ld   a, (FWRAP_OVERFLOW)
+    or   a
+    jr   nz, .long                  ; needs a 5th row
+    ld   a, (WORD_BUF)
+    or   a
+    jr   z, .counted
+    ld   hl, (VIEW_T1)
+    ld   a, (VIEW_T2)
+    ld   c, a
+    call VIEW_MATCH
+.counted:
+    ld   hl, (VIEW_COUNT)
+    inc  hl
+    ld   (VIEW_COUNT), hl
+    jr   .scan
+.long:
+    ld   hl, VIEW_MSG_LONG
+.refuse:
+    call GRAPHICS_HOME_FORGET_PRINT_MSG
+    ld   a, 2
+    ld   (VIEW_RESULT), a
+    ret
+.scanned:
+    ld   a, (WORD_BUF)
+    or   a
+    jr   z, .bare
+    ld   hl, (VIEW_FOUND)
+    ld   a, h
+    or   l
+    jr   nz, .named
+    inc  a                          ; a = 1: not found
+    ld   (VIEW_RESULT), a
+    ret
+.named:
+    dec  hl
+    ld   (VIEW_CUR), hl
+    jr   .open
+.bare:
+    ld   hl, (STORE_END)
+    call STORE_INSERT
+    ld   hl, VIEW_MSG_FULL
+    jr   c, .refuse
+    ld   hl, (VIEW_COUNT)
+    ld   (VIEW_CUR), hl
+    inc  hl
+    ld   (VIEW_COUNT), hl
+.open:
+    ld   hl, (VIEW_CUR)
+    ld   de, 22
+    or   a
+    sbc  hl, de
+    jr   nc, .top
+    ld   hl, 0
+.top:
+    ld   (VIEW_TOP), hl             ; room for the cursor line above is found by VIEW_FIT
+    ld   hl, 0
+    ld   (VIEW_CELL), hl
+    xor  a
+    ld   (VIEW_MSG), a
+    ld   (VIEW_OLDMSG), a
+    call VIEW_LOAD
+    call VIEW_FIT
+    call VIEW_REDRAW_ALL
+.key:
+    call GRAPHICS_HOME_IO_READ_KEY
+    call VIEW_KEY
+    jr   nc, .key
+    ld   a, 3
+    ld   (VIEW_RESULT), a
+    ret
+
+; ============================================================================
+; VIEW_WORD_EQ -- a word of a stored line against a counted name, without case.
+; In:  DE = the word (bytes above space), C = its length, HL = counted string
+;      (upper case: WORD_BUF, VIEW_COLON)
+; Out: Z if equal
+; Destroys: AF, HL (BC, DE kept)
+; ============================================================================
+VIEW_WORD_EQ:
+    push bc
+    push de
+    ld   a, (hl)
+    cp   c
+    jr   nz, .out
+    inc  hl
+.char:
+    ld   a, (de)
+    cp   "a"
+    jr   c, .cmp
+    cp   "z" + 1
+    jr   nc, .cmp
+    sub  "a" - "A"
+.cmp:
+    cp   (hl)
+    jr   nz, .out
+    inc  hl
+    inc  de
+    dec  c
+    jr   nz, .char
+.out:
+    pop  de
+    pop  bc
+    ret
+
+; ============================================================================
+; VIEW_MATCH -- does a stored line hold the words `:` and WORD_BUF's name next
+; to each other? (words are runs of bytes above space)
+; In:  HL = the line's text, C = its length, VIEW_COUNT = the line's index
+; Out: VIEW_FOUND = index + 1 if it does (else unchanged)
+; Destroys: AF, BC, DE, HL, VIEW_FLAG
+; ============================================================================
+VIEW_MATCH:
+    ld   b, c
+    xor  a
+    ld   (VIEW_FLAG), a             ; the word before was `:`
+.next:
+    ld   a, b
+    or   a
+    ret  z
+    ld   a, (hl)
+    cp   " " + 1
+    jr   nc, .word
+    inc  hl
+    dec  b
+    jr   .next
+.word:
+    ld   d, h
+    ld   e, l
+    ld   c, 0
+.len:
+    inc  c
+    inc  hl
+    dec  b
+    jr   z, .end
+    ld   a, (hl)
+    cp   " " + 1
+    jr   nc, .len
+.end:
+    push hl
+    push bc
+    ld   a, (VIEW_FLAG)
+    or   a
+    jr   z, .colon
+    ld   hl, WORD_BUF
+    call VIEW_WORD_EQ
+    jr   z, .hit
+.colon:
+    ld   hl, VIEW_COLON
+    call VIEW_WORD_EQ
+    ld   a, 0
+    jr   nz, .set
+    inc  a
+.set:
+    ld   (VIEW_FLAG), a
+    pop  bc
+    pop  hl
+    jr   .next
+.hit:
+    pop  bc
+    pop  hl
+    ld   hl, (VIEW_COUNT)
+    inc  hl
+    ld   (VIEW_FOUND), hl
+    ret
+
+; ============================================================================
+; VIEW_LOAD -- the cursor line into the engine's edit line, cursor at 0.
+; In:  VIEW_CUR
+; Out: EDIT_BUF, EDIT_LEN, EDIT_CURSOR
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+VIEW_LOAD:
+    ld   de, (VIEW_CUR)
+    call STORE_LINE
+    ld   a, c
+    ld   (EDIT_LEN), a
+    ld   de, EDIT_BUF
+    or   a
+    jr   z, .done
+    ldir
+.done:
+    xor  a
+    ld   (EDIT_CURSOR), a
+    ret
+
+; ============================================================================
+; VIEW_LEAVE -- write the cursor line back to the store if it changed (it is
+; marked $8D), after checking that the caller's EXTRA bytes fit too: all or
+; nothing, so a refused ENTER changes nothing.
+; In:  A = bytes the caller adds to the store right after (0 or 1)
+; Out: carry set if there is no room: VIEW_MSG set, nothing changed; else clear
+; Destroys: AF, BC, DE, HL, VIEW_PTR, VIEW_T1, VIEW_FLAG
+; ============================================================================
+VIEW_LEAVE:
+    ld   (VIEW_EXTRA), a
+    xor  a
+    ld   (VIEW_FLAG), a             ; 1: the text differs from the store's
+    ld   de, (VIEW_CUR)
+    call STORE_LINE
+    ld   (VIEW_PTR), hl
+    ld   (VIEW_T1), bc              ; the stored length
+    ld   a, (EDIT_LEN)
+    cp   c
+    jr   nz, .changed
+    or   a
+    jr   z, .room
+    ld   b, a
+    ld   de, EDIT_BUF
+.cmp:
+    ld   a, (de)
+    cp   (hl)
+    jr   nz, .changed
+    inc  hl
+    inc  de
+    djnz .cmp
+    jr   .room
+.changed:
+    ld   a, 1
+    ld   (VIEW_FLAG), a
+.room:
+    ld   hl, 0
+    ld   a, (VIEW_FLAG)
+    or   a
+    jr   z, .extra
+    ld   a, (EDIT_LEN)
+    ld   l, a
+    ld   bc, (VIEW_T1)
+    or   a
+    sbc  hl, bc                     ; the write-back's delta
+.extra:
+    ld   a, (VIEW_EXTRA)
+    ld   e, a
+    ld   d, 0
+    add  hl, de
+    ex   de, hl
+    call STORE_ROOM
+    jr   c, .full
+    ld   a, (VIEW_FLAG)
+    or   a
+    ret  z
+    ld   hl, (VIEW_PTR)
+    ld   bc, (VIEW_T1)
+    jp   STORE_REPLACE
+.full:
+    ld   a, 1
+    ld   (VIEW_MSG), a
+    scf
+    ret
+
+; ============================================================================
+; VIEW_DEC -- a number as decimal text, no leading zeros.
+; In:  HL = number (0-9999), DE = where to write (inside one 256-byte page)
+; Out: DE = past the last digit
+; Destroys: AF, BC, HL, VIEW_T1
+; ============================================================================
+VIEW_DEC:
+    ld   a, e
+    ld   (VIEW_T1), a               ; nothing written yet while E is this
+    ld   bc, -1000
+    call .digit
+    ld   bc, -100
+    call .digit
+    ld   bc, -10
+    call .digit
+    ld   a, l
+    add  a, "0"
+    ld   (de), a
+    inc  de
+    ret
+.digit:
+    ld   a, "0" - 1
+.sub:
+    inc  a
+    add  hl, bc
+    jr   c, .sub
+    sbc  hl, bc
+    cp   "0"
+    jr   nz, .put
+    ld   a, (VIEW_T1)
+    cp   e
+    ret  z                          ; a leading zero
+    ld   a, "0"
+.put:
+    ld   (de), a
+    inc  de
+    ret
+
+; ============================================================================
+; VIEW_STATUS -- row 23: `LINE n/m` (cursor line, line count), or STORE FULL
+; while VIEW_MSG is set.
+; Destroys: AF, BC, DE, HL, VIEW_T1
+; ============================================================================
+VIEW_STATUS:
+    ld   a, (VIEW_MSG)
+    or   a
+    ld   hl, VIEW_MSG_FULL
+    ld   d, 10
+    jr   nz, .draw
+    ld   de, VIEW_TEXT
+    ld   hl, .line
+    ld   bc, 5
+    ldir
+    ld   hl, (VIEW_CUR)
+    inc  hl
+    call VIEW_DEC
+    ld   a, "/"
+    ld   (de), a
+    inc  de
+    ld   hl, (VIEW_COUNT)
+    call VIEW_DEC
+    ld   a, e
+    sub  VIEW_TEXT & $FF
+    ld   d, a
+    ld   hl, VIEW_TEXT
+.draw:
+    ld   b, 23
+    jp   ED_ROW_JP
+.line:
+    DB   "LINE "
+
+; ============================================================================
+; VIEW_CURSOR -- take the cursor off the cell it was drawn on (VIEW_CELL) and
+; draw it at the edit line's cursor, whose first row is VIEW_CROW.
+; Destroys: AF, BC, DE, HL, the wrap table
+; ============================================================================
+VIEW_CURSOR:
+    ld   a, ATTR_DEFAULT
+    ld   bc, (VIEW_CELL)
+    call GRAPHICS_HOME_SET_ATTR
+    call GRAPHICS_HOME_WRAP_CALC
+    ld   a, (VIEW_CROW)
+    ld   (FWRAP_TOP), a
+    call GRAPHICS_HOME_EDIT_CURSOR_TO_ROWCOL
+    ld   (VIEW_CELL), bc
+    jp   GRAPHICS_HOME_ED_DRAW_CURSOR
+
+; ============================================================================
+; The row shadow (docs/V2/EDITOR_SPEC.md section 5.4): for each of rows 0-22
+; the line shown there and the row within it, so a redraw draws only the rows
+; whose record differs from what the screen is known to hold. A record is the
+; line index (2 bytes; $FFFF a blank row, $FFFE unknown) and the row (1).
+; ============================================================================
+
+; ============================================================================
+; VIEW_SH_REC -- a screen row's shadow record.
+; In:  A = row (0-22)
+; Out: HL = its address
+; Destroys: AF
+; ============================================================================
+VIEW_SH_REC:
+    ld   l, a
+    add  a, a
+    add  a, l
+    add  a, VIEW_SH & $FF
+    ld   l, a
+    ld   a, VIEW_SH >> 8
+    adc  a, 0
+    ld   h, a
+    ret
+
+; ============================================================================
+; VIEW_SH_UNK -- records become unknown.
+; In:  DE = the first record, B = how many (1-23)
+; Out: DE = past the last
+; Destroys: AF, B
+; ============================================================================
+VIEW_SH_UNK:
+    ld   a, $FE
+    ld   (de), a
+    inc  de
+    ld   a, $FF
+    ld   (de), a
+    inc  de
+    inc  de
+    djnz VIEW_SH_UNK
+    ret
+
+; ============================================================================
+; VIEW_SH_MAP -- keep the shadow true when the store's lines change under it.
+; In:  DE = line k, A = 0: line k's text changed (its records become unknown);
+;      1: a line was inserted at k (records of k and above move up one);
+;      $FF: line k was deleted (its records become unknown, those above k
+;      move down one)
+; Destroys: AF, BC, DE, HL, VIEW_T2
+; ============================================================================
+VIEW_SH_MAP:
+    ld   (VIEW_T2), de
+    ld   c, a
+    ld   hl, VIEW_SH
+    ld   b, 23
+.rec:
+    push hl
+    ld   de, (VIEW_T2)
+    ld   a, (hl)
+    inc  hl
+    ld   h, (hl)
+    ld   l, a                       ; hl = the record's line
+    inc  h
+    jr   z, .skip                   ; blank or unknown: $FFxx
+    dec  h
+    or   a
+    sbc  hl, de
+    jr   c, .skip                   ; below k
+    add  hl, de                     ; (ADD HL leaves Z)
+    jr   z, .same
+    ld   a, c
+    or   a
+    jr   z, .skip
+    dec  a
+    jr   z, .up
+    dec  hl                         ; a line was deleted below it
+    jr   .put
+.up:
+    inc  hl
+    jr   .put
+.same:
+    ld   a, c
+    dec  a
+    jr   nz, .unk
+    inc  hl                         ; inserted at k: it is k + 1 now
+    jr   .put
+.unk:
+    ld   hl, $FFFE
+.put:
+    pop  de
+    ld   a, l
+    ld   (de), a
+    inc  de
+    ld   a, h
+    ld   (de), a
+    inc  de
+    inc  de
+    ex   de, hl
+    djnz .rec
+    ret
+.skip:
+    pop  hl
+    inc  hl
+    inc  hl
+    inc  hl
+    djnz .rec
+    ret
+
+; ============================================================================
+; VIEW_COPY_ROW -- the 8 scanlines of one screen row onto another row (the
+; attributes stay: every cell but the cursor's is ATTR_DEFAULT, and
+; VIEW_CURSOR resets that one).
+; In:  B = source row, C = destination row
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+VIEW_COPY_ROW:
+    ld   a, c
+    push bc
+    call GRAPHICS_HOME_ROW_BASE_ADDR
+    pop  bc
+    push hl
+    ld   a, b
+    call GRAPHICS_HOME_ROW_BASE_ADDR
+    pop  de
+    ld   a, 8
+.line:
+    REPT 32
+    ldi
+    ENDR
+    ld   bc, 224
+    add  hl, bc                     ; the next scanline is 256 on
+    ex   de, hl
+    add  hl, bc
+    ex   de, hl
+    dec  a
+    jr   nz, .line
+    ret
+
+; ============================================================================
+; VIEW_BLANK_ROW -- a screen row blank without drawing its 32 blank cells: the
+; 8 scanlines filled with zero, the attributes with ATTR_DEFAULT (what ED_ROW32
+; leaves for D = 0, at a sixth of the cost).
+; In:  B = row
+; Out: B kept
+; Destroys: AF, C, DE, HL
+; ============================================================================
+VIEW_BLANK_ROW:
+    push bc
+    ld   a, b
+    call GRAPHICS_HOME_ROW_BASE_ADDR
+    ld   a, 8
+.line:
+    push hl
+    ld   (hl), 0
+    ld   d, h
+    ld   e, l
+    inc  de
+    ld   bc, 31
+    ldir
+    pop  hl
+    inc  h                          ; the next scanline is 256 on
+    dec  a
+    jr   nz, .line
+    pop  bc
+    push bc
+    ld   c, 0
+    call GRAPHICS_HOME_CELL_ATTR_ADDR
+    ld   (hl), ATTR_DEFAULT
+    ld   d, h
+    ld   e, l
+    inc  de
+    ld   bc, 31
+    ldir
+    pop  bc
+    ret
+
+; ============================================================================
+; VIEW_MOVE_ROWS -- copy E rows of the screen from row B to row C, the end
+; the rows move toward first.
+; In:  B = first source row, C = first destination row, E = count (1-22)
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+VIEW_MOVE_ROWS:
+    ld   d, 1
+    ld   a, c
+    cp   b
+    jr   c, .go                     ; up: the top row first
+    ld   d, $FF                     ; down: the bottom row first
+    ld   a, b
+    add  a, e
+    dec  a
+    ld   b, a
+    ld   a, c
+    add  a, e
+    dec  a
+    ld   c, a
+.go:
+    push bc
+    push de
+    call VIEW_COPY_ROW
+    pop  de
+    pop  bc
+    ld   a, b
+    add  a, d
+    ld   b, a
+    ld   a, c
+    add  a, d
+    ld   c, a
+    dec  e
+    jr   nz, .go
+    ret
+
+; ============================================================================
+; VIEW_SHIFT -- the top line moved: carry what the screen already holds with
+; it. Moved down: the old shadow is searched for the new top line's first row,
+; and the rows from there up are copied to the top of the screen; moved up by
+; lines whose rows total e (at most 22): rows 0 to 22 - e are copied down by e.
+; The shadow moves with the pixels; the rows vacated become unknown. Nothing
+; is moved when the new top is not on the screen (down), or e is too large.
+; Then the walk to draw starts at the upper of the old and new cursor lines
+; (the lines above it are unchanged, so what the move carried is true), unless
+; that line is off the screen; else at the top.
+; In:  VIEW_TOP, VIEW_OLDTOP (different), VIEW_CUR, VIEW_OLDCUR, VIEW_CROW,
+;      VIEW_OLDROW, VIEW_COUNT, the shadow
+; Out: screen and shadow moved; DE = the first line to render, B = its row,
+;      VIEW_STOP (never after a move down: the rows vacated at the bottom are
+;      unknown)
+; Destroys: AF, BC, DE, HL, VIEW_IDX, VIEW_T1, VIEW_T2, the wrap table
+; ============================================================================
+VIEW_SHIFT:
+    ld   de, (VIEW_TOP)
+    ld   hl, (VIEW_OLDTOP)
+    or   a
+    sbc  hl, de
+    jr   nc, .up
+    ld   hl, VIEW_SH
+    ld   b, 0
+.find:
+    ld   a, (hl)
+    cp   e
+    jr   nz, .skip1
+    inc  hl
+    ld   a, (hl)
+    cp   d
+    jr   nz, .skip2
+    inc  hl
+    ld   a, (hl)
+    or   a
+    jr   z, .found                  ; b = the row of the new top line's first
+    jr   .skip3
+.skip1:
+    inc  hl
+.skip2:
+    inc  hl
+.skip3:
+    inc  hl
+    inc  b
+    ld   a, b
+    cp   23
+    jr   c, .find
+    jp   .whole
+.found:
+    ld   a, b
+    or   a
+    jp   z, .whole
+    ld   (VIEW_T1), a               ; d: the rows the content moves up
+    neg
+    ld   (VIEW_T2), a               ; the rows it moves down
+    ld   c, 0
+    ld   a, 23
+    sub  b
+    ld   e, a
+    call VIEW_MOVE_ROWS
+    ld   a, (VIEW_T1)
+    call VIEW_SH_REC                ; the records from row d ...
+    ld   de, VIEW_SH_END
+    ex   de, hl
+    or   a
+    sbc  hl, de
+    ld   b, h
+    ld   c, l                       ; ... to the end
+    ex   de, hl
+    ld   de, VIEW_SH
+    ldir                            ; ... to the top; de = the first vacated
+    ld   a, (VIEW_T1)
+    ld   b, a
+    call VIEW_SH_UNK
+    jr   .start
+.up:
+    ld   de, (VIEW_TOP)
+    ld   (VIEW_IDX), de
+    xor  a
+    ld   (VIEW_T1), a               ; e: the rows of the lines that came in above
+.sum:
+    ld   de, (VIEW_IDX)
+    call VIEW_ROWS
+    ld   hl, VIEW_T1
+    add  a, (hl)
+    ld   (hl), a
+    cp   23
+    jp   nc, .whole                 ; more than the screen: nothing to keep
+    ld   hl, (VIEW_IDX)
+    inc  hl
+    ld   (VIEW_IDX), hl
+    ld   de, (VIEW_OLDTOP)
+    or   a
+    sbc  hl, de
+    jr   nz, .sum
+    ld   a, (VIEW_T1)
+    ld   c, a
+    ld   b, 0
+    ld   a, 23
+    sub  c
+    ld   e, a
+    call VIEW_MOVE_ROWS             ; rows 0 to 22 - e down by e
+    ld   a, (VIEW_T1)
+    ld   c, a
+    ld   a, 23
+    sub  c
+    call VIEW_SH_REC                ; the end of the records that move
+    push hl
+    ld   de, VIEW_SH
+    or   a
+    sbc  hl, de
+    ld   b, h
+    ld   c, l
+    pop  hl
+    dec  hl
+    ld   de, VIEW_SH_END - 1
+    lddr
+    ld   de, VIEW_SH
+    ld   a, (VIEW_T1)
+    ld   (VIEW_T2), a
+    ld   b, a
+    call VIEW_SH_UNK
+.start:
+    ld   hl, (VIEW_CUR)
+    ld   de, (VIEW_OLDCUR)
+    or   a
+    sbc  hl, de
+    ld   a, (VIEW_CROW)
+    jr   c, .upper
+    jr   z, .upper
+    ld   a, (VIEW_T2)               ; the old cursor line is the upper: its row now
+    ld   hl, VIEW_OLDROW
+    add  a, (hl)
+    cp   23
+    jr   nc, .whole
+    ld   hl, (VIEW_CUR)
+    jr   .stop
+.upper:
+    ld   de, (VIEW_CUR)
+    ld   hl, (VIEW_OLDCUR)
+.stop:
+    ld   b, a
+    ld   a, (VIEW_T2)
+    rla
+    jr   nc, .set
+    ld   hl, $FFFF                  ; moved down: the rows vacated below are unknown
+    jr   .set
+.whole:
+    ld   hl, $FFFF
+    ld   de, (VIEW_TOP)
+    ld   b, 0
+.set:
+    ld   (VIEW_STOP), hl
+    ret
+
+; ============================================================================
+; VIEW_RENDER -- draw the lines from one line down, only the rows whose
+; shadow record differs from (line, row), and update the record. Each line is
+; wrapped once: the cursor line by WRAP_CALC from EDIT_BUF (E10's row
+; included), the others by WRAP_CALC_AT from the store; a last line that does
+; not fit is cut at row 22. After the last line the blank rows are drawn
+; where the shadow does not already say blank. The walk stops early, after a
+; line past VIEW_STOP, when the shadow shows the next line's first row where
+; the walk has reached (the rows below are then what they were). Sets
+; VIEW_CROW/VIEW_CROWS when it passes the cursor line.
+; In:  DE = the first line's index, B = its screen row, VIEW_STOP
+; Destroys: AF, BC, DE, HL, VIEW_PTR, VIEW_IDX, VIEW_ROW, VIEW_T1, VIEW_T2,
+;      VIEW_FLAG, the wrap table
+; ============================================================================
+VIEW_RENDER:
+    ld   a, b
+    ld   (VIEW_ROW), a
+    ld   (VIEW_IDX), de
+    call STORE_LINE
+    ld   (VIEW_PTR), hl
+.line:
+    ld   a, (VIEW_ROW)
+    cp   23
+    ret  nc
+    ld   hl, (VIEW_IDX)
+    ld   de, (VIEW_COUNT)
+    or   a
+    sbc  hl, de
+    jp   z, .blank                  ; past the last line
+    ld   hl, (VIEW_STOP)
+    ld   de, (VIEW_IDX)
+    or   a
+    sbc  hl, de
+    jr   nc, .wrap
+    ld   a, (VIEW_ROW)              ; past VIEW_STOP: in step already?
+    call VIEW_SH_REC
+    ld   a, (hl)
+    cp   e
+    jr   nz, .wrap
+    inc  hl
+    ld   a, (hl)
+    cp   d
+    jr   nz, .wrap
+    inc  hl
+    ld   a, (hl)
+    or   a
+    ret  z
+.wrap:
+    ld   hl, (VIEW_PTR)
+    call STORE_NEXT                 ; de = the text, hl = the next line, bc = its length
+    ld   (VIEW_PTR), hl
+    ld   (VIEW_T1), de
+    ld   hl, (VIEW_IDX)
+    ld   de, (VIEW_CUR)
+    or   a
+    sbc  hl, de                     ; Z: the cursor line
+    ld   hl, (VIEW_T1)
+    ld   a, c
+    jr   nz, .stored
+    ld   hl, EDIT_BUF
+    ld   (VIEW_T1), hl
+    call GRAPHICS_HOME_WRAP_CALC
+    ld   a, (VIEW_ROW)
+    ld   (VIEW_CROW), a
+    ld   a, (FWRAP_COUNT)
+    ld   (VIEW_CROWS), a
+    jr   .count
+.stored:
+    ld   c, $FF
+    call GRAPHICS_HOME_WRAP_CALC_AT
+.count:
+    ld   a, (VIEW_ROW)
+    ld   c, a
+    ld   a, 23
+    sub  c                          ; rows left above the status row
+    ld   hl, FWRAP_COUNT
+    cp   (hl)
+    jr   c, .cut
+    ld   a, (hl)
+.cut:
+    ld   (VIEW_T2), a               ; the rows to show
+    xor  a
+    ld   (VIEW_FLAG), a             ; the row within the line
+.row:
+    ld   a, (VIEW_FLAG)
+    ld   hl, VIEW_T2
+    cp   (hl)
+    jr   nc, .next
+    ld   hl, VIEW_ROW
+    add  a, (hl)
+    ld   b, a                       ; the screen row
+    call VIEW_SH_REC
+    ld   de, (VIEW_IDX)
+    ld   a, (hl)
+    cp   e
+    jr   nz, .diff
+    inc  hl
+    ld   a, (hl)
+    cp   d
+    jr   nz, .diff
+    inc  hl
+    ld   a, (VIEW_FLAG)
+    cp   (hl)
+    jr   z, .step
+.diff:
+    ld   a, b
+    call VIEW_SH_REC
+    ld   (hl), e
+    inc  hl
+    ld   (hl), d
+    inc  hl
+    ld   a, (VIEW_FLAG)
+    ld   (hl), a
+    ld   e, a
+    ld   d, 0
+    ld   hl, FWRAP_LEN
+    add  hl, de
+    ld   c, (hl)                    ; this row's length
+    ld   hl, FWRAP_START
+    add  hl, de
+    ld   e, (hl)
+    ld   hl, (VIEW_T1)
+    add  hl, de                     ; d is still 0
+    ld   d, c
+    ld   a, c
+    or   a
+    jr   nz, .text
+    call VIEW_BLANK_ROW
+    jr   .step
+.text:
+    call ED_ROW_JP                  ; keeps B
+.step:
+    ld   hl, VIEW_FLAG
+    inc  (hl)
+    jr   .row
+.next:
+    ld   a, (VIEW_ROW)
+    ld   hl, VIEW_T2
+    add  a, (hl)
+    ld   (VIEW_ROW), a
+    ld   hl, (VIEW_IDX)
+    inc  hl
+    ld   (VIEW_IDX), hl
+    jp   .line
+.blank:
+    ld   a, (VIEW_ROW)
+.brow:
+    cp   23
+    ret  nc
+    ld   b, a
+    call VIEW_SH_REC
+    ld   a, (hl)
+    inc  hl
+    and  (hl)
+    inc  a
+    jr   z, .bnext                  ; $FFFF: blank already
+    ld   (hl), $FF
+    dec  hl
+    ld   (hl), $FF
+    call VIEW_BLANK_ROW
+.bnext:
+    ld   a, b
+    inc  a
+    jr   .brow
+
+; ============================================================================
+; VIEW_FIT -- the cursor line whole on screen: VIEW_TOP is moved up to the
+; cursor line if it is below it, then down a line at a time until the rows
+; from the top line to the cursor line, E10's row included, are 23 or fewer.
+; In:  VIEW_CUR, VIEW_TOP, EDIT_BUF/EDIT_LEN/EDIT_CURSOR
+; Out: VIEW_TOP, VIEW_CROW (the cursor line's first screen row), VIEW_CROWS
+; Destroys: AF, BC, DE, HL, VIEW_PTR, VIEW_IDX, VIEW_ROW, the wrap table
+; ============================================================================
+VIEW_FIT:
+    call GRAPHICS_HOME_WRAP_CALC
+    ld   a, (FWRAP_COUNT)
+    ld   (VIEW_CROWS), a
+    ld   hl, (VIEW_TOP)
+    ld   de, (VIEW_CUR)
+    or   a
+    sbc  hl, de
+    jr   c, .again
+    ld   (VIEW_TOP), de
+.again:
+    ld   de, (VIEW_TOP)
+    ld   (VIEW_IDX), de
+    call STORE_LINE
+    ld   (VIEW_PTR), hl
+    xor  a
+    ld   (VIEW_ROW), a              ; rows from the top line so far
+.walk:
+    ld   hl, (VIEW_IDX)
+    ld   de, (VIEW_CUR)
+    or   a
+    sbc  hl, de
+    jr   z, .done
+    ld   hl, (VIEW_PTR)
+    call STORE_NEXT
+    ld   (VIEW_PTR), hl
+    ex   de, hl
+    ld   a, c
+    ld   c, $FF
+    call GRAPHICS_HOME_WRAP_CALC_AT
+    ld   a, (VIEW_ROW)
+    ld   hl, FWRAP_COUNT
+    add  a, (hl)
+    ld   (VIEW_ROW), a
+    ld   hl, (VIEW_IDX)
+    inc  hl
+    ld   (VIEW_IDX), hl
+    ld   a, (VIEW_CROWS)
+    ld   hl, VIEW_ROW
+    add  a, (hl)
+    cp   24
+    jr   c, .walk
+    ld   hl, (VIEW_TOP)             ; too tall: the top line goes
+    inc  hl
+    ld   (VIEW_TOP), hl
+    jr   .again
+.done:
+    ld   a, (VIEW_ROW)
+    ld   (VIEW_CROW), a
+    ret
+
+; ============================================================================
+; VIEW_ROWS -- the rows a stored line takes.
+; In:  DE = the line's index
+; Out: A = its rows (no cursor row)
+; Destroys: BC, DE, HL, the wrap table
+; ============================================================================
+VIEW_ROWS:
+    call STORE_LINE
+    ld   a, c
+    ld   c, $FF
+    call GRAPHICS_HOME_WRAP_CALC_AT
+    ld   a, (FWRAP_COUNT)
+    ret
+
+; ============================================================================
+; VIEW_FIT_KEY -- VIEW_FIT after a key, without the walk from the top line.
+; The lines above the old cursor line are unchanged and the cursor moved at
+; most one line, so the new cursor line's first row is the old one's
+; (VIEW_OLDROW) plus the rows of the line stepped over (or less those of the
+; line stepped onto); then the top lines go, one at a time, until the cursor
+; line is whole. The same top as VIEW_FIT's: the least scroll. Further away
+; than one line (never after a key): VIEW_FIT.
+; In:  VIEW_CUR, VIEW_OLDCUR, VIEW_OLDROW, VIEW_TOP, EDIT_BUF/EDIT_LEN/EDIT_CURSOR
+; Out: VIEW_TOP, VIEW_CROW, VIEW_CROWS
+; Destroys: AF, BC, DE, HL, VIEW_PTR, VIEW_ROW, VIEW_IDX, the wrap table
+; ============================================================================
+VIEW_FIT_KEY:
+    call GRAPHICS_HOME_WRAP_CALC
+    ld   a, (FWRAP_COUNT)
+    ld   (VIEW_CROWS), a
+    ld   hl, (VIEW_CUR)
+    ld   de, (VIEW_OLDCUR)
+    or   a
+    sbc  hl, de                     ; cur - oldcur
+    ld   a, (VIEW_OLDROW)
+    jr   z, .have
+    dec  hl
+    ld   a, h
+    or   l
+    jr   z, .down
+    inc  hl
+    inc  hl
+    ld   a, h
+    or   l
+    jp   nz, VIEW_FIT               ; not next to it
+    ld   de, (VIEW_CUR)             ; one up: the line stepped onto comes off
+    call VIEW_ROWS
+    neg
+    jr   .add
+.down:
+    call VIEW_ROWS                  ; one down: the old cursor line (de) is passed
+.add:
+    ld   hl, VIEW_OLDROW
+    add  a, (hl)
+.have:
+    ld   (VIEW_ROW), a              ; the cursor line's first row (signed)
+    add  a, a
+    jr   nc, .chk
+    ld   hl, (VIEW_CUR)             ; above the top line: it becomes the top
+    ld   (VIEW_TOP), hl
+    xor  a
+    ld   (VIEW_ROW), a
+.chk:
+    ld   a, (VIEW_ROW)
+    ld   hl, VIEW_CROWS
+    add  a, (hl)
+    cp   24
+    jr   c, .done                   ; whole
+    ld   de, (VIEW_TOP)
+    ld   hl, (VIEW_CUR)
+    or   a
+    sbc  hl, de
+    jr   z, .done
+    call VIEW_ROWS                  ; the top line goes
+    ld   c, a
+    ld   a, (VIEW_ROW)
+    sub  c
+    ld   (VIEW_ROW), a
+    ld   hl, (VIEW_TOP)
+    inc  hl
+    ld   (VIEW_TOP), hl
+    jr   .chk
+.done:
+    ld   a, (VIEW_ROW)
+    ld   (VIEW_CROW), a
+    ret
+
+; ============================================================================
+; VIEW_REDRAW_ALL -- rows 0-22 from the top line, the cursor and the status
+; row, from the view's state alone: every shadow record unknown, then
+; VIEW_RENDER (the oracle, tools/edtest.py N9, calls this at the key wait onto
+; a blank screen and compares).
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+VIEW_REDRAW_ALL:
+    ld   de, VIEW_SH
+    ld   b, 23
+    call VIEW_SH_UNK
+    ld   hl, $FFFF
+    ld   (VIEW_STOP), hl
+    ld   de, (VIEW_TOP)
+    ld   b, 0
+    call VIEW_RENDER
+    call VIEW_CURSOR
+    jp   VIEW_STATUS
+
+; ============================================================================
+; VIEW_ROW_POS -- put the cursor on a row of the edit line at a column, or at
+; the row's end if it is shorter.
+; In:  B = row index in the wrap table, C = column
+; Out: EDIT_CURSOR
+; Destroys: AF, C, DE, HL
+; ============================================================================
+VIEW_ROW_POS:
+    ld   e, b
+    ld   d, 0
+    ld   hl, FWRAP_LEN
+    add  hl, de
+    ld   a, (hl)
+    cp   c
+    jr   nc, .col
+    ld   c, a
+.col:
+    ld   hl, FWRAP_START
+    add  hl, de
+    ld   a, (hl)
+    add  a, c
+    ld   (EDIT_CURSOR), a
+    ret
+
+; ============================================================================
+; VIEW_KEY -- one key.
+; In:  A = key code
+; Out: carry set if the view is to be left (BREAK), else clear. The screen is
+;      up to date.
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+VIEW_KEY:
+    ld   (VIEW_KEYCODE), a
+    ld   hl, (VIEW_CUR)
+    ld   (VIEW_OLDCUR), hl
+    ld   hl, (VIEW_TOP)
+    ld   (VIEW_OLDTOP), hl
+    ld   a, (VIEW_CROW)
+    ld   (VIEW_OLDROW), a
+    ld   a, (VIEW_MSG)
+    ld   (VIEW_OLDMSG), a
+    xor  a
+    ld   (VIEW_MSG), a
+    ld   (VIEW_LEVEL), a
+    ld   a, (VIEW_KEYCODE)
+    cp   KEY_ENTER
+    jr   z, .enter
+    cp   KEY_CURSOR_UP
+    jp   z, .updown
+    cp   KEY_CURSOR_DOWN
+    jp   z, .updown
+    cp   KEY_INSERT_LINE
+    jr   z, .insline
+    cp   KEY_DELETE_LINE
+    jr   z, .delline
+    cp   KEY_BREAK
+    jr   z, .break
+    cp   KEY_DELETE
+    jr   nz, .edit
+    ld   a, (EDIT_CURSOR)
+    or   a
+    jr   nz, .edit
+    ld   a, (EDIT_LEN)
+    or   a
+    jr   z, .delline                ; DELETE on an empty line deletes the line
+    jr   .post                      ; at column 0 of a line with text: nothing
+.edit:
+    ld   a, (VIEW_KEYCODE)
+    call GRAPHICS_HOME_EDITOR_EDIT_KEY
+    jr   z, .post                   ; nothing changed
+    ld   c, 2                       ; the text changed ...
+    ld   a, (VIEW_KEYCODE)
+    cp   KEY_CURSOR_LEFT
+    jr   z, .moved
+    cp   KEY_CURSOR_RIGHT
+    jr   nz, .level
+.moved:
+    dec  c                          ; ... or only the cursor moved
+.level:
+    ld   a, c
+    ld   (VIEW_LEVEL), a
+.post:
+    call VIEW_POST
+    or   a
+    ret
+.break:
+    xor  a
+    call VIEW_LEAVE
+    jr   c, .post                   ; no room for the write-back: stay
+    scf
+    ret
+.enter:
+    ld   a, 1
+    call VIEW_LEAVE
+    jr   c, .post
+    ld   hl, (VIEW_CUR)
+    inc  hl
+    ld   (VIEW_CUR), hl
+    ex   de, hl
+    call STORE_LINE                 ; the line after: the new line goes before it
+    jr   .insert
+.insline:
+    ld   a, 1
+    call VIEW_LEAVE
+    jr   c, .post
+    ld   de, (VIEW_CUR)
+    call STORE_LINE
+.insert:
+    call STORE_INSERT
+    ld   hl, (VIEW_COUNT)
+    inc  hl
+    ld   (VIEW_COUNT), hl
+    ld   de, (VIEW_CUR)             ; the new line's index
+    ld   a, 1
+    call VIEW_SH_MAP
+    call VIEW_LOAD
+    jr   .lines
+.delline:
+    ld   hl, (VIEW_COUNT)
+    dec  hl
+    ld   a, h
+    or   l
+    jr   z, .only
+    ld   de, (VIEW_CUR)
+    call STORE_LINE
+    call STORE_DELETE
+    ld   de, (VIEW_CUR)
+    ld   a, $FF
+    call VIEW_SH_MAP
+    ld   hl, (VIEW_COUNT)
+    dec  hl
+    ld   (VIEW_COUNT), hl
+    ld   de, (VIEW_CUR)
+    or   a
+    sbc  hl, de
+    jr   nz, .reload
+    dec  de                         ; it was the last line
+    ld   (VIEW_CUR), de
+.reload:
+    call VIEW_LOAD
+    jr   .lines
+.only:
+    xor  a                          ; the only line is emptied (and marked)
+    ld   (EDIT_LEN), a
+    ld   (EDIT_CURSOR), a
+    ld   de, 0
+    call STORE_LINE
+    call STORE_REPLACE
+    ld   de, 0
+    xor  a
+    call VIEW_SH_MAP                ; the line's text changed
+.lines:
+    ld   a, 3
+    ld   (VIEW_LEVEL), a
+    jp   .post
+
+    ; UP, DOWN: a row of the wrapped line, else the previous or next line
+.up_post:
+    jp   .post
+.updown:
+    call GRAPHICS_HOME_WRAP_CALC
+    xor  a
+    ld   (FWRAP_TOP), a
+    call GRAPHICS_HOME_EDIT_CURSOR_TO_ROWCOL    ; b = row in the line, c = column
+    ld   a, (VIEW_KEYCODE)
+    cp   KEY_CURSOR_UP
+    jr   nz, .down
+    ld   a, b
+    or   a
+    jr   z, .upline
+    dec  b
+    jr   .inrow
+.down:
+    inc  b
+    ld   a, (FWRAP_COUNT)
+    cp   b
+    jr   z, .downline
+.inrow:
+    call VIEW_ROW_POS
+    ld   a, 1
+    ld   (VIEW_LEVEL), a
+    jr   .up_post
+.upline:
+    ld   hl, (VIEW_CUR)
+    ld   a, h
+    or   l
+    jr   z, .up_post                   ; line 1: nothing above
+    ld   a, c
+    ld   (VIEW_COL), a
+    xor  a
+    call VIEW_LEAVE
+    jr   c, .up_post
+    ld   hl, (VIEW_CUR)
+    dec  hl
+    ld   (VIEW_CUR), hl
+    call VIEW_LOAD
+    call GRAPHICS_HOME_WRAP_CALC
+    ld   a, (FWRAP_COUNT)
+    dec  a
+    ld   b, a                       ; the previous line's last row
+    jr   .arrive
+.downline:
+    ld   hl, (VIEW_CUR)
+    inc  hl
+    ld   de, (VIEW_COUNT)
+    or   a
+    sbc  hl, de
+    jr   z, .up_post                   ; the last line: nothing below
+    ld   a, c
+    ld   (VIEW_COL), a
+    xor  a
+    call VIEW_LEAVE
+    jr   c, .up_post
+    ld   hl, (VIEW_CUR)
+    inc  hl
+    ld   (VIEW_CUR), hl
+    call VIEW_LOAD
+    call GRAPHICS_HOME_WRAP_CALC
+    ld   b, 0                       ; the next line's first row
+.arrive:
+    ld   a, (VIEW_COL)
+    ld   c, a
+    call VIEW_ROW_POS
+    jp   .lines
+
+; ============================================================================
+; VIEW_POST -- bring the screen up to date after a key. VIEW_LEVEL says what
+; the key changed: 0 nothing, 1 the cursor, 2 the cursor line's text, 3 the
+; cursor line or the set of lines. A change of the cursor line's row count
+; counts as 3 (the rows of a line whose text changed become unknown in the
+; shadow first). Levels 0-2 draw at most the cursor line's rows. Level 3:
+; when the top line moved, the screen and shadow are shifted (VIEW_SHIFT) and
+; everything is rendered from the top; else from the upper of the old and new
+; cursor lines, stopping after the lower once the shadow is in step. The
+; status row when the line numbers or the message changed.
+; In:  VIEW_OLDCUR / VIEW_OLDTOP / VIEW_OLDROW / VIEW_OLDMSG, VIEW_LEVEL
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+VIEW_POST:
+    ld   a, (VIEW_LEVEL)
+    or   a
+    jr   z, .status
+    cp   3
+    jr   z, .refit
+    call GRAPHICS_HOME_WRAP_CALC
+    ld   a, (FWRAP_COUNT)
+    ld   hl, VIEW_CROWS
+    cp   (hl)
+    jr   nz, .recount
+    ld   a, (VIEW_CROW)
+    ld   (FWRAP_TOP), a
+    ld   a, (VIEW_LEVEL)
+    cp   2
+    call z, GRAPHICS_HOME_ED_DRAW_ROWS
+    call VIEW_CURSOR
+    jr   .status
+.recount:
+    ld   de, (VIEW_CUR)
+    ld   a, (VIEW_LEVEL)
+    cp   2
+    ld   a, 0
+    call z, VIEW_SH_MAP             ; the text changed: its rows are not what the shadow says
+.refit:
+    call VIEW_FIT_KEY
+    ld   hl, (VIEW_TOP)
+    ld   de, (VIEW_OLDTOP)
+    or   a
+    sbc  hl, de
+    jr   z, .same_top
+    call VIEW_SHIFT
+    jr   .draw
+.same_top:
+    ld   hl, (VIEW_CUR)
+    ld   de, (VIEW_OLDCUR)
+    or   a
+    sbc  hl, de
+    ld   a, (VIEW_CROW)
+    jr   c, .cur                    ; the cursor moved up, or stayed:
+    jr   z, .cur                    ; from the cursor line
+    ld   hl, (VIEW_CUR)             ; moved down: from the old cursor line
+    ld   (VIEW_STOP), hl
+    ld   a, (VIEW_OLDROW)
+    jr   .from
+.cur:
+    ld   hl, (VIEW_OLDCUR)
+    ld   (VIEW_STOP), hl
+    ld   de, (VIEW_CUR)
+.from:
+    ld   b, a
+.draw:
+    call VIEW_RENDER
+    call VIEW_CURSOR
+.status:
+    ld   a, (VIEW_LEVEL)
+    cp   3
+    jr   z, .show
+    ld   a, (VIEW_MSG)
+    ld   hl, VIEW_OLDMSG
+    cp   (hl)
+    ret  z
+.show:
+    jp   VIEW_STATUS
 
     DS   $C000 - $, $FF             ; pad to the end of this 8K image
                                     ; ($A000 + $2000) -- absolute ORG

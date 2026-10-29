@@ -135,7 +135,7 @@ H_THROW:
                              ; INCLUDEing this file
     DB   5, "T","H","R","O","W"
 W_THROW:
-    call DPOP_HL             ; hl = n
+    rst RST_DPOP            ; hl = n
     ld   a, h
     or   l
     ret  z                   ; n = 0: no-op, per THROW's own contract
@@ -179,7 +179,7 @@ W_THROW:
     ld   iy, (CATCH_TMP_IY)
     ld   h, b                 ; hl = n again
     ld   l, c
-    call DPUSH_HL              ; push n onto the freshly-restored stack
+    rst RST_DPUSH             ; push n onto the freshly-restored stack
     ret                        ; returns to CATCH's own caller -- SP now
                                 ; points at CATCH's own original return
                                 ; address, see this file's own header
@@ -223,14 +223,14 @@ W_CATCH:
     ld   a, (CATCH_DEPTH)
     inc  a
     ld   (CATCH_DEPTH), a
-    call DPOP_HL                 ; hl = xt
+    rst RST_DPOP                ; hl = xt
     call JUMP_HL                 ; runs xt; falls through here only if
                                   ; it returned normally (no throw)
     ld   a, (CATCH_DEPTH)
     dec  a
     ld   (CATCH_DEPTH), a
     ld   hl, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 .no_room:
     ; CATCH_MAX_DEPTH already reached: run xt WITHOUT recording a
@@ -238,10 +238,10 @@ W_CATCH:
     ; degradation this implies) -- if xt still returns normally, that's
     ; still a genuine success, so 0 is pushed exactly like the counted
     ; path; a throw from inside simply isn't caught HERE
-    call DPOP_HL
+    rst RST_DPOP
     call JUMP_HL
     ld   hl, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 DICT_LATEST_INIT_THROWCATCH EQU H_CATCH   ; head of the dictionary

@@ -1,8 +1,9 @@
 ; ============================================================================
-; rom/forth_smoke_p58.asm — Phase 58 smoke ROM: EDITOR_REDRAW64/
-; WRAP_CALC64 (core/editor.asm), the real-64-column-TEXT stretch
-; goal's Phase F -- editor integration, the last of the three planned
-; phases
+; rom/forth_smoke_p58.asm — Phase 58 smoke ROM: the editor in 64-column
+; TEXT mode (core/editor.asm), the real-64-column-TEXT stretch goal's
+; Phase F -- editor integration. Since step E item 5 one EDITOR_REDRAW
+; and one WRAP_CALC serve both widths (the width from GFX_MODE); the
+; checkpoints below are unchanged and now prove that selection.
 ;
 ; Mirrors rom/forth_smoke_p33.asm's own approach exactly: feed
 ; EDITOR_PROCESS_KEY a canned key array via TYPE_NO_ENTER (no live
@@ -19,8 +20,7 @@
 ;   1. 64-column mode, 40 "A"s (no spaces) typed via EDITOR_PROCESS_KEY:
 ;      FWRAP_COUNT must be 1 (fits entirely on one 64-column row) --
 ;      the same 40 characters would hard-break into 2 rows at width 32,
-;      so this proves EDITOR_REDRAW64 is really calling WRAP_CALC64,
-;      not the original WRAP_CALC.
+;      so this proves WRAP_CALC wraps at the width in force.
 ;   2. 60 "A"s + space + 10 "B"s (71 characters): word-boundary wrap at
 ;      the space -> row 0 = 60 "A"s, row 1 = 10 "B"s (the space itself
 ;      consumed but never drawn) -- FWRAP_COUNT/START/LEN checked
@@ -28,15 +28,14 @@
 ;      checkpoint 1, just at width 64.
 ;   3. Real rendering: after checkpoint 2, column 40 of row 0 (60 "A"s,
 ;      so column 40 is inside the Second Display File) must show 'A''s
-;      real glyph bytes -- proves EDITOR_REDRAW64 actually called
+;      real glyph bytes -- proves the redraw actually called
 ;      MODE64_PUTCHAR, not just that its own row/column bookkeeping is
 ;      right.
 ;   4. Normal (32-column) mode regression: the SAME 40 "A"s from
 ;      checkpoint 1, typed again after switching back to Normal mode,
 ;      must now hard-break into 2 rows (FWRAP_COUNT=2, row 0 = 32
-;      "A"s) -- proving EDITOR_REDRAW's own mode dispatch correctly
-;      routes back to the ORIGINAL, untouched WRAP_CALC/EDITOR_REDRAW
-;      when GFX_MODE is not 2.
+;      "A"s) -- proving the width goes back to 32 when GFX_MODE is
+;      not 2.
 ;
 ; Border goes GREEN (4) if all four pass; otherwise it shows the
 ; failing checkpoint's number.
@@ -50,19 +49,7 @@
 RST_00:
     di
     jp   COLD_START
-    DS   $0008 - $, $FF
-RST_08: ret
-    DS   $0010 - $, $FF
-RST_10: ret
-    DS   $0018 - $, $FF
-RST_18: ret
-    DS   $0020 - $, $FF
-RST_20: ret
-    DS   $0028 - $, $FF
-RST_28: ret
-    DS   $0030 - $, $FF
-RST_30: ret
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 RST_38:
     ei
     ret
@@ -88,7 +75,7 @@ COLD_START:
 
     call GFX_CLS
 
-; ---- checkpoint 1: 64-column mode calls WRAP_CALC64, not WRAP_CALC ----
+; ---- checkpoint 1: 64-column mode wraps at 64 ----
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
     call MODE64_ON

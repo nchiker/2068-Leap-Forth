@@ -116,8 +116,9 @@ THROW_ROOT_SP     EQU $8542   ; 2 bytes: SP snapshotted at INTERPRET_RUN's
 
 ; ============================================================================
 ; W_WORD ( -- addr )
-; Skips leading spaces from SRC_PTR, copies the next run of non-space
-; characters into WORD_BUF as a counted string (count byte, then the
+; Skips leading whitespace (every byte from 0 to space: CR and TAB are
+; delimiters too, audit step E1) from SRC_PTR, copies the next run of
+; non-whitespace characters into WORD_BUF as a counted string (count byte, then the
 ; characters), advances SRC_PTR past what it consumed, and pushes
 ; WORD_BUF's address. An empty result (count byte = 0) means SRC_PTR
 ; had already reached SRC_END — the caller's signal that input is
@@ -135,8 +136,8 @@ W_WORD:
     jr   z, .empty
 .skip_continue:
     ld   a, (hl)
-    cp   " "
-    jr   nz, .foundstart
+    cp   " " + 1             ; every byte from 0 to space is whitespace
+    jr   nc, .foundstart     ; (CR and TAB included: the line store's CR-ended lines)
     inc  hl
     ld   (SRC_PTR), hl
     jr   .skip
@@ -156,8 +157,8 @@ W_WORD:
     jr   z, .donecopy        ; SRC_PTR reached SRC_END: word ends here
 .copy_continue:
     ld   a, (hl)
-    cp   " "
-    jr   z, .donecopy_consume
+    cp   " " + 1
+    jr   c, .donecopy_consume
     ; Uppercase a-z to A-Z before storing. REAL BUG, found only by a
     ; human typing at a live keyboard (rom/forth_boot.asm, confirmed
     ; via a real memory-dump snapshot showing WORD_BUF holding lowercase
@@ -194,14 +195,14 @@ W_WORD:
     ld   a, b
     ld   (WORD_BUF), a
     ld   hl, WORD_BUF
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 .empty:
     xor  a
     ld   (WORD_BUF), a
     ld   hl, WORD_BUF
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -214,7 +215,7 @@ W_WORD:
 ; string is already uppercase.
 ; ============================================================================
 FIND:
-    call DPOP_HL
+    rst RST_DPOP
     ld   (FIND_SEARCH_ADDR), hl
     ld   hl, (LATEST)
 .loop:
@@ -255,16 +256,16 @@ FIND:
     ld   d, 0
     ld   e, c
     add  hl, de                   ; hl = code address (header + 3 + namelen)
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   a, (FIND_RAW_LENFLAGS)
     and  $80
     ld   hl, 0
     jr   z, .notimm
     ld   hl, 1
 .notimm:
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 1
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 .next:
     ld   hl, (FIND_HEADER_ADDR)
@@ -275,9 +276,9 @@ FIND:
     jr   .loop
 .notfound:
     ld   hl, (FIND_SEARCH_ADDR)
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -287,7 +288,7 @@ FIND:
 ; lone "-", or contains any non-digit.
 ; ============================================================================
 NUMBER:
-    call DPOP_HL
+    rst RST_DPOP
     ld   a, (hl)
     or   a
     jp   z, .fail                 ; JP, not JR -- unconditionally, in
@@ -393,15 +394,15 @@ NUMBER:
     ld   d, a
 .positive:
     ex   de, hl                   ; hl = result
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 1
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 .fail:
     ld   hl, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -422,7 +423,7 @@ DOLIT:
     inc  hl                       ; hl = real continuation address
     push hl
     ex   de, hl
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -463,6 +464,37 @@ COMPILE_LITERAL:
     ret
 
 ; ============================================================================
+; DICT_ROOM ( HL = n bytes about to be reserved -- ) the dictionary ceiling (audit step E2a).
+; Returns, with HL unchanged, if HERE + n does not pass DICT_RAM_CEILING - 256; otherwise THROW -8.
+; The 256 bytes below the ceiling are what a definition's body may still use before its `;`
+; (a body is compiled with COMPILE_CALL/_BYTE/_WORD, which are not checked). Called at the top of
+; every word that starts a definition or a data field (`:` CREATE VARIABLE CONSTANT ARRAY STRING;
+; DICT_ROOM0 is n = 0) and by `,` `C,` ALLOT; it runs before the word changes HERE or LATEST.
+; Unsigned: HERE + n carrying past $FFFF fails. Destroys: AF, DE. A ROM without THROW (the early
+; smoke ROMs) gets a bare RET.
+; ============================================================================
+DICT_ROOM0:
+    ld   hl, 0
+DICT_ROOM:
+    IFDEF THROW_CATCH_ENABLED
+    push hl
+    ld   de, (HERE)
+    add  hl, de
+    jr   c, .full
+    ld   de, DICT_RAM_CEILING - 255
+    sbc  hl, de                   ; carry clear from the add
+    jr   nc, .full                ; HERE + n >= ceiling - 255
+    pop  hl
+    ret
+.full:
+    ld   hl, -8                   ; dictionary overflow (the SP left by the push is reset by THROW)
+    rst  RST_DPUSH
+    jp   W_THROW
+    ELSE
+    ret
+    ENDIF
+
+; ============================================================================
 ; COMPILE_BYTE ( A = byte -- )  compiles one raw byte at HERE. Used by
 ; `;` to compile a bare RET ($C9) — see W_SEMICOLON below.
 ; ============================================================================
@@ -488,8 +520,9 @@ H_COLON:
     DW   H_STORE
     DB   1, ":"
 W_COLON:
+    call DICT_ROOM0
     call W_WORD
-    call DPOP_HL
+    rst RST_DPOP
     ld   (WORD_SRC_ADDR), hl
 
     ld   de, (HERE)
@@ -555,6 +588,14 @@ DICT_LATEST_INIT_P3 EQU H_SEMICOLON   ; head of the dictionary as of Phase 3;
 ; Runs the outer interpreter over one fixed source buffer until W_WORD
 ; reports an empty token (input exhausted), then returns. This is a
 ; batch entry point, not a live REPL — see this file's own header.
+;
+; INTERPRET_NESTED is the same routine entered one instruction later: it
+; does not snapshot THROW_ROOT_SP. THROW_ROOT_SP is therefore always the
+; OUTERMOST run's SP, so an error in a nested run (LOAD-TEXT interpreting
+; its text) unwinds (REPORT_INTERP_ERROR, THROW, ABORT, QUIT) all the way
+; to the outermost caller, abandoning the nested text AND the rest of the
+; outer line. A nested run that succeeds returns to its caller, which
+; saves and restores SRC_PTR/SRC_END around it (core/loadtext.asm).
 ; ============================================================================
 INTERPRET_RUN:
     IFDEF THROW_CATCH_ENABLED
@@ -568,12 +609,14 @@ INTERPRET_RUN:
                                  ; header, and STACK_CHECK's own
                                  ; violation path just below for the
                                  ; existing precedent this mirrors).
-                                 ; Captured once, at INTERPRET_RUN's own
-                                 ; entry, not per-word: SP here is fixed
+                                 ; Captured once, at the OUTERMOST
+                                 ; INTERPRET_RUN's own entry (INTERPRET_NESTED
+                                 ; skips it), not per-word: SP here is fixed
                                  ; for this entire call, since .loop's
                                  ; own dispatch always fully unwinds
                                  ; back to it between words.
     ENDIF
+INTERPRET_NESTED:
     ld   (SRC_PTR), hl
     add  hl, de
     ld   (SRC_END), hl
@@ -592,21 +635,21 @@ INTERPRET_RUN:
                          ; touching any individual word's own code
     ENDIF
     call W_WORD
-    call DPOP_HL
+    rst RST_DPOP
     ld   a, (hl)
     or   a
     jr   z, .done                 ; empty word: input exhausted
-    call DPUSH_HL
+    rst RST_DPUSH
     call FIND
-    call DPOP_HL                  ; hl = found flag
+    rst RST_DPOP                 ; hl = found flag
     ld   a, l
     or   a
     jr   z, .trynumber
 
-    call DPOP_HL                  ; hl = immediate flag
+    rst RST_DPOP                 ; hl = immediate flag
     ld   a, l
     ld   (INTERP_IMM_FLAG), a
-    call DPOP_HL                  ; hl = code address
+    rst RST_DPOP                 ; hl = code address
 
     ld   a, (STATE)
     or   a
@@ -625,7 +668,7 @@ INTERPRET_RUN:
 .trynumber:
     call NUMBER                    ; addr is already on top of stack (FIND
                                     ; pushed it back on a miss) -- ( n flag )
-    call DPOP_HL                   ; hl = numeric flag
+    rst RST_DPOP                  ; hl = numeric flag
     ld   a, l
     or   a
     jr   z, .badword
@@ -641,7 +684,7 @@ INTERPRET_RUN:
     ld   a, (STATE)
     or   a
     jr   z, .loop                  ; interpreting: leave n on the stack
-    call DPOP_HL                   ; compiling: take n back off ...
+    rst RST_DPOP                  ; compiling: take n back off ...
     call COMPILE_LITERAL           ; ... and compile it as a literal instead
     jr   .loop
     IFDEF DECIMAL_NUMBER_ENABLED

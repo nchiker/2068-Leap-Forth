@@ -171,15 +171,25 @@ FWRAP_OVERFLOW   EQU $88F5 ; 1 byte: set by WRAP_CALC — 0 normally, 1
                            ; that would never appear in any row's own
                            ; wrap-table entry at all. Ends at $88F6.
 
-FWRAP_WIDTH_MINUS1 EQU $88F7  ; 1 byte: WRAP_CALC_SHARED's own scratch
-                           ; (32-1=31 or 64-1=63) -- set by WRAP_CALC/
-                           ; WRAP_CALC64's own entry stub before falling
-                           ; into the shared body below. $88F6 is
-                           ; core/recall.asm's own RECALL_PENDING (a
-                           ; different file, but a lower address, so no
-                           ; collision) -- confirmed via the same "grep
-                           ; every EQU in this range" method used
-                           ; throughout this project.
+FWRAP_WIDTH_MINUS1 EQU $88F7  ; 1 byte: the wrap width minus one
+                           ; (32-1=31 or 64-1=63) -- set by WRAP_CALC_AT
+                           ; from GFX_MODE, read by the drawing and the
+                           ; cursor. $88F6 is free
+                           ; (Phase 64's RECALL_PENDING, retired at step
+                           ; E item 7).
+
+; Step E item 5 (the merged redraw, E3): $88F8-$88FE, free before it
+; (CHECKPOINT_NUM at $8900 is the smoke ROMs' own).
+FWRAP_TOP          EQU $88F8  ; 1 byte: screen row of the wrapped line's
+                           ; first row (EDITOR_REDRAW: 24 - FWRAP_COUNT;
+                           ; the full-screen view sets its own)
+FWRAP_CURSOR_AT_END EQU $88F9 ; 1 byte: WRAP_CALC's own scratch -- 0 when
+                           ; the cursor is at the end of the text (E10)
+FWRAP_BASE         EQU $88FA  ; 2 bytes: the text the wrap table describes
+                           ; (EDIT_BUF, or a line of the store)
+ED_ROW_JP          EQU $88FC  ; 3 bytes: JP ED_ROW32 / JP ED_ROW64, written
+                           ; by WRAP_CALC -- the row drawer for the width
+                           ; in force (ED_DRAW_ROWS' header)
 
 ; ============================================================================
 ; INSERT_CHAR ( A = character )
@@ -281,7 +291,7 @@ DELETE_CHAR_BEFORE_CURSOR:
 ; ============================================================================
 ; WRAP_STORE_ROW (internal) — A = content length for the row currently
 ; being computed by WRAP_CALC. Stores FWRAP_SCAN_PTR's own current
-; offset (from EDIT_BUF) into FWRAP_START[FWRAP_ROW_IDX], and A
+; offset (from FWRAP_BASE) into FWRAP_START[FWRAP_ROW_IDX], and A
 ; into FWRAP_LEN[FWRAP_ROW_IDX]. Offsets always fit one byte
 ; (EDIT_MAX_LEN is 128).
 ; Destroys: AF, BC, DE, HL
@@ -289,7 +299,7 @@ DELETE_CHAR_BEFORE_CURSOR:
 WRAP_STORE_ROW:
     ld   (FWRAP_TMP_LEN), a
     ld   hl, (FWRAP_SCAN_PTR)
-    ld   de, EDIT_BUF
+    ld   de, (FWRAP_BASE)
     or   a
     sbc  hl, de
     ld   a, l
@@ -311,60 +321,73 @@ WRAP_STORE_ROW:
     ret
 
 ; ============================================================================
-; WRAP_CALC ( -- ) / WRAP_CALC64 ( -- ) — populates FWRAP_COUNT/
-; FWRAP_START/FWRAP_LEN from the CURRENT EDIT_BUF/EDIT_LEN. Each row
-; holds up to 32 (WRAP_CALC) or 64 (WRAP_CALC64) characters, breaking at
-; the LAST space at or before the row's own column limit (the space
-; itself is consumed but never drawn — matching ts2068rom's own
-; EDITOR_WRAP_CALC exactly) so a word is never split across rows UNLESS
-; a single word alone is too long to fit in one row's own window at
-; all, in which case (and ONLY then) it hard-breaks at exactly the
-; width. Stops early, capped at FWRAP_MAX_ROWS, if content would need
-; more rows than that — see EDITOR_PROCESS_KEY's own header for why a
-; committed edit should never actually reach that cap.
+; WRAP_CALC ( -- ) — the wrap table of the edit line (EDIT_BUF, EDIT_LEN,
+; EDIT_CURSOR).
+; WRAP_CALC_AT — the wrap table of any text: HL = text, A = length
+; (0-128), C = cursor offset in it ($FF: no cursor).
 ;
-; Two thin entry points sharing one body via FWRAP_WIDTH_MINUS1 (not the
-; "full sibling" shape this project usually prefers for a tested
-; routine, e.g. kernel/graphics's GFX_SET_ATTR_EXT — that precedent is
-; about NOT changing an EXISTING tested routine's own calling contract
-; and forcing every call site to change; here, WRAP_CALC/WRAP_CALC64
-; keep their exact original entry points and calling convention, so no
-; caller anywhere is touched. Only the internal duplicate body merges).
-; The real cost: every width-dependent literal below becomes a memory
-; read instead of an immediate, since the width is now a runtime value
-; — real overhead, paid once in the shared body instead of not at all
-; in two separate copies; verified net-positive by measuring
-; rom/forth_boot.asm's own free-byte count before and after, not
-; assumed. WRAP_CALC64 stays IFDEF-gated (only exists when kernel/
-; mode64/mode64.asm is INCLUDEd), same as before.
+; Populates FWRAP_COUNT/FWRAP_START/FWRAP_LEN (offsets from FWRAP_BASE,
+; which is set to HL) and FWRAP_OVERFLOW. Each row holds up to W
+; characters, W = 64 when GFX_MODE is 2 (64-column text) and 32
+; otherwise; the width and the row drawer (ED_ROW_JP) are set here, so the room check, the drawing and the cursor all use the
+; width in force (step E, E10). A row breaks at the LAST space at or
+; before its column limit (the space itself is consumed but never drawn
+; — matching ts2068rom's own EDITOR_WRAP_CALC exactly), so a word is
+; never split across rows UNLESS a single word alone is too long to fit
+; in one row's own window at all, in which case (and ONLY then) it
+; hard-breaks at exactly the width. Stops early, capped at
+; FWRAP_MAX_ROWS, if content would need more rows than that — see
+; EDITOR_PROCESS_KEY's own header for why a committed edit should never
+; actually reach that cap.
+;
+; Cursor on a full row (E10): when the last row holds exactly W
+; characters and the cursor is at the end of the text, that row is
+; stored as a hard break, so the table gets one more row (start = length,
+; 0 characters) and the cursor sits at its column 0, as it would for a
+; text one character longer. Under the cap only: a line already on
+; FWRAP_MAX_ROWS rows gets no fifth row (EDIT_CURSOR_TO_ROWCOL then puts
+; the cursor on the last character's cell). The overflow test is not
+; affected (the extra row holds nothing).
+;
+; The engine the full-screen view uses (E3): it wraps its other lines
+; with WRAP_CALC_AT in place in the store (C = $FF), and its cursor line,
+; copied to EDIT_BUF, with WRAP_CALC; then FWRAP_TOP and ED_DRAW_ROWS,
+; ED_DRAW_CURSOR draw them.
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 WRAP_CALC:
-    ld   a, 31
-    ld   (FWRAP_WIDTH_MINUS1), a
-    jr   WRAP_CALC_SHARED
-
+    ld   hl, EDIT_BUF
+    ld   a, (EDIT_CURSOR)
+    ld   c, a
+    ld   a, (EDIT_LEN)
+WRAP_CALC_AT:
+    ld   (FWRAP_BASE), hl
+    ld   (FWRAP_SCAN_PTR), hl
+    ld   (FWRAP_REMAIN), a
+    sub  c
+    ld   (FWRAP_CURSOR_AT_END), a   ; 0: the cursor is at the end
+    ld   a, $C3                     ; JP: ED_ROW_JP is a RAM veneer
+    ld   (ED_ROW_JP), a
+    ld   hl, ED_ROW32
     IFDEF KERNEL_MODE64_ASM         ; real 64-column TEXT mode only
                                     ; exists once kernel/mode64/mode64.asm
-                                    ; is INCLUDEd -- guarded so this adds
-                                    ; zero bytes to any ROM that doesn't
-                                    ; use it, same convention as
-                                    ; EDITOR_REDRAW64/core/print.asm's
-                                    ; W_EMIT
-WRAP_CALC64:
+                                    ; is INCLUDEd (several smoke ROMs use
+                                    ; the editor without it)
+    ld   a, (GFX_MODE)
+    cp   2
+    ld   a, 31
+    jr   nz, .width_set
+    ld   hl, ED_ROW64
     ld   a, 63
-    ld   (FWRAP_WIDTH_MINUS1), a
-    jr   WRAP_CALC_SHARED
+.width_set:
+    ELSE
+    ld   a, 31
     ENDIF
-
-WRAP_CALC_SHARED:
+    ld   (ED_ROW_JP + 1), hl
+    ld   (FWRAP_WIDTH_MINUS1), a
     xor  a
     ld   (FWRAP_ROW_IDX), a
     ld   (FWRAP_OVERFLOW), a
-    ld   hl, EDIT_BUF
-    ld   (FWRAP_SCAN_PTR), hl
-    ld   a, (EDIT_LEN)
-    ld   (FWRAP_REMAIN), a
 .row_loop:
     ld   a, (FWRAP_WIDTH_MINUS1)
     inc  a                             ; a = WIDTH (32 or 64)
@@ -372,7 +395,8 @@ WRAP_CALC_SHARED:
     ld   a, (FWRAP_REMAIN)
     cp   c
     jr   c, .last_row                  ; remain < WIDTH
-    jr   z, .last_row                  ; remain == WIDTH -- also last row
+    jr   z, .full_row                  ; remain == WIDTH -- the last row,
+                                       ; unless the cursor needs a row (E10)
     ; scan this row's own WIDTH-column window (relative positions
     ; WIDTH-1 down to 1) for the LAST (highest-position) space
     ld   a, (FWRAP_WIDTH_MINUS1)
@@ -402,6 +426,10 @@ WRAP_CALC_SHARED:
     ld   a, (FWRAP_LAST_SPACE)
     inc  a                            ; consumed = last_space_rel + 1
     jr   .advance
+.full_row:
+    ld   a, (FWRAP_CURSOR_AT_END)
+    or   a
+    jr   nz, .last_row
 .hard_break:
     ld   a, (FWRAP_WIDTH_MINUS1)
     inc  a                             ; a = WIDTH
@@ -446,37 +474,27 @@ WRAP_CALC_SHARED:
 ; EDIT_CURSOR_TO_ROWCOL ( -- B=screen row, C=screen column ) — converts
 ; the linear EDIT_CURSOR offset into a screen position, using the wrap
 ; table WRAP_CALC must already have populated for the CURRENT EDIT_BUF/
-; EDIT_LEN/EDIT_CURSOR.
+; EDIT_LEN/EDIT_CURSOR, and FWRAP_TOP (the screen row of the line's
+; first row).
 ;
 ; THE ALGORITHM: for each row (except the last), compare EDIT_CURSOR
 ; against the OFFSET WHERE THE NEXT ROW STARTS (FWRAP_START[row+1])
 ; rather than against this row's own content length. This single
-; choice elegantly handles both real edge cases at once, with no
-; separate special-casing needed (confirmed by hand-tracing both):
+; choice handles both real edge cases at once:
 ;   - A cursor sitting exactly on a CONSUMED (skipped, never-drawn)
 ;     space between two word-wrapped rows compares LESS than the next
 ;     row's own start (which is one further, past that space) — so it
 ;     stays on the CURRENT row, landing at column = this row's own
-;     content length (i.e. right after the last visible character,
-;     the natural place to show a cursor that's logically "before" an
-;     invisible space) — exactly matching ts2068rom's own documented
-;     convention for this case, arrived at here as a side effect of
-;     the comparison rather than a separate rule.
-;   - A cursor sitting exactly at the end of a FULL, hard-broken
-;     32-column row (no consumed space, next row starts immediately at
-;     +32) compares EQUAL to the next row's own start — so it rolls
-;     forward onto the NEXT row at column 0, instead of computing an
-;     out-of-range column 32. This is ts2068rom's own documented "Bug
-;     B" (`GFX_ATTR_SWAP`'s out-of-range write, already fixed at that
-;     layer in this project's own kernel/graphics.asm) avoided by
-;     construction here rather than merely tolerated by that lower-
-;     level safety net. Column 32 can still occur, but only in the
-;     genuinely unavoidable case of the cursor sitting at the very end
-;     of a maximally-long (all FWRAP_MAX_ROWS rows full, no trailing
-;     space anywhere) line, where there is no next row to roll onto —
-;     GFX_INVERT_ATTR's own bounds check (shared with GFX_SET_ATTR)
-;     safely no-ops rather than corrupting anything in that rare case,
-;     at the cost of simply not showing a cursor block there.
+;     content length (right after the last visible character) —
+;     ts2068rom's own documented convention for this case.
+;   - A cursor sitting exactly at the end of a FULL, hard-broken row (no
+;     consumed space, next row starts immediately at +WIDTH) compares
+;     EQUAL to the next row's own start — so it rolls forward onto the
+;     NEXT row at column 0. WRAP_CALC gives a full last row such a next
+;     row when the cursor is at its end (E10).
+; Column WIDTH is then left only for a line on FWRAP_MAX_ROWS full rows
+; with the cursor at its end; it is clamped to WIDTH-1, the last
+; character's cell (E10).
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 EDIT_CURSOR_TO_ROWCOL:
@@ -509,405 +527,215 @@ EDIT_CURSOR_TO_ROWCOL:
     ld   hl, FWRAP_START
     add  hl, de
     ld   a, (EDIT_CURSOR)
-    sub  (hl)
-    ld   c, a                             ; c = column
-    ld   a, EDIT_ROW + 1
-    ld   hl, FWRAP_COUNT
-    sub  (hl)                              ; a = (EDIT_ROW+1) - wrap_count
-                                            ; = this line's own top row
-    ld   hl, FWRAP_ROW_IDX
-    add  a, (hl)                            ; + this row's own index
-    ld   b, a                                ; b = screen row
+    sub  (hl)                             ; a = column
+    ld   hl, FWRAP_WIDTH_MINUS1
+    cp   (hl)
+    jr   c, .col_ok
+    ld   a, (hl)                          ; column WIDTH -> WIDTH-1
+.col_ok:
+    ld   c, a
+    ld   a, (FWRAP_TOP)
+    add  a, e                             ; + this row's own index
+    ld   b, a                             ; b = screen row
     ret
 
 ; ============================================================================
 ; EDITOR_REDRAW ( -- )
 ; Redraws the whole (possibly multi-row) input line from scratch every
-; time — simple and correct rather than incremental, the same choice
-; the original single-row version made and for the same reason: even
-; at up to 4 rows/128 columns, a full redraw on every keystroke has no
-; real performance problem on this hardware.
+; time, at the width in force (one routine for 32 and 64 columns, E3):
+; WRAP_CALC, the grow/shrink of the input area, ED_DRAW_ROWS from
+; FWRAP_TOP = EDIT_ROW+1-FWRAP_COUNT, then the cursor.
 ;
 ; GROW/SHRINK HANDLING: compares the freshly-computed FWRAP_COUNT
-; against FWRAP_OLD_COUNT (the value as of the LAST redraw).
-;   - GREW (the line just wrapped onto a new row): that new row's own
-;     screen position might still hold RECENT output from the program
-;     that ran just before this input line started (see this file's
-;     own top header on why input and output never change on screen at
-;     the same moment, which is what makes this a one-time check rather
-;     than an ongoing negotiation) — checked by comparing that row
-;     against `core/print.asm`'s own PRINT_ROW, read-only, which
-;     cannot change again until AFTER this input line is submitted and
-;     interpreted. If PRINT_ROW reaches that row, the whole screen
-;     scrolls up one row first (`GFX_SCROLL_OUTPUT_UP`) to preserve it,
-;     and PRINT_ROW itself is adjusted down by one to stay consistent
-;     for whatever this line's own eventual execution prints next.
-;     Looped (not a single check) to stay correct even if a single
-;     keystroke somehow grew the wrap count by more than one row,
-;     though that shouldn't ordinarily happen.
+; against FWRAP_OLD_COUNT (the value as of the LAST redraw), one row at
+; a time, reading both cells afresh on every pass (the 64-column scroll
+; destroys every register; the two-copy version kept FWRAP_OLD_COUNT's
+; address in HL across it and hung, E10).
+;   - GREW: the newly claimed row 23-old may still hold RECENT output
+;     from the program that ran just before this input line started
+;     (input and output never change on screen at the same moment, so
+;     this is a one-time check, not an ongoing negotiation): if
+;     PRINT_ROW (core/print.asm, the next output row) is 24-old or
+;     more, the whole screen scrolls up one row first and PRINT_ROW
+;     follows it down by one.
 ;   - SHRANK (backspace crossed back over a row boundary): the row(s)
-;     no longer needed are simply cleared — no attempt to "un-scroll"
-;     whatever used to be above them, matching how real terminals never
-;     restore scrolled-off content either.
+;     no longer needed are cleared, top first — no attempt to
+;     "un-scroll" whatever used to be above them, matching how real
+;     terminals never restore scrolled-off content either.
+; Destroys: AF, BC, DE, HL
 ; ============================================================================
 EDITOR_REDRAW:
-    IFDEF KERNEL_MODE64_ASM        ; real 64-column TEXT mode (Phase
-                                    ; 56/57/58) only exists once
-                                    ; kernel/mode64/mode64.asm is
-                                    ; INCLUDEd (several smoke ROMs use
-                                    ; the editor without it) -- guarded
-                                    ; so this stays zero extra bytes
-                                    ; everywhere else, same convention
-                                    ; as core/print.asm's W_EMIT
-    ld   a, (GFX_MODE)
-    cp   2
-    jp   z, EDITOR_REDRAW64
-    ENDIF
     call WRAP_CALC
-    ld   a, (FWRAP_COUNT)
-    ld   hl, FWRAP_OLD_COUNT
+.resize:
+    ld   a, (FWRAP_OLD_COUNT)
+    ld   c, a
+    ld   a, EDIT_ROW + 1
+    sub  c
+    ld   b, a                            ; b = 24 - old
+    ld   a, c
+    ld   hl, FWRAP_COUNT
     cp   (hl)
     jr   z, .count_settled
-    jr   c, .shrank
-.grow_loop:
-    ld   a, (hl)                        ; current (not-yet-updated) old count
-    ld   b, a
-    ld   a, EDIT_ROW + 1
-    sub  b                               ; a = row about to be newly claimed
-    ld   c, a
-    ld   a, (PRINT_ROW)
-    cp   c
-    jr   c, .no_scroll_needed             ; PRINT_ROW is above that row --
-                                           ; already blank, nothing to save
-    call GFX_SCROLL_OUTPUT_UP
-    ld   a, (PRINT_ROW)
-    dec  a
-    ld   (PRINT_ROW), a
-.no_scroll_needed:
-    ld   a, (hl)
-    inc  a
-    ld   (hl), a
-    ld   a, (FWRAP_COUNT)
-    cp   (hl)
-    jr   nz, .grow_loop
-    jr   .count_settled
-.shrank:
-    ld   a, EDIT_ROW + 1
-    sub  (hl)                            ; a = old top row
-    ld   b, a
-.clear_loop:
-    push bc
-    call GFX_CLEAR_ROW
-    pop  bc
-    inc  b
-    ld   a, EDIT_ROW + 1
-    ld   c, a
-    ld   a, (FWRAP_COUNT)
+    jr   c, .grow                        ; old < new
+    ld   d, 0                            ; shrank: clear row 24 - old
+    call ED_ROW_JP
     ld   hl, FWRAP_OLD_COUNT
-    ; fallthrough uses hl below, so reload after the compare
-    ld   hl, FWRAP_COUNT
-    ld   a, c
-    sub  (hl)                            ; a = new top row
+    dec  (hl)
+    jr   .resize
+.grow:
+    ld   a, (PRINT_ROW)
     cp   b
-    jr   nz, .clear_loop
+    jr   c, .no_scroll                   ; output ends above the new row
+    call ED_SCROLL_UP
+    ld   hl, PRINT_ROW
+    dec  (hl)
+.no_scroll:
     ld   hl, FWRAP_OLD_COUNT
+    inc  (hl)
+    jr   .resize
 .count_settled:
-    ld   a, (FWRAP_COUNT)
-    ld   (FWRAP_OLD_COUNT), a
+    ld   a, b                            ; 24 - FWRAP_COUNT
+    ld   (FWRAP_TOP), a
+    call ED_DRAW_ROWS
+    ; fall into ED_DRAW_CURSOR
 
-    ; draw each wrapped row's own content, then blank-pad to column 31
+; ============================================================================
+; ED_DRAW_CURSOR ( -- ) — the cursor of the edit line, from the wrap table
+; and FWRAP_TOP: a FLASH cell with ink and paper swapped in 32 columns,
+; a static XOR block in 64 (Mode 6 has no attribute byte to flash).
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+ED_DRAW_CURSOR:
+    call EDIT_CURSOR_TO_ROWCOL
+    IFDEF KERNEL_MODE64_ASM
+    ld   a, (GFX_MODE)
+    cp   2
+    jp   z, MODE64_PUTCHAR_XOR
+    ENDIF
+    jp   GFX_INVERT_ATTR
+
+; ED_SCROLL_UP ( -- ): the whole screen up one row at the width in force.
+ED_SCROLL_UP:
+    IFDEF KERNEL_MODE64_ASM
+    ld   a, (GFX_MODE)
+    cp   2
+    jp   z, MODE64_SCROLL_OUTPUT_UP
+    ENDIF
+    jp   GFX_SCROLL_OUTPUT_UP
+
+; ============================================================================
+; ED_DRAW_ROWS ( -- ) — draws the FWRAP_COUNT rows of the wrap table from
+; screen row FWRAP_TOP down, each blank-padded to the width WRAP_CALC set.
+; ED_ROW_JP (ED_ROW32 or ED_ROW64, chosen by WRAP_CALC) draws one row:
+; B = screen row, HL = text, D = characters (0: a blank row); keeps B,
+; destroys AF, C, DE, HL. One loop per width, not one cell writer for
+; both, because a call through the veneer on every cell cost 64 columns
+; up to 12,700 T a key (typing-cost case).
+; ============================================================================
+ED_DRAW_ROWS:
+    ld   a, (FWRAP_TOP)
+    ld   b, a
     xor  a
+.row:
     ld   (FWRAP_ROW_IDX), a
-.row_draw_loop:
-    ld   a, (FWRAP_ROW_IDX)
+    ld   hl, FWRAP_COUNT
+    cp   (hl)
+    ret  nc
     ld   e, a
     ld   d, 0
-    push de
-    ld   hl, FWRAP_START
-    add  hl, de
-    ld   a, (hl)
-    ld   e, a
-    ld   d, 0
-    ld   hl, EDIT_BUF
-    add  hl, de                          ; hl = ptr to this row's own content
-    pop  de
-    push hl
     ld   hl, FWRAP_LEN
     add  hl, de
-    ld   a, (hl)
-    ld   e, a                            ; e = this row's own content length
-    pop  hl                              ; hl = ptr to this row's own content
-    push hl                              ; RE-STASH IT: a real bug lived
-                                          ; here — the code below reuses
-                                          ; HL (for FWRAP_COUNT's own
-                                          ; address) before this row's
-                                          ; content pointer was needed
-                                          ; again, and the original
-                                          ; version tried to "restore" it
-                                          ; via an extra `pop hl` with NO
-                                          ; matching push at that point —
-                                          ; popping one level too many,
-                                          ; corrupting the stack (in
-                                          ; practice, EDITOR_REDRAW's own
-                                          ; return address) on every
-                                          ; single row drawn. Caught by
-                                          ; rom/forth_smoke_p33.asm's own
-                                          ; checkpoint 1 hanging under
-                                          ; real Fuse, isolated with a
-                                          ; waypoint-marker diagnostic
-                                          ; ROM, not by inspection.
+    ld   a, (hl)                         ; a = this row's own length
+    ld   hl, FWRAP_START
+    add  hl, de
+    ld   e, (hl)
+    ld   hl, (FWRAP_BASE)
+    add  hl, de                          ; hl = this row's own text
+    ld   d, a
+    call ED_ROW_JP
+    inc  b
     ld   a, (FWRAP_ROW_IDX)
-    ld   d, EDIT_ROW + 1
-    push af
-    ld   a, d
-    ld   hl, FWRAP_COUNT
-    sub  (hl)
-    pop  bc                              ; b = row_idx (from the earlier af push)
-    add  a, b
-    ld   d, a                            ; d = this row's own screen row
-    pop  hl                              ; hl = ptr to this row's own content
-                                          ; -- correctly restored now,
-                                          ; matching the push just above
+    inc  a
+    jr   .row
+
+ED_ROW32:
     ld   c, EDIT_COL_START
-.printloop:
-    ld   a, e
+.char:
+    ld   a, d
     or   a
-    jr   z, .blank
+    jr   z, .pad
     ld   a, (hl)
     push hl
     push de
-    push bc
-    ld   b, d
-    call GFX_PUTCHAR
-    pop  bc
-    pop  de
-    push de
-    push bc
-    ld   a, ATTR_DEFAULT
-    ld   b, d
-    call GFX_SET_ATTR
-    pop  bc
+    call ED_CELL32
     pop  de
     pop  hl
     inc  hl
     inc  c
-    dec  e
-    jr   .printloop
-.blank:
+    dec  d
+    jr   .char
+.pad:
     ld   a, c
     cp   32
-    jr   nc, .row_done
-    push de
-    push bc
+    ret  nc
     ld   a, " "
-    ld   b, d
+    call ED_CELL32
+    inc  c
+    jr   .pad
+
+; ED_CELL32: A = character at (B, C) with ATTR_DEFAULT; keeps BC.
+ED_CELL32:
+    push bc
     call GFX_PUTCHAR
     pop  bc
-    pop  de                    ; RESTORE d (row) before reusing it below --
-    push de                    ; GFX_PUTCHAR destroys DE (it ends up
-                                ; holding a leftover screen-bitmap
-                                ; address byte, not the row), so without
-                                ; this restore GFX_SET_ATTR silently got
-                                ; called with a garbage row and no-opped,
-                                ; permanently leaking every past cursor
-                                ; position's own FLASH attribute (found
-                                ; via a real live-typed "console" then
-                                ; backspaced-to-empty, reported by the
-                                ; user, reproduced with a deterministic
-                                ; smoke ROM, and root-caused with direct
-                                ; attribute-memory readback probes, not
-                                ; guessed) — .printloop just above
-                                ; already does this correctly, this loop
-                                ; was just missing the matching restore
-    push bc
     ld   a, ATTR_DEFAULT
-    ld   b, d
-    call GFX_SET_ATTR
-    pop  bc
-    pop  de
-    inc  c
-    jr   .blank
-.row_done:
-    ld   a, (FWRAP_ROW_IDX)
-    inc  a
-    ld   (FWRAP_ROW_IDX), a
-    ld   hl, FWRAP_COUNT
-    cp   (hl)
-    jr   c, .row_draw_loop
-
-    call EDIT_CURSOR_TO_ROWCOL
-    call GFX_INVERT_ATTR
-    ret
+    jp   GFX_SET_ATTR                    ; keeps BC
 
     IFDEF KERNEL_MODE64_ASM
-; ============================================================================
-; EDITOR_REDRAW64 — EDITOR_REDRAW's own algorithm, for real 64-column
-; TEXT mode (GFX_MODE=2). A full sibling rather than a mode-branch
-; threaded through EDITOR_REDRAW's own body, matching this project's
-; established precedent for exactly this situation (see WRAP_CALC64's
-; own header) -- especially warranted here given this exact routine's
-; own history of subtle stack-discipline bugs (the two incidents
-; documented in the comments above), which a shared, more tangled body
-; would only make easier to reintroduce.
-;
-; Three real differences from EDITOR_REDRAW, beyond the obvious
-; 32-vs-64 width:
-;   - WRAP_CALC64 instead of WRAP_CALC; MODE64_SCROLL_OUTPUT_UP/
-;     MODE64_CLEAR_ROW instead of the GFX_ equivalents.
-;   - MODE64_PUTCHAR instead of GFX_PUTCHAR, with NO attribute-stamping
-;     call at all afterward (Mode 6 has no per-cell attribute byte to
-;     stamp -- core/hires.asm's own EMIT precedent) -- this also
-;     removes the extra push/pop round EDITOR_REDRAW's own printloop/
-;     blank loop need solely to survive that now-absent second call.
-;   - The cursor is a STATIC (non-blinking) MODE64_PUTCHAR_XOR block
-;     instead of GFX_INVERT_ATTR -- Mode 6 has no hardware FLASH bit to
-;     drive a blink the way the 32-column cursor gets for free; a real
-;     blink would need new ISR timing and a rewrite of the live
-;     keystroke-wait loop, deliberately out of scope (agreed with the
-;     user before writing any of this file).
-; ============================================================================
-EDITOR_REDRAW64:
-    call WRAP_CALC64
-    ld   a, (FWRAP_COUNT)
-    ld   hl, FWRAP_OLD_COUNT
-    cp   (hl)
-    jr   z, .count_settled64
-    jr   c, .shrank64
-.grow_loop64:
-    ld   a, (hl)
-    ld   b, a
-    ld   a, EDIT_ROW + 1
-    sub  b
-    ld   c, a
-    ld   a, (PRINT_ROW)
-    cp   c
-    jr   c, .no_scroll_needed64
-    call MODE64_SCROLL_OUTPUT_UP
-    ld   a, (PRINT_ROW)
-    dec  a
-    ld   (PRINT_ROW), a
-.no_scroll_needed64:
-    ld   a, (hl)
-    inc  a
-    ld   (hl), a
-    ld   a, (FWRAP_COUNT)
-    cp   (hl)
-    jr   nz, .grow_loop64
-    jr   .count_settled64
-.shrank64:
-    ld   a, EDIT_ROW + 1
-    sub  (hl)
-    ld   b, a
-.clear_loop64:
-    push bc
-    call MODE64_CLEAR_ROW
-    pop  bc
-    inc  b
-    ld   a, EDIT_ROW + 1
-    ld   c, a
-    ld   a, (FWRAP_COUNT)
-    ld   hl, FWRAP_OLD_COUNT
-    ld   hl, FWRAP_COUNT
-    ld   a, c
-    sub  (hl)
-    cp   b
-    jr   nz, .clear_loop64
-    ld   hl, FWRAP_OLD_COUNT
-.count_settled64:
-    ld   a, (FWRAP_COUNT)
-    ld   (FWRAP_OLD_COUNT), a
-
-    xor  a
-    ld   (FWRAP_ROW_IDX), a
-.row_draw_loop64:
-    ld   a, (FWRAP_ROW_IDX)
-    ld   e, a
-    ld   d, 0
-    push de
-    ld   hl, FWRAP_START
-    add  hl, de
-    ld   a, (hl)
-    ld   e, a
-    ld   d, 0
-    ld   hl, EDIT_BUF
-    add  hl, de                          ; hl = ptr to this row's own content
-    pop  de
-    push hl
-    ld   hl, FWRAP_LEN
-    add  hl, de
-    ld   a, (hl)
-    ld   e, a                            ; e = this row's own content length
-    pop  hl                              ; hl = ptr to this row's own content
-    push hl                              ; RE-STASH IT -- see EDITOR_REDRAW's
-                                          ; own header for the real
-                                          ; stack-corruption bug this
-                                          ; exact shape once had; kept
-                                          ; identical here on purpose
-    ld   a, (FWRAP_ROW_IDX)
-    ld   d, EDIT_ROW + 1
-    push af
-    ld   a, d
-    ld   hl, FWRAP_COUNT
-    sub  (hl)
-    pop  bc                              ; b = row_idx (from the earlier af push)
-    add  a, b
-    ld   d, a                            ; d = this row's own screen row
-    pop  hl                              ; hl = ptr to this row's own content
+ED_ROW64:
     ld   c, EDIT_COL_START
-.printloop64:
-    ld   a, e
+.char:
+    ld   a, d
     or   a
-    jr   z, .blank64
+    jr   z, .pad
     ld   a, (hl)
     push hl
     push de
     push bc
-    ld   b, d
     call MODE64_PUTCHAR
     pop  bc
     pop  de
     pop  hl
     inc  hl
     inc  c
-    dec  e
-    jr   .printloop64
-.blank64:
+    dec  d
+    jr   .char
+.pad:
     ld   a, c
     cp   64
-    jr   nc, .row_done64
-    push de
+    ret  nc
     push bc
     ld   a, " "
-    ld   b, d
     call MODE64_PUTCHAR
     pop  bc
-    pop  de
     inc  c
-    jr   .blank64
-.row_done64:
-    ld   a, (FWRAP_ROW_IDX)
-    inc  a
-    ld   (FWRAP_ROW_IDX), a
-    ld   hl, FWRAP_COUNT
-    cp   (hl)
-    jr   c, .row_draw_loop64
-
-    call EDIT_CURSOR_TO_ROWCOL
-    call MODE64_PUTCHAR_XOR         ; static (non-blinking) cursor block
-                                    ; -- EDIT_CURSOR_TO_ROWCOL's own B=row/
-                                    ; C=col output matches MODE64_PUTCHAR_
-                                    ; XOR's contract directly, no shuffling
-    ret
+    jr   .pad
     ENDIF
 
 ; ============================================================================
-; EDITOR_PROCESS_KEY ( A = key code -- )
+; EDITOR_EDIT_KEY ( A = key code -- ) -- the console's editing without a
+; redraw (step E item 6: the full-screen view edits its line with this).
 ; Out: carry set if A was ENTER (a line is ready in EDIT_BUF/EDIT_LEN;
-; caller decides what to do with it — see EDITOR_LOOP_LIVE below).
-; Carry clear otherwise (key handled, or ignored if unmapped/out of
-; range — no error is ever raised here, matching every earlier phase's
-; scope: this is a shell, not something a Forth program can catch an
-; exception from).
+;      not handled here); otherwise carry clear and
+;      NZ = the line or the cursor changed, Z = nothing changed (DELETE or
+;      LEFT at 0, RIGHT at the end, a refused or ignored key).
+; Destroys: AF, BC, DE, HL
+;
+; EDITOR_PROCESS_KEY ( A = key code -- ) is EDITOR_EDIT_KEY and, when
+; something changed, EDITOR_REDRAW. Out: carry set if A was ENTER (see
+; EDITOR_LOOP_LIVE below). No error is ever raised here, matching every
+; earlier phase's scope: this is a shell, not something a Forth program
+; can catch an exception from.
 ;
 ; ROOM CHECK, CHANGED FOR WORD WRAP: the raw "EDIT_LEN < EDIT_MAX_LEN"
 ; check alone is no longer sufficient — the buffer might have physical
@@ -921,7 +749,7 @@ EDITOR_REDRAW64:
 ; silently ignored — the same user-visible outcome ("buffer full") the
 ; original single-row version had, just at a much higher real capacity.
 ; ============================================================================
-EDITOR_PROCESS_KEY:
+EDITOR_EDIT_KEY:
     cp   KEY_ENTER
     jr   nz, .not_enter
     scf
@@ -933,7 +761,7 @@ EDITOR_PROCESS_KEY:
     or   a
     jr   z, .done
     call DELETE_CHAR_BEFORE_CURSOR
-    jr   .redraw_and_done
+    jr   .changed
 .not_delete:
     cp   KEY_CURSOR_LEFT
     jr   nz, .not_left
@@ -942,7 +770,7 @@ EDITOR_PROCESS_KEY:
     jr   z, .done
     dec  a
     ld   (EDIT_CURSOR), a
-    jr   .redraw_and_done
+    jr   .changed
 .not_left:
     cp   KEY_CURSOR_RIGHT
     jr   nz, .not_right
@@ -952,7 +780,7 @@ EDITOR_PROCESS_KEY:
     jr   nc, .done             ; already at or past the end
     inc  a
     ld   (EDIT_CURSOR), a
-    jr   .redraw_and_done
+    jr   .changed
 .not_right:
     cp   " "
     jr   c, .done              ; below space: unmapped/control, ignore
@@ -972,20 +800,25 @@ EDITOR_PROCESS_KEY:
     call WRAP_CALC
     ld   a, (FWRAP_OVERFLOW)
     or   a
-    jr   z, .fits                  ; the whole line still fits in
+    jr   z, .changed               ; the whole line still fits in
                                     ; FWRAP_MAX_ROWS rows -- keep it
     call DELETE_CHAR_BEFORE_CURSOR  ; undo the speculative insert --
                                     ; the just-inserted char is
                                     ; immediately before EDIT_CURSOR,
                                     ; exactly DELETE_CHAR_BEFORE_CURSOR's
                                     ; own contract
-    jr   .done
-.fits:
-    jr   .redraw_and_done
-
-.redraw_and_done:
-    call EDITOR_REDRAW
 .done:
+    xor  a                      ; NC, Z: nothing changed
+    ret
+.changed:
+    or   1                      ; NC, NZ
+    ret
+
+EDITOR_PROCESS_KEY:
+    call EDITOR_EDIT_KEY
+    ret  c
+    ret  z
+    call EDITOR_REDRAW
     or   a
     ret
 
@@ -1015,31 +848,9 @@ EDITOR_PROCESS_KEY:
 ; RST $0038 -> KBD_ISR_TICK, IM 1, and EI before calling this.
 ; ============================================================================
 EDITOR_LOOP_LIVE:
-    ; Phase 64 (core/recall.asm), gated: only wired in for a ROM that
-    ; actually INCLUDEs core/recall.asm (rom/forth_boot.asm) -- several
-    ; older, narrower smoke ROMs (rom/forth_smoke_p6.asm/p9/p33/p58)
-    ; INCLUDE this file WITHOUT core/recall.asm, and would fail to
-    ; assemble against an unconditional reference to RECALL_PENDING.
-    ; RECALL sets RECALL_PENDING and leaves its own copied text sitting
-    ; in EDIT_BUF/EDIT_LEN/EDIT_CURSOR for the user to edit -- skip the
-    ; usual "clear the line" reset just this once, or RECALL's own line
-    ; finishing would immediately wipe out what it just recalled. See
-    ; core/recall.asm's own header.
-    IFDEF CORE_RECALL_ASM
-    ld   a, (RECALL_PENDING)
-    or   a
-    jr   nz, .skip_clear
-    ENDIF
     xor  a
     ld   (EDIT_LEN), a
     ld   (EDIT_CURSOR), a
-    IFDEF CORE_RECALL_ASM
-    jr   .cleared
-.skip_clear:
-    xor  a
-    ld   (RECALL_PENDING), a
-.cleared:
-    ENDIF
     ; deliberately NOT resetting FWRAP_OLD_COUNT here -- it must
     ; still hold whatever the JUST-SUBMITTED line's own final row count
     ; was, so EDITOR_REDRAW's own shrink-detection (comparing that
@@ -1057,7 +868,7 @@ EDITOR_LOOP_LIVE:
     ; Phase 64 (core/recall.asm), gated -- see this file's own header
     ; note on EDITOR_LOOP_LIVE above. Appends the just-committed line to
     ; the persistent workspace BEFORE running it, so it's recoverable via
-    ; RECALL/LIST-DEFS even if INTERPRET_RUN itself never returns
+    ; EDIT/LIST-DEFS even if INTERPRET_RUN itself never returns
     ; normally (e.g. a QUIT-triggering error path). See core/recall.asm's
     ; own header for why this is unconditional (appended regardless of
     ; whether the line turns out to be a real definition) rather than
@@ -1066,7 +877,7 @@ EDITOR_LOOP_LIVE:
     ld   hl, EDIT_BUF
     ld   a, (EDIT_LEN)
     ld   b, a
-    call WORKSPACE_APPEND
+    call STORE_APPEND
     ENDIF
 
     ld   hl, EDIT_BUF
@@ -1074,6 +885,11 @@ EDITOR_LOOP_LIVE:
     ld   d, 0
     ld   e, a
     call INTERPRET_RUN
+    IFDEF CORE_EDIT_ASM
+    ld   a, (VIEW_RESULT)           ; core/edit.asm: EDIT ran, and an error may have left
+    or   a                          ; changed-line marks in the store
+    call nz, EDIT_CLEAR_MARKS
+    ENDIF
     ; found live by the user: a successfully-run line gave no visible
     ; confirmation at all -- it just vanished, indistinguishable from
     ; nothing having happened. An error already prints "?"/"STACK?"
@@ -1083,15 +899,15 @@ EDITOR_LOOP_LIVE:
     or   a
     jr   nz, .no_ok
     ld   hl, "O"
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     ld   hl, "K"
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     ld   hl, 13
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
 .no_ok:
-    jr   EDITOR_LOOP_LIVE
+    jp   EDITOR_LOOP_LIVE
 
     ENDIF

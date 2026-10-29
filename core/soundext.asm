@@ -98,13 +98,13 @@ H_TONE:
                             ; INCLUDEing this file
     DB   4, "T", "O", "N", "E"
 W_TONE:
-    call DPOP_HL               ; hl = period
+    rst RST_DPOP              ; hl = period
     ld   a, h
     and  $0F                   ; coarse nibble -- top 4 bits of the
                                 ; register are unused on real hardware
     ld   d, a
     ld   e, l                  ; e = fine byte
-    call DPOP_HL               ; hl = channel
+    rst RST_DPOP              ; hl = channel
     ld   a, l
     cp   3
     ret  nc                    ; channel not 0-2 -- ignore
@@ -131,11 +131,11 @@ H_VOLUME:
     DW   H_TONE
     DB   6, "V", "O", "L", "U", "M", "E"
 W_VOLUME:
-    call DPOP_HL               ; hl = level
+    rst RST_DPOP              ; hl = level
     ld   a, l
     and  $0F
     ld   c, a
-    call DPOP_HL               ; hl = channel
+    rst RST_DPOP              ; hl = channel
     ld   a, l
     cp   3
     ret  nc                    ; channel not 0-2 -- ignore
@@ -165,7 +165,7 @@ H_MIXER:
     DW   H_VOLUME
     DB   5, "M", "I", "X", "E", "R"
 W_MIXER:
-    call DPOP_HL                ; hl = mask
+    rst RST_DPOP               ; hl = mask
     ld   c, l
     ld   b, 7
     call AY_WRITE
@@ -184,7 +184,7 @@ H_NOISE:
     DW   H_MIXER
     DB   5, "N", "O", "I", "S", "E"
 W_NOISE:
-    call DPOP_HL                ; hl = period
+    rst RST_DPOP               ; hl = period
     ld   a, l
     and  $1F
     ld   c, a
@@ -218,13 +218,13 @@ H_ENVELOPE:
     DW   H_NOISE
     DB   8, "E", "N", "V", "E", "L", "O", "P", "E"
 W_ENVELOPE:
-    call DPOP_HL                ; hl = shape
+    rst RST_DPOP               ; hl = shape
     ld   a, l
     and  $0F
     ld   e, a                   ; e = shape byte -- survives the next
                                 ; DPOP_HL (only IX/HL touched there)
                                 ; and the AY_WRITE calls below (only AF)
-    call DPOP_HL                 ; hl = period
+    rst RST_DPOP                ; hl = period
     ld   b, 11
     ld   c, l                    ; fine byte
     call AY_WRITE

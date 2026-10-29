@@ -43,19 +43,7 @@
 RST_00:
     di
     jp   COLD_START
-    DS   $0008 - $, $FF
-RST_08: ret
-    DS   $0010 - $, $FF
-RST_10: ret
-    DS   $0018 - $, $FF
-RST_18: ret
-    DS   $0020 - $, $FF
-RST_20: ret
-    DS   $0028 - $, $FF
-RST_28: ret
-    DS   $0030 - $, $FF
-RST_30: ret
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 RST_38:
     ei
     ret
@@ -89,7 +77,7 @@ COLD_START:
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
     ld   hl, TEST_XT_OK
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_CATCH
     ld   de, 0
     call CHECK_TOP
@@ -102,7 +90,7 @@ COLD_START:
     ld   a, 2
     ld   (CHECKPOINT_NUM), a
     ld   hl, TEST_XT_THROWS
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_CATCH
     ld   de, 7
     call CHECK_TOP
@@ -112,7 +100,7 @@ COLD_START:
     ld   a, 3
     ld   (CHECKPOINT_NUM), a
     ld   hl, TEST_XT_NESTED
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_CATCH
     ld   de, 0
     call CHECK_TOP
@@ -128,9 +116,9 @@ COLD_START:
     ld   a, 4
     ld   (CHECKPOINT_NUM), a
     ld   hl, 4242
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_THROW
     ld   de, 4242
     call CHECK_TOP
@@ -167,25 +155,25 @@ COLD_START:
 ; ============================================================================
 TEST_XT_OK:
     ld   hl, 42
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 TEST_XT_THROWS:
     ld   hl, 999               ; must NOT survive the throw below
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 7
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_THROW
     ld   hl, 12345              ; sentinel -- reaching this at all would
-    call DPUSH_HL                ; mean THROW's own unwind is broken
+    rst RST_DPUSH               ; mean THROW's own unwind is broken
     ret
 
 TEST_XT_NESTED:
     ld   hl, TEST_XT_THROWS
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_CATCH                 ; inner CATCH absorbs the throw -> 7
     ld   hl, 555
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
