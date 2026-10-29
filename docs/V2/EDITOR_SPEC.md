@@ -130,6 +130,8 @@ the console screen (audit 4.3 item 6) would need a 6,912-byte buffer, which RAM 
 **E9. 64 columns.** The console keeps both widths through the merged redraw (E3). The view is 32 columns; in
 64-column mode `EDIT` refuses with a message and changes nothing (decided: less code than switching modes and back).
 A 64-column view is a later item.
+*Superseded (step M6, 2026-10-29): Mode 6 is removed (`docs/V2/MODE6_REMOVAL_SPEC.md`); there is no
+64-column mode to refuse, so the `32COL FIRST` refusal is gone and the console and the view are both 32 columns.*
 
 ## 3. Line store contract
 
@@ -207,6 +209,7 @@ separated by whitespace, compared without regard to case) and opens the view wit
 line. `EDIT` with nothing after it opens it on a new empty line after the last line. Refusals, each printing one
 message and changing nothing: no graphics EXROM (`NO EXROM`, detected as `EXROM_CALL_SLOT` does), 64-column mode
 (`32COL FIRST`), a line over 128 characters in the store (`LONG LINE`), name not found (`name ?`, as an unknown word).
+(Step M6: the `32COL FIRST` refusal was removed with Mode 6.)
 
 **Screen.** 32 columns. Rows 0-22 show store lines from the view's top line down, each wrapped by the console's
 word-wrap rule (one rule, one routine: E3); row 23 is the status row, `LINE n/m` (cursor line, line count). The
@@ -277,7 +280,7 @@ inline are smaller than a veneer.) A write-back stores `EDIT_BUF`'s text and `$8
 "Changed" means the bytes differ (`EDIT_BUF`/`EDIT_LEN` against the store line), compared when the line is left.
 
 **Entry (`VIEW_SESSION`).** In: `WORD_BUF` = the name (length 0: bare `EDIT`). Refusals in this order, each changing
-nothing: 64-column mode (`32COL FIRST`); a line over 128 characters or one that needs a fifth row at 32 columns
+nothing: 64-column mode (`32COL FIRST`; removed in step M6, which also removed the mode); a line over 128 characters or one that needs a fifth row at 32 columns
 (`LONG LINE`: neither can be the engine's line); the name not found (result 1: HOME jumps to
 `INTERPRET_UNKNOWN_WORD`, which prints `name ?` from `WORD_BUF` as for an unknown word). Matching: per line, the
 words `:` and the name adjacent, words split at bytes 0-32, compared without case. Bare `EDIT` inserts an empty
@@ -490,13 +493,13 @@ in `docs/V2/evidence/`.
 | 5 | `left-right-insert` | as the model | same |
 | 6 | `delete` | as the model | same |
 | 7 | `line-full` | 128 fit; the 129th refused; no cursor on a full row | 128 fit; 129th refused; **cursor shown** (E10) |
-| 8 | `wrap-model` | screen equals the `WRAP_CALC` model, 32 and 64 columns | same model |
+| 8 | `wrap-model` | screen equals the `WRAP_CALC` model, 32 and 64 columns | same model (step M6: the 64-column part is removed) |
 | 9 | `wrap-grow-shrink` | grows upward 1-4 rows, clears on shrink | same |
-| 10 | `wrap-scroll` | output scrolls up; **64-column hang** at `pr22-64` | scrolls; **no hang** (E10) |
+| 10 | `wrap-scroll` | output scrolls up; **64-column hang** at `pr22-64` | scrolls; **no hang** (E10) (step M6: the 64-column part is removed) |
 | 11 | `enter-interprets` | `3 OK`; `FOO ?`; `STACK?` | same |
 | 12 | `workspace-append` | space-separated; overruns past `$F000` | **CR-ended lines; a full store refuses** (E1, E5) |
 | 13 | `recall` | `n RECALL` edits a copy; both copies kept | **replaced by `EDIT`** cases (E6) |
-| 14 | `console-64col` | wraps at 64; refused at the 106th character | wraps at 64; **refused only when 4 rows of 64 are full** (E10) |
+| 14 | `console-64col` | wraps at 64; refused at the 106th character | wraps at 64; **refused only when 4 rows of 64 are full** (E10) (step M6: now checks that `64COL` is an unknown word and prints `64COL ?`) |
 | 15 | `scroll-output` | output scrolls, edit line on row 23 | same |
 | 16 | `break-running` | not broken (no poll) | same (step B changes it) |
 | 17 | `colour-state` | editor ignores INK/PAPER | same |
@@ -517,7 +520,7 @@ Cases E adds (written and run on the old build with the next commit; expected re
 | N8 | `edit-commit` | leaving interprets only marked lines, in store order; an unchanged session interprets nothing; an error stops at `LINE n` and clears the marks; no `$8D` left in the store | (fails) |
 | N9 | `edit-redraw-oracle` | after every key in the view the screen equals a full view redraw | (fails) |
 | N10 | `edit-refusals` | `NO EXROM` (stock-shaped EXROM), `LONG LINE` (a 200-character line loaded), `name ?` (not found); nothing changes and the console works | (fails: no `EDIT`) |
-| N11 | `edit-64col` | `EDIT` in 64-column mode prints `32COL FIRST` and changes nothing (E9) | (fails) |
+| N11 | `edit-64col` | `EDIT` in 64-column mode prints `32COL FIRST` and changes nothing (E9) (retired in step M6: no 64-column mode) | (fails) |
 | N12 | `edit-typing-cost` | typing cost in the view recorded (no old figure; the gate is set from this first measurement) | (n/a) |
 | N13 | `edit-store-full` | in the view, a change that would overflow the store is refused, `STORE FULL` on the status row, store unchanged | (fails) |
 

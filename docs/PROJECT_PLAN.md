@@ -669,6 +669,9 @@ remain real follow-up work, not folded into this slice.
 
 ### 64-column display
 
+*Update 2026-10-29: this mode was removed in V2 step M6
+(`docs/V2/MODE6_REMOVAL_SPEC.md`); the text below is history.*
+
 **A real find while researching this, worth remembering:** the ROM
 disassembly ("Timex Sinclair 2068 ROM Disassembly," David Anderson,
 2023) documents port `$FF`'s bits individually (bit 1 = ultra-high-res,
@@ -3521,6 +3524,9 @@ truncation-vs-rounding error in a `DEG` example, and a nonexistent
 `1+` word used in a `C@` example) before they could mislead a reader.
 
 ## Future stretch goal — a real 64-column TEXT mode in the editor
+
+*Update 2026-10-29: the 64-column mode was removed in V2 step M6
+(`docs/V2/MODE6_REMOVAL_SPEC.md`); the text below is history.*
 
 **DONE 2026-09-06 (Phases 56/57/58) — kept below for the real research
 history that shaped the design, not as an open item any more.** The

@@ -548,7 +548,7 @@ This is the first thing to check whenever a `?` appears unexpectedly: read the e
 When a line runs successfully, **`OK`** prints on its own line, ensuring that every entered line receives visible confirmation rather than silence.
 
 A second kind of mistake—such as popping from an empty stack or pushing past its reserved space (like executing `DROP` on an empty stack)—prints **`STACK?`** and resets both stacks to empty rather than leaving them in a corrupted state. Like the unrecognized-word prompt, this is a blunt, whole-line reset. *(See 
-[Error handling: THROW and CATCH](#14-error-handling-throw-and-catch)
+[Error handling: THROW and CATCH](#13-error-handling-throw-and-catch)
 for a way to intercept an error like this yourself, from inside your
 own program, instead of always falling back to this default reset.
 
@@ -670,15 +670,12 @@ and changes nothing:
 | Message       | Meaning                                                       |
 | ------------- | ------------------------------------------------------------- |
 | `name ?`      | there is no definition line for that name (as for an unknown word) |
-| `32COL FIRST` | you are in 64-column mode; the view is 32 columns wide        |
 | `LONG LINE`   | a line in the store is longer than 128 characters, or needs more than 4 screen rows |
 | `NO EXROM`    | the graphics EXROM is not fitted (the Home ROM alone) |
 
 #### Important Limits to Keep in Mind
 
-- The view is 32 columns wide. In 64-column mode (`64COL`, see
-  [section 13](#13-a-wider-screen)) `EDIT` prints `32COL FIRST`;
-  type `32COL` and try again.
+- The view is 32 columns wide.
 
 - The store is 8 KB. When it is full, a line you enter at the prompt
   still runs but is not kept, and `STORE FULL` is printed. Inside the
@@ -721,7 +718,7 @@ and changes nothing:
 
 2. Define two words of your own and run `VLIST`. Your two appear first.
    Keep reading and find the point where your definitions stop and the
-   built-in words begin — that boundary is where `LLIST` in section 15
+   built-in words begin — that boundary is where `LLIST` in section 14
    stops, and `VLIST` doesn't.
 
 3. Redefine one of those two words, then run `VLIST` again. The name
@@ -3640,7 +3637,7 @@ later `SAVE-TEXT` will save, and `EDIT` can open it.
 
 All six tape words report failure with `THROW`, so a program can notice
 and recover with `CATCH` (see
-[section 14](#14-error-handling-throw-and-catch)):
+[section 13](#13-error-handling-throw-and-catch)):
 
 | Code  | Meaning                                                                      |
 | ----- | ---------------------------------------------------------------------------- |
@@ -3648,7 +3645,7 @@ and recover with `CATCH` (see
 | `-37` | Any other tape failure: bad checksum, no matching file, a tape this ROM won't accept, a verify that doesn't match, or no tape signal at all |
 | `-8`  | `SAVE-LIB` only: the image doesn't fit (the dictionary has reached its ceiling) |
 
-Left alone, an error just reaches the same fallback section 14
+Left alone, an error just reaches the same fallback section 13
 describes for any uncaught `THROW`. (Before the tape storage rebuild,
 a failed `LOAD-LIB` or `LOAD-TEXT` said nothing at all; it now always
 reports.) To get the code instead, run the word under `CATCH`. The
@@ -3740,125 +3737,7 @@ SAVE-LIB MYPROG
 
 ---
 
-## 13. A wider screen
-
-`64COL` switches to a 64-column *pixel graphics* display — twice the
-normal horizontal resolution — and `32COL` switches back. `PALETTE64`
-picks a color pair, and `PLOT64` sets a point on it, with `x` from 0
-to 511 and `y` from 0 to 191, wider than the normal screen's
-coordinate range. All four are real, working words:
-
-```forth
-64COL
-3 PALETTE64
-100 50 PLOT64
-32COL
-```
-
-#### A Wider Text Display Too
-
-`64COL` is also a genuinely wider **text** display now: `EMIT`, `.`,
-`."`, and typing at the prompt itself all automatically wrap at column
-64 instead of 32 while `64COL` is active, no separate word needed —
-the same 8-pixel font, just drawn across twice the width:
-
-```forth
-64COL
-." THIS LINE NOW WRAPS AT 64 COLUMNS INSTEAD OF 32, TWICE AS MUCH ROOM "
-32COL
-." BACK TO THE NORMAL 32-COLUMN WIDTH"
-```
-
-- **The Cursor's One Real Difference:** Typing at the prompt works the
-  same way — a line you're typing wraps at 64 columns instead of 32
-  while `64COL` is active, cursor included. One real difference from
-  the normal-width cursor: the 64-column cursor is a solid block that
-  stays **on** rather than blinking. Mode 6 (the hardware mode `64COL`
-  switches to) has no per-cell color memory at all — the normal
-  cursor's blink comes from the real ULA hardware's own FLASH bit,
-  which lives in that per-cell color byte, so there's nothing for a
-  64-column cursor to hook into. You'll always be able to see where it
-  is; it just won't flash.
-
-- **No Per-Character Color:** `INK`/`PAPER` don't apply per-character
-  in `64COL` mode either, for the same reason — `PALETTE64` (above) is
-  how `64COL` picks its one shared color pair instead.
-
-#### Looping Over `PLOT64`
-
-Because `PLOT64` is an ordinary word once `64COL` has switched modes,
-[section 8](#8-repeating-yourself)'s `DO`/`LOOP` works on it exactly
-as it did on `CIRCLE` in [section 10](#10-drawing-and-sound) — a row of ten points,
-spaced out across the wider coordinate range this mode gives you:
-
-```forth
-64COL
-3 PALETTE64
-420 20 DO I 96 PLOT64 40 +LOOP
-32COL
-```
-
-- **Reading This Loop:** This is the same `+LOOP`-steps-the-index
-  trick [Drawing and sound](#10-drawing-and-sound)'s `DOTS` used, just
-  reaching further along the row — ten points, `I` running 20, 60,
-  100, ... up to 380, comfortably inside `PLOT64`'s wider 0-511 range
-  and well past what the normal screen's own coordinates could reach.
-
-### A Caveat on 64-Column Visual Rendering
-
-While `PLOT64`'s underlying logic is completely solid—confirmed byte-for-byte across independent emulators like **Fuse** and **ZEsarUX**, which agree on exactly which bit in memory changes—its on-screen visual appearance comes with one important caveat:
-
-- **Memory vs. Display:** Both emulators render 64-column mode's entire drawing area as a flat, uniform color rather than showing the individual pixels a real Timex Sinclair 2068 hardware would display.
-
-- **The Reason:** Because 64-column mode was rarely utilized in 1980s software, neither emulator ever invested engineering effort into rendering it accurately. This is an emulator limitation, not an error in `PLOT64` itself.
-
-Treat `64COL`'s visual on-screen appearance as **unverified**. However, everything else about its operation—such as which pixel gets set and at which memory address—is entirely reliable, functioning just as solidly as the standard-screen `PLOT`, `LINE`, and `CIRCLE` commands.
-
-### Summary
-
-- **Core Concepts:** A second screen mode, twice as wide. It is both a
-  wider pixel display, with x running to 511, and a wider text
-  display, with `EMIT` and the prompt itself wrapping at column 64
-  with no extra word needed. It has no per-cell colour memory, so
-  `INK`/`PAPER` don't apply and the cursor doesn't blink; one shared
-  colour pair is chosen with `PALETTE64` instead.
-
-- **Forth Words:** `64COL`, `32COL`, `PALETTE64`, `PLOT64`.
-
-### Exercises
-
-1. Print the same long line of text twice, once in each mode, and count
-   where each one wraps:
-   
-   ```forth
-   32COL 60 SPACES 42 EMIT CR
-   64COL 60 SPACES 42 EMIT CR
-   32COL
-   ```
-   
-   Nothing about the printing changed — only the width the same `EMIT`
-   wraps at.
-
-2. `PLOT64`'s x coordinate runs to 511, past anything the normal screen
-   can address. Plot a point at x = 400 and satisfy yourself that it is
-   accepted rather than refused or wrapped. (Remember the caveat above:
-   what is confirmed is which pixel in memory changes, not necessarily
-   what an emulator draws for you.)
-
-3. Type a long line at the prompt itself while `64COL` is active, and
-   watch where it wraps and what the cursor looks like. Compare with
-   the same line typed after `32COL`. The cursor difference is the one
-   described above, and it is a property of the hardware mode rather
-   than of this Forth.
-
-4. Try several values of `PALETTE64` with the same `PLOT64` point on
-   screen, and confirm that the colour applies to the whole display at
-   once rather than to the point you last drew — which is exactly what
-   "no per-cell colour memory" means in practice.
-
----
-
-## 14. Error handling: THROW and CATCH
+## 13. Error handling: THROW and CATCH
 
 [Section 3](#3-understanding-system-feedback--errors) covered the
 defaults when something goes wrong: `?` for an unrecognized word,
@@ -4078,7 +3957,7 @@ you come straight back out to the prompt:
 
 ---
 
-## 15. Printing to a real printer: LPRINT and LLIST
+## 14. Printing to a real printer: LPRINT and LLIST
 
 BASIC's `LPRINT` and `LLIST` send output to an attached printer
 instead of the screen. 2068-Leap-Forth has the same idea, adapted to the
@@ -4156,7 +4035,7 @@ support enabled.
    printer neither knows nor cares where the pair came from.
 
 ---
-## 16. ULAPlus: a bigger color palette
+## 15. ULAPlus: a bigger color palette
 
 Every color word covered so far — `INK`, `PAPER`, `BORDER` — picks
 from the same fixed 8 colors the hardware has always had. ULAPlus is
@@ -4257,7 +4136,7 @@ These need a ULAplus-capable emulator
 
 ---
 
-## 17. Growing the dictionary yourself
+## 16. Growing the dictionary yourself
 
 [Section 2](#2-defining-your-own-words) made a claim worth revisiting
 now that you've used the whole language: defining a word *extends the
@@ -4538,7 +4417,7 @@ ZZZ .           \ prints 222
   A name the dictionary doesn't have at all gets a different message —
   `FORGET: NOT FOUND` — and likewise changes nothing. Both are
   ordinary printed messages, not errors: the rest of your line carries
-  on running normally afterward, unlike the resets in section 14.
+  on running normally afterward, unlike the resets in section 13.
 
 ### Summary
 
@@ -4595,7 +4474,7 @@ ZZZ .           \ prints 222
 
 ---
 
-## 18. A worked example: the Blackjack demo
+## 17. A worked example: the Blackjack demo
 
 Everything up to this point has been explored in small, isolated pieces — one new word at a time, each demonstrated with a brief two- or three-line example. **`demos/blackjack.fs`** is the opposite: a complete, fully functional single-deck Blackjack game written in a few hundred lines of ordinary Forth. It plays a full hand against a computer dealer complete with hit/stand logic, correct soft-ace scoring, a real shuffle, and a scored outcome every round.
 
@@ -4831,7 +4710,7 @@ the same convention applied to the full ANS Forth standard.
 | `IMMEDIATE`                      | `( -- )`                             | mark the most recently defined word immediate                                             |
 
 **Dictionary space and defining words** — see
-[section 17](#17-growing-the-dictionary-yourself)
+[section 16](#16-growing-the-dictionary-yourself)
 
 | Word        | Stack effect    | Notes                                                                                                                              |
 | ----------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
@@ -4846,7 +4725,7 @@ the same convention applied to the full ANS Forth standard.
 | `LIST-DEFS` | `( -- )`        | list the first 16 colon definitions in the line store, numbered from 0, with a 20-character source preview — see [section 3](#fixing-a-typo-after-youve-already-pressed-enter-edit-and-list-defs) |
 | `EDIT`      | `( "name" -- )` | open the line store in a full-screen view on the last definition of `name` (with no name: on a new empty line at the end); BREAK leaves and runs the changed lines — see [section 3](#fixing-a-typo-after-youve-already-pressed-enter-edit-and-list-defs) |
 
-**Error handling** — see [section 14](#14-error-handling-throw-and-catch)
+**Error handling** — see [section 13](#13-error-handling-throw-and-catch)
 
 | Word    | Stack effect       | Notes                                        |
 | ------- | ------------------ | -------------------------------------------- |
@@ -4897,11 +4776,8 @@ the same convention applied to the full ANS Forth standard.
 | `NOISE`           | `( period -- )`                                                             |
 | `ENVELOPE`        | `( period shape -- )`                                                       |
 | `UDG`             | `( n -- addr )`                                                             |
-| `64COL` / `32COL` | `( -- )`                                                                    |
-| `PALETTE64`       | `( n -- )`                                                                  |
-| `PLOT64`          | `( x y -- )`                                                                |
-| `ULAPLUS`         | `( flag -- )` — see [section 16](#16-ulaplus-a-bigger-color-palette)        |
-| `PALETTE`         | `( index value -- )` — see [section 16](#16-ulaplus-a-bigger-color-palette) |
+| `ULAPLUS`         | `( flag -- )` — see [section 15](#15-ulaplus-a-bigger-color-palette)        |
+| `PALETTE`         | `( index value -- )` — see [section 15](#15-ulaplus-a-bigger-color-palette) |
 
 **EXROM graphics (RECT, POLYGON, sprites)** — see [section
 10](#10-drawing-and-sound); needs the real `graphics_exrom.bin`
@@ -4934,7 +4810,7 @@ loaded, not the placeholder EXROM
 | `LOAD-TEXT`   | `( "name" -- )`          | load and re-run saved source text                                 |
 | `VERIFY-TEXT` | `( "name" -- )`          | compare a text tape with the line store                           |
 
-**Printer** — see [section 15](#15-printing-to-a-real-printer-lprint-and-llist)
+**Printer** — see [section 14](#14-printing-to-a-real-printer-lprint-and-llist)
 
 | Word     | Stack effect      |
 | -------- | ----------------- |
