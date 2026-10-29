@@ -22,7 +22,8 @@
 ;
 ; TWO CHECKPOINTS:
 ;   1. A small, self-contained round trip (": DOUBLER DUP + ;") proving
-;      the basic wiring: SAVE-TEXT the definition's own source text,
+;      the basic wiring: SAVE-TEXT the definition's own source text
+;      (put in the line store first: SAVE-TEXT saves the store since step E),
 ;      simulate a fresh boot (dictionary pointers reset AND the RAM
 ;      dictionary region poisoned with $FF — stronger than
 ;      rom/forth_smoke_p7.asm's own pointer-only reset, since this
@@ -170,9 +171,8 @@ COLD_START:
     ld   (CHECKPOINT_NUM), a
 
     ld   hl, MINI_SRC
-    rst RST_DPUSH
-    ld   hl, MINI_SRC_LEN
-    rst RST_DPUSH
+    ld   bc, MINI_SRC_LEN
+    call SET_STORE                  ; SAVE-TEXT saves the line store (step E)
     ld   hl, SRC_SAVE_MINI
     ld   de, SRC_SAVE_MINI_LEN
     call INTERPRET_RUN
@@ -196,9 +196,8 @@ COLD_START:
     ld   (CHECKPOINT_NUM), a
 
     ld   hl, BJ_SRC
-    rst RST_DPUSH
-    ld   hl, BJ_SRC_LEN
-    rst RST_DPUSH
+    ld   bc, BJ_SRC_LEN
+    call SET_STORE
     ld   hl, SRC_SAVE_BJ
     ld   de, SRC_SAVE_BJ_LEN
     call INTERPRET_RUN
@@ -269,6 +268,12 @@ COLD_START:
     jr   PASS_TEST
 
 ; ---- test-harness-only helpers: NOT dictionary words ----
+SET_STORE:                       ; HL = text, BC = length (> 0): the line store
+    ld   de, STORE_START          ; holds exactly it, as typed or loaded lines
+    ldir                          ; would leave it (SAVE-TEXT's source since
+    ld   (STORE_END), de          ; step E: docs/V2/EDITOR_SPEC.md section 3)
+    ret
+
 RESET_AND_POISON:                ; simulates a fresh boot: RAM dictionary
                                   ; pointers reset AND the RAM dictionary
                                   ; region actually overwritten with $FF,

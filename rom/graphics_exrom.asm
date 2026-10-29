@@ -1642,7 +1642,6 @@ VIEW_COLON:        DB 1, ":"                   ; counted, like WORD_BUF
 ; marked line after the last (no room: STORE FULL).
 ; ============================================================================
 VIEW_SESSION:
-    call VIEW_TRIM
     ld   a, (GFX_MODE)
     cp   2
     ld   hl, VIEW_MSG_32COL
@@ -1754,57 +1753,6 @@ VIEW_SESSION:
     ld   a, 3
     ld   (VIEW_RESULT), a
     ret
-
-; ============================================================================
-; VIEW_TRIM -- the console appends the line it is about to run to the store;
-; a line holding EDIT is not source, so it is taken off again.
-; In:  EDIT_BUF/EDIT_LEN = the console's line
-; Out: STORE_END moved back over the line if the store ends with exactly it
-; Destroys: AF, BC, DE, HL
-; ============================================================================
-VIEW_TRIM:
-    ld   a, (EDIT_LEN)
-    or   a
-    ret  z
-    ld   c, a
-    ld   b, 0
-    ld   hl, (STORE_END)
-    dec  hl
-    ld   a, (hl)
-    cp   13
-    ret  nz                         ; the console's append ends in $0D
-    or   a
-    sbc  hl, bc                     ; where the line's text would start
-    ld   a, h
-    cp   STORE_START >> 8
-    ret  c
-    xor  STORE_START >> 8           ; at the start of the store, or after a
-    or   l                          ; terminator?
-    jr   z, .text
-    dec  hl
-    ld   a, (hl)
-    inc  hl
-    and  $7F
-    cp   13
-    ret  nz
-.text:
-    ld   de, EDIT_BUF
-    push hl
-    ld   b, c
-.cmp:
-    ld   a, (de)
-    cp   (hl)
-    jr   nz, .no
-    inc  hl
-    inc  de
-    djnz .cmp
-    pop  hl
-    ld   (STORE_END), hl
-    ret
-.no:
-    pop  hl
-    ret
-    ASSERT (STORE_START & $FF) == 0
 
 ; ============================================================================
 ; VIEW_WORD_EQ -- a word of a stored line against a counted name, without case.

@@ -1,76 +1,85 @@
-# Leap-Forth V2 — session handoff (2026-10-29, step E complete)
+# Leap-Forth V2 — session handoff (2026-10-29, step E complete with the review follow-up)
 
-Read this first in a new session. Then `docs/V2/EDITOR_SPEC.md` (step E: decisions, line store contract, view
-behaviour, sections 4 and 5.1-5.3 as built, oracle table), `docs/V2/LEAPC_COMPARISON_AUDIT.md` (on branch
-`v2/step-l-leapc-audit`) and `docs/V2/FORTH_V2_REUSE_AUDIT.md` (section 8 sequence, section 9 ledger, section 10 owner
-decisions).
+Read this first in a new session. Then `docs/V2/EDITOR_SPEC.md` (step E: decisions, line store contract in section 3,
+view behaviour, sections 4 and 5.1-5.5 as built, oracle table), `docs/V2/MODE6_REMOVAL_SPEC.md` (the next step),
+`docs/V2/LEAPC_COMPARISON_AUDIT.md` (on branch `v2/step-l-leapc-audit`) and `docs/V2/FORTH_V2_REUSE_AUDIT.md`
+(section 8 sequence, section 9 ledger, section 10 owner decisions).
 
 ## Where things stand
 
 - **master** is `af61e35`: PR #2 (T → G → R0 → A → R1 → S, `0d45a2f`) and PR #3 (a three-line edit of this file).
   When the E branch merges into master, this file conflicts with PR #3's version: keep the E branch's.
-- **Step E is done** on `v2/step-e-console-editor` (items 1-7; all of `EDITOR_SPEC.md` section 9). Not pushed; no PR
-  yet (push and open PRs only when the owner asks; merge step PRs with merge commits).
+- **Step E is done** on `v2/step-e-console-editor`, including the owner-review follow-up (the view's row-shadow
+  redraw, `SAVE-TEXT` on the line store). Not pushed; no PR yet (push and open PRs only when the owner asks; merge step
+  PRs with merge commits).
 
   | Branch | State |
   |---|---|
-  | `v2/step-e-console-editor` | **Step E complete**: T11, T12, spec, oracle, O13 merged in, items 3-7. Ready for a PR to master |
-  | `v2/e-item6-wip` | item 6's four commits, merged into the E branch (`7ddc7d6`); can be deleted |
+  | `v2/step-e-console-editor` | **Step E complete** with the follow-up. Ready for a PR to master |
+  | `v2/e-item6-wip`, `v2/e-shadow-wip`, `v2/e-savetext-wip` | work branches, merged into the E branch; can be deleted |
   | `v2/step-o13-rst-stack` | O13, already merged into the E branch (`9a1d570`) |
   | `v2/step-l-leapc-audit` | step L, docs only (`9391422`, decisions `f5a36c5`), from master |
 
   Merging L and E into master: both append rows to the audit's section 9 ledger (and L adds section 5 rows O13-O19
   and section 10 decisions 7-9), so the second merge conflicts there; keep both sides' rows, in step order.
-- **Free space [M]:** HOME 1,078 B, DOCK cartridge 1,078, Blackjack 1,096/1,096, Gallery 1,021, EXROM 5,006. The floors
+- **Free space [M]:** HOME 1,042 B, DOCK cartridge 1,042, Blackjack 1,096/1,096, Gallery 1,021, EXROM 4,224. The floors
   in `tools/budget.toml` equal these.
-- **Step E in bytes [M]:** items 3-7 cost HOME +54 B (1,132 → 1,078 free, after O13's −506) against an estimate of
-  −110 to −200; the overrun is `EDIT` and its commit loop (+157 against +40-60). EXROM +1,676 B (estimate 2,200-2,600).
-  Item 5's merged redraw saved 178 B; RECALL's retirement 84.
-- **Last full run [M]** (item 7's commit): `make edtest` **31/31** (old 19/19, new 12/12); `make test` 70 PASS, 0
-  FAIL, 1 SKIP, POWERON 7/7; `make tapetest` 16/16; `make harness` 0 failed; `make cartdiff` 26/26; `make fusesave`
-  41 checks, 0 failed; `make bench` within 1% (sieve −1.6%, string −1.2%, the rest faster); `make repro` 266 files
-  identical; `make check` passes.
+- **Step E in bytes [M]:** items 3-7 and the follow-up cost HOME +90 B (1,132 → 1,042 free, after O13's −506; the
+  owner accepts HOME bytes that a ledger row justifies) and EXROM +2,458 B (6,682 → 4,224: the view 1,676, its
+  row-shadow redraw +841 against an estimate of about 0, less `VIEW_TRIM` 56).
+- **Last full run [M]** (the follow-up's commit): `make edtest` **31/31**; `make test` 70 PASS, 0 FAIL, 1 SKIP,
+  POWERON 7/7; `make tapetest` 16/16; `make harness` 0 failed; `make cartdiff` 26/26;
+  `make fusesave` 42 checks, 0 failed (the Fuse tape_write abort and retry, as known); `make bench` within 1% (sieve
+  −1.6%, string −1.2%, the rest faster); `make repro` 266 files identical; `make check` passes.
 
-## What step E built (details in EDITOR_SPEC.md 4, 5.1-5.3)
+## Owner decisions this session (2026-10-29)
+
+- **Mode 6 dropped entirely** (64COL, 32COL, PALETTE64, PLOT64, the 64-column kernel and every 64-column path):
+  the layout is unverifiable here and not worth the effort. **HIRES/NORMAL stay** (the TS2068 high-colour mode, not
+  Mode 6). Plan: `docs/V2/MODE6_REMOVAL_SPEC.md` (about −589 B HOME).
+- **HOME bytes** may be spent when a ledger row justifies them.
+- **One authoritative source:** the line store. `SAVE-TEXT name`/`VERIFY-TEXT name` save and check it (the `addr len`
+  forms were a defect left from before step E; spec section 3 had required the store). Command lines (`SAVE-TEXT`,
+  `VERIFY-TEXT`, `LOAD-TEXT`, `EDIT`) are never stored (`STORE_TRIM`).
+- **The view's redraw** was rebuilt from Leap V2's row shadow after the owner asked whether Leap-C/Leap V2's redraw
+  logic had been used (it had not: a process miss; references named in a spec are to be studied before designing).
+
+## What step E built (details in EDITOR_SPEC.md 3, 4, 5.1-5.5)
 
 - **Console:** one width-parameterised redraw (`WRAP_CALC_AT`, `ED_DRAW_ROWS`, `ED_DRAW_CURSOR`, the RAM `JP`
-  `ED_ROW_JP` at `$88FC` choosing `ED_ROW32`/`ED_ROW64` per row); E10 fixed (64-column hang, 64-column room check,
-  cursor on a full row: its own row, or the last cell on a 4th full row).
-- **View:** `EDIT name` / `EDIT` (core/edit.asm, HOME) calls `VIEW_SESSION`, EXROM service slot 6
-  (`rom/graphics_exrom.asm`); veneers 5-12 in `GRAPHICS_HOME_TABLE`; HOME cells the EXROM uses are copies in
-  `include/exrom_home_ram.inc`, checked by `tools/audit_layout.py`. The view's RAM is `$8AC0-$8AF2`. Leaving runs
-  the marked (`$8D`) lines with `INTERPRET_NESTED`; an error prints `LINE n` first (`EDIT_ERR_PREFIX`), and
-  `EDITOR_LOOP_LIVE` clears any marks left after the console line (`EDIT_CLEAR_MARKS`).
-- **The `EDIT ...` command line is taken off the store** when the view opens (`VIEW_TRIM`), so saved texts never
-  reopen the editor.
+  `ED_ROW_JP` at `$88FC`); E10 fixed (64-column hang, 64-column room check, cursor on a full row).
+- **View:** `EDIT name` / `EDIT` (core/edit.asm, HOME) calls `VIEW_SESSION`, EXROM service slot 6; veneers 5-12 in
+  `GRAPHICS_HOME_TABLE`; HOME cells the EXROM uses are copies in `include/exrom_home_ram.inc`, checked by
+  `tools/audit_layout.py`. View RAM `$8AC0-$8B39` (row shadow `$8AF3-$8B37`). Leaving runs the marked (`$8D`) lines
+  (`EDIT_NEXT_MARK`, `INTERPRET_NESTED`); an error prints `LINE n` first; `EDITOR_LOOP_LIVE` clears marks left by an
+  unwound line.
+- **Redraw on a row shadow** (5.4, 5.5): rows remember (line, row); a moved view is shifted by pixels and only rows
+  that differ are drawn. N12 (T): scroll 270,769, DOWN mid-screen 76,914, UP scroll 242,624, ENTER at the bottom
+  421,116, DOWN 56,894, typing 40,324.
+- **The store is the source:** `STORE_APPEND` records where it put the line being run (`STORE_LAST_LINE`, `$8BFE`);
+  `STORE_TRIM` takes it off for the four commands.
 - **RECALL retired**; `LIST-DEFS` is the dictionary head; 158 words (counted by walking the chain).
-- **View typing cost (N12) is now a gate:** key at end 42,198 T, DOWN 126,049, ENTER 162,624, a scroll in a 60-line
-  store 1,032,460 (0.3 s: all 23 rows redrawn, lines found by scanning from `STORE_START`).
 
 ## Next work, in order
 
-1. **Owner:** review step E and ask for the PR (E branch → master), and decide on L's PR. Open points for the owner
-   are in the next section.
-2. **O15** (after E): FILL and CIRCLE kernels to the EXROM (about −820 B HOME). The EXROM now has 5,006 B free.
-3. **Step F: float rebuild** (audit section 4.2) with O10 and T13. Also: measure `UDIV10` as a call of Leap-C's
-   `RT_UDIV` once O10 is in (L audit, output words).
-4. **K** (with O16, O17; about +62 B + words), **D** (with O18, the PLOT/LINE clip), **B** (BREAK latch, pause word).
-5. **Step Z** (audit section 4.4) with O14 (230 B of page-zero padding), O19, and `W_EMIT` through `rst $28`.
+1. **Owner:** review step E and ask for the PR (E branch → master), and decide on L's PR.
+2. **Step M6: Mode 6 removal** (`docs/V2/MODE6_REMOVAL_SPEC.md`), its own branch from the E branch's tip: spec,
+   oracle (edtest's 64-column parts and N11, fharness check `i`, smoke ROMs p8b/p56/p57/p58 and the visual check,
+   p44 to HIRES), the code in one commit (re-point the chain before `floatmul.asm` to `H_FMINUS`), docs (tutorial
+   section 13 goes, 14-17 renumber).
+3. **O15:** FILL and CIRCLE kernels to the EXROM (about −820 B HOME; the EXROM has 4,224 B free).
+4. **Step F: float rebuild** (audit section 4.2) with O10 and T13.
+5. **K** (with O16, O17; also the text-drawing speed-up the owner may approve: an ASCII-indexed font, about
+   byte-neutral against K's planned +80 B, and a row text primitive, about 2x on every redraw), **D** (O18), **B**.
+6. **Step Z** (audit section 4.4) with O14, O19, and `W_EMIT` through `rst $28`.
 
-## Open points for the owner (not blocking)
+## Open points (not blocking)
 
-- **Step E's HOME total is over its estimate** (+54 B against −110 to −200): `EDIT` and the commit loop are 157 B.
-  Candidates if HOME gets tight: share one `$8D` search between the commit loop and `EDIT_CLEAR_MARKS` (about −10 B);
-  move the bare-`EDIT`/refusal messages' handling further into the EXROM.
-- **The view's scroll is slow** (about 1 M T a scrolled line). A pixel scroll of rows 0-22 plus one new line, and a
-  remembered line pointer instead of scanning from `STORE_START`, would cut it to a small fraction; not specified, so
-  not done.
-- **64-column screen layout:** the ROM writes columns 0-31 to the first display file and 32-63 to the second
-  (`MODE64_CHAR_ADDR_SETUP`), and T12 reads it the same way. ZEsarUX's headless `save-screen` cannot capture the
-  512-pixel mode, so nothing here has checked how a real hi-res display presents those bytes. Unchanged by step E.
-- `SAVE-TEXT` still takes `addr len` (tutorial section 12), and no word gives the store's address and length, so
-  what `EDIT` edits cannot be saved to tape directly. A word for that (or `SAVE-TEXT` with no arguments saving the
-  store) was not in step E's scope; worth deciding before users rely on `EDIT`.
+- **The view's ENTER at the bottom** is still 421k T: about 122k is `STORE_LINE` scanning a 60-line store from
+  `STORE_START` per key; a cached cursor-line address would cut it. An insert or delete mid-screen redraws the rows
+  below (no partial shift). Both outside spec 5.4.
+- **Text drawing** costs about 1,000 T a cell in HOME's `GFX_PUTCHAR` (the per-character font lookup and attribute
+  address); see K above.
 
 ## How the owner wants the work done
 

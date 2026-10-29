@@ -24,13 +24,13 @@ pad = 0xFF
 [[image]]
 file   = "forth_boot_rom0.bin"
 title  = "HOME ROM (Forth)"
-floor  = 1090
+floor  = 1042
 target = 200
 
 [[image]]
 file   = "forth_boot_cart.bin"
 title  = "HOME, DOCK cartridge build (Forth)"
-floor  = 1090
+floor  = 1042
 target = 200
 
 [[image]]
@@ -54,7 +54,7 @@ target = 200
 [[image]]
 file   = "graphics_exrom.bin"
 title  = "Graphics EXROM (chunk 5)"
-floor  = 5006
+floor  = 4224
 target = 150
 
 # Every floor change after the first commit of this file, newest last:
@@ -82,3 +82,6 @@ target = 150
 #     the LINE n error report (+47); the audit's section 9 row "E item 7".
 #   forth_boot_rom0.bin and forth_boot_cart.bin: 1078 -> 1090 (+12 B, raised), step E follow-up: EDIT's commit loop and
 #     EDIT_CLEAR_MARKS share one search (EDIT_NEXT_MARK); the audit's section 9 row "E follow-up".
+#   forth_boot_rom0.bin and forth_boot_cart.bin: 1090 -> 1042 (-48 B), graphics_exrom.bin: 5006 -> 4224 (-782 B), step E
+#     follow-up: SAVE-TEXT/VERIFY-TEXT save the line store and STORE_TRIM keeps command lines out of it (HOME), the
+#     view's row-shadow renderer (+841 EXROM), VIEW_TRIM removed (-56 EXROM); the audit's section 9 row "E follow-up".

@@ -315,7 +315,7 @@ remaining mark).
 
 Built to 5.1, with these departures (each judged by N6-N13 and the redraw oracle):
 
-- **The `EDIT` command line is taken off the store** (`VIEW_TRIM`, EXROM). The console appends the line it is about
+- **The `EDIT` command line is taken off the store** (item 6: `VIEW_TRIM`, EXROM; since the `SAVE-TEXT` fix, HOME's `STORE_TRIM`, section 3, and `VIEW_TRIM` is gone). The console appends the line it is about
   to run (E5), so `EDIT SQ` would become source, and a text saved with it would open the view again when loaded. The
   session removes the store's last line when it is exactly the console's line after a terminator. With `NO EXROM`
   the line stays (the EXROM is not there to remove it); N10 and N11 accept both.

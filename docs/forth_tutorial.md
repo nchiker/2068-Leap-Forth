@@ -598,9 +598,11 @@ The text behind it is the **line store**. Every line you press Enter
 on is also kept there, one line per line, in the order you entered
 them — whether you typed it live at the prompt or brought it in with
 `LOAD-TEXT` (see [section 12](#12-saving-and-loading-your-work)). An
-empty line is not kept. (When the view opens, the `EDIT ...` line
-itself is taken off the store again: it is a command to look at the
-store, not part of your program.) The store holds 8 KB.
+empty line is not kept. (The line holding `EDIT ...` itself is taken
+off the store again: it is a command to look at the store, not part of
+your program. The same goes for the lines holding `SAVE-TEXT`,
+`VERIFY-TEXT` and `LOAD-TEXT`.) The store holds 8 KB, and it is the
+source that `SAVE-TEXT` saves.
 
 `LIST-DEFS ( -- )` is the way to see what is there. It prints the
 colon definitions in the store — the first 16 of them — numbered from
@@ -3549,21 +3551,29 @@ bytes `:` produced, tied to the exact ROM that compiled them. That's
 fast, but it means a tape saved by one release of 2068-Leap-Forth
 won't load into a different one.
 
-`SAVE-TEXT ( addr len "name" -- )`, `LOAD-TEXT ( "name" -- )` and
-`VERIFY-TEXT ( addr len "name" -- )` work with something different:
-the **plain source text** of a program, exactly as you'd type it.
+`SAVE-TEXT ( "name" -- )`, `LOAD-TEXT ( "name" -- )` and
+`VERIFY-TEXT ( "name" -- )` work with something different: the
+**plain source text** of your program, exactly as you typed it.
 
-- **Why an Address and Length:** Where `SAVE-LIB`/`LOAD-LIB` need no
-  addresses at all (they already know where the dictionary lives),
-  `SAVE-TEXT` takes an address and length on the stack — wherever your
-  program's source text already sits in memory — the same
-  `( addr len -- )` shape
-  [section 5](#5-reading-and-writing-memory-directly)'s string words
-  use:
+- **What `SAVE-TEXT` Saves: the Line Store:** Section 3 described the
+  line store: every line you press Enter on at the prompt, kept in
+  order, one line each. (Lines brought in by `LOAD-TEXT` and lines
+  you fixed with `EDIT` are in it too.) `SAVE-TEXT` takes no address
+  and no length; it writes that whole store to tape, one CR-ended
+  line after another. What you have typed this session is your
+  program's source, and this is how you keep it:
 
   ```forth
-  S" : DOUBLER DUP + ;" SAVE-TEXT PROGTEXT
+  : DOUBLER DUP + ;
+  5 DOUBLER .
+  SAVE-TEXT PROGTEXT
   ```
+
+  The first line defines `DOUBLER`, the second prints `10`, and the
+  third saves both lines under the name `PROGTEXT`. The `SAVE-TEXT
+  PROGTEXT` line itself is not saved: the line holding the command is
+  never kept in the store, so a tape never contains the instruction
+  that made it.
 
 Loading it back doesn't just restore a dictionary snapshot — it
 **re-runs the interpreter over the saved text**, exactly as if you'd
@@ -3571,8 +3581,29 @@ typed it at the prompt:
 
 ```forth
 LOAD-TEXT PROGTEXT
-4 DOUBLER .     \ prints 8
 ```
+
+`DOUBLER` is defined again, and then the saved `5 DOUBLER .` line
+runs and prints `10`. `LOAD-TEXT` replaces the store with the tape's
+lines and interprets them, so what you have loaded is also what a
+later `SAVE-TEXT` will save, and `EDIT` can open it.
+
+- **Everything You Typed Is Saved:** The store is the session's
+  source, not just its definitions. A line such as `5 DOUBLER .` is
+  in it, so it runs again every time the tape is loaded, and so do
+  `21 DBL .`, `VLIST` and anything else you committed. That is
+  usually what you want from a program, but not always. Before you
+  save, use `LIST-DEFS` to see your definitions and `EDIT` to fix the
+  lines, or to delete the ones you do not want saved: a line that is
+  deleted in the view is not in the store, so it is not on the tape.
+  (A line that was refused with `STORE FULL` never reached the store,
+  so it is not saved either.)
+
+- **The Command Line Is Not Source:** The line holding `SAVE-TEXT
+  NAME`, `VERIFY-TEXT NAME`, `LOAD-TEXT NAME` or `EDIT ...` is not
+  kept in the store. If it were, saving and then reloading would run
+  `SAVE-TEXT` again, or open the editor, every time. Every other line
+  you committed is kept and saved.
 
 - **Why Both Mechanisms Exist, and Which to Keep:** That re-parsing is
   the whole point: source text has no dependency on which exact ROM
@@ -3586,20 +3617,24 @@ LOAD-TEXT PROGTEXT
   replacing the other. Keep your source as text if you want to keep it
   for good.
 
-- **Checking a Text Tape: `VERIFY-TEXT`:** Give `VERIFY-TEXT` the same
-  address and length you saved, and the same name, and it compares the
-  tape with that text without changing anything:
+- **Checking a Text Tape: `VERIFY-TEXT`:** Give `VERIFY-TEXT` the name
+  you saved under, and it compares the tape with the line store
+  without changing anything:
 
   ```forth
-  S" : DOUBLER DUP + ;" 2DUP SAVE-TEXT PROGTEXT
-  \ rewind the tape, press play
+  SAVE-TEXT PROGTEXT
   VERIFY-TEXT PROGTEXT
   ```
 
-  `SAVE-TEXT` uses up the address and length it is given, so the
-  `2DUP` above keeps a second copy for the verify. The text must match
-  exactly and have exactly the same length; a single differing byte, or
-  a longer or shorter text, fails the verify.
+  (Rewind the tape and press play between the two; don't type a
+  comment line there, since every line you commit joins the store.)
+
+  The tape must match the store exactly. A single differing byte
+  fails the verify, and so does a tape of a different length, which is
+  refused just like a mismatch. Run it straight after the save,
+  before you type anything else that you would want to keep:
+  every line you commit in between joins the store, so a tape saved
+  earlier no longer matches it.
 
 ### When the Tape Goes Wrong: Errors from the Tape Words
 
@@ -3649,13 +3684,16 @@ SAVE-LIB MYPROG
 - **Core Concepts:** Two different things can be saved to tape: a
   compiled dictionary image, which is fast but tied to the exact ROM
   that built it (a new ROM release makes older images unloadable), and
-  plain source text, which is slower to load but portable because
-  loading it simply re-runs the interpreter over it. Both take the name
+  plain source text (the line store, everything you committed at the
+  prompt), which is slower to load but portable because loading it
+  simply re-runs the interpreter over it. Both take the name
   that follows them rather than a value from the stack. `SAVE-LIB`
   always writes everything defined up to that moment, and never part of
   it; `LOAD-LIB` replaces the user dictionary and, if the tape breaks
-  mid-load, leaves it empty. Each kind has a `VERIFY` word that compares
-  a tape with memory and changes nothing. Failures are `THROW`n: `-28`
+  mid-load, leaves it empty. `SAVE-TEXT` writes the whole line store,
+  except the line that holds the command itself. Each kind has a
+  `VERIFY` word that compares a tape with memory (or with the store)
+  and changes nothing. Failures are `THROW`n: `-28`
   for SPACE, `-37` for any other tape failure, `-8` for an image that
   doesn't fit.
 
@@ -3674,17 +3712,22 @@ SAVE-LIB MYPROG
    the tape. Try it, having saved something a moment before, and
    confirm you get your definitions back without retyping the name.
 
-3. `SAVE-TEXT` saves whatever address and length you hand it, and a
-   string literal is an address and a length. Save a source string
-   containing *two* definitions at once —
+3. `SAVE-TEXT` saves the line store, and the line store is whatever
+   you committed. Type two definitions —
    
    ```forth
-   S" : DOUBLER DUP + ; : QUADER DOUBLER DOUBLER ;" SAVE-TEXT PROG2
+   : DOUBLER DUP + ;
+   : QUADER DOUBLER DOUBLER ;
+   SAVE-TEXT PROG2
    ```
    
    — then `LOAD-TEXT PROG2` and check that both words exist afterwards.
-   This is the difference from `SAVE-LIB` in one line: what came back
-   was recompiled from text, not restored from an image.
+   Run `LIST-DEFS` first and see that it lists the same two. This is
+   the difference from `SAVE-LIB` in one line: what came back was
+   recompiled from text, not restored from an image. Then add a line
+   such as `3 QUADER .` before the save, load the tape again, and
+   notice that it runs on loading; use `EDIT` to delete it and save
+   again.
 
 4. Run `FREE .` from section 5 before and after a `LOAD-LIB`. The
    number changes, and by roughly the size of what you loaded — which
@@ -4887,9 +4930,9 @@ loaded, not the placeholder EXROM
 | `SAVE-LIB`    | `( "name" -- )`          | save the compiled dictionary as a binary image (tied to this ROM) |
 | `LOAD-LIB`    | `( "name" -- )`          | load a dictionary image back, replacing the user dictionary       |
 | `VERIFY-LIB`  | `( "name" -- )`          | compare a dictionary image on tape with memory                    |
-| `SAVE-TEXT`   | `( addr len "name" -- )` | save plain Forth source text (portable)                           |
+| `SAVE-TEXT`   | `( "name" -- )`          | save the line store as plain Forth source text (portable)         |
 | `LOAD-TEXT`   | `( "name" -- )`          | load and re-run saved source text                                 |
-| `VERIFY-TEXT` | `( addr len "name" -- )` | compare a text tape with the text at addr len                     |
+| `VERIFY-TEXT` | `( "name" -- )`          | compare a text tape with the line store                           |
 
 **Printer** — see [section 15](#15-printing-to-a-real-printer-lprint-and-llist)
 

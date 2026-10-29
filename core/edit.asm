@@ -22,7 +22,7 @@
 VIEW_RESULT EQU $8AC0       ; 1 byte; the EXROM's copy is include/exrom_home_ram.inc
 EDIT_LINE_NO EQU $8AF1      ; 2 bytes: the number of the line the commit loop is running
                             ; (0: none); EDIT_ERR_PREFIX reports it. After the EXROM's
-                            ; view cells (rom/graphics_exrom.asm, $8AC1-$8AF0)
+                            ; view cells $8AC1-$8AF0 (rom/graphics_exrom.asm; its row shadow follows at $8AF3)
 
 H_EDIT:
     DW   DICT_CHAIN_POINT   ; the including ROM sets this (DEFL)

@@ -936,7 +936,12 @@ this is the condensed one-paragraph-per-phase version.
   routine, which fixed the 64-column hang (the grow loop now reads the
   row counts afresh on every pass) and the cursor on a full row (it goes
   to column 0 of a new row; a 128-character line has no fifth row), and
-  made the console's HOME code 178 bytes smaller. Checked by the step E
+  made the console's HOME code 178 bytes smaller. `SAVE-TEXT` and
+  `VERIFY-TEXT` now take only a name (`( "name" -- )`) and save or check
+  the line store; the `addr len` forms were a leftover from before the
+  store, fixed after review. The line holding `SAVE-TEXT`, `VERIFY-TEXT`,
+  `LOAD-TEXT` or `EDIT` is never kept in the store, so a saved text does
+  not run them again when it is loaded. Checked by the step E
   oracle (`tools/edtest.py`, `make edtest`; cases N1-N13) and the screen
   oracle, under ZEsarUX only; no hardware, so contact bounce and fast
   typing on a real keyboard are not exercised. See
