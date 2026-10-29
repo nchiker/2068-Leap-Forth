@@ -206,6 +206,35 @@ def slots_invoked_by(rom_path, rom_name):
     return slots
 
 
+def check_home_ram():
+    """include/exrom_home_ram.inc copies Home RAM cells and constants for the EXROM's view; each must equal the
+    symbol of that name in build/forth_boot.sym (and in the cartridge build's)."""
+    inc = ROOT / 'include' / 'exrom_home_ram.inc'
+    want = {}
+    for m in re.finditer(r'^([A-Z][A-Z0-9_]*)\s+EQU\s+(\$[0-9A-Fa-f]+|\d+)', inc.read_text(), re.MULTILINE):
+        v = m.group(2)
+        want[m.group(1)] = int(v[1:], 16) if v[0] == '$' else int(v)
+    bad = []
+    for sym_name in ('forth_boot.sym', 'forth_boot_cart.sym'):
+        path = ROOT / 'build' / sym_name
+        if not path.exists():
+            fail(f'{path.relative_to(ROOT)} missing: build the Forth images first (make)')
+        have = {}
+        for line in path.read_text().splitlines():
+            m = re.match(r'^([A-Za-z_][A-Za-z0-9_]*):\s+EQU\s+0x([0-9A-Fa-f]+)', line)
+            if m:
+                have[m.group(1)] = int(m.group(2), 16)
+        for name, value in want.items():
+            if have.get(name) != value:
+                got = 'missing' if name not in have else f'${have[name]:04X}'
+                bad.append(f'{inc.relative_to(ROOT)}: {name} = ${value:04X} but {sym_name} has {got}')
+    if bad:
+        for b in bad:
+            print(f'FAIL: {b}')
+        raise SystemExit(1)
+    print(f'PASS: include/exrom_home_ram.inc: {len(want)} Home cell(s)/constant(s) agree with the Home symbols')
+
+
 def audit():
     veneers_by_slot, dispatch = parse_exrom_dispatch()
     print(f'GRAPHICS_EXROM_TABLE: {len(dispatch)} slots parsed from '
@@ -257,6 +286,7 @@ def audit():
         raise SystemExit(1)
     print('PASS: every GRAPHICS_HOME_TABLE ROM is at the fixed $0100 ABI '
           'address and covers what it actually invokes')
+    check_home_ram()
 
 
 if __name__ == '__main__':

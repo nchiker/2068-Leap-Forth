@@ -57,6 +57,7 @@
 
     INCLUDE "include/sysvars.inc"
     INCLUDE "include/graphics_exrom_abi.inc"
+    INCLUDE "include/exrom_home_ram.inc"
 
 ; ---- Home-side stable call targets (rom/forth_boot.asm, $0100) ----
 ; Generated, not hand-typed — see this file's own header above.
@@ -1372,6 +1373,236 @@ POLY_FILL_IMPL:
     jp   .row_loop
 .all_rows_done:
     ret
+
+; ============================================================================
+; The line store for the full-screen view (step E, docs/V2/EDITOR_SPEC.md
+; sections 3 and 5.1). Lines are text + one terminator, STORE_START up to
+; STORE_END (HOME cell); a terminator is $0D, or $8D for a line changed in
+; the view (bit 7 is ignored when scanning). Lines are numbered from 0 here
+; (the status row shows n + 1). Every routine below destroys the registers its
+; header does not list as Out; none touches IX or IY.
+; ============================================================================
+
+; ---- the view's RAM, $8AC0 up (free: $8ABD-$8BFF) ----
+VIEW_RESULT        EQU $8AC0    ; 1: what VIEW_SESSION reports to Home (EDIT)
+VIEW_CUR           EQU $8AC1    ; 2: the cursor line (its text is in EDIT_BUF)
+VIEW_TOP           EQU $8AC3    ; 2: the first line on screen
+VIEW_COUNT         EQU $8AC5    ; 2: lines in the store
+VIEW_OLDCUR        EQU $8AC7    ; 2: VIEW_CUR / VIEW_TOP / VIEW_CROW before the key
+VIEW_OLDTOP        EQU $8AC9    ; 2
+VIEW_PTR           EQU $8ACB    ; 2: a line's address, walking the store
+VIEW_IDX           EQU $8ACD    ; 2: its index
+VIEW_CELL          EQU $8ACF    ; 2: the cursor cell last drawn: column, row
+VIEW_MSG           EQU $8AD1    ; 1: STORE FULL is on the status row
+VIEW_OLDMSG        EQU $8AD2    ; 1: VIEW_MSG before the key
+VIEW_CROW          EQU $8AD3    ; 1: screen row of the cursor line's first row
+VIEW_CROWS         EQU $8AD4    ; 1: its rows (the wrap table's count)
+VIEW_OLDROW        EQU $8AD5    ; 1
+VIEW_ROW           EQU $8AD6    ; 1: the screen row a walk has reached
+VIEW_LEVEL         EQU $8AD7    ; 1: what the key changed: 0 nothing, 1 the
+                                ;    cursor, 2 the cursor line's text, 3 lines
+VIEW_COL           EQU $8AD8    ; 1: the column UP/DOWN carries to a line
+VIEW_KEYCODE       EQU $8AD9    ; 1
+VIEW_EXTRA         EQU $8ADA    ; 1: bytes a caller adds right after VIEW_LEAVE
+VIEW_FOUND         EQU $8ADB    ; 2: 1 + the last line the name matched, or 0
+VIEW_T1            EQU $8ADD    ; 2: scratch
+VIEW_T2            EQU $8ADF    ; 2: scratch
+VIEW_FLAG          EQU $8AE1    ; 1: scratch
+VIEW_TEXT          EQU $8AE2    ; 14: the status row's text
+    ASSERT (VIEW_TEXT & $FF) + 14 < $100
+    ASSERT VIEW_TEXT + 14 <= $8C00
+
+; ============================================================================
+; STORE_NEXT -- the line at HL.
+; In:  HL = the line's address (a terminated line: the store ends with one)
+; Out: DE = the line's address, HL = the next line's address, BC = its text
+;      length (terminator not counted)
+; Destroys: AF
+; ============================================================================
+STORE_NEXT:
+    ld   d, h
+    ld   e, l
+.scan:
+    ld   a, (hl)
+    inc  hl
+    and  $7F
+    cp   13
+    jr   nz, .scan
+    push hl
+    dec  hl
+    or   a
+    sbc  hl, de
+    ld   b, h
+    ld   c, l
+    pop  hl
+    ret
+
+; ============================================================================
+; STORE_LINE -- line n.
+; In:  DE = n (0 to the line count; the count itself is the end of the store)
+; Out: HL = the line's address (STORE_END for n = count), BC = its length (0)
+; Destroys: AF, DE
+; ============================================================================
+STORE_LINE:
+    ld   hl, STORE_START
+.skip:
+    ld   a, d
+    or   e
+    jr   z, .here
+    push de
+    call STORE_NEXT
+    pop  de
+    dec  de
+    jr   .skip
+.here:
+    ld   bc, 0
+    ld   de, (STORE_END)
+    or   a
+    sbc  hl, de
+    add  hl, de
+    ret  z                          ; the end of the store: an empty line
+    push hl
+    call STORE_NEXT
+    pop  hl
+    ret
+
+; ============================================================================
+; STORE_ROOM -- does the store take DELTA more bytes?
+; In:  DE = delta (signed)
+; Out: carry set if STORE_END + delta would pass STORE_LIMIT; HL = room
+; Destroys: AF, BC, HL
+; ============================================================================
+STORE_ROOM:
+    ld   a, d
+    rla
+    ccf
+    ret  nc                         ; negative: always fits
+    ld   hl, STORE_LIMIT
+    ld   bc, (STORE_END)
+    or   a
+    sbc  hl, bc                     ; room (STORE_END never passes STORE_LIMIT)
+    or   a
+    sbc  hl, de                     ; carry if delta > room
+    ret
+
+; ============================================================================
+; STORE_GAP -- open or close a gap: the bytes from POS to STORE_END move by
+; DELTA and STORE_END follows. The one routine every change is built on.
+; In:  HL = position (STORE_START to STORE_END), DE = delta (signed): positive
+;      opens a gap of that size at POS; negative removes the bytes
+;      [POS + delta, POS)
+; Out: carry set if there is no room (STORE_END + delta > STORE_LIMIT):
+;      nothing changed; else carry clear
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+STORE_GAP:
+    ld   a, d
+    or   e
+    ret  z                          ; no change
+    ld   (VIEW_T1), hl
+    ld   (VIEW_T2), de
+    call STORE_ROOM
+    ret  c
+    ld   hl, (STORE_END)
+    ld   de, (VIEW_T1)
+    or   a
+    sbc  hl, de
+    ld   b, h
+    ld   c, l                       ; bc = bytes to move
+    ld   hl, (VIEW_T1)              ; closing: from POS
+    ld   de, (VIEW_T2)
+    ld   a, d
+    rla
+    jr   c, .go
+    ld   hl, (STORE_END)            ; opening: from the last byte down
+    dec  hl
+.go:
+    push hl
+    add  hl, de
+    ex   de, hl                     ; de = the destination
+    pop  hl                         ; hl = the source
+    ld   a, b
+    or   c
+    jr   z, .end                    ; nothing to move
+    ld   a, (VIEW_T2 + 1)
+    rla
+    jr   c, .down
+    lddr
+    jr   .end
+.down:
+    ldir
+.end:
+    ld   hl, (STORE_END)
+    ld   de, (VIEW_T2)
+    add  hl, de
+    ld   (STORE_END), hl
+    or   a
+    ret
+
+; ============================================================================
+; STORE_REPLACE -- replace a line's text by EDIT_BUF (EDIT_LEN bytes) and mark
+; it ($8D). Unconditional: the caller decides whether the line changed.
+; In:  HL = the line's address, BC = its text length
+; Out: carry set if the new text does not fit: nothing changed; else clear
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+STORE_REPLACE:
+    push hl
+    add  hl, bc                     ; the terminator
+    ld   a, (EDIT_LEN)
+    ld   e, a
+    ld   d, 0
+    ex   de, hl                     ; hl = new length, de = the terminator
+    or   a
+    sbc  hl, bc                     ; hl = delta
+    ex   de, hl                     ; hl = the terminator, de = delta
+    call STORE_GAP
+    pop  de
+    ret  c
+    ld   hl, EDIT_BUF
+    ld   a, (EDIT_LEN)
+    ld   c, a
+    ld   b, 0
+    or   a
+    jr   z, .mark
+    ldir
+.mark:
+    ld   a, $8D
+    ld   (de), a
+    or   a
+    ret
+
+; ============================================================================
+; STORE_INSERT -- a new empty line, marked ($8D), at an address.
+; In:  HL = the address (a line's, or STORE_END for a new last line)
+; Out: carry set if there is no room: nothing changed; else clear
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+STORE_INSERT:
+    push hl
+    ld   de, 1
+    call STORE_GAP
+    pop  hl
+    ret  c
+    ld   (hl), $8D
+    ret
+
+; ============================================================================
+; STORE_DELETE -- remove a line, terminator included.
+; In:  HL = the line's address, BC = its text length
+; Out: carry clear
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+STORE_DELETE:
+    ld   a, c
+    cpl
+    ld   e, a
+    ld   a, b
+    cpl
+    ld   d, a                       ; de = -(length + 1)
+    add  hl, bc
+    inc  hl                         ; the next line
+    jp   STORE_GAP
 
     DS   $C000 - $, $FF             ; pad to the end of this 8K image
                                     ; ($A000 + $2000) -- absolute ORG
