@@ -7,8 +7,7 @@ HOME is short; the provenance scan in this step) and decision 4 (Leap V2's MIT p
 the 12-byte scan is clean). O10 (integer multiply and divide) was added to F by the owner on 2026-10-28. Evidence tags
 as in the audit: [M] measured, [S] source, [E] estimate, [L] from another project's records.
 
-**Decisions the owner must take are collected in section 15** and marked **(owner)** where they arise. Nothing past
-this spec is built until they are answered.
+**The owner's decisions are in section 15** (decided 2026-10-29).
 
 ## 1. Why
 
@@ -30,7 +29,7 @@ byte for byte.
 | Leap V2 SQR (`rom/exrom_v2_vm_core.asm` `BUILTIN_FN_SQR`, `54cd877`) | Newton's method, 5 steps of x = (x + n/x)/2, the halving done by decrementing the exponent byte (exact, about 22 kT less than a divide); first guess 2^⌊(e+2)/2⌋ from the exponent; negative: an error; 0: 0 | The algorithm as is (section 8.1) |
 | Leap V2 SIN/COS/TAN (`rom/exrom_v2_float_fn.asm`, 5.9-5.10) | Degrees: exact integer reduction mod 360 to [0°, 90°], then x = a·π/180 and the odd minimax series x + x³(c3 + c5x² + c7x⁴ + c9x⁶ + c11x⁸), coefficients fitted for \|x\| ≤ 91° (relative error 4.8e-11), within about 2 ulp; COS(x) = SIN(x + 90); TAN = SIN/COS with a division-by-zero guard; \|x\| ≥ 32768° is error 15 | The series and its 5 coefficients and π/180 (`SIN_COEFFS`, 30 B) as is. The reduction is rebuilt for radians (section 8.2): Forth's SIN/COS take radians, and RAD/DEG stay (audit 4.2 item 3) |
 | Leap-C `src/runtime/helpers.asm` `RT_MUL`, `RT_UMUL`, `RT_DIVS`, `RT_MODS`, `RT_SDIV`, `RT_UDIV` (84 B [M] in `leapc_home.lst`) | Register-only 16-bit multiply (16 steps from the top bit) and restoring divide (16 steps, the remainder in DE); signed wrappers: quotient truncated toward 0, remainder with the dividend's sign, a divisor of 0 gives 0 | O10 (section 11): the same contract Forth's `MATH_*` routines have today [S], so `*`, `/`, `MOD` keep their results |
-| Leap-C `src/runtime/library.asm` `LIB_RAND` | 16-bit xorshift (7, 9, 8), period 65535 | Candidate for `RND` (section 11.2, owner) |
+| Leap-C `src/runtime/library.asm` `LIB_RAND` | 16-bit xorshift (7, 9, 8), period 65535 | The generator behind `RND` (section 11.2, F8) |
 | Today's `core/float.asm`, `floatmul.asm`, `floatdiv.asm`, `floatconv.asm`, `floatprint.asm`, `floatsqrt.asm`, `floattrig.asm`, `decimal.asm`, `core/beep.asm`, `core/interp.asm` (`NUMBER`, `.gotfloat`, `STACK_CHECK`), `kernel/math/math.asm` | Section 3 | What must keep working (section 10) |
 
 ## 3. Today [M] (re-measured on `b4a05b0`, `build/forth_boot.lst`)
@@ -97,7 +96,7 @@ What changes around it:
   (`iy += 5`) and packs into the new top. No `F_ACC`, `F_OLD`, `TOK_BUF` or `PRINT_BUF`.
 - **Errors** (section 8.4) leave through one entry, `F_THROW`: Leap-C's `F_ERR` with `E_RANGE` becomes `THROW` with
   −43, and the division by zero in `FDIV` gets its own entry with −42.
-- **Multiply and divide kernels (owner, decision F1).** `fpcore`'s `FMUL` and `FDIV` run their 32 and 40 steps
+- **Multiply and divide kernels (F1).** `fpcore`'s `FMUL` and `FDIV` run their 32 and 40 steps
   through the byte-loop helpers (`FSHR`, `FADDN`, `FSUBN`, `FSHL` on RAM): about 19 kT per F* and 34 kT per F/ [E,
   counted from the instructions]. `bench_float` does 27 F* and 29 F/ per repetition (582 kT per repetition today, all
   words included [M]), so with them the benchmark would take about 3 times as long [E]. Alternative: the same two
@@ -108,7 +107,7 @@ What changes around it:
   `FMUL` + `FDIV` (160 B) [E]. Precondition: neither interrupt routine touches the alternate registers. Forth's
   own does not [S: no `exx` in kernel/ or core/]. The stock ROM's routine in the cartridge build is checked in
   ZEsarUX before the code is written (alternate registers set to a pattern, frames run, read back); if it does touch
-  them, the kernels run with interrupts held off for at most about 5 kT (+4 B). **Recommended: the register kernels.**
+  them, the kernels run with interrupts held off for at most about 5 kT (+4 B). **Decided: the register kernels.**
 - **Alignment in FADD** shifts whole bytes first, then bits (the same ⌊y / 2^d⌋, so the same results): an exponent
   difference of 30 costs about 6 kT with bit shifts only [E]; whole bytes first, under 1.5 kT, for about +15 B [E].
   Done if the byte budget allows (it does on the section 14 estimate).
@@ -120,27 +119,39 @@ What changes around it:
 1. An optional leading `-` (as today). Then `ATOF`'s grammar: digits, an optional `.` and digits, an optional exponent
    `E`/`e` with an optional sign and digits. At least one digit; the whole token must be consumed. `+` is not a sign,
    and there is no suffix (Leap-C's `f F l L` go).
-2. **A float** when the token has a `.` or an exponent (owner, decision F5: whether the exponent is accepted at all,
-   and whether `1E3` without a point is a float). The value is ATOF's (rounded to nearest at each step, as
-   `fpmodel.atof`), negated by the sign, pushed on the float stack (or compiled after `DOFLIT`), flag 2 as today.
-3. **An integer** otherwise: the low 16 bits of the value, negated by the sign, flag 1, as today (`40000` is −25536, as
-   today). ATOF keeps 32 bits of digits; for longer integer tokens (10 digits and more) today's result is the value mod
-   65536. Minor decision F5b: keep that exactly (+~12 B: the 16-bit accumulation carries on when the 32-bit one is
-   full) or refuse such tokens as not a number. **Recommended: keep it exact.**
+2. **A float** when the token has a `.` or an exponent (F5: `1E3`, `2.5e-4`, `-1.5E+3`, `3.` and `.5` are floats).
+   The value is ATOF's (rounded to nearest at each step, as `fpmodel.atof`), negated by the sign, pushed on the float
+   stack (or compiled after `DOFLIT`), flag 2 as today.
+3. **An integer** otherwise, if its value is in −32768..65535 (F5b): the 16-bit pattern (`40000` is −25536 as a
+   signed number, as today, so addresses up to 65535 can be typed), flag 1. Outside that range (`100000`, `-40000`)
+   THROW −43: today such a token silently wraps (`100000` gives 34464).
 4. Not a number (no digit, a second `.`, letters, `E` without digits): flag 0, so the interpreter reports the unknown
    word as today. A float beyond the range (`1E39`): THROW −43. Below the range: 0 (as `fpmodel`).
 
 This replaces `CHECK_FOR_DOT`, `DECIMAL_PARSE_AND_PUSH` and `NUMBER`'s own digit loop (about 300 B together [M:
 decimal.asm 248, NUMBER's loop about 60 S]).
 
-## 7. Output: `F.`
+## 7. Output: `F.`, `FS.` and `PLACES`
 
-`FTOA` with the decimals rounded half up (as `fpmodel.ftoa`): every integer digit, a `.` and the decimals, `-` for a
-negative value (so `-0.00001 F.` prints `-0.0000`, as C's `%.4f` and the model do), then a space, as today. Owner,
-decision F4: (a) always 4 decimals (today's count; the rounding and the precision change: `2.0 FSQRT F.` prints
-`1.4142` where today it prints `1.4141`, `1.0 SIN F.` `0.8415` where today `0.8408`); or (b) the same with a word `PLACES ( n -- )` that sets the count 0-9 (a RAM byte, 4 after the cold
-start; about +20 B). **Recommended: (b).** Whichever is chosen, very small values print as zeros and very large ones
-with all their digits (up to 39); there is no scientific notation (FTOA has none, and it would cost about 150 B [E]).
+- **`PLACES ( n -- )`** sets the number of decimals both words print, 0-9 (a RAM byte, 4 after the cold start);
+  another n: THROW −43 (F4).
+- **`F.`** prints `FTOA` with `PLACES` decimals rounded half up (as `fpmodel.ftoa`): every integer digit, then `.` and
+  the decimals (none and no point when `PLACES` is 0), `-` for a negative value, then a space, as today. One change
+  from the model: when every printed digit is 0, no `-` (`-0.00001 F.` prints `0.0000`, not C's `-0.0000`). With 4
+  decimals, as today: `2.0 FSQRT F.` prints `1.4142` where today `1.4141`, and `1.0 SIN F.` `0.8415` where today
+  `0.8408` (rounding and precision).
+- **`FS.`** prints scientific notation (the ANS word): `[-]d.ddddEn` with `PLACES` decimals, the exponent n in decimal
+  with a `-` when negative and no `+`, then a space: `1E-6 FS.` prints `1.0000E-6`, `-12345.678 FS.` `-1.2346E4`,
+  `0.0 FS.` `0.0000E0`. Algorithm (all `fpcore` operations, so `tools/fpforth.py` models it bit for bit):
+  1. a = \|x\| (0: print `0`, the decimals, `E0`).
+  2. n = ⌊(e − 129) × 77 / 256⌋ from the exponent byte e (77/256 approximates log10 2; n is the decimal exponent or
+     one less or more).
+  3. a = a / 10^n: for n > 0 divide, for n < 0 multiply, by `POW10` entries in steps of at most 13 (as ATOF).
+  4. If a ≥ 10: a = a / 10, n + 1; else if a < 1: a = a × 10, n − 1 (one step suffices: n is never off by two).
+  5. The digits are FTOA(a, `PLACES`); if they read `10.`… (rounding carried), print `1.` and the zeros, n + 1.
+  Scaling costs at most 3 roundings, so the printed digits can differ from the exact decimal in the last of 9 or so
+  places; with 4 decimals never visibly [checked by T13 against Python's `%.4E`].
+- Very large values print all their integer digits with `F.` (up to 39); `FS.` is the way to read them.
 
 ## 8. Words
 
@@ -151,73 +162,95 @@ with all their digits (up to 39); there is no scientific notation (FTOA has none
 | `F+` `F-` `F*` `F/` | truncating, no errors | `fpmodel.add/mul/div`; overflow THROW −43, division by 0 THROW −42; underflow gives 0 |
 | `F.` | 4 decimals truncated | section 7 |
 | `S>F` | exact | exact (`FFROM`, signed) |
-| `F>S` | floor (`-2.5 F>S` gives −3), high bits lost silently | owner, decision F3: **recommended** truncation toward 0 (`fpmodel.toi`, ANS `F>D`'s rule; `-2.5 F>S` gives −2), the low 16 bits for values beyond ±32767 (as integer arithmetic wraps) |
-| `FROUND` | half up (−2.5 gives −2) | owner, decision F3: **recommended** half away from 0 (−2.5 gives −3, 2.5 gives 3), done on the unpacked mantissa (truncate, then add 1 if the first dropped bit is set), so a value just below n + ½ never rounds up through `FPACK` |
-| `FSQRT` | 32-bit integer root; negative gives 0 | Leap V2's Newton (`54cd877`): 0 gives 0, negative THROW −46, first guess from the exponent, 5 steps of (x + n/x)/2 with the halving on the exponent byte. Composed of `fpcore` operations, so `tools/fpforth.py` models it bit for bit; within 2 ulp of `math.sqrt` [checked by T13] |
+| `F>S` | floor (`-2.5 F>S` gives −3), high bits lost silently | truncation toward 0 (`fpmodel.toi`, ANS `F>D`'s rule; `-2.5 F>S` gives −2; `FLOOR` gives the floor); the integer part must be in −32768..65535 (the range a literal may have), else THROW −43 (F3) |
+| `FROUND` | half up (−2.5 gives −2) | half away from 0 (−2.5 gives −3, 2.5 gives 3) (F3) |
+| `FSQRT` | 32-bit integer root; negative gives 0 | Leap V2's Newton (`54cd877`): 0 gives 0, negative THROW −46; first guess: exponent byte 128 + ⌊(e − 126) / 2⌋ (arithmetic shift), mantissa bytes 0 (0.5); 5 steps of x = x + n/x with the exponent byte then decremented (the halving). Within 2 ulp of `math.sqrt` [checked by T13] |
 | `PI` | 3-byte constant | the 5-byte π (`$82 $49 $0F $DA $A2`) |
 | `SIN` `COS` | table, ~1e-3 | section 8.2 |
-| `RAD` `DEG` | × 0.0174532 / × 57.294922 | × π/180 (Leap V2's `SIN_COEFFS` entry) / × 180/π, 5-byte constants |
+| `RAD` `DEG` | × 0.0174532 / × 57.294922 | × π/180 (Leap V2's `SIN_COEFFS` entry `$7B $0E $FA $35 $13`) / × 180/π (`fpmodel.encode(180/π)`) |
+
+`FROUND` and `FLOOR` work on the unpacked mantissa, not by adding ½ (which `FPACK` could round up across an integer):
+for \|x\| < 1, `FROUND` gives ±1 when \|x\| ≥ ½ else 0, `FLOOR` −1 for a negative x else 0; for \|x\| ≥ 2^31 the value
+is already an integer; otherwise the fraction bits are cleared and the magnitude incremented by 1 when (`FROUND`) the
+first cleared bit was set, or (`FLOOR`) x is negative and any cleared bit was set; then normalised and packed.
 
 ### 8.2 SIN, COS, TAN (radians)
 
-- **Reduction** (rebuilt: Leap V2 reduces degrees exactly in 16-bit integers; radians need a float reduction).
-  k = x·(1/π) rounded to the nearest integer in 16 bits; r = (x − k·P1) − k·P2, with P1 = π rounded to 24 bits (so
-  k·P1 is exact for \|k\| < 256 and nearly so beyond) and P2 = π − P1 to 32 bits (Cody-Waite). Then
-  sin x = (−1)^k sin r with \|r\| ≤ π/2 + a little, inside the series' fitted range (\|r\| ≤ 1.588, 91°).
-- **Series:** Leap V2's, unchanged: r + r³(c3 + c5r² + c7r⁴ + c9r⁶ + c11r⁸), Horner on r². 10 multiplies and 7
-  additions per SIN, all `fpcore` operations, so `tools/fpforth.py` models SIN bit for bit.
-- **COS** x = SIN(x + π/2) (as today and as Leap V2's COS = SIN(x + 90)). **TAN** x = SIN x / COS x, a zero cosine
-  THROW −42 (as Leap V2; with radians in 5 bytes it hardly occurs, and a tiny cosine gives a large result or −43).
-- **Range:** \|k\| must fit 16 bits, so \|x\| < 32768·π ≈ 102,943; beyond, owner decision F6: **recommended** THROW
-  −43 (Leap V2's error 15 at 32768°). Accuracy [E, checked by T13 against `math.sin`]: within about 2 ulp for
-  \|x\| ≤ π/2, absolute error under 2^-30 for \|x\| ≤ 100, growing slowly with \|x\| beyond (P2's rounding, about
-  \|k\|·2^-34).
-- **Placement:** HOME (section 14 shows room). The EXROM fallback, used only if a measured step leaves HOME below its
-  floor plus the 200 B target: SQR, SIN, COS and TAN move to the EXROM behind service slot 7 (free since step E) with
-  a sub-function byte, calling HOME's engine through new veneers in `GRAPHICS_HOME_TABLE` (`FADD`, `FMUL`, `FDIV`,
-  `FUNPK`, `FPACK`, `FCMP`, `TOI`, `FFROM`: 8 × 3 B), the RAM cells they use copied into `include/exrom_home_ram.inc`
-  and checked by `tools/audit_layout.py`, and each word in HOME a 4-byte call through `EXROM_SERVICE`. Saves about
-  −420 + 60 = −360 B of HOME [E], costs about 10 kT per call for the paging (both builds; the cartridge build pages
-  DOCK chunk 5).
+Steps (each an `fpcore` operation: `tools/fpforth.py` follows the same steps, so the ROM is checked bit for bit):
 
-### 8.3 New words (owner, decision F2)
+1. t = x × `INV_PI` (1/π, `fpmodel.encode(1/π)`).
+2. k = t rounded half away from 0 (as `FROUND`); \|t\| ≥ 32767.5 (\|x\| above about 102,940): THROW −43 (F6: no
+   digit of a sine is right at that size in a 32-bit mantissa).
+3. kf = k as a float (`FFROM`); r = (x − kf × P1) − kf × P2 (Cody-Waite), with P1 = π rounded to 17 significant bits
+   (so kf × P1, at most 15 + 17 bits, is exact, and x − kf × P1 is exact by Sterbenz's lemma) and P2 = π − P1 to 32
+   bits (`fpmodel.encode`). \|r\| ≤ π/2 plus rounding, inside the series' fitted range (\|r\| ≤ 1.588, 91°).
+4. Leap V2's series on r, unchanged: x² = r × r, x³ = r × x², P = c3 + x²(c5 + x²(c7 + x²(c9 + x² c11))), s = r +
+   x³ × P, coefficients `SIN_COEFFS` (5 × 5 B, Leap V2 5.10).
+5. k odd: s = −s.
 
-Each costs its header (link 2, length 1, the name) plus code; estimates [E].
+**COS** x = SIN(x + π/2) (`HALF_PI` constant; as today and as Leap V2's COS = SIN(x + 90)). **TAN** x = SIN x / COS x;
+a cosine of exactly 0: THROW −42. Accuracy [E, checked by T13 against `math`]: about 2 ulp for \|x\| ≤ π/2, absolute
+error under 2^-30 for \|x\| ≤ 100, growing to about 2^-29 at the range's end (P2's rounding, about \|k\| × 2^-49 plus
+the series). 9 multiplies and 6 additions per SIN.
+
+**Placement:** HOME (section 14 shows room). The EXROM fallback, used only if a measured step leaves HOME below its
+floor plus the 200 B target: SQR, SIN, COS and TAN move to the EXROM behind service slot 7 (free since step E) with a
+sub-function byte, calling HOME's engine through new veneers in `GRAPHICS_HOME_TABLE` (`FADD`, `FMUL`, `FDIV`, `FUNPK`,
+`FPACK`, `FCMP`, `TOI`, `FFROM`: 8 × 3 B), the RAM cells they use copied into `include/exrom_home_ram.inc` and checked
+by `tools/audit_layout.py`, and each word in HOME a 4-byte call through `EXROM_SERVICE`. Saves about −420 + 60 = −360
+B of HOME [E], costs about 10 kT per call for the paging (both builds; the cartridge build pages DOCK chunk 5).
+
+### 8.3 New words (F2)
+
+Each costs its header (link 2, length 1, the name) plus code; estimates [E]. Flags are −1/0, as `<`.
 
 | Word | Stack | B [E] | Note |
 |---|---|---:|---|
 | `FDUP` | ( r -- r r ) | 14 | audit item 5 |
-| `FDROP` | ( r -- ) | 11 | without it a float can only be consumed by an operation |
+| `FDROP` | ( r -- ) | 11 | |
 | `FSWAP` | ( r1 r2 -- r2 r1 ) | 18 | |
 | `FOVER` | ( r1 r2 -- r1 r2 r1 ) | 15 | shares `FDUP`'s copy |
-| `FNEGATE` | ( r -- −r ) | 14 | audit item 5; `NEG` |
+| `FDEPTH` | ( -- n ) | 14 | floats on the float stack |
+| `FNEGATE` | ( r -- −r ) | 14 | audit item 5 |
 | `FABS` | ( r -- \|r\| ) | 12 | |
-| `F<` | ( r1 r2 -- flag ) | 14 | audit item 5; `FCMP`, flag −1/0 as `<` |
-| `F=` | ( r1 r2 -- flag ) | 10 | audit item 5; shares `F<`'s path |
+| `F<` `F>` `F=` | ( r1 r2 -- flag ) | 34 | audit item 5 (`F<`, `F=`); one `FCMP` path |
 | `F0<` `F0=` | ( r -- flag ) | 20 | the sign bit / the exponent byte |
+| `FMIN` `FMAX` | ( r1 r2 -- r3 ) | 30 | |
+| `FLOOR` | ( r1 -- r2 ) | 25 | shares `FROUND`'s code (section 8.1) |
 | `F@` `F!` | ( addr -- r ) ( r addr -- ) | 30 | audit item 5; 5-byte moves |
 | `FVARIABLE` | ( "name" -- ) | 15 | audit item 5; `VARIABLE`'s header builder with 5 bytes |
-| `FCONSTANT` | ( r "name" -- ) | 25 | a header and `DOFLIT` + 5 bytes, as a compiled literal |
-| `TAN` | ( r -- r ) | 20 | Leap V2; section 8.2 |
-| `PLACES` | ( n -- ) | 20 | only with decision F4 (b) |
+| `FCONSTANT` | ( r "name" -- ) | 25 | a header and `DOFLIT` + 5 bytes |
+| `TAN` | ( r1 -- r2 ) | 20 | section 8.2 |
+| `PLACES` | ( n -- ) | 20 | section 7 |
+| `FS.` | ( r -- ) | 140 | section 7 |
 
-Audit set (`FNEGATE F< F= FDUP F@ F! FVARIABLE`): about 97 B. **Recommended:** the audit set plus `FDROP FSWAP FOVER
-FABS F0< F0= TAN` (about 211 B with the audit set), `FCONSTANT` left out (`FVARIABLE` with `F!` covers it).
+About 457 B together. With today's 14 words: 34 float words.
 
-### 8.4 Errors through THROW
+### 8.4 Errors and their messages (F7)
 
 | Code | ANS meaning | Raised by |
 |---:|---|---|
 | −42 | floating-point divide by zero | `F/`, `TAN` (a zero cosine) |
-| −43 | floating-point result out of range | `F+ F- F* F/` overflow, `FPACK`'s rounding carry, a literal beyond the range, SIN/COS/TAN beyond \|x\| < 32768π (F6) |
+| −43 | floating-point result out of range | `F+ F- F* F/` overflow, `FPACK`'s rounding carry, a float literal beyond the range, an integer literal outside −32768..65535, `F>S` outside it, SIN/COS/TAN beyond about ±102,940, `PLACES` outside 0-9 |
 | −46 | floating-point invalid argument | `FSQRT` of a negative number |
 
-`CATCH` already saves and restores IY, so a caught float error leaves the float stack as it was at `CATCH`. Uncaught,
-every THROW today ends in `RUNTIME_ERROR_HOOK`, which prints `STACK?` whatever the code (`-8`, dictionary full, does
-too) and resets both stacks. Owner, decision F7: (a) leave that (0 B: a float error prints `STACK?`); (b) print
-`FLOAT?` for −42..−46 (about +20 B); (c) print the code for every uncaught THROW other than the stack check, e.g.
-`ERROR -42` (about +25 B; changes the message `-8` and user THROWs give). **Recommended: (c)**, since it is the only one
-that tells the user which error happened, for every code, at about the same price as (b).
+`CATCH` already saves and restores IY, so a caught error leaves the float stack as it was at `CATCH`. Uncaught, every
+THROW today ends in `RUNTIME_ERROR_HOOK`, which prints `STACK?` whatever the code. After F, an uncaught THROW prints a
+message for each code the ROM raises itself, and `ERROR n` for any other (a user's `5 THROW` prints `ERROR 5`):
+
+| Code | Message | Raised by (today's code) |
+|---:|---|---|
+| −8 | `DICTIONARY FULL` | `DICT_ROOM` (`core/interp.asm`) |
+| −13 | `UNDEFINED WORD` | `'` (`core/tick.asm`) |
+| −28 | `BREAK` | tape words (`core/tapeword.asm`) |
+| −37 | `TAPE ERROR` | tape words |
+| −42 | `DIVISION BY ZERO` | section 8.4 |
+| −43 | `OUT OF RANGE` | section 8.4 |
+| −46 | `INVALID ARGUMENT` | `FSQRT` |
+
+`STACK_CHECK`'s violation (a stack under- or overflow found between words, not a THROW) keeps printing `STACK?`. The
+`LINE n` prefix (`EDIT`'s commit) and the reset of both stacks are unchanged. About 115 B [E] (the texts 88, the code
+table and lookup 27).
 
 ## 9. RAM
 
@@ -317,14 +350,27 @@ exports `MATH_MULTIPLY16`/`MATH_DIVIDE16`):
 - Size about 90 B for the five [E: Leap-C's 84 plus the register moves Forth's contracts need], −88 B. Speed [L]:
   60000/7 from 3,584 to 1,479 T. Gates: `make bench` sieve and string must hold (within 1%) or improve.
 
-### 11.2 RND (owner, decision F8)
+### 11.2 RND (F8: Leap-C's xorshift)
 
-The audit asks to keep `MATH_SQRT16`, `MATH_SGN16`, `MATH_RND16` and `MATH_RND_SEED` or take Leap-C's xorshift for
-`RND`, whichever measures smaller. The xorshift step is 24 B against the LFSR's about 60 [E] (the range reduction
-through `MOD` stays), so it would save about 35 B, but it changes every `RND` sequence: the Blackjack demo's deals,
-any smoke ROM that checks an `RND` result, and `bench_pixel`, whose work and `RESULT=159` follow its seeded `RND`
-calls, so its T-states would change and its baseline would need resetting. **Recommended: keep `MATH_RND16`** (no
-sequence change for 35 B); take the xorshift only if the owner prefers the smaller code and accepts the re-baseline.
+Today's `MATH_RND16` is a Fibonacci LFSR that advances one bit per call, so each value is the previous one shifted
+right with one new top bit, and `RND n` is that value `MOD n`. Consecutive results are strongly related: in a Python
+copy of the routine, `6 RND` over 60,000 calls never produces 12 of the 36 possible pairs of consecutive values
+(each pair that does occur comes about 1.5 times as often as it should) [M, scratch simulation]; and `MOD` favours
+small results when n does not divide 32768 (`10000 RND` gives 0-2767 about 25% more often than the rest).
+
+After F (in O10's commit, `kernel/math/math.asm`):
+
+- **The generator:** Leap-C's 16-bit xorshift (`LIB_RAND`: x ^= x << 7, x ^= x >> 9, x ^= x << 8; period 65535). The
+  same simulation produces all 36 pairs, each within 6% of the fair rate.
+- **The range:** `RND n` = ⌊x × n / 65536⌋ for n > 0 (the high word of the 16 × 16 product), so every result in 0..n−1
+  comes from ⌊65535/n⌋ or one more states; n ≤ 0 gives 0, as today.
+- **Seeding, as today:** `RANDOMIZE n` sets the state to n; a state of 0 (after the cold start or `0 RANDOMIZE`) is
+  replaced at the next `RND` by a seed from the R register (low bit set, so never 0), so programs differ from run to
+  run unless they seed.
+- About −30 B [E]. Every `RND` sequence changes: the Blackjack and Gallery demos' play (accepted by the owner), any
+  smoke ROM that checks an `RND` result (found and updated in O10's commit), and `bench_pixel`, whose work and
+  `RESULT=159` follow its seeded `RND` calls: its expected RESULT and its baseline are reset in O10's commit (accepted
+  by the owner with F8), with the before and after figures in the ledger row.
 
 ## 12. BEEP
 
@@ -341,14 +387,15 @@ restores the snapshot, writes operands into float-stack cells (IY set to the cel
 (`W_FPLUS`, `W_FSTAR`, ... from the `.sym`) with a stop return, and reads the result cells, IY, the data stack and the
 screen. Error cases: a CATCH frame whose saved SP returns to the harness's stop slot (as Leap-C's `ERRSP`), so THROW
 lands there with the code on the data stack. The model: `tools/fpmodel.py` (Leap-C's, unchanged) and
-`tools/fpforth.py` (Forth's words composed of model operations: the parser of section 6, `F.`'s text, `F>S`,
-`FROUND`, `FSQRT`, `SIN`, `COS`, `TAN`, `RAD`, `DEG`, `BEEP`'s frame count).
+`tools/fpforth.py` (Forth's words composed of model operations, step for step as sections 6-8 give them: the
+parser, `F.` and `FS.` text, `F>S`, `FROUND`, `FLOOR`, `FSQRT`, `SIN`, `COS`, `TAN`, `RAD`, `DEG`, `BEEP`'s frame
+count; and `RND`'s generator and range).
 
 | Group | Checks |
 |---|---|
 | **old** (behaviour the spec keeps; must pass on the old build too) | typed at the console and read off the screen: `2.0 3.0 F* F.` `6.0000`, `0.5 0.5 F* F.` `0.2500`, `-6.0 3.0 F/ F.` `-2.0000`, `1.5 2.25 F+ F.` `3.7500`, `7 S>F F.` `7.0000`, `7.9 F>S .` `7`, `2.5 FROUND F>S .` `3`, `4.0 FSQRT F.` `2.0000`, `0.0 SIN F.` `0.0000`, compiled literals in a colon definition, `BEEP`'s frame count for 0.5 s (30), floats in `CATCH`. Exact strings chosen where both formats agree |
-| **new** (the spec; fail on the old build) | Engine, bit for bit against `fpmodel` on the generators of Leap-C's floattest (300 cases each): `F+ F- F* F/` (near pairs for cancellation), `F< F=` flags, `S>F` (all boundaries), `F>S`, `FROUND`, `FNEGATE`, `FABS`; literals (the 20 texts of Leap-C's list without suffixes, plus random `d.dEn`, signs, integers, 10+ digit integers); `F.` text on 300 values; `FSQRT`, `SIN`, `COS`, `TAN`, `RAD`, `DEG` bit for bit against `fpforth` and within the section 8 accuracy of Python's `math`; the model against Python's floats within 2^-30 (as Leap-C); errors −42, −43, −46 (and the literal `1E39`); the float stack: 204 cells push and pop, the 205th push reported by `STACK?`; new words' stack effects; integer `*` `/` `MOD` on 40,000 pairs against Python (O10) |
-| **speed** (recorded, not gated) | T-states per word on fixed operands: `F+` (exponent difference 0, 8, 30), `F*`, `F/`, `F.`, a literal, `FSQRT`, `SIN`, `*`, `/` (60000 7), `MOD`; old and new build side by side in the ledger row |
+| **new** (the spec; fail on the old build) | Engine, bit for bit against `fpmodel` on the generators of Leap-C's floattest (300 cases each): `F+ F- F* F/` (near pairs for cancellation), `F< F=` flags, `S>F` (all boundaries), `F>S`, `FROUND`, `FNEGATE`, `FABS`; literals (the 20 texts of Leap-C's list without suffixes, plus random `d.dEn`, signs, integers, 10+ digit integers); `F.` text on 300 values; `FSQRT`, `SIN`, `COS`, `TAN`, `RAD`, `DEG` bit for bit against `fpforth` and within the section 8 accuracy of Python's `math`; the model against Python's floats within 2^-30 (as Leap-C); errors −42, −43, −46 (the literal `1E39`, the integer literals `100000` and `-40000`, `40000.0 F>S`, `11 PLACES`); `F.` with `PLACES` 0-9 and the `-0.0000` rule; `FS.` text against `fpforth` and against Python's `%.<p>E` digits; `FLOOR`, `FMIN`, `FMAX`, `F>`, `F0<`, `F0=`, `FDEPTH`, `F@ F!`, `FVARIABLE`, `FCONSTANT` (typed and compiled); the float stack: 204 cells push and pop, the 205th push reported by `STACK?`; uncaught-THROW messages typed at the console (`1.0 0.0 F/` prints `DIVISION BY ZERO`, `5 THROW` `ERROR 5`, `' NOSUCHWORD` `UNDEFINED WORD`, `-1.0 FSQRT` `INVALID ARGUMENT`); integer `*` `/` `MOD` on 40,000 pairs against Python (O10); `RND`: 1,000 results after `n RANDOMIZE` equal the model's, `6 RND` gives all 36 consecutive pairs in 3,600 calls, `0 RANDOMIZE` reseeds from R (two boots give different first values) |
+| **speed** (recorded, not gated) | T-states per word on fixed operands: `F+` (exponent difference 0, 8, 30), `F*`, `F/`, `F.`, `FS.`, a literal, `FSQRT`, `SIN`, `*`, `/` (60000 7), `MOD`, `RND`; old and new build side by side in the ledger row |
 
 Run on the old build first (`make floattest FLOATTEST_BUILD=<old>`): the old group passes, the new group fails, and the
 old speed figures are recorded. That run, with this spec, is the oracle commit.
@@ -367,44 +414,47 @@ old speed figures are recorded. That run, with this spec, is the oracle commit.
 | Today's 14 words' headers and glue on the new engine, BEEP's float part, the error entries | about +230 |
 | O10 routines | about +90 |
 | **Net, before new words** | **about −200 (more free)** |
-| New words (recommended set) | about +211 |
-| PLACES (F4 b), the error message (F7 c), the exact long-integer path (F5b) | about +57 |
-| **Net, everything recommended** | **about +70 B used: HOME 1,629 → about 1,560 free** |
+| New words (section 8.3, with `PLACES` and `FS.`) | about +457 |
+| Error messages (section 8.4) | about +115 |
+| Range checks (integer literals, `F>S`), the `-0.0000` rule | about +28 |
+| `RND` (xorshift, multiply range, R seeding, against the LFSR's 88) | about −30 |
+| **Net, as decided** | **about +370 B used: HOME 1,629 → about 1,260 free** |
 
 The demos lose about 290 B each (section 10.1). The estimates are coarse (±250 B). Every code commit measures its own row; if HOME would fall below 1,000 B free, the
 EXROM fallback for the transcendentals (section 8.2) is proposed to the owner before going on. Floors in
 `tools/budget.toml` move only with a ledger row and a history line.
 
-## 15. Owner decisions
+## 15. Owner decisions (decided 2026-10-29)
 
-| # | Decision | Options | Recommended |
-|---|---|---|---|
-| F1 | Multiply/divide kernels | (a) `fpcore`'s byte loops: about 19 kT per F*, 34 kT per F/, `bench_float` about 3× slower (re-baseline needed); (b) register kernels, bit-exact with the same model, about 3.5 / 4.5 kT, `bench_float` about as today or faster, ±30 B | **(b)** |
-| F2 | New words | the audit set only (about 97 B); the recommended set (audit + `FDROP FSWAP FOVER FABS F0< F0= TAN`, about 211 B); add `FCONSTANT` (+25) | **recommended set, no FCONSTANT** |
-| F3 | `F>S` and `FROUND` rounding | `F>S`: truncate toward 0 (ANS, `fpmodel.toi`) or keep floor; beyond ±32767: wrap (low 16 bits) or THROW −43. `FROUND`: ties away from 0 or keep ties toward +∞ | **toward 0, wrap; ties away from 0** |
-| F4 | `F.` | (a) 4 decimals rounded; (b) (a) plus `PLACES ( n -- )` 0-9 (+20 B) | **(b)** |
-| F5 | Literal syntax | (a) today's (a `.` required, no exponent); (b) with `E`/`e` exponents, `1E3` a float without a point. F5b: 10+ digit integer tokens kept mod 65536 exactly (+12 B) or refused | **(b); keep exact** |
-| F6 | SIN/COS/TAN beyond \|x\| ≥ 32768π | THROW −43, or reduce anyway with growing error | **THROW −43** |
-| F7 | Uncaught THROW message | (a) `STACK?` as today; (b) `FLOAT?` for −42..−46; (c) `ERROR n` for every uncaught THROW | **(c)** |
-| F8 | `RND` | keep the LFSR; or Leap-C's xorshift (about −35 B, every sequence changes, `bench_pixel` re-baselined) | **keep** |
-| F9 | Order of commits | as section 16 | **as section 16** |
-| F10 | `bench_float`'s printed RESULT | `tools/bench.py` expects `-0.6523` (today's 3-byte error, taken from the benchmark's header in `~/2068-rom-benchmarks`); the 5-byte build prints `-0.1453` (the exact sum is −0.1453125). The bench fails until the expected value changes, whatever the speed | **accept `-0.1453`** in `tools/bench.py`; the header in `~/2068-rom-benchmarks` is the owner's to change |
+The owner's rule for all of them: what is best for the language and its users, not compatibility with today's
+behaviour or sequences.
 
-Not decisions (decided by the owner or by measurement): the format, the oracle, the placement in HOME unless HOME is
-short (decision 3), the provenance scan and NOTICE line (decision 4), `bench_float`'s re-baseline (only with the
-owner's OK if slower).
+| # | Decision | Decided |
+|---|---|---|
+| F1 | Multiply/divide kernels | Register kernels, bit-exact with `fpmodel` (section 5) |
+| F2 | New words | `FDUP FDROP FSWAP FOVER FDEPTH FNEGATE FABS F< F> F= F0< F0= FMIN FMAX FLOOR F@ F! FVARIABLE FCONSTANT TAN PLACES FS.` (section 8.3) |
+| F3 | `F>S`, `FROUND` | `F>S` truncates toward 0, THROW −43 outside −32768..65535; `FROUND` ties away from 0; `FLOOR` for the floor |
+| F4 | Output | `F.` with `PLACES` decimals (4 by default), no `-` on an all-zero result; `FS.` scientific (section 7) |
+| F5 | Literals | `E`/`e` exponents, `1E3` a float; integer literals outside −32768..65535 THROW −43 (section 6) |
+| F6 | SIN/COS/TAN beyond about ±102,940 | THROW −43 |
+| F7 | Uncaught THROW | a message for each code the ROM raises, `ERROR n` for the rest; `STACK?` only for the stack check (section 8.4) |
+| F8 | `RND` | Leap-C's xorshift, a multiply for the range, R seeding kept; demos' play and `bench_pixel` change (section 11.2) |
+| F9 | Order | section 16 |
+| F10 | `bench_float`'s RESULT | `-0.1453` in `tools/bench.py` (the exact value; today's `-0.6523` is the 3-byte error) |
+
+Still the owner's at the time (decision 3): resetting `bench_float`'s T-state baseline if F's build is slower.
 
 ## 16. Order of work (each a commit with a measured ledger row)
 
 1. **Spec** (this file) with the owner's answers.
 2. **T13 oracle** (`tools/fpmodel.py` vendored, `tools/fpforth.py`, `tools/floattest.py`, `make floattest`), run on
    the old build: old group pass, new group fail, old speed figures.
-3. **O10** (section 11): independent of the format, so it goes first and its bench gates (sieve, string) are read
-   alone. Ledger row.
+3. **O10 and RND** (section 11): independent of the format, so they go first and the bench gates (sieve, string) are
+   read alone; `bench_pixel`'s RESULT and baseline reset here (F8). Ledger row.
 4. **Engine and today's 14 words on the 5-byte format**, with the parser, `F.`, BEEP, `FSQRT`, SIN/COS, the
    smoke ROMs and the tests that hard-code the old format (section 10), in one commit: the format changes everywhere at
    once. Ledger row; bench (float figure for the owner).
-5. **New words** (F2), `PLACES` (F4), the error message (F7). Ledger row.
+5. **New words** (F2) with `PLACES` and `FS.` (F4), the error messages (F7). Ledger row.
 6. **Provenance scan** on the images (`make check`'s `tools/provenance.py`), NOTICE entry (decision 4), docs
    (`docs/forth_tutorial.md` float section, CHANGELOG, the audit's 4.2 and ledger, HANDOFF). Full run: `make edtest`,
    `test`, `harness`, `tapetest` (alone), `cartdiff`, `fusesave`, `bench`, `repro`, `check`, `floattest`.
