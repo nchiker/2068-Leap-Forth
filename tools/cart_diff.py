@@ -35,7 +35,7 @@ Informational: HOME screen bytes from ZEsarUX vs HOME screen bytes from TSRun.  
 BANK_EXROM_DEPTH (max value stored): 1 means page-ins never nested.
 
 RUN:  python3 cart_diff.py --home-dir TREE --cart-dir TREE [--cart-dck FILE] [--emulators zesarux,tsrun]
-        [--cases a,b] [--port 10930] [--json] [--selftest]      (TREE/build/ holds the build products; the cart
+        [--cases a,b] [--port 10930] [--json] [--selftest] [--dump DIR]      (TREE/build/ holds the build products; the cart
       .dck defaults to CART_DIR/build/forth_boot.dck; ~13 cases take ~12 min with ZEsarUX, ~35 s with TSRun only)
 
 NESTED PAGE-IN (BANK_EXROM_DEPTH): BANK_PAGE_EXROM_IN has exactly one caller (EXROM_CALL_SLOT), which only the
@@ -505,7 +505,19 @@ def fmt(m):
 
 
 # ----------------------------------------------------------------------------------------------- driver
-def run_pair(emu, case, lines, hb, cb, tmp, tsdir, port):
+def dump_result(dump, case, r):
+    """--dump DIR: the RAM the comparison reads ($4000-$FFFF) and the registers/typing it used, one pair of files per
+    run, named CASE.EMU.KIND.bin / .json so the dumps of two versions of this tool pair up (tools/cart_diff_dumpcmp.py)."""
+    os.makedirs(dump, exist_ok=True)
+    base = "%s/%s.%s.%s" % (dump, case, r.emu, r.build.kind)
+    with open(base + ".bin", "wb") as f:
+        f.write(r.ram)
+    with open(base + ".json", "w") as f:
+        json.dump(dict(case=case, emu=r.emu, kind=r.build.kind, ix=r.ix, iy=r.iy, alive=r.alive, page5_out=r.page5_out,
+                       attempts=r.attempts, typed=r.typed, notes=r.notes), f, indent=1)
+
+
+def run_pair(emu, case, lines, hb, cb, tmp, tsdir, port, dump=None):
     """Run one case on one emulator for both builds (fresh boot each), retrying keystroke errors."""
     out = []
     for b in (hb, cb):
@@ -521,6 +533,8 @@ def run_pair(emu, case, lines, hb, cb, tmp, tsdir, port):
             raise HarnessError("keystrokes still wrong after 4 attempts on %s/%s/%s: %r" % (emu, b.kind, case, bad[0]))
         if b.kind == "home" and not r.alive:
             raise HarnessError("HOME build unresponsive on %s/%s: %s" % (emu, case, "; ".join(r.notes)))
+        if dump:
+            dump_result(dump, case, r)
         out.append(r)
     return out
 
@@ -580,6 +594,8 @@ def main():
     ap.add_argument("--port", type=int, default=10930, help="ZRCP port (10930-10949)")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--selftest", action="store_true")
+    ap.add_argument("--dump", metavar="DIR", help="write every run's RAM ($4000-$FFFF) and IX/IY/typed lines to DIR "
+                    "(CASE.EMU.KIND.bin/.json); compare two dumps with tools/cart_diff_dumpcmp.py")
     args = ap.parse_args()
     if not 10930 <= args.port <= 10949:
         print("port must be within 10930-10949", file=sys.stderr)
@@ -606,7 +622,7 @@ def main():
         for name, lines, *opt in cases:
             home_scr = {}
             for emu in emus:
-                H, C = run_pair(emu, name, lines, hb, cb, tmp, tsdir, args.port)
+                H, C = run_pair(emu, name, lines, hb, cb, tmp, tsdir, args.port, args.dump)
                 m = compare(name, H, C, glyphs, opt[0] if opt else None)
                 m["attempts"] = (H.attempts, C.attempts)
                 m["tsrun_max_depth"] = (H.depth_max, C.depth_max) if emu == "tsrun" else None
