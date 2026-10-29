@@ -50,7 +50,7 @@ HOW "UNCHANGED" IS JUDGED
   stray write beyond HERE, such as a 64 KB LDIR, shows up).  LOADTEXT_BUF..DICT_RAM_CEILING-1 is left out: it is
   core/recall.asm's workspace, where the editor appends every line typed at the prompt on ENTER (an earlier version
   compared it and reported the typed command as a change).  VERIFY-LIB may write its CRC at HERE, HERE + 1 (spec
-  section 6); those two bytes are not compared.  "Dictionary reset" = HERE $9800 and LATEST = DICT_LATEST_INIT_RECALL
+  section 6); those two bytes are not compared.  "Dictionary reset" = HERE $9800 and LATEST = DICT_LATEST_COLD
   (cold start's values).
 
 THE ROM IDENTITY
@@ -141,7 +141,7 @@ class Build:
         # LOADTEXT_BUF ($D000) .. the ceiling is core/recall.asm's workspace: the editor appends every line typed at
         # the prompt there on ENTER, so the "dictionary unchanged" checks stop below it
         self.workspace = s.get("LOADTEXT_BUF", self.ceiling)
-        self.init_latest = s.get("DICT_LATEST_INIT_RECALL")
+        self.init_latest = s.get("DICT_LATEST_COLD")
         self.has_identity = "ROM_IDENTITY" in s
         a = s.get("ROM_IDENTITY")
         self.identity = (self.rom[a] | self.rom[a + 1] << 8) if a is not None and a + 1 < len(self.rom) else 0

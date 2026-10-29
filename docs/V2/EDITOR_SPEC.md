@@ -341,6 +341,22 @@ for later changes) [M]:
 A scroll redraws all 23 rows through `ED_ROW32` (no pixel scroll) and finds lines by scanning from `STORE_START`;
 about 0.3 s a scrolled line at 3.5 MHz.
 
+### 5.3 Item 7 as built [M, S]
+
+- **`LINE n`.** The commit loop counts lines as it scans and stores the running line's number in `EDIT_LINE_NO`
+  (`$8AF1`, after the view's cells); `EDIT_ERR_PREFIX`, called by `INTERPRET_UNKNOWN_WORD` (after its stack reset)
+  and `RUNTIME_ERROR_HOOK` (an uncaught THROW too), prints `LINE n ` before the message when it is non-zero. The cell
+  is zeroed when the loop ends and by `EDIT_CLEAR_MARKS` after an unwound console line, so an error later in the same
+  console line, or in any later line, gets no prefix. ABORT and QUIT print nothing, so no prefix; their marks are
+  cleared all the same.
+- **`RECALL` retired.** `W_RECALL`, `RECALL_PENDING` and the console's skip-the-clear hand-off are gone; `LIST-DEFS`
+  is the dictionary head (`DICT_LATEST_INIT_LISTDEFS`; `tools/tapetest.py` reads `DICT_LATEST_COLD`). T12 case 13
+  now asserts the retirement: `0 RECALL` answers `RECALL ?`, `LIST-DEFS` still lists, and `EDIT SQ` fixes the
+  definition in place. Smoke p64 drops its two RECALL checkpoints (4, 5; checkpoint 6 keeps its number, since border
+  4 means PASS).
+- The HOME dictionary has 158 words, counted by walking the chain in the image (the header's 150 was stale before
+  step E).
+
 ## 6. Words
 
 `EDIT` (new), `RECALL` (retired), `LIST-DEFS`, `SAVE-TEXT`, `VERIFY-TEXT`, `LOAD-TEXT` (format unchanged, CRs kept).
@@ -350,13 +366,14 @@ about 0.3 s a scrolled line at 3.5 MHz.
 | Change | HOME | EXROM |
 |---|---:|---:|
 | Merged redraw (E3) | about −150 [E]; measured −178 (item 5) | |
-| `RECALL` retired (E6) | −74 | |
+| `RECALL` retired (E6) | −74 [E]; measured −84 (item 7: `RECALL` 74 and the console's `RECALL_PENDING` hand-off 10) | |
+| `LINE n` error report (item 7) | +47 [M]: `EDIT_ERR_PREFIX` 22 with its text, two calls 6, line counting and the cell's resets 19 | |
 | CR as whitespace (E1) | 0 | |
 | Store room check, dictionary ceiling check (E2a, E5) | +20-40 [E]; measured +16 (item 3) and +66 (item 4) | |
 | Engine veneers for the view (E3) | +15-25 [E]; measured +30 (item 6: 8 slots and the engine split) | |
 | `EDIT` word and EXROM call | +40-60 [E]; measured +157 (item 6: `EDIT` and its commit loop 118, `EDIT_CLEAR_MARKS` 31, hook 8) | |
 | View, navigation, redraw, store routines (E4) | | +2,200-2,600 [E]; measured +1,676 (item 6) |
-| **Total** | **about −110 to −200** | **+2,200-2,600** |
+| **Total** | **about −110 to −200 [E]; measured +54** (items 3-7: HOME free 1,132 → 1,078, measured after O13's −506) | **+2,200-2,600 [E]; measured +1,676** |
 
 ## 8. Oracle (written and run against the old build before the ROM changes)
 

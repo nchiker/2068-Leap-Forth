@@ -20,6 +20,9 @@
     DEFINE CORE_EDIT_ASM
 
 VIEW_RESULT EQU $8AC0       ; 1 byte; the EXROM's copy is include/exrom_home_ram.inc
+EDIT_LINE_NO EQU $8AF1      ; 2 bytes: the number of the line the commit loop is running
+                            ; (0: none); EDIT_ERR_PREFIX reports it. After the EXROM's
+                            ; view cells (rom/graphics_exrom.asm, $8AC1-$8AF0)
 
 H_EDIT:
     DW   DICT_CHAIN_POINT   ; the including ROM sets this (DEFL)
@@ -49,12 +52,14 @@ W_EDIT:
     push hl
 .restart:
     ld   hl, STORE_START
+    ld   bc, 0                      ; line number
 .line:
     ld   de, (STORE_END)
     or   a
     sbc  hl, de
     add  hl, de
     jr   nc, .end                   ; at (or, after a store change by a run line, past) STORE_END
+    inc  bc
     push hl                         ; this line's start
 .byte:
     ld   a, (hl)
@@ -69,12 +74,15 @@ W_EDIT:
     or   a
     sbc  hl, de
     ex   de, hl                     ; hl = the text, de = its length
+    ld   (EDIT_LINE_NO), bc
     call INTERPRET_NESTED
     jr   .restart
 .plain:
     pop  de
     jr   .line
 .end:
+    ld   hl, 0                      ; no line running: an error in the rest of the
+    ld   (EDIT_LINE_NO), hl         ; console line gets no LINE n
     pop  hl
     ld   (SRC_PTR), hl
     pop  hl
@@ -92,12 +100,15 @@ W_EDIT:
 ; not 0): the commit loop above clears a line's mark just before it runs, so
 ; marks are left only when a line raised an error (or ABORT/QUIT) and the
 ; whole run unwound to the console, and they must not outlive the session.
-; Out: VIEW_RESULT = 0
+; Out: VIEW_RESULT = 0, EDIT_LINE_NO = 0
 ; Destroys: AF, BC, HL
 ; ============================================================================
 EDIT_CLEAR_MARKS:
     xor  a
     ld   (VIEW_RESULT), a
+    ld   h, a
+    ld   l, a
+    ld   (EDIT_LINE_NO), hl         ; the run unwound past the commit loop's own reset
     ld   hl, (STORE_END)
     ld   bc, STORE_START
     sbc  hl, bc                     ; (carry is clear after XOR)
@@ -114,6 +125,26 @@ EDIT_CLEAR_MARKS:
     inc  hl
     jp   pe, .next                  ; bytes left
     ret
+
+; ============================================================================
+; EDIT_ERR_PREFIX -- `LINE n ` before an error's message while the commit loop
+; runs line n (EDITOR_SPEC.md section 5, Leaving). Called by rom/forth_boot.asm's
+; INTERPRET_UNKNOWN_WORD and RUNTIME_ERROR_HOOK (an uncaught THROW goes there
+; too), with the data stack already reset. The marks after line n are cleared
+; when the unwound console line ends (EDIT_CLEAR_MARKS).
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+EDIT_ERR_PREFIX:
+    ld   hl, (EDIT_LINE_NO)
+    ld   a, h
+    or   l
+    ret  z
+    rst  RST_DPUSH
+    ld   hl, .msg
+    call FORGET_PRINT_MSG
+    jp   W_DOT                      ; the number and a space
+.msg:
+    DB   "LINE ", 0
 
 DICT_LATEST_INIT_EDIT EQU H_EDIT    ; head of the dictionary once this file is the last one INCLUDEd
 

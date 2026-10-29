@@ -1007,53 +1007,37 @@ def workspace_append(env, part):
     return ck.result()
 
 
-# ===================================================================== 13 recall
-@case("recall", "after `: SQ DUP * ;`, `0 RECALL` (RECALL takes a definition NUMBER, not a name) puts the definition in the edit line "
-                "with the cursor at its end; editing it and ENTER redefines SQ and appends the new text to the workspace; "
-                "LIST-DEFS lists both copies; a number out of range and a definition longer than 128 characters are no-ops")
+# ===================================================================== 13 recall (retired)
+@case("recall", "RECALL is retired (E6): `0 RECALL` answers `RECALL ?` and leaves the edit line empty; LIST-DEFS still lists the "
+                "definitions; `EDIT SQ` fixes the definition in place (one copy in the store, the EDIT line not kept), the "
+                "commit redefines SQ, and LIST-DEFS then shows the edited text")
 def recall(env, part):
     ck, m = Check(), env.m
-    base = env.boot()
+    env.boot()
     con = env.con
     con.type(": SQ DUP * ;")
     con.type("3 SQ .")
     ck.eq("old SQ: 3 SQ .", view(m).rows[:4], [BANNER, "OK", "9 OK", ""])
     con.type("0 RECALL")
-    ed = Ed(32, ": SQ DUP * ;")
-    ck.eq("recalled: edit line, cursor", env.edit_state(), (": SQ DUP * ;", 12))
-    ck.eq("recalled: rows", view(m).rows[:4], [BANNER, "OK", "9 OK", "OK"])
-    base = view(m).rows
-    base[23] = ""
-    env.check_view(ck, "recalled", base, ed)
-    ck.eq("RECALL_PENDING after the editor took it", env.u8("RECALL_PENDING"), 0)
-    for code in [LEFT, LEFT]:
-        step(env, ck, "edit", base, ed, code)
-    type_keys(env, ed, " DUP *", ck, "edit", base)
-    ck.eq("edited line", env.edit_state(), (": SQ DUP * DUP * ;", 16))
-    con.key(ENTER)
-    ck.eq("after ENTER: edit line", env.edit_state(), ("", 0))
-    ck.eq("after ENTER: rows", view(m).rows[:6], [BANNER, "OK", "9 OK", "OK", "OK", ""])
-    ws = ws_text(m)
-    ck.eq("workspace", ws, ": SQ DUP * ;\r3 SQ .\r0 RECALL\r: SQ DUP * DUP * ;\r")
+    ck.eq("0 RECALL: an unknown word", view(m).rows[3], "RECALL ?")
+    ck.eq("0 RECALL: edit line", env.edit_state(), ("", 0))
+    con.type("LIST-DEFS")
+    ck.eq("LIST-DEFS", view(m).rows[4:6], ["0: : SQ DUP * ;", "OK"])
+    for ch in "EDIT SQ":
+        con.key(ord(ch), maxi=VIEW_MAXI)
+    con.key(KEY_ENTER, maxi=VIEW_MAXI * 3)
+    ck.eq("the view is open on line 1", m.screen_rows()[SCREEN_ROWS], "LINE 1/4")
+    for code in [RIGHT] * 10 + [ord(c) for c in " DUP *"]:
+        con.key(code, maxi=VIEW_MAXI)
+    con.key(BREAK, maxi=VIEW_MAXI * 3)
+    ck.eq("store after the session", ws_text(m), ": SQ DUP * DUP * ;\r3 SQ .\r0 RECALL\rLIST-DEFS\r")
     con.type("3 SQ .")
-    ck.eq("new SQ: 3 SQ .", view(m).rows[5], "81 OK")
     con.type("LIST-DEFS")
-    rows = view(m).rows
-    ck.eq("LIST-DEFS", rows[6:9], ["0: : SQ DUP * ;", "1: : SQ DUP * DUP * ;", "OK"])
-    con.type("2 RECALL")
-    ck.eq("out of range: edit line", env.edit_state(), ("", 0))
-    ck.eq("out of range: rows", view(m).rows[9:12], ["OK", "", ""])
-    # a definition longer than 128 characters (two lines)
-    env.boot()
-    con.type(": LD " + "1 DROP " * 14)
-    con.type("1 DROP " * 14 + ";")
-    ck.true("long definition: more than 128 characters in the workspace", len(ws_text(m)) > MAX_LEN)
-    con.type("0 RECALL")
-    ck.eq("long definition: RECALL does nothing", env.edit_state(), ("", 0))
-    con.type("LIST-DEFS")
-    ck.eq("long definition: LIST-DEFS shows 20 characters", view(m).rows[4], "0: : LD 1 DROP 1 DROP 1")
-    ck.note("recalled ': SQ DUP * ;' cursor 12; edited to ': SQ DUP * DUP * ;'; 3 SQ . gave 9 before, 81 after; both copies listed; "
-            "workspace %r" % ws)
+    rows = [r for r in view(m).rows if r]
+    ck.true("new SQ: 81", "81 OK" in rows, str(rows))
+    ck.true("LIST-DEFS: one definition, edited", "0: : SQ DUP * DUP * ;" in rows and not any(r.startswith("1:") for r in rows),
+            str(rows))
+    ck.note("0 RECALL -> 'RECALL ?'; EDIT SQ, ' DUP *' inserted, BREAK: SQ redefined in place (3 SQ . gives 81), one copy listed")
     return ck.result()
 
 

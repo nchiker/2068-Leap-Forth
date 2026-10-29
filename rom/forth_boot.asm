@@ -30,7 +30,9 @@
 ; HERE/,/C,/ALLOT/CREATE/DOES>/IMMEDIATE, FREE, THROW/CATCH,
 ; ROT/2DUP/2DROP/?DUP/PICK, AND/OR/XOR/INVERT, ' (TICK), LPRINT/LLIST,
 ; VLIST, ABORT/QUIT, IN/OUT, FORGET, UDG, TONE/VOLUME/MIXER/NOISE/
-; ENVELOPE, LIST-DEFS, RECALL, EXIT — 150 words total.
+; ENVELOPE, LIST-DEFS, EDIT, EXIT — 158 words total (re-derived at step E
+; item 7 by walking the chain: EDIT in, RECALL out, and the steps since the
+; last count).
 ; RE-DERIVED, NOT HAND-COUNTED: this comment's own earlier draft
 ; (claiming 93) had already gone stale twice over — once discovered
 ; during a Phase-24-era consolidation pass (missing the original Phase
@@ -43,7 +45,7 @@
 ; comment still said 143, missing Phase 63's own TONE/VOLUME/MIXER/
 ; NOISE/ENVELOPE entirely) it's the result of actually assembling this
 ; file and walking the real dictionary's own LINK chain in the compiled
-; binary, byte for byte, from LATEST's own seed (DICT_LATEST_INIT_RECALL)
+; binary, byte for byte, from LATEST's own seed (DICT_LATEST_COLD)
 ; down to the LINK=0 sentinel — the same class of check that caught two
 ; real dictionary-orphaning bugs earlier in this project's history (a
 ; chain-point set to the wrong tail marker silently drops every word
@@ -52,7 +54,7 @@
 ; into one LATEST list via the same DICT_CHAIN_POINT splices
 ; rom/forth_smoke_p9.asm introduced and proved. Whoever next adds a
 ; phase: re-run this same walk (build this ROM, then follow
-; DICT_LATEST_INIT_RECALL's own LINK chain through the assembled .bin)
+; DICT_LATEST_COLD's own LINK chain through the assembled .bin)
 ; rather than incrementing this number by eye — that's exactly the habit
 ; that let it drift, repeatedly.
 ; DECIMAL_NUMBER_ENABLED is also DEFINEd here (core/decimal.asm,
@@ -226,9 +228,9 @@ COLD_CLEAR_END EQU UDG_TABLE + UDG_COUNT * 8
 
     ld   hl, DICT_LATEST_COLD          ; the full chain's own head —
                                     ; see this file's own header (Phase
-                                    ; 64 -- core/recall.asm's LIST-DEFS/
-                                    ; RECALL -- spliced on after
-                                    ; core/loadtext.asm's own tail)
+                                    ; 64 -- core/recall.asm's LIST-DEFS
+                                    ; -- spliced on after core/edit.asm's
+                                    ; EDIT, after core/loadtext.asm)
     ld   (LATEST), hl
 
     ; Phase 64 (core/recall.asm): STORE_END starts undefined RAM at
@@ -423,6 +425,7 @@ INTERPRET_UNKNOWN_WORD:
     ; before reporting, so this now matches that same abort contract.
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
+    call EDIT_ERR_PREFIX          ; core/edit.asm: `LINE n ` while EDIT commits line n
     ; print the actual unrecognized word before the "?", not just a
     ; bare "?" with no clue which token failed -- WORD_BUF (core/
     ; interp.asm) still holds it untouched: INTERPRET_RUN's own .loop
@@ -485,6 +488,7 @@ REPORT_INTERP_ERROR:              ; shared tail with RUNTIME_ERROR_HOOK's
 ; hook's only job is reporting.
 ; ============================================================================
 RUNTIME_ERROR_HOOK:
+    call EDIT_ERR_PREFIX          ; core/edit.asm: `LINE n ` while EDIT commits line n
     ld   hl, RUNTIME_ERROR_MSG
 .msgloop:
     ld   a, (hl)
@@ -658,9 +662,9 @@ DICT_CHAIN_POINT DEFL H_LOADTEXT
     INCLUDE "core/edit.asm"
 DICT_CHAIN_POINT DEFL H_EDIT
     INCLUDE "core/recall.asm"
-DICT_LATEST_COLD EQU DICT_LATEST_INIT_RECALL  ; LATEST of an empty user dictionary: cold start,
+DICT_LATEST_COLD EQU DICT_LATEST_INIT_LISTDEFS ; LATEST of an empty user dictionary: cold start,
                                               ; and core/storage.asm's LOAD-LIB after a failure
-DICT_CHAIN_POINT DEFL H_RECALL
+DICT_CHAIN_POINT DEFL H_LISTDEFS
     INCLUDE "core/editor.asm"
 
     DS   $4000 - $, $FF

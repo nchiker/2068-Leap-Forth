@@ -572,7 +572,7 @@ Because the dictionary is searched newest-first, `VLIST` follows that exact same
 
 - **`LLIST`**: Walks the same chain but stops at the built-in words, sending its output to a physical printer to list *your program*.
 
-### Fixing a typo after you've already pressed Enter: `LIST-DEFS` and `RECALL`
+### Fixing a typo after you've already pressed Enter: `EDIT` and `LIST-DEFS`
 
 Everything above fixes a mistake *before* you press Enter — inserting,
 deleting, moving the cursor. But what about a typo you don't notice
@@ -588,16 +588,23 @@ the bug:
 shows up later, when you (or someone reading your program) expects a
 word called `SQUARE` and it isn't there. Retyping the whole definition
 by hand works, but for anything longer than one line, that's tedious
-and error-prone in its own right. `LIST-DEFS ( -- )` and
-`RECALL ( n -- )` exist for exactly this: they let you pull a
-definition you already entered back onto the input line, so you can
-fix it with the same cursor-left/Delete editing from earlier in this
-section instead of retyping it from scratch.
+and error-prone in its own right. `EDIT` exists for exactly this: it
+opens the lines you have already entered in a full-screen view, where
+you can move around, fix them with the same cursor-left/Delete editing
+from earlier in this section, and have the fixed lines run again when
+you leave.
 
-`LIST-DEFS` prints every colon definition you've entered so far this
-session — whether typed live at the prompt or brought in with
-`LOAD-TEXT` (see [section 12](#12-saving-and-loading-your-work)) —
-numbered from 0, oldest first, each with a short preview of its source:
+The text behind it is the **line store**. Every line you press Enter
+on is also kept there, one line per line, in the order you entered
+them — whether you typed it live at the prompt or brought it in with
+`LOAD-TEXT` (see [section 12](#12-saving-and-loading-your-work)). An
+empty line is not kept. (When the view opens, the `EDIT ...` line
+itself is taken off the store again: it is a command to look at the
+store, not part of your program.) The store holds 8 KB.
+
+`LIST-DEFS ( -- )` is the way to see what is there. It prints the
+colon definitions in the store — the first 16 of them — numbered from
+0, oldest first, each with a short preview of its source:
 
 ```forth
 LIST-DEFS
@@ -607,26 +614,91 @@ LIST-DEFS
 0: : SQURE  DUP * ;
 ```
 
-`RECALL` takes one of those numbers and copies that definition's
-*entire* source — not just the preview — back onto the input line,
-cursor at the end, ready to edit:
+`EDIT ( "name" -- )` opens the view on a definition by name:
 
 ```forth
-0 RECALL
+EDIT SQURE
 ```
 
-The input line now reads `: SQURE  DUP * ;` exactly as you first typed
-it. From here it's ordinary editing: move the cursor onto `SQURE`,
-fix it to `SQUARE`, and press Enter. The corrected line runs — defining
-`SQUARE`, which now shadows nothing since `SQURE` was never right in
-the first place — and is also appended to the end of the workspace, so
-a later `LIST-DEFS` shows it too.
+It looks for the **last** line in the store in which the word `:` is
+followed directly by `SQURE` (capital or small letters, it does not
+matter), and puts the cursor at the start of that line. Typing `EDIT`
+with no name opens the view on a new, empty line after the last line,
+for adding something new instead of fixing something old.
+
+The view fills the screen with the lines of the store. Each line is
+word-wrapped exactly as it is at the prompt, so a long line takes
+several rows. The top 23 rows show the lines; the bottom row is a
+status row, `LINE n/m`, which says which line the cursor is on and how
+many lines there are. The cursor is the same flashing cell you know
+from the prompt.
+
+With `SQURE` and the `5 SQURE .` line above, the status row reads
+`LINE 1/2`. Move the cursor right to just after `SQU` and type the
+missing `A`, so that the line reads `: SQUARE  DUP * ;`. The keys are:
+
+| Key                                | What it does                                              |
+| ---------------------------------- | --------------------------------------------------------- |
+| characters, LEFT, RIGHT, DELETE    | edit the cursor line, just as at the prompt               |
+| UP, DOWN                           | move between the rows of a wrapped line, and between lines — to the same column, or to the end of the row if it is shorter |
+| ENTER                              | keep this line and open a new, empty line after it        |
+| DELETE at column 0 of an empty line | delete that line                                         |
+| CAPS SHIFT + 1                     | delete the cursor line                                    |
+| CAPS SHIFT + ENTER                 | insert an empty line above the cursor line                |
+| BREAK (CAPS SHIFT + SPACE)         | leave the view                                            |
+
+Note that ENTER here does not run anything: inside the view it only
+starts a new line. Nothing runs until you leave.
+
+When you press BREAK, the screen is cleared and the lines you
+**changed or added** during this visit are interpreted, in the order
+they stand in the store — lines you only looked at are not run again.
+Our corrected line runs, defining `SQUARE`, and the prompt comes back.
+Typing `5 SQUARE .` now prints 25.
+
+If one of those lines raises an error, interpretation stops there. The
+number of the line is printed first, followed by the usual message —
+for example `LINE 3 FOO ?` if line 3 contained an unknown word `FOO`.
+The changed lines after it are not run. The lines stay in the store
+as you left them.
+
+If something stops `EDIT` from opening the view, it prints one message
+and changes nothing:
+
+| Message       | Meaning                                                       |
+| ------------- | ------------------------------------------------------------- |
+| `name ?`      | there is no definition line for that name (as for an unknown word) |
+| `32COL FIRST` | you are in 64-column mode; the view is 32 columns wide        |
+| `LONG LINE`   | a line in the store is longer than 128 characters, or needs more than 4 screen rows |
+| `NO EXROM`    | the graphics EXROM is not fitted (the Home ROM alone) |
 
 #### Important Limits to Keep in Mind
 
-- `RECALL` only handles complete `:`...`;` definitions, not arbitrary single lines typed outside a definition. It also cannot recall definitions longer than 128 characters or reach past the first 16 definitions found by `LIST-DEFS`.
+- The view is 32 columns wide. In 64-column mode (`64COL`, see
+  [section 13](#13-a-wider-screen)) `EDIT` prints `32COL FIRST`;
+  type `32COL` and try again.
 
-- Recalling and re-entering a definition does not erase the old, mistyped version; it simply adds the corrected version after it in the workspace. Running `LIST-DEFS` again will show both `SQURE` and `SQUARE`, which is entirely harmless since the dictionary resolves names on a newest-wins basis.
+- The store is 8 KB. When it is full, a line you enter at the prompt
+  still runs but is not kept, and `STORE FULL` is printed. Inside the
+  view, a change that would overflow the store is refused, and
+  `STORE FULL` shows on the status row until the next key.
+
+- A line is at most 128 characters, and at most 4 screen rows, the
+  same limit as the prompt. A longer line anywhere in the store makes
+  `EDIT` print `LONG LINE`. `LIST-DEFS` shows only the first 16 colon
+  definitions it finds.
+
+- Only the lines you changed or added in a visit are run when you leave.
+  Fixing a typo in the middle of a large program does not re-run the
+  rest of it.
+
+- Fixing a definition and leaving it does not erase the old, mistyped
+  version from the dictionary; it simply defines the corrected version
+  after it. Nothing is `FORGET`ten for you. `VLIST` will now show both
+  `SQUARE` and `SQURE`, which is entirely harmless since the
+  dictionary resolves names on a newest-wins basis. The store, on the
+  other hand, holds the line you edited, so `LIST-DEFS` shows only the
+  corrected `SQUARE` line.
 
 ### Summary
 
@@ -634,9 +706,9 @@ a later `LIST-DEFS` shows it too.
 
 - **Feedback Signals:** Lines provide visible feedback—`OK` on success, an unrecognized word followed by `?` on typos, and `STACK?` on stack underflow/overflow resets.
 
-- **Dictionary Inspection & Recovery:** Use `VLIST` to inspect available words, `LIST-DEFS` to review past definitions, and `RECALL` to pull and fix definitions without retyping them from scratch.
+- **Dictionary Inspection & Recovery:** Use `VLIST` to inspect available words, `LIST-DEFS` to review past definitions, and `EDIT` to open them in a full-screen view and fix them without retyping them from scratch.
 
-- **Key Words:** `VLIST`, `LIST-DEFS`, `RECALL`.
+- **Key Words:** `VLIST`, `LIST-DEFS`, `EDIT`.
 
 ### Exercises
 
@@ -657,10 +729,11 @@ a later `LIST-DEFS` shows it too.
    made visible.
 
 4. Repeat the `SQURE`/`SQUARE` example above yourself: define `SQURE`,
-   run `LIST-DEFS`, `RECALL` it, fix the name, and press Enter. Then
-   run `LIST-DEFS` one more time and confirm both the old and the
-   corrected definition are listed — the honest limit described above,
-   seen directly rather than just taken on faith.
+   run `LIST-DEFS`, then `EDIT SQURE`, fix the name, and leave with
+   BREAK. Then run `VLIST` and confirm both `SQUARE` and the old
+   `SQURE` are in the dictionary, and `LIST-DEFS` once more to see
+   that the store now holds only the corrected line — the honest limit
+   described above, seen directly rather than just taken on faith.
 
 ---
 
@@ -4727,8 +4800,8 @@ the same convention applied to the full ANS Forth standard.
 | `DOES>`     | `( -- )`        | give a `CREATE`d word its behavior; the code after it runs with that address on the stack                                          |
 | `FORGET`    | `( "name" -- )` | remove a word and everything defined after it; refuses built-ins                                                                   |
 | `VLIST`     | `( -- )`        | print every word in the dictionary, newest first — see [section 3](#seeing-what-words-exist-vlist)                            |
-| `LIST-DEFS` | `( -- )`        | list every colon definition entered so far, numbered, with a source preview — see [section 3](#fixing-a-typo-after-youve-already-pressed-enter-list-defs-and-recall) |
-| `RECALL`    | `( n -- )`      | copy `LIST-DEFS` entry `n`'s full source onto the input line for editing — see [section 3](#fixing-a-typo-after-youve-already-pressed-enter-list-defs-and-recall)    |
+| `LIST-DEFS` | `( -- )`        | list the first 16 colon definitions in the line store, numbered from 0, with a 20-character source preview — see [section 3](#fixing-a-typo-after-youve-already-pressed-enter-edit-and-list-defs) |
+| `EDIT`      | `( "name" -- )` | open the line store in a full-screen view on the last definition of `name` (with no name: on a new empty line at the end); BREAK leaves and runs the changed lines — see [section 3](#fixing-a-typo-after-youve-already-pressed-enter-edit-and-list-defs) |
 
 **Error handling** — see [section 14](#14-error-handling-throw-and-catch)
 

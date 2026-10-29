@@ -1,6 +1,7 @@
 ; ============================================================================
-; rom/forth_smoke_p64.asm — Phase 64 smoke ROM: LIST-DEFS / RECALL
-; (core/recall.asm)
+; rom/forth_smoke_p64.asm — Phase 64 smoke ROM: LIST-DEFS and the store
+; append (core/recall.asm; RECALL and its checkpoints 4 and 5 retired at
+; step E item 7 -- checkpoint 6 keeps its number, since border 4 is PASS)
 ;
 ; Tests core/recall.asm's own logic in isolation from LOAD-TEXT's real
 ; tape wiring (already proven by rom/forth_smoke_p52.asm) and from
@@ -29,18 +30,14 @@
 ;   span 1: offset 13, length 12 (": BB DUP - ;")
 ; (offset 12 is the single space between the two definitions)
 ;
-; SIX CHECKPOINTS:
+; FOUR CHECKPOINTS (1-3 and 6):
 ;   1. SCAN_DEFS over the test payload finds exactly 2 definitions.
 ;   2. GET_DEF_SPAN(0) reports the correct offset/length.
 ;   3. GET_DEF_SPAN(1) reports the correct offset/length.
-;   4. RECALL(0) copies the full 12-byte span into EDIT_BUF, sets
-;      EDIT_LEN/EDIT_CURSOR to 12, and sets RECALL_PENDING.
-;   5. RECALL(2) -- out of range (DEF_COUNT is 2) -- is a no-op: EDIT_LEN
-;      is unchanged from a poisoned sentinel value.
 ;   6. STORE_APPEND: each append is the text plus one CR (no separating space),
 ;      STORE_END advances by length + 1 each time, and an empty line appends nothing.
 ;
-; Border goes GREEN (4) if all six pass; otherwise it shows the failing
+; Border goes GREEN (4) if all four pass; otherwise it shows the failing
 ; checkpoint's number.
 ; ============================================================================
 
@@ -134,48 +131,6 @@ COLD_START:
     jp   nz, FAIL_TEST
     ld   a, l
     cp   12
-    jp   nz, FAIL_TEST
-
-; ---- checkpoint 4: RECALL(0) copies the span, sets EDIT_LEN/CURSOR/
-; RECALL_PENDING ----
-    ld   a, 4
-    ld   (CHECKPOINT_NUM), a
-    xor  a
-    ld   (RECALL_PENDING), a
-    ld   hl, 0
-    rst RST_DPUSH
-    call W_RECALL
-    ld   a, (EDIT_LEN)
-    cp   12
-    jp   nz, FAIL_TEST
-    ld   a, (EDIT_CURSOR)
-    cp   12
-    jp   nz, FAIL_TEST
-    ld   a, (RECALL_PENDING)
-    cp   1
-    jp   nz, FAIL_TEST
-    ld   hl, EDIT_BUF
-    ld   de, TESTSRC
-    ld   b, 12
-.cmploop:
-    ld   a, (de)
-    cp   (hl)
-    jp   nz, FAIL_TEST
-    inc  hl
-    inc  de
-    djnz .cmploop
-
-; ---- checkpoint 5: RECALL(2) is out of range (DEF_COUNT is 2) --
-; no-op, EDIT_LEN stays at the poisoned sentinel ----
-    ld   a, 5
-    ld   (CHECKPOINT_NUM), a
-    ld   a, 99
-    ld   (EDIT_LEN), a
-    ld   hl, 2
-    rst RST_DPUSH
-    call W_RECALL
-    ld   a, (EDIT_LEN)
-    cp   99
     jp   nz, FAIL_TEST
 
 ; ---- checkpoint 6: STORE_APPEND -- text + CR, no separator; an empty line appends nothing ----

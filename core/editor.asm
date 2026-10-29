@@ -174,12 +174,9 @@ FWRAP_OVERFLOW   EQU $88F5 ; 1 byte: set by WRAP_CALC — 0 normally, 1
 FWRAP_WIDTH_MINUS1 EQU $88F7  ; 1 byte: the wrap width minus one
                            ; (32-1=31 or 64-1=63) -- set by WRAP_CALC_AT
                            ; from GFX_MODE, read by the drawing and the
-                           ; cursor. $88F6 is
-                           ; core/recall.asm's own RECALL_PENDING (a
-                           ; different file, but a lower address, so no
-                           ; collision) -- confirmed via the same "grep
-                           ; every EQU in this range" method used
-                           ; throughout this project.
+                           ; cursor. $88F6 is free
+                           ; (Phase 64's RECALL_PENDING, retired at step
+                           ; E item 7).
 
 ; Step E item 5 (the merged redraw, E3): $88F8-$88FE, free before it
 ; (CHECKPOINT_NUM at $8900 is the smoke ROMs' own).
@@ -851,31 +848,9 @@ EDITOR_PROCESS_KEY:
 ; RST $0038 -> KBD_ISR_TICK, IM 1, and EI before calling this.
 ; ============================================================================
 EDITOR_LOOP_LIVE:
-    ; Phase 64 (core/recall.asm), gated: only wired in for a ROM that
-    ; actually INCLUDEs core/recall.asm (rom/forth_boot.asm) -- several
-    ; older, narrower smoke ROMs (rom/forth_smoke_p6.asm/p9/p33/p58)
-    ; INCLUDE this file WITHOUT core/recall.asm, and would fail to
-    ; assemble against an unconditional reference to RECALL_PENDING.
-    ; RECALL sets RECALL_PENDING and leaves its own copied text sitting
-    ; in EDIT_BUF/EDIT_LEN/EDIT_CURSOR for the user to edit -- skip the
-    ; usual "clear the line" reset just this once, or RECALL's own line
-    ; finishing would immediately wipe out what it just recalled. See
-    ; core/recall.asm's own header.
-    IFDEF CORE_RECALL_ASM
-    ld   a, (RECALL_PENDING)
-    or   a
-    jr   nz, .skip_clear
-    ENDIF
     xor  a
     ld   (EDIT_LEN), a
     ld   (EDIT_CURSOR), a
-    IFDEF CORE_RECALL_ASM
-    jr   .cleared
-.skip_clear:
-    xor  a
-    ld   (RECALL_PENDING), a
-.cleared:
-    ENDIF
     ; deliberately NOT resetting FWRAP_OLD_COUNT here -- it must
     ; still hold whatever the JUST-SUBMITTED line's own final row count
     ; was, so EDITOR_REDRAW's own shrink-detection (comparing that
@@ -893,7 +868,7 @@ EDITOR_LOOP_LIVE:
     ; Phase 64 (core/recall.asm), gated -- see this file's own header
     ; note on EDITOR_LOOP_LIVE above. Appends the just-committed line to
     ; the persistent workspace BEFORE running it, so it's recoverable via
-    ; RECALL/LIST-DEFS even if INTERPRET_RUN itself never returns
+    ; EDIT/LIST-DEFS even if INTERPRET_RUN itself never returns
     ; normally (e.g. a QUIT-triggering error path). See core/recall.asm's
     ; own header for why this is unconditional (appended regardless of
     ; whether the line turns out to be a real definition) rather than

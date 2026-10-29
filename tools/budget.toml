@@ -24,13 +24,13 @@ pad = 0xFF
 [[image]]
 file   = "forth_boot_rom0.bin"
 title  = "HOME ROM (Forth)"
-floor  = 1041
+floor  = 1078
 target = 200
 
 [[image]]
 file   = "forth_boot_cart.bin"
 title  = "HOME, DOCK cartridge build (Forth)"
-floor  = 1041
+floor  = 1078
 target = 200
 
 [[image]]
@@ -78,3 +78,5 @@ target = 150
 #   forth_boot_rom0.bin and forth_boot_cart.bin: 1228 -> 1041 (-187 B), graphics_exrom.bin: 6682 -> 5006 (-1,676 B),
 #     step E item 6: the full-screen view in the EXROM, its engine veneers, EDIT and the commit loop in Home
 #     (docs/V2/EDITOR_SPEC.md sections 5.1, 5.2); the audit's section 9 row "E item 6".
+#   forth_boot_rom0.bin and forth_boot_cart.bin: 1041 -> 1078 (+37 B, raised), step E item 7: RECALL retired (-84),
+#     the LINE n error report (+47); the audit's section 9 row "E item 7".

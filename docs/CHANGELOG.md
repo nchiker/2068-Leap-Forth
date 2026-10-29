@@ -890,3 +890,55 @@ this is the condensed one-paragraph-per-phase version.
   tape, `LOAD` gives up after about two minutes; `SAVE` leaves a one
   second gap between header and data, as a stock tape does. Checked
   under ZEsarUX by `tools/tapetest.py` (15 cases); no hardware.
+- V2 step E (console and editor rebuild, `EDIT`; `docs/V2/EDITOR_SPEC.md`,
+  `core/edit.asm` + `core/editor.asm` + `core/interp.asm` +
+  `rom/graphics_exrom.asm`): `RECALL` is retired and replaced by a
+  full-screen editor, `EDIT`. User-visible: the `$D000` workspace is now
+  a **line store** of up to 8,192 bytes: every committed (Enter) line is
+  appended as one line, ended by CR, an empty line is not stored, and a
+  full store prints `STORE FULL` while the line still runs. The format
+  is what `SAVE-TEXT` already wrote, so the tape format is unchanged;
+  `LOAD-TEXT` fills the store, keeps the rest of the console line after
+  `LOAD-TEXT name`, and an error in the loaded text now stops it with the
+  console's usual message and leaves the dictionary built so far and the
+  store intact. CR and TAB now count as whitespace to `WORD` (every byte
+  from 0 to space is a delimiter), so source with CR-ended lines
+  interprets as before. `EDIT name` opens a 32-column view on the last
+  line of the store in which `:` and `name` follow each other (any
+  case), cursor at its start; `EDIT` alone opens it on a new empty line
+  after the last. Rows 0-22 show the lines, word-wrapped as the console
+  wraps them; row 23 is the status row `LINE n/m`. Keys: characters,
+  LEFT, RIGHT, DELETE as at the prompt; UP and DOWN between wrapped rows
+  and lines; ENTER opens a new line after the cursor line; DELETE at
+  column 0 of an empty line, or CAPS SHIFT + 1, deletes a line; CAPS
+  SHIFT + ENTER inserts an empty line above; BREAK leaves. A change that
+  would overflow the store is refused and `STORE FULL` shows on the
+  status row until the next key. On leaving, the screen is cleared and
+  only the lines changed or added in the visit are interpreted, in store
+  order (an edited `: SQURE ...` line becomes the new definition;
+  nothing is `FORGET`ten); an error stops the run with `LINE n` and the
+  usual message, and the remaining changed lines are not run. `EDIT`
+  refuses, changing nothing, with `NO EXROM` (graphics EXROM not
+  fitted), `32COL FIRST` (64-column mode), `LONG LINE` (a stored line
+  over 128 characters or needing more than 4 rows) or `name ?` (no such
+  definition line). The `EDIT` command line itself is taken off the
+  store. `LIST-DEFS` stays (first 16 definitions, 20-character previews);
+  `RECALL` is gone (`RECALL ?`), which saves 84 bytes with its console hand-off. The
+  dictionary ceiling (`DICT_RAM_CEILING`) is now `$D000`, below the
+  store: `:`, `CREATE`, `VARIABLE`, `CONSTANT`, `STRING`, `ARRAY`,
+  `ALLOT`, `,` and `C,` refuse with `THROW -8` when `HERE` would pass it
+  minus a 256-byte guard (dictionary space is 14 KB, down from 22 KB),
+  and in-place `LOAD-LIB` images are bounded by the same ceiling. The
+  graphics EXROM's sprite buffers moved from `$E800` to `$F000`, out of
+  the store region (a store over 6 KB and `SPRITE-DEFINE`/`SPRITE-SHOW`
+  used to overwrite each other, in the old build too). The console's
+  two redraws (32 and 64 columns) are merged into one width-parameterised
+  routine, which fixed the 64-column hang (the grow loop now reads the
+  row counts afresh on every pass) and the cursor on a full row (it goes
+  to column 0 of a new row; a 128-character line has no fifth row), and
+  made the console's HOME code 178 bytes smaller. Checked by the step E
+  oracle (`tools/edtest.py`, `make edtest`; cases N1-N13) and the screen
+  oracle, under ZEsarUX only; no hardware, so contact bounce and fast
+  typing on a real keyboard are not exercised. See
+  `docs/V2/EDITOR_SPEC.md` for the design, the as-built sizes and the
+  view's typing-cost table.
