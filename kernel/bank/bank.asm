@@ -12,7 +12,7 @@
 ; Forth's dictionary ceiling (`DICT_RAM_CEILING`, `core/free.asm`) was
 ; later raised to $F000, deep into chunk 6, and `LOADTEXT_BUF`
 ; (`core/loadtext.asm`) — persistent SAVE-TEXT/LOAD-TEXT workspace
-; `RECALL`/`LIST-DEFS` read from — also lives there.
+; `EDIT`/`LIST-DEFS` read from — also lives there.
 ;
 ; Retargeted to CHUNK 5 ($A000-$BFFF) instead: a full chunk-by-chunk
 ; audit (this session) found it's the one chunk with NO competing use

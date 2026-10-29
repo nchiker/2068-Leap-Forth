@@ -45,7 +45,7 @@ H_PALETTE64:
     DW   H_32COL
     DB   9, "P", "A", "L", "E", "T", "T", "E", "6", "4"
 W_PALETTE64:
-    call DPOP_HL
+    rst RST_DPOP
     ld   a, l
     call MODE64_SET_PALETTE
     ret
@@ -57,9 +57,9 @@ H_PLOT64:
     DW   H_PALETTE64
     DB   6, "P", "L", "O", "T", "6", "4"
 W_PLOT64:
-    call DPOP_HL           ; hl = y
+    rst RST_DPOP          ; hl = y
     ld   c, l
-    call DPOP_HL           ; hl = x (full 16-bit — 0-511 doesn't fit a byte)
+    rst RST_DPOP          ; hl = x (full 16-bit — 0-511 doesn't fit a byte)
     ld   d, 0               ; OVER=0: set, don't XOR-toggle
     call MODE64_WRITE_PIXEL
     ret

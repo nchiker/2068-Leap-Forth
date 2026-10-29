@@ -57,19 +57,7 @@
 RST_00:
     di
     jp   COLD_START
-    DS   $0008 - $, $FF
-RST_08: ret
-    DS   $0010 - $, $FF
-RST_10: ret
-    DS   $0018 - $, $FF
-RST_18: ret
-    DS   $0020 - $, $FF
-RST_20: ret
-    DS   $0028 - $, $FF
-RST_28: ret
-    DS   $0030 - $, $FF
-RST_30: ret
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 RST_38:
     ei
     ret
@@ -99,21 +87,21 @@ COLD_START:
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
     ld   hl, 65
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_CHR
-    call DPOP_HL              ; hl = len
+    rst RST_DPOP             ; hl = len
     ld   de, 1
     call CHECK_HL_DE
-    call DPOP_HL              ; hl = addr
+    rst RST_DPOP             ; hl = addr
     ld   a, (hl)
     cp   "A"
     jp   nz, FAIL_TEST
 
 ; ---- checkpoint 1 continued: CODE(addr,len) on "HELLO WORLD" = 'H' = 72 ----
     ld   hl, HELLO_WORLD
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 11
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_CODE
     ld   de, 72
     call CHECK_TOP
@@ -123,21 +111,21 @@ COLD_START:
     ld   a, 2
     ld   (CHECKPOINT_NUM), a
     ld   hl, 42
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_STR
     call CHECK_STRTOP_LIT
     DB   2, "4", "2"
 
 ; ---- checkpoint 2 continued: STR(-5) = "-5" ----
     ld   hl, -5
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_STR
     call CHECK_STRTOP_LIT
     DB   2, "-", "5"
 
 ; ---- checkpoint 2 continued: STR(0) = "0" ----
     ld   hl, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_STR
     call CHECK_STRTOP_LIT
     DB   1, "0"
@@ -159,18 +147,18 @@ COLD_START:
     ldir                          ; copy the ROM literal into real RAM
                                   ; first
     ld   hl, CASE_BUF
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 6
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_UPPER
     call CHECK_STRTOP_LIT
     DB   6, "H", "E", "L", "L", "O", "!"
 
 ; ---- checkpoint 3 continued: LOWER("HELLO!") in place -> "hello!" ----
     ld   hl, CASE_BUF           ; already uppercased just above, same
-    call DPUSH_HL                ; RAM buffer
+    rst RST_DPUSH               ; RAM buffer
     ld   hl, 6
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_LOWER
     call CHECK_STRTOP_LIT
     DB   6, "h", "e", "l", "l", "o", "!"
@@ -181,11 +169,11 @@ COLD_START:
     ld   a, 5
     ld   (CHECKPOINT_NUM), a
     ld   hl, HELLO_WORLD
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 11
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 5
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_LEFT
     call CHECK_STRTOP_LIT
     DB   5, "H", "E", "L", "L", "O"
@@ -193,11 +181,11 @@ COLD_START:
 
 ; ---- checkpoint 5 continued: LEFT(addr,11,20) -> unchanged (n >= len) ----
     ld   hl, HELLO_WORLD
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 11
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 20
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_LEFT
     ld   de, 11
     call CHECK_TOP
@@ -208,11 +196,11 @@ COLD_START:
     ld   a, 6
     ld   (CHECKPOINT_NUM), a
     ld   hl, HELLO_WORLD
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 11
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 5
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_RIGHT
     call CHECK_STRTOP_LIT
     DB   5, "W", "O", "R", "L", "D"
@@ -220,11 +208,11 @@ COLD_START:
 
 ; ---- checkpoint 6 continued: RIGHT(addr,11,20) -> unchanged (n >= len) ----
     ld   hl, HELLO_WORLD
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 11
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 20
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_RIGHT
     ld   de, 11
     call CHECK_TOP              ; len' unchanged -- peek only, still
@@ -240,13 +228,13 @@ COLD_START:
     xor  a
     ld   (CHECKPOINT_NUM), a
     ld   hl, HELLO_WORLD
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 11
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, WORLD_ONLY
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 5
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_SEARCH
     ld   de, -1
     call CHECK_TOP              ; flag = true
@@ -260,13 +248,13 @@ COLD_START:
 
 ; ---- checkpoint 0 continued: SEARCH("HELLO","XYZ") -- not found ----
     ld   hl, HELLO_WORLD        ; first 5 bytes are "HELLO"
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 5
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, XYZ_STR
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 3
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_SEARCH
     ld   de, 0
     call CHECK_TOP               ; flag = false
@@ -280,13 +268,13 @@ COLD_START:
 
 ; ---- checkpoint 0 continued: SEARCH, needle longer than haystack ----
     ld   hl, XYZ_STR
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 3
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, HELLO_WORLD
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 11
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_SEARCH
     ld   de, 0
     call CHECK_TOP

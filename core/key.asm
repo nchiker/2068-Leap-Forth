@@ -48,7 +48,7 @@ W_KEY:
     call IO_READ_KEY
     ld   l, a
     ld   h, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 DICT_LATEST_INIT_KEY EQU H_KEY   ; head of the dictionary as of Phase
@@ -76,11 +76,11 @@ W_KEYQ:
     or   a
     jr   z, .false
     ld   hl, -1
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 .false:
     ld   hl, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -99,7 +99,7 @@ W_BREAKQ:
     jr   nc, .push
     ld   hl, -1
 .push:
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 DICT_LATEST_INIT_KEYQ EQU H_BREAKQ   ; head of the dictionary once this

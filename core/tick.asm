@@ -38,7 +38,7 @@ H_TICK:
 W_TICK:
     call W_WORD
     call FIND
-    call DPOP_HL             ; hl = found flag
+    rst RST_DPOP            ; hl = found flag
     ld   a, h
     or   l
     jr   nz, .found
@@ -46,13 +46,13 @@ W_TICK:
                                 ; the search addr pushed back unchanged
                                 ; -- drop it before throwing
     ld   hl, -13               ; ANS Forth's own "undefined word" code
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_THROW
     ret                         ; unreachable if uncaught (THROW jumps
                                  ; away); reached only if some active
                                  ; CATCH unwinds past this call anyway
 .found:
-    call DPOP_HL               ; hl = immediate flag, discard -- ' has
+    rst RST_DPOP              ; hl = immediate flag, discard -- ' has
                                  ; no use for it, only EXECUTE cares
                                  ; whether it's about to run compiled
                                  ; or interpreted code, and ' does

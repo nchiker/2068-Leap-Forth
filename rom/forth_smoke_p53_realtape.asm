@@ -85,19 +85,7 @@ RST_00:
     di
     jp   COLD_START
 
-    DS   $0008 - $, $FF
-RST_08: ret
-    DS   $0010 - $, $FF
-RST_10: ret
-    DS   $0018 - $, $FF
-RST_18: ret
-    DS   $0020 - $, $FF
-RST_20: ret
-    DS   $0028 - $, $FF
-RST_28: ret
-    DS   $0030 - $, $FF
-RST_30: ret
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 RST_38:
     ei
     reti                          ; no live keyboard needed -- this
@@ -173,14 +161,14 @@ COLD_START:
     ; a real FIND on "MAIN", not just inferring success from the game
     ; having run ----
     ld   hl, FINDWORD_MAIN
-    call DPUSH_HL
+    rst RST_DPUSH
     call FIND
-    call DPOP_HL                 ; found flag
+    rst RST_DPOP                ; found flag
     ld   a, l
     cp   1
     jp   nz, FAIL_TEST
-    call DPOP_HL                 ; imm flag -- discard
-    call DPOP_HL                 ; code addr -- discard
+    rst RST_DPOP                ; imm flag -- discard
+    rst RST_DPOP                ; code addr -- discard
 
     ; ---- confirm all 4 rounds' logged outcomes match the SAME ground
     ; truth rom/forth_smoke_p52.asm's own header independently
@@ -360,6 +348,7 @@ DICT_CHAIN_POINT DEFL H_INVERT
     INCLUDE "core/udg.asm"
 DICT_CHAIN_POINT DEFL H_UDG
     INCLUDE "core/loadtext.asm"
+STORE_TRIM: ret                 ; no console append here (core/recall.asm): nothing to trim
 
     DS   $4000 - $, $FF
 

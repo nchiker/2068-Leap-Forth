@@ -26,19 +26,7 @@
 RST_00:
     di
     jp   COLD_START
-    DS   $0008 - $, $FF
-RST_08: ret
-    DS   $0010 - $, $FF
-RST_10: ret
-    DS   $0018 - $, $FF
-RST_18: ret
-    DS   $0020 - $, $FF
-RST_20: ret
-    DS   $0028 - $, $FF
-RST_28: ret
-    DS   $0030 - $, $FF
-RST_30: ret
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 RST_38:
     ei
     ret
@@ -67,11 +55,11 @@ COLD_START:
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
     ld   hl, 5
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 3
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, W_PLUS
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EXECUTE
     ld   de, 8
     call CHECK_TOP
@@ -86,24 +74,24 @@ COLD_START:
     call INTERPRET_RUN
 
     ld   hl, DOUBLE_NAME
-    call DPUSH_HL
+    rst RST_DPUSH
     call FIND
-    call DPOP_HL                 ; hl = found flag
+    rst RST_DPOP                ; hl = found flag
     ld   a, l
     or   a
     jp   z, FAIL_TEST             ; DOUBLE must have been found
-    call DPOP_HL                 ; hl = immediate flag (discarded --
+    rst RST_DPOP                ; hl = immediate flag (discarded --
                                   ; DOUBLE isn't IMMEDIATE)
-    call DPOP_HL                 ; hl = DOUBLE's own real code address
+    rst RST_DPOP                ; hl = DOUBLE's own real code address
                                   ; (found via FIND, not a compile-time
                                   ; label -- it doesn't have one)
     push hl                       ; stash the xt on the Z80 hardware
                                   ; stack while pushing DOUBLE's own
                                   ; argument onto the FORTH stack first
     ld   hl, 21
-    call DPUSH_HL
+    rst RST_DPUSH
     pop  hl                        ; hl = xt again
-    call DPUSH_HL                   ; NOW push it -- stack is ( 21 xt ),
+    rst RST_DPUSH                  ; NOW push it -- stack is ( 21 xt ),
                                     ; xt on top, exactly EXECUTE's own
                                     ; ( xt -- ) signature
     call W_EXECUTE

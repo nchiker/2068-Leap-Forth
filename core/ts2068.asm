@@ -79,9 +79,9 @@ H_PLOT:
     DW   H_UNTIL
     DB   4, "P", "L", "O", "T"
 W_PLOT:
-    call DPOP_HL           ; hl = y
+    rst RST_DPOP          ; hl = y
     ld   c, l
-    call DPOP_HL           ; hl = x
+    rst RST_DPOP          ; hl = x
     ld   b, l
     ld   a, (CURRENT_ATTR)
     ld   d, 0              ; OVER=0: set the pixel, don't XOR-toggle it
@@ -95,16 +95,16 @@ H_LINE:
     DW   H_PLOT
     DB   4, "L", "I", "N", "E"
 W_LINE:
-    call DPOP_HL           ; hl = y2
+    rst RST_DPOP          ; hl = y2
     ld   a, l
     ld   (GFX_LINE_Y1), a
-    call DPOP_HL           ; hl = x2
+    rst RST_DPOP          ; hl = x2
     ld   a, l
     ld   (GFX_LINE_X1), a
-    call DPOP_HL           ; hl = y1
+    rst RST_DPOP          ; hl = y1
     ld   a, l
     ld   (GFX_LINE_Y0), a
-    call DPOP_HL           ; hl = x1
+    rst RST_DPOP          ; hl = x1
     ld   a, l
     ld   (GFX_LINE_X0), a
     ld   a, (CURRENT_ATTR)
@@ -121,13 +121,13 @@ H_CIRCLE:
     DW   H_LINE
     DB   6, "C", "I", "R", "C", "L", "E"
 W_CIRCLE:
-    call DPOP_HL           ; hl = r
+    rst RST_DPOP          ; hl = r
     ld   a, l
     ld   (GFX_CIRCLE_R), a
-    call DPOP_HL           ; hl = yc
+    rst RST_DPOP          ; hl = yc
     ld   a, l
     ld   (GFX_CIRCLE_YC), a
-    call DPOP_HL           ; hl = xc
+    rst RST_DPOP          ; hl = xc
     ld   a, l
     ld   (GFX_CIRCLE_XC), a
     ld   a, (CURRENT_ATTR)
@@ -144,7 +144,7 @@ H_BORDER:
     DW   H_CIRCLE
     DB   6, "B", "O", "R", "D", "E", "R"
 W_BORDER:
-    call DPOP_HL
+    rst RST_DPOP
     ld   a, l
     call GFX_SET_BORDER
     ret

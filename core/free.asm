@@ -78,7 +78,7 @@ W_FREE:
     ld   de, (HERE)
     or   a               ; clear carry before sbc
     sbc  hl, de          ; hl = ceiling - HERE
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 DICT_LATEST_INIT_FREE EQU H_FREE   ; head of the dictionary once this

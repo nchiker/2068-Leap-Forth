@@ -5,6 +5,24 @@ Runs the case table of spec section 8 (cases 1-14 and 11a; case 15 is p7/p52 in 
 ZEsarUX (through ts2068-debug / ZRCP), judging every case against the NEW contract of the spec.  It is written before
 the code: on the old build it is expected to FAIL several cases, and the failures are the defects of section 1.
 
+SAVE-TEXT / VERIFY-TEXT contract (docs/V2/EDITOR_SPEC.md section 3, "The command line is not source"): `SAVE-TEXT name` saves
+the line store, STORE_START .. the cell STORE_END, and `VERIFY-TEXT name` compares a tape with it (a different length is
+refused as a different byte is); the console appends every committed line (text + CR) before running it and STORE_TRIM,
+called first by both words, removes the last line when it is the console's current one, so the command line is not
+saved.  The cases therefore build the store the natural way, by typing lines (setup lines; the same for fusesave.py),
+and the saved bytes are those lines, each + CR, and never the SAVE-TEXT / VERIFY-TEXT line.  Against a build whose
+SAVE-TEXT still takes `addr len` (before the 2026-10-29 change) cases 3, N4, 12 and 14 are expected to FAIL.
+
+Step E adds case N4 (docs/V2/EDITOR_SPEC.md section 8, "text-tape-roundtrip"; ids: `--case N4`, run right after case 3):
+a store of nine CR-ended lines is put into memory at LOADTEXT_BUF with the store's end cell set (STORE_END, or
+WORKSPACE_END on the old build), `SAVE-TEXT N4TXT` writes it from there (the word takes the store, not `addr len`: the
+console appends the command line after the poked text and STORE_TRIM removes it again), the capture is decoded
+(header and payload must be the store bytes, CRs included), played into a fresh machine, `LOAD-TEXT N4TXT`: the store must
+be byte-identical, no error, and the program must have run.  The old build interprets CR as part of a word and restarts
+on an unknown word inside LOAD-TEXT's text, so the text (N4_TEXT, whose comment says how) has no unknown token for it: it
+prints 42 there (first, space-separated line) and, on a build with STORE_END (CR is whitespace), 21 as well, from the
+CR-separated lines.  The case passes on the old build; on a new build it also demands the second effect.
+
 RUN   python3 -I tools/tapetest.py --build DIR [--case N ...] [--selftest] [--out FILE] [--jobs K] [--port P]
       DIR holds forth_boot_rom0.bin + graphics_exrom.bin (booted as one 24K --romfile) and forth_boot.sym.
       One line per case:  `case N <name>: PASS|FAIL <short reason>`,  then  `TAPETEST: PASS a FAIL b`.
@@ -41,7 +59,7 @@ HOW "UNCHANGED" IS JUDGED
   stray write beyond HERE, such as a 64 KB LDIR, shows up).  LOADTEXT_BUF..DICT_RAM_CEILING-1 is left out: it is
   core/recall.asm's workspace, where the editor appends every line typed at the prompt on ENTER (an earlier version
   compared it and reported the typed command as a change).  VERIFY-LIB may write its CRC at HERE, HERE + 1 (spec
-  section 6); those two bytes are not compared.  "Dictionary reset" = HERE $9800 and LATEST = DICT_LATEST_INIT_RECALL
+  section 6); those two bytes are not compared.  "Dictionary reset" = HERE $9800 and LATEST = DICT_LATEST_COLD
   (cold start's values).
 
 THE ROM IDENTITY
@@ -132,7 +150,7 @@ class Build:
         # LOADTEXT_BUF ($D000) .. the ceiling is core/recall.asm's workspace: the editor appends every line typed at
         # the prompt there on ENTER, so the "dictionary unchanged" checks stop below it
         self.workspace = s.get("LOADTEXT_BUF", self.ceiling)
-        self.init_latest = s.get("DICT_LATEST_INIT_RECALL")
+        self.init_latest = s.get("DICT_LATEST_COLD")
         self.has_identity = "ROM_IDENTITY" in s
         a = s.get("ROM_IDENTITY")
         self.identity = (self.rom[a] | self.rom[a + 1] << 8) if a is not None and a + 1 < len(self.rom) else 0
@@ -597,15 +615,17 @@ def case_2(ctx):
     return v
 
 
-def save_and_capture(ctx, setup, cmd, v, label, space_after_s=None, extra_wait=0):
-    """Fresh emulator, no tape: setup lines, then `cmd` with the sender's MIC edges captured.  Returns
-    (Sess paused, blocks decoded, dict)."""
+def save_and_capture(ctx, setup, cmd, v, label, space_after_s=None, extra_wait=0, poke=None):
+    """Fresh emulator, no tape: setup lines, then `cmd` with the sender's MIC edges captured.  poke(s): called with the
+    paused session after the setup lines, to put bytes into memory.  Returns (Sess paused, blocks decoded, dict)."""
     s = ctx.session(capture=True).start()
     try:
         s.wait_idle()
         for ln in setup:
             if s.line(ln):
                 raise HarnessError("setup line raised an error: %r" % ln)
+        if poke:
+            poke(s)
         pre = s.snap()
         s.arm_capture()
         s.type_text(cmd)
@@ -638,8 +658,11 @@ def tape_from_blocks(blocks):
 
 def case_3(ctx):
     v = Verdict()
-    text = b": DBL DUP + ; 21 DBL ."
-    s, info = save_and_capture(ctx, [], 'S" %s" SAVE-TEXT TXTSAVE' % text.decode(), v, "SAVE-TEXT")
+    # The store is built by typing: both lines run (prints 42) and are appended to the store with their CRs; the SAVE-TEXT
+    # line is appended too and trimmed by STORE_TRIM, so the tape holds exactly the two lines, not the command.
+    lines = [": DBL DUP + ;", "21 DBL ."]
+    text = b"".join(l.encode() + b"\r" for l in lines)
+    s, info = save_and_capture(ctx, lines, "SAVE-TEXT TXTSAVE", v, "SAVE-TEXT")
     try:
         blks = info["blocks"]
         v.check(info["idle"], "SAVE-TEXT did not return")
@@ -648,7 +671,7 @@ def case_3(ctx):
         chk_header(v, "SAVE-TEXT", blks[0], 0, "TXTSAVE", len(text), 0x8000, len(text))
         f, payload, ok = tapes.unframe(blks[1]["data"])
         v.check(f == 0xFF and ok, "SAVE-TEXT data block flag/checksum (flag %s)" % f)
-        chk_bytes(v, "SAVE-TEXT payload", payload, text)
+        chk_bytes(v, "SAVE-TEXT payload (the typed lines + CR, not the SAVE-TEXT line)", payload, text)
         v.note("%d edges, %d blocks, %.1f s emulated" % (info["edges"], len(blks), info["emu_s"]))
     finally:
         s.stop()
@@ -661,6 +684,76 @@ def case_3(ctx):
         v.check(r["idle"], "no prompt after LOAD-TEXT of the captured tape")
         v.check(screen_has(s2.screen(), r"\b42\b"), "round trip: no 42 on the screen %s" % s2.screen()[-3:])
         v.check(s2.err_flag() == 0, "round trip: error reported")
+    finally:
+        s2.stop()
+    return v
+
+
+# Step E (docs/V2/EDITOR_SPEC.md section 8, N4): the text tape round trip of a STORE of CR-ended lines.  The bytes are put into
+# the store directly (STORE_START = LOADTEXT_BUF, end cell STORE_END, or WORKSPACE_END on the old build), SAVE-TEXT writes them
+# from the store, the capture is decoded and played into a fresh machine, LOAD-TEXT puts them back: the store must hold
+# the same bytes and the program must have run.  SAVE-TEXT takes no address and length: it saves the store, and the
+# command line the console appended behind the poked text is trimmed (docs/V2/EDITOR_SPEC.md section 3).
+#
+# HOW THE TEXT SURVIVES THE OLD BUILD.  There CR is part of a word (core/interp.asm W_WORD splits at a space only), and an
+# unknown word inside LOAD-TEXT's text does not return an error: the error path unwinds one level too far and the machine
+# restarts at $0000 (measured by tools/edtest.py N3), losing the store and the screen.  So the text has no unknown token
+# for the old build: its first line is ordinary space-separated Forth that ends with a lone colon, and every later line is
+# a single token, so that the old tokenizer sees `: ` followed by ONE token (all the remaining lines glued with their CRs,
+# 25 bytes, under WORD's 32-character limit) which the colon takes as the NAME of a new definition, and the text ends:
+#     : DBL DUP + ; 21 DBL . :<space> CR TRI CR DUP CR DBL CR + CR ; CR 7 CR TRI CR . CR
+# Old build: defines DBL, prints 42, defines a word with a name of 25 characters (CRs inside), no error.  A build in which
+# CR is whitespace (it has STORE_END) defines TRI = DUP DBL +, runs `7 TRI .` and prints 21 as well.  Both: the tape
+# carries the nine CR-ended lines byte for byte, SAVE-TEXT and LOAD-TEXT keep them, the store afterwards is identical, no
+# error.  What is not checked on the old build is the only thing the spec says it cannot do (table N4: "passes with its
+# space-separated text"): that lines run as lines.
+N4_TEXT = b": DBL DUP + ; 21 DBL . : \rTRI\rDUP\rDBL\r+\r;\r7\rTRI\r.\r"
+
+
+def case_n4(ctx):
+    v = Verdict()
+    b = ctx.b
+    text = N4_TEXT
+    end_cell = b.S["STORE_END"] if "STORE_END" in b.S else b.S["WORKSPACE_END"]
+    crws = "STORE_END" in b.S                  # the build whose WORD takes CR as whitespace (step E) has the new end cell
+    buf = b.S["LOADTEXT_BUF"]
+    v.check(text.count(b"\r") == 9 and text.endswith(b"\r"), "test text: nine CR-ended lines")
+
+    def poke(s):
+        s.dbg.pause()
+        s.z.command("write-memory-raw %d %s" % (buf, text.hex()))
+        s.z.command("write-memory-raw %d %s" % (end_cell, struct.pack("<H", buf + len(text)).hex()))
+
+    # The console appends "SAVE-TEXT N4TXT" + CR after the poked text; STORE_TRIM takes it off again, so the payload is
+    # exactly the poked bytes.  (Old build: `<addr> <len> SAVE-TEXT N4TXT`, which saved from the buffer given.)
+    cmd = "SAVE-TEXT N4TXT"
+    s, info = save_and_capture(ctx, [], cmd, v, "SAVE-TEXT", poke=poke)
+    try:
+        blks = info["blocks"]
+        v.check(info["idle"], "N4 SAVE-TEXT did not return")
+        if not v.check(len(blks) == 2, "N4 captured %d blocks, expected 2" % len(blks)):
+            return v
+        chk_header(v, "N4 SAVE-TEXT", blks[0], 0, "N4TXT", len(text), 0x8000, len(text))
+        f, payload, ok = tapes.unframe(blks[1]["data"])
+        v.check(f == 0xFF and ok, "N4 SAVE-TEXT data block flag/checksum (flag %s)" % f)
+        chk_bytes(v, "N4 SAVE-TEXT payload (the store bytes, CRs included)", payload, text)
+        v.note("N4 %d edges, %d blocks, %.1f s emulated" % (info["edges"], len(blks), info["emu_s"]))
+    finally:
+        s.stop()
+    s2, _ = play(ctx, tape_from_blocks(blks), [], "LOAD-TEXT N4TXT")
+    try:
+        r = finish(s2)
+        v.check(r["idle"], "N4 no prompt after LOAD-TEXT of the captured tape")
+        end = s2.rd16(end_cell)
+        v.check(end == buf + len(text), "N4 store end %04X, expected %04X" % (end, buf + len(text)))
+        chk_bytes(v, "N4 store after LOAD-TEXT", bytes(s2.rd(buf, max(0, min(end - buf, 8192)))), text)
+        rows = s2.screen()
+        v.check(screen_has(rows, r"\b42\b"), "N4 round trip: no 42 on the screen %s" % rows[-3:])
+        v.check(s2.err_flag() == 0, "N4 round trip: error reported")
+        if crws:
+            v.check(screen_has(rows, r"\b21\b"), "N4 round trip: the CR-separated lines did not run (no 21) %s" % rows[-3:])
+        v.note("N4 %s: expected 42%s on the screen, store %d bytes identical to the saved ones" % (
+            "new build (CR is whitespace)" if crws else "old build (CR is part of a word)", " and 21" if crws else "", len(text)))
     finally:
         s2.stop()
     return v
@@ -861,7 +954,9 @@ def case_11a(ctx):
 
 def case_12(ctx):
     v = Verdict()
-    s, info = save_and_capture(ctx, [": ST SAVE-TEXT ;"], 'S" 1 2 +" ' + catch_cmd("ST", "SPCX"), v, "SAVE-TEXT",
+    # The store holds the two setup lines (the command line is trimmed); the case is about the SPACE (BREAK) during the
+    # header, not about what is saved, so no payload is judged.
+    s, info = save_and_capture(ctx, [": ST SAVE-TEXT ;", "1 2 + ."], catch_cmd("ST", "SPCX"), v, "SAVE-TEXT",
                                space_after_s=1.5)
     try:
         blks = info["blocks"]
@@ -926,11 +1021,20 @@ def case_14(ctx):
         return v
     bad = bytearray(d)
     bad[len(d) // 2] ^= 0x01
+    # VERIFY-TEXT compares with the store, which holds the typed setup lines (text + CR each; the VERIFY-TEXT command line
+    # is trimmed by STORE_TRIM before the compare and is not part of it).  So the matching tape is those lines; a tape that
+    # differs in one byte, or only in length (one byte short: a prefix of the store; one byte long), is refused (-37).
+    store = b"".join(l.encode() + b"\r" for l in setup)
+    bad_t = bytearray(store)
+    bad_t[len(store) // 2] ^= 0x01
     runs = [("VERIFY-LIB match", tapes.lib_file("GOODLIB", d, latest, b.identity), [], catch_cmd("VL", "GOODLIB"), 0, False),
             ("VERIFY-LIB one byte differs", tapes.lib_file("BADLIB", bytes(bad), latest, b.identity), [],
              catch_cmd("VL", "BADLIB"), -37, False),
-            ("VERIFY-TEXT match", tapes.text_file("GOODTXT", "1 2 +"), [], 'S" 1 2 +" ' + catch_cmd("VT", "GOODTXT"), 0, True),
-            ("VERIFY-TEXT one byte differs", tapes.text_file("BADTXT", "1 2 +"), [], 'S" 1 2 -" ' + catch_cmd("VT", "BADTXT"),
+            ("VERIFY-TEXT match", tapes.text_file("GOODTXT", store), [], catch_cmd("VT", "GOODTXT"), 0, True),
+            ("VERIFY-TEXT one byte differs", tapes.text_file("BADTXT", bytes(bad_t)), [], catch_cmd("VT", "BADTXT"), -37, True),
+            ("VERIFY-TEXT tape one byte short", tapes.text_file("SHORTTXT", store[:-1]), [], catch_cmd("VT", "SHORTTXT"),
+             -37, True),
+            ("VERIFY-TEXT tape one byte long", tapes.text_file("LONGTXT", store + b"\r"), [], catch_cmd("VT", "LONGTXT"),
              -37, True)]
     for label, items, extra_setup, cmd, expect, is_text in runs:
         s, _ = play(ctx, items, setup + extra_setup, cmd)
@@ -946,13 +1050,14 @@ def case_14(ctx):
                 chk_same(v, label + " (memory untouched but the CRC at HERE)", before, after, workspace=b.workspace,
                          skip=(before["here"], before["here"] + 1))
             else:
-                # the S" string: addr len [code] -- addr must still hold the typed text, not the tape's
-                # S" copies its string to HERE+4 (probe): it must still hold the typed text, not the tape's
-                a0 = before["here"] - b.dict0 + 4
-                txt = after["ram"][a0:a0 + 5]
-                want = b"1 2 +" if label.endswith("match") else b"1 2 -"
-                v.check(txt == want, "%s: the string at HERE+4 is %r, expected %r (VERIFY must not write)" % (label, txt, want))
-                chk_same(v, label + " (dictionary untouched)", before, after, whole=False)
+                # VERIFY-TEXT must not write: the dictionary is untouched, and the store still holds the typed lines
+                # (the command line was trimmed, whatever the verdict; STORE_END is absent in an old build)
+                chk_same(v, label + " (dictionary untouched)", before, after, workspace=b.workspace)
+                if "STORE_END" in b.S:
+                    end = s.rd16(b.S["STORE_END"])
+                    v.check(end == b.workspace + len(store), "%s: store end %04X, expected %04X (the VERIFY-TEXT line must be trimmed)" % (
+                        label, end, b.workspace + len(store)))
+                    chk_bytes(v, label + " store", bytes(s.rd(b.workspace, len(store))), store)
             v.note("%s: code %s" % (label, code))
         finally:
             s.stop()
@@ -1021,6 +1126,7 @@ CASES = {
     "1": ("text_doubler", case_1, "pass"),
     "2": ("blackjack_p53", case_2, "pass"),
     "3": ("savetext_roundtrip", case_3, "header param 1 differs"),
+    "N4": ("text_tape_roundtrip", case_n4, "passes (42 only: CR is part of a word, the text is built for that)"),
     "4": ("savelib_roundtrip", case_4, "fails the format checks; round trip passes"),
     "5": ("foreign_identity", case_5, "n/a (loads as nothing; type 3 skipped)"),
     "6": ("v1_lib_tape", case_6, "loads"),
@@ -1040,7 +1146,7 @@ CASES = {
     "9L": ("legacy_wrong_flag", legacy_9, "reports success"),
     "10L": ("legacy_dropout", legacy_10, "reports success"),
 }
-ORDER = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "11a", "12", "13", "14"]
+ORDER = ["1", "2", "3", "N4", "4", "5", "6", "7", "8", "9", "10", "11", "11a", "12", "13", "14"]
 EXTRA = ["11L"]                             # judged like the cases, tallied apart
 LEGACY = ["7L", "8L", "8Z", "9L", "10L"]    # old build only (no ROM_IDENTITY): INFO lines, not judged
 
@@ -1149,7 +1255,7 @@ def selftest(a):
     ctx = Ctx(b, a.port, work)
     ok = True
     try:
-        text = b"1 2 +"
+        text = b": TT -37 THROW ;\r"            # the one typed line, + CR: the store (the SAVE-TEXT line is trimmed)
         s = ctx.session(capture=True).start()
         try:
             s.wait_idle()
@@ -1157,7 +1263,7 @@ def selftest(a):
                 raise HarnessError("setup failed")
             before = s.snap()
             s.arm_capture()
-            s.type_text('S" %s" SAVE-TEXT STX' % text.decode())
+            s.type_text("SAVE-TEXT STX")
             s.press_enter()
             idle, _ = s.poll_idle(120)
             s.disarm_capture()

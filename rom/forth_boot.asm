@@ -30,7 +30,9 @@
 ; HERE/,/C,/ALLOT/CREATE/DOES>/IMMEDIATE, FREE, THROW/CATCH,
 ; ROT/2DUP/2DROP/?DUP/PICK, AND/OR/XOR/INVERT, ' (TICK), LPRINT/LLIST,
 ; VLIST, ABORT/QUIT, IN/OUT, FORGET, UDG, TONE/VOLUME/MIXER/NOISE/
-; ENVELOPE, LIST-DEFS, RECALL, EXIT — 150 words total.
+; ENVELOPE, LIST-DEFS, EDIT, EXIT — 158 words total (re-derived at step E
+; item 7 by walking the chain: EDIT in, RECALL out, and the steps since the
+; last count).
 ; RE-DERIVED, NOT HAND-COUNTED: this comment's own earlier draft
 ; (claiming 93) had already gone stale twice over — once discovered
 ; during a Phase-24-era consolidation pass (missing the original Phase
@@ -43,7 +45,7 @@
 ; comment still said 143, missing Phase 63's own TONE/VOLUME/MIXER/
 ; NOISE/ENVELOPE entirely) it's the result of actually assembling this
 ; file and walking the real dictionary's own LINK chain in the compiled
-; binary, byte for byte, from LATEST's own seed (DICT_LATEST_INIT_RECALL)
+; binary, byte for byte, from LATEST's own seed (DICT_LATEST_COLD)
 ; down to the LINK=0 sentinel — the same class of check that caught two
 ; real dictionary-orphaning bugs earlier in this project's history (a
 ; chain-point set to the wrong tail marker silently drops every word
@@ -52,7 +54,7 @@
 ; into one LATEST list via the same DICT_CHAIN_POINT splices
 ; rom/forth_smoke_p9.asm introduced and proved. Whoever next adds a
 ; phase: re-run this same walk (build this ROM, then follow
-; DICT_LATEST_INIT_RECALL's own LINK chain through the assembled .bin)
+; DICT_LATEST_COLD's own LINK chain through the assembled .bin)
 ; rather than incrementing this number by eye — that's exactly the habit
 ; that let it drift, repeatedly.
 ; DECIMAL_NUMBER_ENABLED is also DEFINEd here (core/decimal.asm,
@@ -116,31 +118,7 @@ RST_00:
     ENDIF
     ASSERT $ <= ROM_ID_SKIP_RESET_END
 
-    DS   $0008 - $, $FF
-RST_08:
-    ret
-
-    DS   $0010 - $, $FF
-RST_10:
-    ret
-
-    DS   $0018 - $, $FF
-RST_18:
-    ret
-
-    DS   $0020 - $, $FF
-RST_20:
-    ret
-
-    DS   $0028 - $, $FF
-RST_28:
-    ret
-
-    DS   $0030 - $, $FF
-RST_30:
-    ret
-
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 ; ---- RST 38 / IM 1 maskable interrupt entry point — real wiring,
 ; confirmed from 2068-Leap's own working ROM files (e.g.
 ; rom/test_arr3.asm's own RST_38), not guessed. ----
@@ -193,6 +171,16 @@ GRAPHICS_HOME_TABLE:
     jp   GFX_ROW_BASE_ADDR        ; slot 3 — A=row -> HL=that row's
                                   ; bitmap base address (scanline 0)
     jp   GFX_CELL_ATTR_ADDR       ; slot 4 — B=row, C=col -> HL=addr
+; Step E item 6 (docs/V2/EDITOR_SPEC.md section 5.1): the full-screen view
+; in the EXROM edits and draws with the console's own engine.
+    jp   WRAP_CALC                ; slot 5 — the edit line's wrap table
+    jp   WRAP_CALC_AT             ; slot 6 — HL=text, A=length, C=cursor/$FF
+    jp   ED_DRAW_ROWS             ; slot 7 — the table's rows from FWRAP_TOP
+    jp   ED_DRAW_CURSOR           ; slot 8 — the cursor from table, FWRAP_TOP
+    jp   EDITOR_EDIT_KEY          ; slot 9 — A=key; carry=ENTER, NZ=changed
+    jp   IO_READ_KEY              ; slot 10 — the key wait -> A
+    jp   EDIT_CURSOR_TO_ROWCOL    ; slot 11 — B=row, C=col
+    jp   FORGET_PRINT_MSG         ; slot 12 — HL=zero-terminated text
 
 ; ============================================================================
 ; COLD_START
@@ -240,19 +228,19 @@ COLD_CLEAR_END EQU UDG_TABLE + UDG_COUNT * 8
 
     ld   hl, DICT_LATEST_COLD          ; the full chain's own head —
                                     ; see this file's own header (Phase
-                                    ; 64 -- core/recall.asm's LIST-DEFS/
-                                    ; RECALL -- spliced on after
-                                    ; core/loadtext.asm's own tail)
+                                    ; 64 -- core/recall.asm's LIST-DEFS
+                                    ; -- spliced on after core/edit.asm's
+                                    ; EDIT, after core/loadtext.asm)
     ld   (LATEST), hl
 
-    ; Phase 64 (core/recall.asm): WORKSPACE_END starts undefined RAM at
-    ; cold boot -- must be LOADTEXT_BUF (an empty workspace) before the
-    ; first live-typed line's own WORKSPACE_APPEND call (core/editor.asm's
+    ; Phase 64 (core/recall.asm): STORE_END starts undefined RAM at
+    ; cold boot -- must be STORE_START (an empty store) before the
+    ; first live-typed line's own STORE_APPEND call (core/editor.asm's
     ; EDITOR_LOOP_LIVE), or that call reads garbage and can write outside
     ; LOADTEXT_BUF entirely. A later LOAD-TEXT resets it again to cover
     ; exactly what it received (core/loadtext.asm's own W_LOADTEXT).
-    ld   hl, LOADTEXT_BUF
-    ld   (WORKSPACE_END), hl
+    ld   hl, STORE_START
+    ld   (STORE_END), hl
     ld   hl, FORTH_DICT_RAM
     ld   (HERE), hl
     xor  a
@@ -437,6 +425,7 @@ INTERPRET_UNKNOWN_WORD:
     ; before reporting, so this now matches that same abort contract.
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
+    call EDIT_ERR_PREFIX          ; core/edit.asm: `LINE n ` while EDIT commits line n
     ; print the actual unrecognized word before the "?", not just a
     ; bare "?" with no clue which token failed -- WORD_BUF (core/
     ; interp.asm) still holds it untouched: INTERPRET_RUN's own .loop
@@ -454,20 +443,20 @@ INTERPRET_UNKNOWN_WORD:
     push bc
     ld   l, a
     ld   h, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     pop  bc
     pop  hl
     inc  hl
     djnz .printword
     ld   hl, " "
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     ld   hl, "?"
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     ld   hl, 13
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
 REPORT_INTERP_ERROR:              ; shared tail with RUNTIME_ERROR_HOOK's
                                    ; own .msgdone below -- byte-identical,
@@ -479,6 +468,12 @@ REPORT_INTERP_ERROR:              ; shared tail with RUNTIME_ERROR_HOOK's
                                    ; its own OK for this line -- see
                                    ; INTERP_ERROR_FLAG's own header
                                    ; (core/interp.asm)
+    ld   sp, (THROW_ROOT_SP)      ; back to the OUTERMOST INTERPRET_RUN's
+                                   ; caller, even from a nested run
+                                   ; (LOAD-TEXT's text): the whole
+                                   ; interpretation stops, not just the
+                                   ; innermost run. A no-op at the
+                                   ; outermost level.
     ret
 
 ; ============================================================================
@@ -493,6 +488,7 @@ REPORT_INTERP_ERROR:              ; shared tail with RUNTIME_ERROR_HOOK's
 ; hook's only job is reporting.
 ; ============================================================================
 RUNTIME_ERROR_HOOK:
+    call EDIT_ERR_PREFIX          ; core/edit.asm: `LINE n ` while EDIT commits line n
     ld   hl, RUNTIME_ERROR_MSG
 .msgloop:
     ld   a, (hl)
@@ -501,14 +497,14 @@ RUNTIME_ERROR_HOOK:
     push hl
     ld   l, a
     ld   h, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     pop  hl
     inc  hl
     jr   .msgloop
 .msgdone:
     ld   hl, 13
-    call DPUSH_HL
+    rst RST_DPUSH
     call W_EMIT
     ; same fix as INTERPRET_UNKNOWN_WORD's own STATE reset -- an
     ; IMMEDIATE word's runtime error while compiling could otherwise
@@ -656,17 +652,19 @@ DICT_CHAIN_POINT DEFL H_OUT
 DICT_CHAIN_POINT DEFL H_FORGET
     INCLUDE "core/udg.asm"
 DICT_CHAIN_POINT DEFL H_UDG
-    DEFINE TRACK_WORKSPACE_END   ; opt in to core/loadtext.asm's
-                                 ; WORKSPACE_END tracking -- see that
+    DEFINE TRACK_STORE_END       ; opt in to core/loadtext.asm's
+                                 ; STORE_END tracking -- see that
                                  ; file's own W_LOADTEXT comment on why
                                  ; this must be a per-ROM opt-in, not
                                  ; unconditional
     INCLUDE "core/loadtext.asm"
 DICT_CHAIN_POINT DEFL H_LOADTEXT
+    INCLUDE "core/edit.asm"
+DICT_CHAIN_POINT DEFL H_EDIT
     INCLUDE "core/recall.asm"
-DICT_LATEST_COLD EQU DICT_LATEST_INIT_RECALL  ; LATEST of an empty user dictionary: cold start,
+DICT_LATEST_COLD EQU DICT_LATEST_INIT_LISTDEFS ; LATEST of an empty user dictionary: cold start,
                                               ; and core/storage.asm's LOAD-LIB after a failure
-DICT_CHAIN_POINT DEFL H_RECALL
+DICT_CHAIN_POINT DEFL H_LISTDEFS
     INCLUDE "core/editor.asm"
 
     DS   $4000 - $, $FF

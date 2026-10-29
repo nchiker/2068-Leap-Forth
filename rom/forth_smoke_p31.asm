@@ -23,19 +23,7 @@
 RST_00:
     di
     jp   COLD_START
-    DS   $0008 - $, $FF
-RST_08: ret
-    DS   $0010 - $, $FF
-RST_10: ret
-    DS   $0018 - $, $FF
-RST_18: ret
-    DS   $0020 - $, $FF
-RST_20: ret
-    DS   $0028 - $, $FF
-RST_28: ret
-    DS   $0030 - $, $FF
-RST_30: ret
-    DS   $0038 - $, $FF
+    INCLUDE "include/rst_vectors.inc"
 RST_38:
     call KBD_ISR_TICK
     ei
@@ -64,7 +52,7 @@ COLD_START:
 .note:
     push hl
     push de
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, DUR_ONE_FRAME_M
     ld   a, DUR_ONE_FRAME_E
     call FPUSH
@@ -136,7 +124,7 @@ COLD_START:
     push hl
     push de
     ld   hl, 0
-    call DPUSH_HL                 ; n = 0, middle C
+    rst RST_DPUSH                ; n = 0, middle C
     pop  de
     pop  hl
     ld   a, d
@@ -190,7 +178,7 @@ COLD_START:
     jr   nz, .pre
     push de
     ld   hl, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, DUR_ONE_FRAME_M
     ld   a, DUR_ONE_FRAME_E
     call FPUSH
@@ -232,7 +220,7 @@ COLD_START:
     ld   (SAVE_IX), ix
     ld   (SAVE_IY), iy
     ld   hl, 0
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, DUR_ONE_FRAME_M
     ld   a, DUR_ONE_FRAME_E
     call FPUSH
@@ -286,7 +274,7 @@ OOR_CASE:
     ld   c, $03
     call AY_WRITE_C
     pop  hl
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, DUR_HALF_M
     ld   a, DUR_HALF_E
     call FPUSH

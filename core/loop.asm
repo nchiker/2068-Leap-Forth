@@ -70,7 +70,7 @@ W_WHILE:
     ld   hl, QBRANCH
     call COMPILE_CALL
     ld   hl, (HERE)
-    call DPUSH_HL
+    rst RST_DPUSH
     ld   hl, 0
     call COMPILE_WORD
     ret
@@ -89,7 +89,7 @@ W_REPEAT:
     IFDEF COMPILE_ONLY_CHECK_ENABLED
     call COMPILE_ONLY_CHECK    ; see W_WHILE's own note (this file, above)
     ENDIF
-    call DPOP_HL                ; hl = WHILE's own placeholder address
+    rst RST_DPOP               ; hl = WHILE's own placeholder address
     push hl                     ; stashed briefly on the Z80 hardware
                                  ; stack -- safe: symmetric push/pop
                                  ; within this one routine's own body,
@@ -98,7 +98,7 @@ W_REPEAT:
                                  ; this same technique)
     ld   hl, BRANCH
     call COMPILE_CALL
-    call DPOP_HL                ; hl = BEGIN's remembered loop-start
+    rst RST_DPOP               ; hl = BEGIN's remembered loop-start
     call COMPILE_WORD
     pop  hl                     ; hl = WHILE's own placeholder address
     ld   de, (HERE)

@@ -3,7 +3,8 @@
 
 A port of the `save` case of 2068-Leap-C's tools/fusetest.py to the Forth ROM.  For each word a headless Fuse
 (tools/fusedrive.py) boots the build, a short definition is typed, Fuse's tape deck starts recording, the word is
-run (`S" : DBL DUP + ; 21 DBL ." SAVE-TEXT TXTSAVE`; `SAVE-LIB LIBA` after `: SQ DUP * ; : CUBE DUP SQ * ;`) and
+run (`SAVE-TEXT TXTSAVE` after the lines `: DBL DUP + ;` and `21 DBL .`, which build the line store; `SAVE-LIB LIBA` after
+`: SQ DUP * ; : CUBE DUP SQ * ;`) and
 the recording is written as a TZX.  The ROM's own MIC edges are then decoded by fuse-utils, not by this project:
 `tape2wav` renders the recording as audio and `audio2tape` decodes the audio back into blocks.  Those blocks are
 compared with what docs/V2/STORAGE_SPEC.md section 4 says they must be:
@@ -11,7 +12,8 @@ compared with what docs/V2/STORAGE_SPEC.md section 4 says they must be:
   header block   flag $00, 17-byte payload, XOR checksum good: type (0 TEXT / 3 LIB), name (10, space padded),
                  data length (TEXT: the text length; LIB: dictionary length + 2), param 1 ($8000 / ROM_IDENTITY),
                  param 2 (text length / LATEST)
-  data block     flag $FF, XOR checksum good: TEXT: the text bytes; LIB: the dictionary $9800..HERE-1 read from
+  data block     flag $FF, XOR checksum good: TEXT: the line store, i.e. the typed lines each + CR (the console appends
+                 every committed line; STORE_TRIM removes the SAVE-TEXT line itself, docs/V2/EDITOR_SPEC.md section 3); LIB: the dictionary $9800..HERE-1 read from
                  Fuse's memory, then CRC-16/CCITT-FALSE of it, low byte then high byte
 
 and SAVE-LIB must leave HERE and LATEST alone.  Then the recording is played into a fresh Fuse (tape traps off) with
@@ -46,7 +48,8 @@ import fusedrive                        # noqa: E402
 import tapes                            # noqa: E402
 
 ROOT = os.path.dirname(HERE)
-TEXT = b": DBL DUP + ; 21 DBL ."
+TEXT_LINES = [": DBL DUP + ;", "21 DBL ."]                 # typed one by one: they run and the console appends them to the store
+TEXT = b"".join(l.encode() + b"\r" for l in TEXT_LINES)    # what SAVE-TEXT must write: the store, the command line trimmed
 LIB_SETUP = ": SQ DUP * ; : CUBE DUP SQ * ;"
 
 
@@ -200,8 +203,7 @@ def run(build, work, rep):
     # ------------------------------------------------------------------------------------ SAVE-TEXT
     wd = os.path.join(work, "text")
     os.makedirs(wd)
-    rec, before, after, returned, secs, screen = record(
-        build, wd, [], 'S" %s" SAVE-TEXT TXTSAVE' % TEXT.decode(), snap)
+    rec, before, after, returned, secs, screen = record(build, wd, TEXT_LINES, "SAVE-TEXT TXTSAVE", snap)
     rep.check("SAVE-TEXT: returned", returned, "%.1f s emulated, screen: %s" % (secs, screen))
     try:
         blocks, dec = independent_decode(rec, wd)
@@ -253,6 +255,11 @@ def run(build, work, rep):
 
 
 CROSS_SETUP = ": CUBE DUP DUP * * ;"
+# Fuse 1.9.1 aborts (a glibc malloc assertion inside its own tape_write) when it records some particular tapes: the
+# trigger is the recorded signal, not the ROM (step E item 4: the same ROM layout records ": CUBE DUP DUP * * 0 + ;"
+# fine, and ZEsarUX decodes the tape that crashed Fuse; docs/V2/EDITOR_SPEC.md section 10). The cross phase then says
+# so and records both machines again with the next, equivalent definition (5 CUBE . is still 125).
+CROSS_SETUPS = (CROSS_SETUP, ": CUBE DUP DUP * * 0 + ;")
 
 
 def cross_run(build, work, rep):
@@ -286,9 +293,9 @@ def cross_run(build, work, rep):
         want_id = ident if ident is not None else (idc if want_cart else idh)
         return hdr == want_hdr and cell == want_id, "bytes 0-4 %s, ROM_IDENTITY cell $%04X" % (hdr.hex(), cell)
 
-    def tape_of(label, dckfile):
-        """SAVE-LIB LIBX on the machine `label`; returns (recording, state after)."""
-        wd = os.path.join(work, label)
+    def tape_of(label, dckfile, setup, attempt):
+        """SAVE-LIB LIBX on the machine `label` after `setup`; returns (recording, state after)."""
+        wd = os.path.join(work, label + ("-%d" % attempt if attempt else ""))
         os.makedirs(wd)
         box = {}
 
@@ -297,7 +304,7 @@ def cross_run(build, work, rep):
                 ok, d = booted_ok(f, dckfile is not None)
                 box["boot"] = rep.check("cross: %s machine is the %s" % (label, "cartridge" if dckfile else "Home build"), ok, d)
             return snap(f)
-        rec, before, after, returned, secs, screen = record(build, wd, [CROSS_SETUP], "SAVE-LIB LIBX", snap_checked, dck=dckfile)
+        rec, before, after, returned, secs, screen = record(build, wd, [setup], "SAVE-LIB LIBX", snap_checked, dck=dckfile)
         rep.check("cross: SAVE-LIB on %s returned" % label, returned, "%.1f s emulated, screen: %s" % (secs, screen))
         rep.check("cross: SAVE-LIB on %s kept HERE, LATEST, dictionary" % label, before == after,
                   "HERE $%04X LATEST $%04X, %d dictionary bytes" % (after["here"], after["latest"], len(after["dict"])))
@@ -328,8 +335,16 @@ def cross_run(build, work, rep):
                 now["here"], now["latest"], len(saved["dict"]))
         roundtrip(build, work, rep, label, tape, "LOAD-LIB LIBX", verify, dck=dckfile)
 
-    rec_h, saved_h = tape_of("home", None)
-    rec_c, saved_c = tape_of("cartridge", dck)
+    for attempt, setup in enumerate(CROSS_SETUPS):
+        try:
+            rec_h, saved_h = tape_of("home", None, setup, attempt)
+            rec_c, saved_c = tape_of("cartridge", dck, setup, attempt)
+            break
+        except RuntimeError as e:
+            if "tape_write" not in str(e) or attempt + 1 == len(CROSS_SETUPS):
+                raise
+            rep.line("fusesave: cross: Fuse aborted in tape_write recording %r (a Fuse 1.9.1 defect, see CROSS_SETUPS); "
+                     "both machines again with %r" % (setup, CROSS_SETUPS[attempt + 1]))
     rep.check("cross: Home and cartridge saved the same HERE, LATEST, dictionary", saved_h == saved_c,
               "HERE $%04X/$%04X LATEST $%04X/$%04X" % (saved_h["here"], saved_c["here"], saved_h["latest"], saved_c["latest"]))
     load_on("cross: Home SAVE-LIB -> cartridge LOAD-LIB", rec_h, saved_h, dck)

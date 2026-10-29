@@ -57,9 +57,9 @@ H_ABS:
                             ; INCLUDEing this file
     DB   3, "A", "B", "S"
 W_ABS:
-    call DPOP_HL
+    rst RST_DPOP
     call MATH_ABS16
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -69,9 +69,9 @@ H_SGN:
     DW   H_ABS
     DB   3, "S", "G", "N"
 W_SGN:
-    call DPOP_HL
+    rst RST_DPOP
     call MATH_SGN16
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -81,11 +81,11 @@ H_MOD:
     DW   H_SGN
     DB   3, "M", "O", "D"
 W_MOD:
-    call DPOP_HL           ; hl = b (divisor)
+    rst RST_DPOP          ; hl = b (divisor)
     ex   de, hl             ; de = b
-    call DPOP_HL             ; hl = a (dividend)
+    rst RST_DPOP            ; hl = a (dividend)
     call MATH_MOD16
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -95,9 +95,9 @@ H_SQRT:
     DW   H_MOD
     DB   4, "S", "Q", "R", "T"
 W_SQRT:
-    call DPOP_HL
+    rst RST_DPOP
     call MATH_SQRT16
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -107,9 +107,9 @@ H_RND:
     DW   H_SQRT
     DB   3, "R", "N", "D"
 W_RND:
-    call DPOP_HL
+    rst RST_DPOP
     call MATH_RND16
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -119,7 +119,7 @@ H_RANDOMIZE:
     DW   H_RND
     DB   9, "R", "A", "N", "D", "O", "M", "I", "Z", "E"
 W_RANDOMIZE:
-    call DPOP_HL
+    rst RST_DPOP
     call MATH_RND_SEED
     ret
 
@@ -134,11 +134,11 @@ H_STAR:
     DW   H_RANDOMIZE
     DB   1, "*"
 W_STAR:
-    call DPOP_HL           ; hl = b
+    rst RST_DPOP          ; hl = b
     ex   de, hl             ; de = b
-    call DPOP_HL             ; hl = a
+    rst RST_DPOP            ; hl = a
     call MATH_MULTIPLY16      ; hl = a*b
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
@@ -151,11 +151,11 @@ H_SLASH:
     DW   H_STAR
     DB   1, "/"
 W_SLASH:
-    call DPOP_HL           ; hl = b (divisor)
+    rst RST_DPOP          ; hl = b (divisor)
     ex   de, hl             ; de = b
-    call DPOP_HL             ; hl = a (dividend)
+    rst RST_DPOP            ; hl = a (dividend)
     call MATH_DIVIDE16        ; hl = a/b, truncated toward zero
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 DICT_LATEST_INIT_MATHFN EQU H_SLASH       ; head of the dictionary once

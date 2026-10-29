@@ -74,7 +74,7 @@ H_ULAPLUS:
                             ; INCLUDEing this file
     DB   7, "U","L","A","P","L","U","S"
 W_ULAPLUS:
-    call DPOP_HL             ; hl = flag
+    rst RST_DPOP            ; hl = flag
     ld   a, ULAPLUS_MODE_GROUP
     ld   bc, PORT_ULAPLUS_SELECT
     out  (c), a
@@ -91,11 +91,11 @@ H_PALETTE:
     DW   H_ULAPLUS
     DB   7, "P","A","L","E","T","T","E"
 W_PALETTE:
-    call DPOP_HL              ; hl = value
+    rst RST_DPOP             ; hl = value
     push hl                    ; stash it on the machine stack -- no
                                 ; named scratch needed for two values
                                 ; this short-lived
-    call DPOP_HL                ; hl = index
+    rst RST_DPOP               ; hl = index
     ld   a, l
     ld   bc, PORT_ULAPLUS_SELECT
     out  (c), a

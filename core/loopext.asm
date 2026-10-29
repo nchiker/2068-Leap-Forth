@@ -137,7 +137,7 @@ W_J:
     inc  hl
     ld   d, (hl)
     ex   de, hl
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 DICT_LATEST_INIT_LOOPEXT EQU H_J   ; head of the dictionary once this

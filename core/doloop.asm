@@ -371,7 +371,7 @@ W_DO:
     ld   hl, (HERE)            ; remember the loop-start address (right
                                 ; after DO_RT's own compiled call) for
                                 ; LOOP/+LOOP to branch back to
-    call DPUSH_HL
+    rst RST_DPUSH
     ; open a fresh, empty LEAVE chain for this (possibly nested) loop
     ld   a, (LEAVE_DEPTH)
     inc  a
@@ -395,7 +395,7 @@ W_LOOP:
     ENDIF
     ld   hl, LOOP_RT
     call COMPILE_CALL
-    call DPOP_HL                ; hl = DO's remembered loop-start address
+    rst RST_DPOP               ; hl = DO's remembered loop-start address
     call COMPILE_WORD
     call LEAVE_SLOT_ADDR_CALC    ; hl = &LEAVE_HEAD_TABLE[LEAVE_DEPTH-1]
                                   ; -- MUST run before the (HERE) read
@@ -483,7 +483,7 @@ W_PLUSLOOP:
     ENDIF
     ld   hl, PLUSLOOP_RT
     call COMPILE_CALL
-    call DPOP_HL                ; hl = DO's remembered loop-start address
+    rst RST_DPOP               ; hl = DO's remembered loop-start address
     call COMPILE_WORD
     call LEAVE_SLOT_ADDR_CALC    ; must run before the (HERE) read below
                                   ; -- see W_LOOP's own note on why
@@ -518,7 +518,7 @@ W_I:
     inc  hl
     ld   d, (hl)
     ex   de, hl
-    call DPUSH_HL
+    rst RST_DPUSH
     ret
 
 DICT_LATEST_INIT_DOLOOP EQU H_I   ; head of the dictionary once this

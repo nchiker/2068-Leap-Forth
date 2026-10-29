@@ -572,7 +572,7 @@ Because the dictionary is searched newest-first, `VLIST` follows that exact same
 
 - **`LLIST`**: Walks the same chain but stops at the built-in words, sending its output to a physical printer to list *your program*.
 
-### Fixing a typo after you've already pressed Enter: `LIST-DEFS` and `RECALL`
+### Fixing a typo after you've already pressed Enter: `EDIT` and `LIST-DEFS`
 
 Everything above fixes a mistake *before* you press Enter — inserting,
 deleting, moving the cursor. But what about a typo you don't notice
@@ -588,16 +588,25 @@ the bug:
 shows up later, when you (or someone reading your program) expects a
 word called `SQUARE` and it isn't there. Retyping the whole definition
 by hand works, but for anything longer than one line, that's tedious
-and error-prone in its own right. `LIST-DEFS ( -- )` and
-`RECALL ( n -- )` exist for exactly this: they let you pull a
-definition you already entered back onto the input line, so you can
-fix it with the same cursor-left/Delete editing from earlier in this
-section instead of retyping it from scratch.
+and error-prone in its own right. `EDIT` exists for exactly this: it
+opens the lines you have already entered in a full-screen view, where
+you can move around, fix them with the same cursor-left/Delete editing
+from earlier in this section, and have the fixed lines run again when
+you leave.
 
-`LIST-DEFS` prints every colon definition you've entered so far this
-session — whether typed live at the prompt or brought in with
-`LOAD-TEXT` (see [section 12](#12-saving-and-loading-your-work)) —
-numbered from 0, oldest first, each with a short preview of its source:
+The text behind it is the **line store**. Every line you press Enter
+on is also kept there, one line per line, in the order you entered
+them — whether you typed it live at the prompt or brought it in with
+`LOAD-TEXT` (see [section 12](#12-saving-and-loading-your-work)). An
+empty line is not kept. (The line holding `EDIT ...` itself is taken
+off the store again: it is a command to look at the store, not part of
+your program. The same goes for the lines holding `SAVE-TEXT`,
+`VERIFY-TEXT` and `LOAD-TEXT`.) The store holds 8 KB, and it is the
+source that `SAVE-TEXT` saves.
+
+`LIST-DEFS ( -- )` is the way to see what is there. It prints the
+colon definitions in the store — the first 16 of them — numbered from
+0, oldest first, each with a short preview of its source:
 
 ```forth
 LIST-DEFS
@@ -607,26 +616,91 @@ LIST-DEFS
 0: : SQURE  DUP * ;
 ```
 
-`RECALL` takes one of those numbers and copies that definition's
-*entire* source — not just the preview — back onto the input line,
-cursor at the end, ready to edit:
+`EDIT ( "name" -- )` opens the view on a definition by name:
 
 ```forth
-0 RECALL
+EDIT SQURE
 ```
 
-The input line now reads `: SQURE  DUP * ;` exactly as you first typed
-it. From here it's ordinary editing: move the cursor onto `SQURE`,
-fix it to `SQUARE`, and press Enter. The corrected line runs — defining
-`SQUARE`, which now shadows nothing since `SQURE` was never right in
-the first place — and is also appended to the end of the workspace, so
-a later `LIST-DEFS` shows it too.
+It looks for the **last** line in the store in which the word `:` is
+followed directly by `SQURE` (capital or small letters, it does not
+matter), and puts the cursor at the start of that line. Typing `EDIT`
+with no name opens the view on a new, empty line after the last line,
+for adding something new instead of fixing something old.
+
+The view fills the screen with the lines of the store. Each line is
+word-wrapped exactly as it is at the prompt, so a long line takes
+several rows. The top 23 rows show the lines; the bottom row is a
+status row, `LINE n/m`, which says which line the cursor is on and how
+many lines there are. The cursor is the same flashing cell you know
+from the prompt.
+
+With `SQURE` and the `5 SQURE .` line above, the status row reads
+`LINE 1/2`. Move the cursor right to just after `SQU` and type the
+missing `A`, so that the line reads `: SQUARE  DUP * ;`. The keys are:
+
+| Key                                | What it does                                              |
+| ---------------------------------- | --------------------------------------------------------- |
+| characters, LEFT, RIGHT, DELETE    | edit the cursor line, just as at the prompt               |
+| UP, DOWN                           | move between the rows of a wrapped line, and between lines — to the same column, or to the end of the row if it is shorter |
+| ENTER                              | keep this line and open a new, empty line after it        |
+| DELETE at column 0 of an empty line | delete that line                                         |
+| CAPS SHIFT + 1                     | delete the cursor line                                    |
+| CAPS SHIFT + ENTER                 | insert an empty line above the cursor line                |
+| BREAK (CAPS SHIFT + SPACE)         | leave the view                                            |
+
+Note that ENTER here does not run anything: inside the view it only
+starts a new line. Nothing runs until you leave.
+
+When you press BREAK, the screen is cleared and the lines you
+**changed or added** during this visit are interpreted, in the order
+they stand in the store — lines you only looked at are not run again.
+Our corrected line runs, defining `SQUARE`, and the prompt comes back.
+Typing `5 SQUARE .` now prints 25.
+
+If one of those lines raises an error, interpretation stops there. The
+number of the line is printed first, followed by the usual message —
+for example `LINE 3 FOO ?` if line 3 contained an unknown word `FOO`.
+The changed lines after it are not run. The lines stay in the store
+as you left them.
+
+If something stops `EDIT` from opening the view, it prints one message
+and changes nothing:
+
+| Message       | Meaning                                                       |
+| ------------- | ------------------------------------------------------------- |
+| `name ?`      | there is no definition line for that name (as for an unknown word) |
+| `32COL FIRST` | you are in 64-column mode; the view is 32 columns wide        |
+| `LONG LINE`   | a line in the store is longer than 128 characters, or needs more than 4 screen rows |
+| `NO EXROM`    | the graphics EXROM is not fitted (the Home ROM alone) |
 
 #### Important Limits to Keep in Mind
 
-- `RECALL` only handles complete `:`...`;` definitions, not arbitrary single lines typed outside a definition. It also cannot recall definitions longer than 128 characters or reach past the first 16 definitions found by `LIST-DEFS`.
+- The view is 32 columns wide. In 64-column mode (`64COL`, see
+  [section 13](#13-a-wider-screen)) `EDIT` prints `32COL FIRST`;
+  type `32COL` and try again.
 
-- Recalling and re-entering a definition does not erase the old, mistyped version; it simply adds the corrected version after it in the workspace. Running `LIST-DEFS` again will show both `SQURE` and `SQUARE`, which is entirely harmless since the dictionary resolves names on a newest-wins basis.
+- The store is 8 KB. When it is full, a line you enter at the prompt
+  still runs but is not kept, and `STORE FULL` is printed. Inside the
+  view, a change that would overflow the store is refused, and
+  `STORE FULL` shows on the status row until the next key.
+
+- A line is at most 128 characters, and at most 4 screen rows, the
+  same limit as the prompt. A longer line anywhere in the store makes
+  `EDIT` print `LONG LINE`. `LIST-DEFS` shows only the first 16 colon
+  definitions it finds.
+
+- Only the lines you changed or added in a visit are run when you leave.
+  Fixing a typo in the middle of a large program does not re-run the
+  rest of it.
+
+- Fixing a definition and leaving it does not erase the old, mistyped
+  version from the dictionary; it simply defines the corrected version
+  after it. Nothing is `FORGET`ten for you. `VLIST` will now show both
+  `SQUARE` and `SQURE`, which is entirely harmless since the
+  dictionary resolves names on a newest-wins basis. The store, on the
+  other hand, holds the line you edited, so `LIST-DEFS` shows only the
+  corrected `SQUARE` line.
 
 ### Summary
 
@@ -634,9 +708,9 @@ a later `LIST-DEFS` shows it too.
 
 - **Feedback Signals:** Lines provide visible feedback—`OK` on success, an unrecognized word followed by `?` on typos, and `STACK?` on stack underflow/overflow resets.
 
-- **Dictionary Inspection & Recovery:** Use `VLIST` to inspect available words, `LIST-DEFS` to review past definitions, and `RECALL` to pull and fix definitions without retyping them from scratch.
+- **Dictionary Inspection & Recovery:** Use `VLIST` to inspect available words, `LIST-DEFS` to review past definitions, and `EDIT` to open them in a full-screen view and fix them without retyping them from scratch.
 
-- **Key Words:** `VLIST`, `LIST-DEFS`, `RECALL`.
+- **Key Words:** `VLIST`, `LIST-DEFS`, `EDIT`.
 
 ### Exercises
 
@@ -657,10 +731,11 @@ a later `LIST-DEFS` shows it too.
    made visible.
 
 4. Repeat the `SQURE`/`SQUARE` example above yourself: define `SQURE`,
-   run `LIST-DEFS`, `RECALL` it, fix the name, and press Enter. Then
-   run `LIST-DEFS` one more time and confirm both the old and the
-   corrected definition are listed — the honest limit described above,
-   seen directly rather than just taken on faith.
+   run `LIST-DEFS`, then `EDIT SQURE`, fix the name, and leave with
+   BREAK. Then run `VLIST` and confirm both `SQUARE` and the old
+   `SQURE` are in the dictionary, and `LIST-DEFS` once more to see
+   that the store now holds only the corrected line — the honest limit
+   described above, seen directly rather than just taken on faith.
 
 ---
 
@@ -3476,21 +3551,29 @@ bytes `:` produced, tied to the exact ROM that compiled them. That's
 fast, but it means a tape saved by one release of 2068-Leap-Forth
 won't load into a different one.
 
-`SAVE-TEXT ( addr len "name" -- )`, `LOAD-TEXT ( "name" -- )` and
-`VERIFY-TEXT ( addr len "name" -- )` work with something different:
-the **plain source text** of a program, exactly as you'd type it.
+`SAVE-TEXT ( "name" -- )`, `LOAD-TEXT ( "name" -- )` and
+`VERIFY-TEXT ( "name" -- )` work with something different: the
+**plain source text** of your program, exactly as you typed it.
 
-- **Why an Address and Length:** Where `SAVE-LIB`/`LOAD-LIB` need no
-  addresses at all (they already know where the dictionary lives),
-  `SAVE-TEXT` takes an address and length on the stack — wherever your
-  program's source text already sits in memory — the same
-  `( addr len -- )` shape
-  [section 5](#5-reading-and-writing-memory-directly)'s string words
-  use:
+- **What `SAVE-TEXT` Saves: the Line Store:** Section 3 described the
+  line store: every line you press Enter on at the prompt, kept in
+  order, one line each. (Lines brought in by `LOAD-TEXT` and lines
+  you fixed with `EDIT` are in it too.) `SAVE-TEXT` takes no address
+  and no length; it writes that whole store to tape, one CR-ended
+  line after another. What you have typed this session is your
+  program's source, and this is how you keep it:
 
   ```forth
-  S" : DOUBLER DUP + ;" SAVE-TEXT PROGTEXT
+  : DOUBLER DUP + ;
+  5 DOUBLER .
+  SAVE-TEXT PROGTEXT
   ```
+
+  The first line defines `DOUBLER`, the second prints `10`, and the
+  third saves both lines under the name `PROGTEXT`. The `SAVE-TEXT
+  PROGTEXT` line itself is not saved: the line holding the command is
+  never kept in the store, so a tape never contains the instruction
+  that made it.
 
 Loading it back doesn't just restore a dictionary snapshot — it
 **re-runs the interpreter over the saved text**, exactly as if you'd
@@ -3498,8 +3581,29 @@ typed it at the prompt:
 
 ```forth
 LOAD-TEXT PROGTEXT
-4 DOUBLER .     \ prints 8
 ```
+
+`DOUBLER` is defined again, and then the saved `5 DOUBLER .` line
+runs and prints `10`. `LOAD-TEXT` replaces the store with the tape's
+lines and interprets them, so what you have loaded is also what a
+later `SAVE-TEXT` will save, and `EDIT` can open it.
+
+- **Everything You Typed Is Saved:** The store is the session's
+  source, not just its definitions. A line such as `5 DOUBLER .` is
+  in it, so it runs again every time the tape is loaded, and so do
+  `21 DBL .`, `VLIST` and anything else you committed. That is
+  usually what you want from a program, but not always. Before you
+  save, use `LIST-DEFS` to see your definitions and `EDIT` to fix the
+  lines, or to delete the ones you do not want saved: a line that is
+  deleted in the view is not in the store, so it is not on the tape.
+  (A line that was refused with `STORE FULL` never reached the store,
+  so it is not saved either.)
+
+- **The Command Line Is Not Source:** The line holding `SAVE-TEXT
+  NAME`, `VERIFY-TEXT NAME`, `LOAD-TEXT NAME` or `EDIT ...` is not
+  kept in the store. If it were, saving and then reloading would run
+  `SAVE-TEXT` again, or open the editor, every time. Every other line
+  you committed is kept and saved.
 
 - **Why Both Mechanisms Exist, and Which to Keep:** That re-parsing is
   the whole point: source text has no dependency on which exact ROM
@@ -3513,20 +3617,24 @@ LOAD-TEXT PROGTEXT
   replacing the other. Keep your source as text if you want to keep it
   for good.
 
-- **Checking a Text Tape: `VERIFY-TEXT`:** Give `VERIFY-TEXT` the same
-  address and length you saved, and the same name, and it compares the
-  tape with that text without changing anything:
+- **Checking a Text Tape: `VERIFY-TEXT`:** Give `VERIFY-TEXT` the name
+  you saved under, and it compares the tape with the line store
+  without changing anything:
 
   ```forth
-  S" : DOUBLER DUP + ;" 2DUP SAVE-TEXT PROGTEXT
-  \ rewind the tape, press play
+  SAVE-TEXT PROGTEXT
   VERIFY-TEXT PROGTEXT
   ```
 
-  `SAVE-TEXT` uses up the address and length it is given, so the
-  `2DUP` above keeps a second copy for the verify. The text must match
-  exactly and have exactly the same length; a single differing byte, or
-  a longer or shorter text, fails the verify.
+  (Rewind the tape and press play between the two; don't type a
+  comment line there, since every line you commit joins the store.)
+
+  The tape must match the store exactly. A single differing byte
+  fails the verify, and so does a tape of a different length, which is
+  refused just like a mismatch. Run it straight after the save,
+  before you type anything else that you would want to keep:
+  every line you commit in between joins the store, so a tape saved
+  earlier no longer matches it.
 
 ### When the Tape Goes Wrong: Errors from the Tape Words
 
@@ -3576,13 +3684,16 @@ SAVE-LIB MYPROG
 - **Core Concepts:** Two different things can be saved to tape: a
   compiled dictionary image, which is fast but tied to the exact ROM
   that built it (a new ROM release makes older images unloadable), and
-  plain source text, which is slower to load but portable because
-  loading it simply re-runs the interpreter over it. Both take the name
+  plain source text (the line store, everything you committed at the
+  prompt), which is slower to load but portable because loading it
+  simply re-runs the interpreter over it. Both take the name
   that follows them rather than a value from the stack. `SAVE-LIB`
   always writes everything defined up to that moment, and never part of
   it; `LOAD-LIB` replaces the user dictionary and, if the tape breaks
-  mid-load, leaves it empty. Each kind has a `VERIFY` word that compares
-  a tape with memory and changes nothing. Failures are `THROW`n: `-28`
+  mid-load, leaves it empty. `SAVE-TEXT` writes the whole line store,
+  except the line that holds the command itself. Each kind has a
+  `VERIFY` word that compares a tape with memory (or with the store)
+  and changes nothing. Failures are `THROW`n: `-28`
   for SPACE, `-37` for any other tape failure, `-8` for an image that
   doesn't fit.
 
@@ -3601,17 +3712,22 @@ SAVE-LIB MYPROG
    the tape. Try it, having saved something a moment before, and
    confirm you get your definitions back without retyping the name.
 
-3. `SAVE-TEXT` saves whatever address and length you hand it, and a
-   string literal is an address and a length. Save a source string
-   containing *two* definitions at once —
+3. `SAVE-TEXT` saves the line store, and the line store is whatever
+   you committed. Type two definitions —
    
    ```forth
-   S" : DOUBLER DUP + ; : QUADER DOUBLER DOUBLER ;" SAVE-TEXT PROG2
+   : DOUBLER DUP + ;
+   : QUADER DOUBLER DOUBLER ;
+   SAVE-TEXT PROG2
    ```
    
    — then `LOAD-TEXT PROG2` and check that both words exist afterwards.
-   This is the difference from `SAVE-LIB` in one line: what came back
-   was recompiled from text, not restored from an image.
+   Run `LIST-DEFS` first and see that it lists the same two. This is
+   the difference from `SAVE-LIB` in one line: what came back was
+   recompiled from text, not restored from an image. Then add a line
+   such as `3 QUADER .` before the save, load the tape again, and
+   notice that it runs on loading; use `EDIT` to delete it and save
+   again.
 
 4. Run `FREE .` from section 5 before and after a `LOAD-LIB`. The
    number changes, and by roughly the size of what you loaded — which
@@ -4727,8 +4843,8 @@ the same convention applied to the full ANS Forth standard.
 | `DOES>`     | `( -- )`        | give a `CREATE`d word its behavior; the code after it runs with that address on the stack                                          |
 | `FORGET`    | `( "name" -- )` | remove a word and everything defined after it; refuses built-ins                                                                   |
 | `VLIST`     | `( -- )`        | print every word in the dictionary, newest first — see [section 3](#seeing-what-words-exist-vlist)                            |
-| `LIST-DEFS` | `( -- )`        | list every colon definition entered so far, numbered, with a source preview — see [section 3](#fixing-a-typo-after-youve-already-pressed-enter-list-defs-and-recall) |
-| `RECALL`    | `( n -- )`      | copy `LIST-DEFS` entry `n`'s full source onto the input line for editing — see [section 3](#fixing-a-typo-after-youve-already-pressed-enter-list-defs-and-recall)    |
+| `LIST-DEFS` | `( -- )`        | list the first 16 colon definitions in the line store, numbered from 0, with a 20-character source preview — see [section 3](#fixing-a-typo-after-youve-already-pressed-enter-edit-and-list-defs) |
+| `EDIT`      | `( "name" -- )` | open the line store in a full-screen view on the last definition of `name` (with no name: on a new empty line at the end); BREAK leaves and runs the changed lines — see [section 3](#fixing-a-typo-after-youve-already-pressed-enter-edit-and-list-defs) |
 
 **Error handling** — see [section 14](#14-error-handling-throw-and-catch)
 
@@ -4814,9 +4930,9 @@ loaded, not the placeholder EXROM
 | `SAVE-LIB`    | `( "name" -- )`          | save the compiled dictionary as a binary image (tied to this ROM) |
 | `LOAD-LIB`    | `( "name" -- )`          | load a dictionary image back, replacing the user dictionary       |
 | `VERIFY-LIB`  | `( "name" -- )`          | compare a dictionary image on tape with memory                    |
-| `SAVE-TEXT`   | `( addr len "name" -- )` | save plain Forth source text (portable)                           |
+| `SAVE-TEXT`   | `( "name" -- )`          | save the line store as plain Forth source text (portable)         |
 | `LOAD-TEXT`   | `( "name" -- )`          | load and re-run saved source text                                 |
-| `VERIFY-TEXT` | `( addr len "name" -- )` | compare a text tape with the text at addr len                     |
+| `VERIFY-TEXT` | `( "name" -- )`          | compare a text tape with the line store                           |
 
 **Printer** — see [section 15](#15-printing-to-a-real-printer-lprint-and-llist)
 
