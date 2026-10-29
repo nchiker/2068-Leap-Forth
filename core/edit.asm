@@ -50,36 +50,12 @@ W_EDIT:
     push hl
     ld   hl, (SRC_PTR)
     push hl
-.restart:
-    ld   hl, STORE_START
-    ld   bc, 0                      ; line number
-.line:
-    ld   de, (STORE_END)
-    or   a
-    sbc  hl, de
-    add  hl, de
-    jr   nc, .end                   ; at (or, after a store change by a run line, past) STORE_END
-    inc  bc
-    push hl                         ; this line's start
-.byte:
-    ld   a, (hl)
-    inc  hl
-    cp   13
-    jr   z, .plain
-    cp   $8D
-    jr   nz, .byte
-    dec  hl                         ; a changed line: clear its mark, run it,
-    ld   (hl), 13                   ; and look again from the start (it may
-    pop  de                         ; have changed the store)
-    or   a
-    sbc  hl, de
-    ex   de, hl                     ; hl = the text, de = its length
+.next:
+    call EDIT_NEXT_MARK             ; the first changed line, its mark cleared (the
+    jr   z, .end                    ; search starts afresh: a run line may change the store)
     ld   (EDIT_LINE_NO), bc
     call INTERPRET_NESTED
-    jr   .restart
-.plain:
-    pop  de
-    jr   .line
+    jr   .next
 .end:
     ld   hl, 0                      ; no line running: an error in the rest of the
     ld   (EDIT_LINE_NO), hl         ; console line gets no LINE n
@@ -95,13 +71,53 @@ W_EDIT:
     DB   "NO EXROM", 13, 0
 
 ; ============================================================================
+; EDIT_NEXT_MARK -- the first changed line in the store: its mark ($8D) back to
+; $0D. Shared by EDIT's commit loop and EDIT_CLEAR_MARKS.
+; Out: NZ, HL = the line's text, DE = its length, BC = its number (from 1);
+;      Z if no line is marked
+; Destroys: AF
+; ============================================================================
+EDIT_NEXT_MARK:
+    ld   hl, STORE_START
+    ld   bc, 0
+.line:
+    ld   de, (STORE_END)
+    or   a
+    sbc  hl, de
+    add  hl, de
+    jr   nc, .none                  ; at (or, after a store change by a run line, past) STORE_END
+    inc  bc
+    push hl                         ; this line's start
+.byte:
+    ld   a, (hl)
+    inc  hl
+    cp   13
+    jr   z, .plain
+    cp   $8D
+    jr   nz, .byte
+    dec  hl
+    ld   (hl), 13
+    pop  de
+    or   a
+    sbc  hl, de
+    ex   de, hl                     ; hl = the text, de = its length
+    or   a                          ; NZ (A = $8D)
+    ret
+.plain:
+    pop  de
+    jr   .line
+.none:
+    xor  a
+    ret
+
+; ============================================================================
 ; EDIT_CLEAR_MARKS -- every changed-line mark ($8D) in the store back to $0D;
 ; EDITOR_LOOP_LIVE calls it when EDIT was the last thing to run (VIEW_RESULT
 ; not 0): the commit loop above clears a line's mark just before it runs, so
 ; marks are left only when a line raised an error (or ABORT/QUIT) and the
 ; whole run unwound to the console, and they must not outlive the session.
 ; Out: VIEW_RESULT = 0, EDIT_LINE_NO = 0
-; Destroys: AF, BC, HL
+; Destroys: AF, BC, DE, HL
 ; ============================================================================
 EDIT_CLEAR_MARKS:
     xor  a
@@ -109,21 +125,9 @@ EDIT_CLEAR_MARKS:
     ld   h, a
     ld   l, a
     ld   (EDIT_LINE_NO), hl         ; the run unwound past the commit loop's own reset
-    ld   hl, (STORE_END)
-    ld   bc, STORE_START
-    sbc  hl, bc                     ; (carry is clear after XOR)
-    ret  z
-    ld   b, h
-    ld   c, l
-    ld   hl, STORE_START
-    ld   a, $8D
 .next:
-    cpir
-    ret  nz
-    dec  hl
-    ld   (hl), 13
-    inc  hl
-    jp   pe, .next                  ; bytes left
+    call EDIT_NEXT_MARK
+    jr   nz, .next
     ret
 
 ; ============================================================================
