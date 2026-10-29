@@ -3,7 +3,8 @@
 
 A port of the `save` case of 2068-Leap-C's tools/fusetest.py to the Forth ROM.  For each word a headless Fuse
 (tools/fusedrive.py) boots the build, a short definition is typed, Fuse's tape deck starts recording, the word is
-run (`S" : DBL DUP + ; 21 DBL ." SAVE-TEXT TXTSAVE`; `SAVE-LIB LIBA` after `: SQ DUP * ; : CUBE DUP SQ * ;`) and
+run (`SAVE-TEXT TXTSAVE` after the lines `: DBL DUP + ;` and `21 DBL .`, which build the line store; `SAVE-LIB LIBA` after
+`: SQ DUP * ; : CUBE DUP SQ * ;`) and
 the recording is written as a TZX.  The ROM's own MIC edges are then decoded by fuse-utils, not by this project:
 `tape2wav` renders the recording as audio and `audio2tape` decodes the audio back into blocks.  Those blocks are
 compared with what docs/V2/STORAGE_SPEC.md section 4 says they must be:
@@ -11,7 +12,8 @@ compared with what docs/V2/STORAGE_SPEC.md section 4 says they must be:
   header block   flag $00, 17-byte payload, XOR checksum good: type (0 TEXT / 3 LIB), name (10, space padded),
                  data length (TEXT: the text length; LIB: dictionary length + 2), param 1 ($8000 / ROM_IDENTITY),
                  param 2 (text length / LATEST)
-  data block     flag $FF, XOR checksum good: TEXT: the text bytes; LIB: the dictionary $9800..HERE-1 read from
+  data block     flag $FF, XOR checksum good: TEXT: the line store, i.e. the typed lines each + CR (the console appends
+                 every committed line; STORE_TRIM removes the SAVE-TEXT line itself, docs/V2/EDITOR_SPEC.md section 3); LIB: the dictionary $9800..HERE-1 read from
                  Fuse's memory, then CRC-16/CCITT-FALSE of it, low byte then high byte
 
 and SAVE-LIB must leave HERE and LATEST alone.  Then the recording is played into a fresh Fuse (tape traps off) with
@@ -46,7 +48,8 @@ import fusedrive                        # noqa: E402
 import tapes                            # noqa: E402
 
 ROOT = os.path.dirname(HERE)
-TEXT = b": DBL DUP + ; 21 DBL ."
+TEXT_LINES = [": DBL DUP + ;", "21 DBL ."]                 # typed one by one: they run and the console appends them to the store
+TEXT = b"".join(l.encode() + b"\r" for l in TEXT_LINES)    # what SAVE-TEXT must write: the store, the command line trimmed
 LIB_SETUP = ": SQ DUP * ; : CUBE DUP SQ * ;"
 
 
@@ -200,8 +203,7 @@ def run(build, work, rep):
     # ------------------------------------------------------------------------------------ SAVE-TEXT
     wd = os.path.join(work, "text")
     os.makedirs(wd)
-    rec, before, after, returned, secs, screen = record(
-        build, wd, [], 'S" %s" SAVE-TEXT TXTSAVE' % TEXT.decode(), snap)
+    rec, before, after, returned, secs, screen = record(build, wd, TEXT_LINES, "SAVE-TEXT TXTSAVE", snap)
     rep.check("SAVE-TEXT: returned", returned, "%.1f s emulated, screen: %s" % (secs, screen))
     try:
         blocks, dec = independent_decode(rec, wd)
