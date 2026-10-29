@@ -148,7 +148,8 @@ instead of `$0D`. Outside the view every terminator is `$0D` (E6's commit clears
 - *LOAD-TEXT*: the tape's data replaces the store (as today, up to 8,192 bytes); if its last byte is not CR, a CR is
   added when there is room. Then the store is interpreted, as today. An error in the loaded text (an unknown word,
   an uncaught THROW) stops the interpretation with the console's usual message and leaves the machine, the
-  dictionary built so far and the store intact; `THROW_ROOT_SP` is the outer interpreter's again afterwards. Lines longer than 128 characters (an old
+  dictionary built so far and the store intact; `THROW_ROOT_SP` is the outer interpreter's again afterwards. On success, the
+  rest of the console line after `LOAD-TEXT name` is interpreted (the outer run's `SRC_PTR`/`SRC_END` are kept). Lines longer than 128 characters (an old
   space-separated text) are kept as they are: the console interprets them, and `EDIT` refuses while one exists.
 - *SAVE-TEXT*, *VERIFY-TEXT*: the bytes `STORE_START` to `STORE_END`, unchanged format.
 - `WORD` treats every byte from 0 to space as a delimiter (E1).
