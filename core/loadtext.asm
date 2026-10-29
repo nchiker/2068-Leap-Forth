@@ -7,8 +7,8 @@
 ; STORAGE_NO_AUTOSTART, parameter 2 = the length), then the text bytes (the format V1 used, which is
 ; not a requirement: spec D2) and the format tools/tape_gen_forth.py writes.
 ;
-; LOAD-TEXT receives into LOADTEXT_BUF (the top LOADTEXT_MAX_LEN bytes below DICT_RAM_CEILING),
-; which stays resident afterwards as core/recall.asm's workspace, and interprets it.
+; LOAD-TEXT receives into STORE_START = LOADTEXT_BUF (the top LOADTEXT_MAX_LEN bytes below DICT_RAM_CEILING),
+; which stays resident afterwards as the line store (core/recall.asm), and interprets it.
 ;
 ; Errors are THROWn as in core/storage.asm (-28 SPACE, -37 any other tape failure; core/tapeword.asm).
 ; Needs core/dict.asm, core/interp.asm (INTERPRET_RUN), core/throwcatch.asm and
@@ -20,15 +20,18 @@
 
     INCLUDE "core/tapeword.asm"
 
-; ---- Phase 64 (core/recall.asm) workspace-end tracking: here because W_LOADTEXT sets it;
-; core/recall.asm, INCLUDEd after this file, reads it. In the $8426-$8FFF gap below core/float.asm's
-; FSTACK_LIMIT ($8C00). ----
-WORKSPACE_END EQU $8A74     ; 2 bytes: one past the last valid byte in LOADTEXT_BUF, the append
-                            ; cursor of core/recall.asm's WORKSPACE_APPEND. Set after a successful
-                            ; LOAD-TEXT; SAVE-TEXT and VERIFY-TEXT leave it alone
+; ---- The line store (audit step E, docs/V2/EDITOR_SPEC.md section 3): $D000-$EFFF, plain text, every line
+; ended by CR. STORE_END is the Phase 64 workspace-end cell under its new name (same address); it is in the
+; $8426-$8FFF gap below core/float.asm's FSTACK_LIMIT ($8C00). ----
+STORE_END EQU $8A74         ; 2 bytes: one past the last valid byte in the store, the append cursor of
+                            ; core/recall.asm's STORE_APPEND. Set by LOAD-TEXT; SAVE-TEXT and VERIFY-TEXT
+                            ; leave it alone
 
 LOADTEXT_MAX_LEN EQU 8192
 LOADTEXT_BUF     EQU DICT_RAM_CEILING - LOADTEXT_MAX_LEN   ; $D000 with today's $F000 ceiling
+STORE_START      EQU LOADTEXT_BUF
+STORE_LIMIT      EQU STORE_START + LOADTEXT_MAX_LEN        ; $F000: the store never writes at or above it
+    ASSERT (STORE_LIMIT & $FF) == 0   ; LOAD-TEXT's room test below looks at the high byte only
 
 ; ============================================================================
 ; SAVE-TEXT ( addr len "name" -- )
@@ -80,7 +83,14 @@ W_VERIFYTEXT:
     jp   STORAGE_END
 
 ; ============================================================================
-; LOAD-TEXT ( "name" -- ) -- load a text tape into LOADTEXT_BUF and interpret it
+; LOAD-TEXT ( "name" -- ) -- load a text tape into the store and interpret it
+;
+; Product build (TRACK_STORE_END): STORE_END = start + length, then a CR is added if the last byte is not
+; CR and there is room. The text is interpreted by INTERPRET_NESTED (core/interp.asm), so THROW_ROOT_SP
+; stays the outer run's: an error in the loaded text (unknown word, uncaught THROW, ABORT) unwinds, past
+; this routine, to the outermost caller after printing its usual message -- the rest of the console line
+; is abandoned with it. On success the outer run's SRC_PTR/SRC_END (just past the name) are restored and
+; the rest of the line goes on.
 ; ============================================================================
 H_LOADTEXT:
     DW   H_VERIFYTEXT
@@ -96,23 +106,45 @@ W_LOADTEXT:
     or   a
     sbc  hl, de
     jp   c, STORAGE_REFUSED
-    ld   ix, LOADTEXT_BUF
+    ld   ix, STORE_START
     scf                                 ; load
     call STORAGE_LOAD_DATA
     jp   c, STORAGE_END
     pop  ix
     ei
-    ld   de, (STORAGE_HEADER_BUF + STORAGE_HEADER_LENGTH_OFF)
-    ld   hl, LOADTEXT_BUF               ; INTERPRET_RUN: HL = source, DE = length
-    ; TRACK_WORKSPACE_END: only rom/forth_boot.asm DEFINEs it, the one ROM with core/recall.asm
-    ; (WORKSPACE_END's only reader); other ROMs skip the bookkeeping.
-    IFDEF TRACK_WORKSPACE_END
+    ld   hl, (SRC_END)                  ; the outer run's source pointers survive the nested run
     push hl
-    add  hl, de
-    ld   (WORKSPACE_END), hl
+    ld   hl, (SRC_PTR)
+    push hl
+    ld   de, (STORAGE_HEADER_BUF + STORAGE_HEADER_LENGTH_OFF)
+    ld   hl, STORE_START                ; INTERPRET_NESTED: HL = source, DE = length
+    ; TRACK_STORE_END: only rom/forth_boot.asm DEFINEs it, the one ROM with core/recall.asm
+    ; (STORE_END's only reader); other ROMs skip the bookkeeping.
+    IFDEF TRACK_STORE_END
+    push hl
+    add  hl, de                         ; hl = end of the text
+    ld   a, d
+    or   e
+    jr   z, .store_end                  ; an empty tape: nothing to end
+    dec  hl
+    ld   a, (hl)
+    inc  hl
+    cp   13
+    jr   z, .store_end
+    ld   a, h
+    cp   STORE_LIMIT / 256
+    jr   nc, .store_end                 ; no room for the CR
+    ld   (hl), 13
+    inc  hl
+.store_end:
+    ld   (STORE_END), hl
     pop  hl
     ENDIF
-    call INTERPRET_RUN
+    call INTERPRET_NESTED
+    pop  hl
+    ld   (SRC_PTR), hl
+    pop  hl
+    ld   (SRC_END), hl
     ret
 
 DICT_LATEST_INIT_LOADTEXT EQU H_LOADTEXT   ; head of the dictionary once this file is the last one

@@ -116,8 +116,9 @@ THROW_ROOT_SP     EQU $8542   ; 2 bytes: SP snapshotted at INTERPRET_RUN's
 
 ; ============================================================================
 ; W_WORD ( -- addr )
-; Skips leading spaces from SRC_PTR, copies the next run of non-space
-; characters into WORD_BUF as a counted string (count byte, then the
+; Skips leading whitespace (every byte from 0 to space: CR and TAB are
+; delimiters too, audit step E1) from SRC_PTR, copies the next run of
+; non-whitespace characters into WORD_BUF as a counted string (count byte, then the
 ; characters), advances SRC_PTR past what it consumed, and pushes
 ; WORD_BUF's address. An empty result (count byte = 0) means SRC_PTR
 ; had already reached SRC_END — the caller's signal that input is
@@ -135,8 +136,8 @@ W_WORD:
     jr   z, .empty
 .skip_continue:
     ld   a, (hl)
-    cp   " "
-    jr   nz, .foundstart
+    cp   " " + 1             ; every byte from 0 to space is whitespace
+    jr   nc, .foundstart     ; (CR and TAB included: the line store's CR-ended lines)
     inc  hl
     ld   (SRC_PTR), hl
     jr   .skip
@@ -156,8 +157,8 @@ W_WORD:
     jr   z, .donecopy        ; SRC_PTR reached SRC_END: word ends here
 .copy_continue:
     ld   a, (hl)
-    cp   " "
-    jr   z, .donecopy_consume
+    cp   " " + 1
+    jr   c, .donecopy_consume
     ; Uppercase a-z to A-Z before storing. REAL BUG, found only by a
     ; human typing at a live keyboard (rom/forth_boot.asm, confirmed
     ; via a real memory-dump snapshot showing WORD_BUF holding lowercase
@@ -555,6 +556,14 @@ DICT_LATEST_INIT_P3 EQU H_SEMICOLON   ; head of the dictionary as of Phase 3;
 ; Runs the outer interpreter over one fixed source buffer until W_WORD
 ; reports an empty token (input exhausted), then returns. This is a
 ; batch entry point, not a live REPL — see this file's own header.
+;
+; INTERPRET_NESTED is the same routine entered one instruction later: it
+; does not snapshot THROW_ROOT_SP. THROW_ROOT_SP is therefore always the
+; OUTERMOST run's SP, so an error in a nested run (LOAD-TEXT interpreting
+; its text) unwinds (REPORT_INTERP_ERROR, THROW, ABORT, QUIT) all the way
+; to the outermost caller, abandoning the nested text AND the rest of the
+; outer line. A nested run that succeeds returns to its caller, which
+; saves and restores SRC_PTR/SRC_END around it (core/loadtext.asm).
 ; ============================================================================
 INTERPRET_RUN:
     IFDEF THROW_CATCH_ENABLED
@@ -568,12 +577,14 @@ INTERPRET_RUN:
                                  ; header, and STACK_CHECK's own
                                  ; violation path just below for the
                                  ; existing precedent this mirrors).
-                                 ; Captured once, at INTERPRET_RUN's own
-                                 ; entry, not per-word: SP here is fixed
+                                 ; Captured once, at the OUTERMOST
+                                 ; INTERPRET_RUN's own entry (INTERPRET_NESTED
+                                 ; skips it), not per-word: SP here is fixed
                                  ; for this entire call, since .loop's
                                  ; own dispatch always fully unwinds
                                  ; back to it between words.
     ENDIF
+INTERPRET_NESTED:
     ld   (SRC_PTR), hl
     add  hl, de
     ld   (SRC_END), hl

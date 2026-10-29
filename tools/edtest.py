@@ -495,7 +495,7 @@ def boot_console(env, part):
     ck.eq("wrap table", wrap_table(m), (1, [(0, 0)], 0))
     ck.eq("FWRAP_OLD_COUNT", env.u8("FWRAP_OLD_COUNT"), 1)
     ck.eq("GFX_MODE", env.u8("GFX_MODE"), 0)
-    ck.eq("WORKSPACE_END", m.w16(env.S("WORKSPACE_END")), env.S("LOADTEXT_BUF"))
+    ck.eq(end_name(env), m.w16(env.S(end_name(env))), env.S("LOADTEXT_BUF"))
     ck.note("row 0 %r, rows 1-23 blank, cursor (23, 0) attribute $%02X, other attributes $%02X, PRINT_ROW 1, workspace empty" % (
         BANNER, cur_attr, m.S.get("ATTR_DEFAULT", 0x44)))
     return ck.result()
@@ -941,14 +941,16 @@ def enter_interprets(env, part):
 
 # ===================================================================== 12 workspace append
 def ws_text(m):
-    n = m.w16(m.sym("WORKSPACE_END")) - m.sym("LOADTEXT_BUF")
+    end = "STORE_END" if "STORE_END" in m.S else "WORKSPACE_END"
+    n = m.w16(m.sym(end)) - m.sym("LOADTEXT_BUF")
     return m.read(m.sym("LOADTEXT_BUF"), n).decode("latin-1")
 
 
-@case("workspace-append", "each committed line (an error line and an empty line included) is appended to the workspace at LOADTEXT_BUF "
-                          "with one space before it if the workspace is not empty; WORKSPACE_END follows; the bytes beyond stay "
-                          "zero; a line of 128 characters is appended whole; the length test looks at the high byte only (an append "
-                          "may run past LOADTEXT_BUF + 8192 by up to 255 bytes)", parts=("append", "limit"))
+@case("workspace-append", "each committed line (an error line included, an empty line not) is appended to the store at LOADTEXT_BUF "
+                          "as its text and one CR; STORE_END follows; the bytes beyond stay zero; a line of 128 characters is "
+                          "appended whole; the room test is exact: a line whose text and CR end exactly at $F000 is appended, one "
+                          "byte more is refused with STORE FULL on its own row (the line still runs) and nothing at or above $F000 "
+                          "changes (EDITOR_SPEC E1, E5, section 3)", parts=("append", "limit"))
 def workspace_append(env, part):
     ck, m = Check(), env.m
     buf = env.S("LOADTEXT_BUF")
@@ -959,29 +961,34 @@ def workspace_append(env, part):
         model = ""
         for line in ["1 2 + .", "5 6 *", "", "foo", "DROP", "7 ."]:
             con.type(line)
-            model = model + (" " if model else "") + line
-            ck.eq("workspace after %r" % line, ws_text(m), model)
-            ck.eq("WORKSPACE_END after %r" % line, m.w16(env.S("WORKSPACE_END")), buf + len(model))
+            if line:
+                model = model + line + "\r"
+            ck.eq("store after %r" % line, ws_text(m), model)
+            ck.eq("%s after %r" % (end_name(env), line), store_end(env), buf + len(model))
         ck.eq("zero beyond", m.read(buf + len(model), 32), bytes(32))
         long = ("a" * 7 + " ") * 16
         con.type(long)
-        model = model + " " + long
+        model = model + long + "\r"
         ck.eq("128-character line appended whole", ws_text(m), model)
-        ck.note("workspace %r, 128-char line appended whole (workspace %d bytes); an empty line adds just its separator" % (
-            model[:44], len(model)))
+        ck.note("store %r, 128-char line appended whole (store %d bytes); an empty line appends nothing" % (model[:44], len(model)))
     else:
+        pat = seed_above_limit(env)
         end = buf + 8192 - 16
-        m.poke16(env.S("WORKSPACE_END"), end)
-        con.type("1234567890123456789012")
-        ck.eq("22-char line at 16 bytes from the end: WORKSPACE_END", m.w16(env.S("WORKSPACE_END")), end + 1 + 22)
-        ck.eq("the line, a space before it, from the old end", m.read(end, 23), b" 1234567890123456789012")
-        ck.eq("its last 7 characters are in $F000-$F006, past LOADTEXT_BUF + 8192", m.read(buf + 8192, 7), b"6789012")
+        m.poke16(env.S(end_name(env)), end)
+        con.type("1 2 + . 3 DROP ")                                     # 15 characters + CR = 16 bytes: fits exactly
+        ck.eq("15-char line at 16 bytes from the end: %s" % end_name(env), store_end(env), STORE_LIMIT)
+        ck.eq("the line and its CR from the old end", m.read(end, 16), b"1 2 + . 3 DROP \r")
+        ck.eq("no STORE FULL", count_row(env, "STORE FULL"), 0)
         env.boot()
-        m.poke16(env.S("WORKSPACE_END"), buf + 8432)
-        con.type("A" * 100)
-        ck.eq("refused when the high byte of (length + line + 1) reaches 33", m.w16(env.S("WORKSPACE_END")), buf + 8432)
-        ck.note("current behaviour: an append that ends at workspace length 8193-8447 is written ($F000-$F0FE, past the "
-                "end of the workspace); only length >= 8448 is refused")
+        pat = seed_above_limit(env)
+        m.poke16(env.S(end_name(env)), end)
+        con.type("1 2 + .  3 DROP ")                                    # 16 characters + CR = 17 bytes: one too many
+        ck.eq("16-char line at 16 bytes from the end: %s unchanged" % end_name(env), store_end(env), end)
+        ck.eq("STORE FULL on its own row", count_row(env, "STORE FULL"), 1)
+        ck.true("the refused line still ran (3 on the screen)", "3" in digits(out_rows(env)), str(out_rows(env)[-3:]))
+        ck.eq("bytes from the end still zero", m.read(end, 16), bytes(16))
+        eq_bytes(ck, "$F000-$F0FF untouched", read_above_limit(env), pat)
+        ck.note("a line ending exactly at $F000 is appended; one byte more is refused with STORE FULL and still runs")
     return ck.result()
 
 
@@ -1012,7 +1019,7 @@ def recall(env, part):
     ck.eq("after ENTER: edit line", env.edit_state(), ("", 0))
     ck.eq("after ENTER: rows", view(m).rows[:6], [BANNER, "OK", "9 OK", "OK", "OK", ""])
     ws = ws_text(m)
-    ck.eq("workspace", ws, ": SQ DUP * ; 3 SQ . 0 RECALL : SQ DUP * DUP * ;")
+    ck.eq("workspace", ws, ": SQ DUP * ;\r3 SQ .\r0 RECALL\r: SQ DUP * DUP * ;\r")
     con.type("3 SQ .")
     ck.eq("new SQ: 3 SQ .", view(m).rows[5], "81 OK")
     con.type("LIST-DEFS")
@@ -2096,7 +2103,8 @@ def cr_whitespace(env, part, ck):
             ck.true("the machine kept running", False, "LOAD-TEXT restarted the machine (cold start: seed, store, KEEP gone); "
                     "screen %s" % _short(rows[:5]))
             return
-        ck.true("FOO ? on the screen", "FOO ?" in rows, _short(rows[:6]))
+        # (`1 .` leaves the print column after "1 ", so the message follows it on the same row: '1 FOO ?')
+        ck.true("FOO ? on the screen", any(r == "FOO ?" or r.endswith(" FOO ?") for r in rows), _short(rows[:6]))
         ck.eq("1 printed by the first line, nothing from the rest (rows below the banner)", digits(rows[1:]), ["1"])
         ck.eq("banner kept", rows[0], BANNER)
         ck.true("back at the console key wait", env.con.in_editor() and env.edit_state() == ("", 0))

@@ -304,5 +304,10 @@ implements (all of them by the last step, when plain `make edtest` must pass); `
 
 - No hardware: every result is ZEsarUX running the ROM images. Key presses through `Console.press` are held until the
   ISR accepts them, so contact bounce and fast typing on a real keyboard are not exercised.
+- **Fuse 1.9.1 crash** (found at step E item 3): with one particular image layout (item 3's first draft, HOME 1,114 B
+  free), `make fusesave-cross` dies: Fuse aborts with a glibc malloc assertion inside its own `tape_write` while
+  recording `SAVE-LIB` of `: CUBE DUP DUP * * ;`. The same layout's `SAVE-LIB` captured on ZEsarUX decodes
+  correctly and round-trips (`tools/tapetest.py --case 4`), and 1 or 3 bytes more or less make Fuse pass. A Fuse
+  defect, not the ROM's; if a later layout trips it, check `tapetest --case 4` on that build before suspecting the ROM.
 - The screen is read from video RAM; flicker is judged by the full-redraw oracle (no intermediate frame differs from
   a full redraw at the key wait), not by watching a display.

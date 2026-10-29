@@ -221,14 +221,14 @@ COLD_CLEAR_END EQU UDG_TABLE + UDG_COUNT * 8
                                     ; core/loadtext.asm's own tail)
     ld   (LATEST), hl
 
-    ; Phase 64 (core/recall.asm): WORKSPACE_END starts undefined RAM at
-    ; cold boot -- must be LOADTEXT_BUF (an empty workspace) before the
-    ; first live-typed line's own WORKSPACE_APPEND call (core/editor.asm's
+    ; Phase 64 (core/recall.asm): STORE_END starts undefined RAM at
+    ; cold boot -- must be STORE_START (an empty store) before the
+    ; first live-typed line's own STORE_APPEND call (core/editor.asm's
     ; EDITOR_LOOP_LIVE), or that call reads garbage and can write outside
     ; LOADTEXT_BUF entirely. A later LOAD-TEXT resets it again to cover
     ; exactly what it received (core/loadtext.asm's own W_LOADTEXT).
-    ld   hl, LOADTEXT_BUF
-    ld   (WORKSPACE_END), hl
+    ld   hl, STORE_START
+    ld   (STORE_END), hl
     ld   hl, FORTH_DICT_RAM
     ld   (HERE), hl
     xor  a
@@ -455,6 +455,12 @@ REPORT_INTERP_ERROR:              ; shared tail with RUNTIME_ERROR_HOOK's
                                    ; its own OK for this line -- see
                                    ; INTERP_ERROR_FLAG's own header
                                    ; (core/interp.asm)
+    ld   sp, (THROW_ROOT_SP)      ; back to the OUTERMOST INTERPRET_RUN's
+                                   ; caller, even from a nested run
+                                   ; (LOAD-TEXT's text): the whole
+                                   ; interpretation stops, not just the
+                                   ; innermost run. A no-op at the
+                                   ; outermost level.
     ret
 
 ; ============================================================================
@@ -632,8 +638,8 @@ DICT_CHAIN_POINT DEFL H_OUT
 DICT_CHAIN_POINT DEFL H_FORGET
     INCLUDE "core/udg.asm"
 DICT_CHAIN_POINT DEFL H_UDG
-    DEFINE TRACK_WORKSPACE_END   ; opt in to core/loadtext.asm's
-                                 ; WORKSPACE_END tracking -- see that
+    DEFINE TRACK_STORE_END       ; opt in to core/loadtext.asm's
+                                 ; STORE_END tracking -- see that
                                  ; file's own W_LOADTEXT comment on why
                                  ; this must be a per-ROM opt-in, not
                                  ; unconditional

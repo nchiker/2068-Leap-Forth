@@ -24,13 +24,13 @@ pad = 0xFF
 [[image]]
 file   = "forth_boot_rom0.bin"
 title  = "HOME ROM (Forth)"
-floor  = 1132
+floor  = 1116
 target = 200
 
 [[image]]
 file   = "forth_boot_cart.bin"
 title  = "HOME, DOCK cartridge build (Forth)"
-floor  = 1132
+floor  = 1116
 target = 200
 
 [[image]]
@@ -65,3 +65,6 @@ target = 150
 #     802 -> 801 (-1 B), step S follow-up (owner, 2026-10-28): the Home and cartridge builds share LIB tapes. The
 #     cartridge's EXROM page-in is padded to the Home one's length and both page-outs use a 2-byte `ld a,n`, so every
 #     address matches (kernel/bank/bank.asm, STORAGE_SPEC.md D3); the audit's section 9 row "S follow-up".
+#   forth_boot_rom0.bin and forth_boot_cart.bin: 1132 -> 1116 (-16 B), step E item 3 (docs/V2/EDITOR_SPEC.md
+#     section 9): the line store's exact room check and STORE FULL, LOAD-TEXT's final CR, source-pointer save and
+#     nested entry, the error unwind to the outermost interpreter; the audit's section 9 row "E item 3".

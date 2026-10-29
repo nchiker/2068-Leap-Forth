@@ -9,7 +9,7 @@
 ; needs a live or injected keyboard, genuinely out of reach for an
 ; automated border-color smoke ROM). Deliberately does NOT INCLUDE
 ; core/loadtext.asm or core/editor.asm — LOADTEXT_BUF/LOADTEXT_MAX_LEN/
-; WORKSPACE_END and EDIT_BUF/EDIT_LEN/EDIT_CURSOR/EDIT_MAX_LEN are
+; STORE_END and EDIT_BUF/EDIT_LEN/EDIT_CURSOR/EDIT_MAX_LEN are
 ; redeclared here as the SAME literal values those files use (confirmed
 ; by direct comparison, not guessed), avoiding kernel/storage's own
 ; fake-tape harness and core/editor.asm's kernel/io dependency entirely
@@ -37,9 +37,8 @@
 ;      EDIT_LEN/EDIT_CURSOR to 12, and sets RECALL_PENDING.
 ;   5. RECALL(2) -- out of range (DEF_COUNT is 2) -- is a no-op: EDIT_LEN
 ;      is unchanged from a poisoned sentinel value.
-;   6. WORKSPACE_APPEND: appending to an empty workspace adds no
-;      separator; appending again DOES insert exactly one separating
-;      space, and WORKSPACE_END advances correctly both times.
+;   6. STORE_APPEND: each append is the text plus one CR (no separating space),
+;      STORE_END advances by length + 1 each time, and an empty line appends nothing.
 ;
 ; Border goes GREEN (4) if all six pass; otherwise it shows the failing
 ; checkpoint's number.
@@ -66,7 +65,9 @@ NMI_ENTRY:
 ; see this file's own header on why they're redeclared, not INCLUDEd.
 LOADTEXT_BUF     EQU $D000
 LOADTEXT_MAX_LEN EQU 8192
-WORKSPACE_END    EQU $8A74
+STORE_START      EQU LOADTEXT_BUF
+STORE_LIMIT      EQU STORE_START + LOADTEXT_MAX_LEN
+STORE_END        EQU $8A74
 EDIT_BUF         EQU $8860
 EDIT_LEN         EQU $88E0
 EDIT_CURSOR      EQU $88E1
@@ -74,6 +75,9 @@ EDIT_MAX_LEN     EQU 128
 
 PRINT_UDEC16:
     ret                          ; stub -- see this file's own header
+FORGET_PRINT_MSG:
+    ret                          ; stub: STORE_APPEND's STORE FULL path is not exercised here
+                                 ; (tools/edtest.py case 12 covers it on the product ROM)
 
 ; ============================================================================
 ; COLD_START
@@ -89,7 +93,7 @@ COLD_START:
     ld   hl, LOADTEXT_BUF
     ld   de, TESTSRC_LEN
     add  hl, de
-    ld   (WORKSPACE_END), hl
+    ld   (STORE_END), hl
 
 ; ---- checkpoint 1: SCAN_DEFS finds exactly 2 definitions ----
     ld   a, 1
@@ -174,37 +178,48 @@ COLD_START:
     cp   99
     jp   nz, FAIL_TEST
 
-; ---- checkpoint 6: WORKSPACE_APPEND -- no separator into an empty
-; workspace, exactly one separator on the next append ----
+; ---- checkpoint 6: STORE_APPEND -- text + CR, no separator; an empty line appends nothing ----
     ld   a, 6
     ld   (CHECKPOINT_NUM), a
     ld   hl, LOADTEXT_BUF
-    ld   (WORKSPACE_END), hl
+    ld   (STORE_END), hl
     ld   hl, APPEND_X
     ld   b, 1
-    call WORKSPACE_APPEND
-    ld   hl, (WORKSPACE_END)
-    ld   de, LOADTEXT_BUF + 1
+    call STORE_APPEND
+    ld   hl, (STORE_END)
+    ld   de, LOADTEXT_BUF + 2
     or   a
     sbc  hl, de
     jp   nz, FAIL_TEST
     ld   a, (LOADTEXT_BUF)
     cp   "X"
     jp   nz, FAIL_TEST
+    ld   a, (LOADTEXT_BUF + 1)
+    cp   13
+    jp   nz, FAIL_TEST
 
     ld   hl, APPEND_Y
     ld   b, 1
-    call WORKSPACE_APPEND
-    ld   hl, (WORKSPACE_END)
-    ld   de, LOADTEXT_BUF + 3
+    call STORE_APPEND
+    ld   hl, (STORE_END)
+    ld   de, LOADTEXT_BUF + 4
     or   a
     sbc  hl, de
     jp   nz, FAIL_TEST
-    ld   a, (LOADTEXT_BUF + 1)
-    cp   " "
-    jp   nz, FAIL_TEST
     ld   a, (LOADTEXT_BUF + 2)
     cp   "Y"
+    jp   nz, FAIL_TEST
+    ld   a, (LOADTEXT_BUF + 3)
+    cp   13
+    jp   nz, FAIL_TEST
+
+    ld   hl, APPEND_Y
+    ld   b, 0
+    call STORE_APPEND
+    ld   hl, (STORE_END)
+    ld   de, LOADTEXT_BUF + 4
+    or   a
+    sbc  hl, de
     jp   nz, FAIL_TEST
 
     jp   PASS_TEST

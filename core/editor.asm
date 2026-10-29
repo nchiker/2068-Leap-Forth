@@ -1066,7 +1066,7 @@ EDITOR_LOOP_LIVE:
     ld   hl, EDIT_BUF
     ld   a, (EDIT_LEN)
     ld   b, a
-    call WORKSPACE_APPEND
+    call STORE_APPEND
     ENDIF
 
     ld   hl, EDIT_BUF

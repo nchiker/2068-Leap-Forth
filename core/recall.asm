@@ -1,7 +1,7 @@
 ; ============================================================================
 ; core/recall.asm — Phase 64: LIST-DEFS / RECALL, live-typo correction
 ;
-; Builds on core/loadtext.asm (LOADTEXT_BUF, WORKSPACE_END — the latter
+; Builds on core/loadtext.asm (LOADTEXT_BUF = STORE_START, STORE_END — the latter
 ; set there, by LOAD-TEXT, on the same file's own reasoning) and
 ; core/editor.asm (EDIT_BUF/EDIT_LEN/EDIT_CURSOR, EDITOR_LOOP_LIVE).
 ;
@@ -11,7 +11,7 @@
 ; definition, the broken source is simply gone. LOAD-TEXT's own
 ; LOADTEXT_BUF, by contrast, DOES stay resident after a load. This file
 ; makes both cases work the same way: every line committed at the live
-; prompt gets appended into that same persistent buffer (WORKSPACE_APPEND,
+; prompt gets appended into that same persistent buffer (STORE_APPEND,
 ; called from core/editor.asm's EDITOR_LOOP_LIVE — see that file's own
 ; updated header), so anything typed OR loaded can later be recalled.
 ;
@@ -44,8 +44,8 @@
 ;     RECALLed — .too_long reports this rather than silently truncating.
 ;   - the workspace (LOADTEXT_MAX_LEN, 8192 bytes, shared with LOAD-TEXT's
 ;     own receive buffer) slowly fills with stale superseded copies over
-;     a long editing session; WORKSPACE_APPEND simply stops appending
-;     once full rather than overflowing into dictionary RAM above it —
+;     a long editing session; STORE_APPEND refuses an append that does not
+;     fit (and says STORE FULL) rather than overflowing into dictionary RAM above it —
 ;     same class of documented-not-guarded scope as LOAD-TEXT's own
 ;     buffer-overlap caveat.
 ;   - DEF_TABLE below caps at DEF_TABLE_MAX (16) definitions per scan;
@@ -65,13 +65,13 @@ RECALL_PENDING EQU $88F6   ; 1 byte: set by W_RECALL, cleared by
                            ; reset just once, so the recalled text
                            ; survives past RECALL's own line finishing.
 
-; ---- DEF_COUNT/DEF_TABLE: same confirmed-idle gap as WORKSPACE_END
+; ---- DEF_COUNT/DEF_TABLE: same confirmed-idle gap as STORE_END
 ; (core/loadtext.asm), continuing right after it ($8A74-$8A75). ----
 DEF_TABLE_MAX  EQU 16
 DEF_COUNT      EQU $8A76   ; 1 byte: how many spans SCAN_DEFS found
                            ; (0-DEF_TABLE_MAX)
 DEF_TABLE      EQU $8A77   ; DEF_TABLE_MAX*4 bytes: per entry, 2-byte
-                           ; start offset from LOADTEXT_BUF + 2-byte
+                           ; start offset from STORE_START + 2-byte
                            ; length. Ends $8AB7, still well before
                            ; core/float.asm's own FSTACK_LIMIT ($8C00).
 
@@ -79,80 +79,55 @@ RECALL_SCAN_PTR   EQU $8AB7   ; 2 bytes: SCAN_DEFS's own scratch
 RECALL_SPAN_START EQU $8AB9   ; 2 bytes: SCAN_DEFS's own scratch
 
 ; ============================================================================
-; WORKSPACE_APPEND ( HL = addr, B = len -- )
-; Appends B bytes at HL to the workspace at WORKSPACE_END, with a single
-; leading space separator if the workspace is already non-empty (keeps
-; INTERPRET_RUN's own space-delimited tokenizing from gluing the last
-; word of the previous entry to the first word of this one). Stops
-; silently, appending nothing, if it wouldn't fit — see this file's own
-; header on why that's a documented limit, not a guarded one.
+; STORE_APPEND ( HL = addr, B = len -- )
+; The console's append (core/editor.asm's EDITOR_LOOP_LIVE, ENTER): the line's B bytes at HL and a CR go
+; at STORE_END (docs/V2/EDITOR_SPEC.md section 3). An empty line is not appended. A line that does not fit
+; (STORE_END + len + 1 > STORE_LIMIT, an exact 16-bit test) is not appended and "STORE FULL" is printed on
+; its own line; the caller goes on to interpret the line either way.
+; Destroys: AF, BC, DE, HL
 ; ============================================================================
-WORKSPACE_APPEND:
-    push hl
-    push bc
-    ld   hl, (WORKSPACE_END)
-    ld   de, LOADTEXT_BUF
-    or   a
-    sbc  hl, de                 ; hl = current workspace length
-    ld   a, b
-    inc  a                      ; +1 for the possible separator space
-    add  a, l
-    ld   e, a
-    ld   a, 0
-    adc  a, h
-    ld   d, a                   ; de = length AFTER this append
-    ld   a, d
-    cp   LOADTEXT_MAX_LEN / 256 + 1
-    pop  bc
-    pop  hl
-    ret  nc                     ; would overflow the workspace: no-op
-
-    push hl
-    ld   hl, (WORKSPACE_END)
-    ld   de, LOADTEXT_BUF
-    or   a
-    sbc  hl, de
-    ld   a, h
-    or   l
-    pop  hl
-    jr   z, .no_sep              ; empty workspace: no separator needed
-    push hl
-    ld   hl, (WORKSPACE_END)
-    ld   (hl), " "
-    inc  hl
-    ld   (WORKSPACE_END), hl
-    pop  hl
-.no_sep:
-    ld   de, (WORKSPACE_END)
-.copyloop:
+STORE_APPEND:
     ld   a, b
     or   a
-    jr   z, .done
-    ld   a, (hl)
+    ret  z                      ; empty line: nothing to append
+    ld   c, a
+    ld   b, 0                   ; bc = len
+    ld   de, (STORE_END)
+    push hl
+    ld   hl, STORE_LIMIT
+    or   a
+    sbc  hl, de                 ; hl = room (STORE_END never passes STORE_LIMIT)
+    scf
+    sbc  hl, bc                 ; room - len - 1: borrow if the line and its CR do not fit
+    pop  hl
+    jr   c, .full
+    ldir
+    ld   a, 13
     ld   (de), a
-    inc  hl
     inc  de
-    dec  b
-    jr   .copyloop
-.done:
-    ld   (WORKSPACE_END), de
+    ld   (STORE_END), de
     ret
+.full:
+    ld   hl, STORE_FULL_MSG
+    jp   FORGET_PRINT_MSG       ; core/forget.asm: prints the message (its CR is a newline) and returns
+
+STORE_FULL_MSG: DB "STORE FULL", 13, 0
 
 ; ============================================================================
 ; SCAN_DEFS ( -- )
-; Walks LOADTEXT_BUF..WORKSPACE_END for top-level ":"..";" spans (each
-; delimiter-bounded, the same way core/interp.asm's own WORD treats a
-; space as the only delimiter) and populates DEF_TABLE/DEF_COUNT, oldest
+; Walks STORE_START..STORE_END for top-level ":"..";" spans (each
+; delimiter-bounded, the same way core/interp.asm's own WORD treats
+; every byte from 0 to space as a delimiter) and populates DEF_TABLE/DEF_COUNT, oldest
 ; first. Forth doesn't nest colon definitions, so no depth tracking is
 ; needed: a ":" starts a span, the next ";" ends it.
 ; ============================================================================
-; AT_END (internal) -- Z set if RECALL_SCAN_PTR has reached WORKSPACE_END.
+; AT_END (internal) -- Z set if RECALL_SCAN_PTR has reached STORE_END.
 ; Factored out of SCAN_DEFS's own three identical inline checks (one per
 ; scan state below) -- pure dedup, no behavior change. Destroys HL/DE,
 ; which every call site below already reloads fresh afterward anyway.
 AT_END:
     ld   hl, (RECALL_SCAN_PTR)
-    ld   de, (WORKSPACE_END)
+    ld   de, (STORE_END)
     or   a
     sbc  hl, de
     ret
@@ -160,7 +135,7 @@ AT_END:
 SCAN_DEFS:
     xor  a
     ld   (DEF_COUNT), a
-    ld   hl, LOADTEXT_BUF
+    ld   hl, STORE_START
     ld   (RECALL_SCAN_PTR), hl
 .outer:
     call AT_END
@@ -169,8 +144,8 @@ SCAN_DEFS:
                                   ; byte under the +-127 limit
     ld   hl, (RECALL_SCAN_PTR)
     ld   a, (hl)
-    cp   " "
-    jr   nz, .check_colon
+    cp   " " + 1
+    jr   nc, .check_colon
     inc  hl
     ld   (RECALL_SCAN_PTR), hl
     jr   .outer
@@ -186,10 +161,8 @@ SCAN_DEFS:
     jr   z, .stop                ; ran off the end with no ";": stop scanning
     ld   hl, (RECALL_SCAN_PTR)
     ld   a, (hl)
-    cp   " "
-    jr   z, .find_semi
     cp   ";"
-    jr   nz, .find_semi
+    jr   nz, .find_semi         ; (whitespace is never ";")
     ; ";" found -- record the span (inclusive of the ";") if room remains
     ld   a, (DEF_COUNT)
     cp   DEF_TABLE_MAX
@@ -205,7 +178,7 @@ SCAN_DEFS:
     add  hl, de                   ; hl = DEF_TABLE + a*4
     ex   de, hl
     ld   hl, (RECALL_SPAN_START)
-    ld   bc, LOADTEXT_BUF
+    ld   bc, STORE_START
     or   a
     sbc  hl, bc                   ; hl = span start offset
     ld   a, l                     ; Z80 has no `ld (de),hl` -- store via A
@@ -239,8 +212,8 @@ SCAN_DEFS:
     jr   z, .stop
     ld   hl, (RECALL_SCAN_PTR)
     ld   a, (hl)
-    cp   " "
-    jr   nz, .skip_word
+    cp   " " + 1
+    jr   nc, .skip_word
     jp   .outer
 .stop:
     ret
@@ -318,7 +291,7 @@ W_LISTDEFS:
     ld   h, 0
 .nocap:
     push hl
-    ld   hl, LOADTEXT_BUF
+    ld   hl, STORE_START
     add  hl, de                   ; hl -> span start in the workspace
     pop  bc                       ; bc = capped preview length
 .printloop:
@@ -390,7 +363,7 @@ W_RECALL:
 
     ld   (RECALL_LEN_TMP), a       ; a = l = span length here, still
     ld   c, a
-    ld   hl, LOADTEXT_BUF
+    ld   hl, STORE_START
     add  hl, de                    ; hl -> span start in the workspace
     ld   de, EDIT_BUF
 .copyloop:
