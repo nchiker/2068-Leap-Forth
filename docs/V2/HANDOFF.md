@@ -1,58 +1,76 @@
-# Leap-Forth V2 — session handoff (2026-10-28, step E items 1-4 done)
+# Leap-Forth V2 — session handoff (2026-10-29, step E complete)
 
 Read this first in a new session. Then `docs/V2/EDITOR_SPEC.md` (step E: decisions, line store contract, view
-behaviour, oracle table, order), `docs/V2/LEAPC_COMPARISON_AUDIT.md` (step L) and `docs/V2/FORTH_V2_REUSE_AUDIT.md`
-(section 8 sequence, section 9 ledger, section 10 owner decisions).
+behaviour, sections 4 and 5.1-5.3 as built, oracle table), `docs/V2/LEAPC_COMPARISON_AUDIT.md` (on branch
+`v2/step-l-leapc-audit`) and `docs/V2/FORTH_V2_REUSE_AUDIT.md` (section 8 sequence, section 9 ledger, section 10 owner
+decisions).
 
 ## Where things stand
 
-- **master** is `af61e35`: PR #2 (T → G → R0 → A → R1 → S, `0d45a2f`) and PR #3 (a three-line edit of this file,
-  merged 2026-10-29). When the E branch merges into master, this file conflicts with PR #3's version: keep this one.
-- **Branches, none pushed** (push and open PRs only when the owner asks; merge step PRs with merge commits):
+- **master** is `af61e35`: PR #2 (T → G → R0 → A → R1 → S, `0d45a2f`) and PR #3 (a three-line edit of this file).
+  When the E branch merges into master, this file conflicts with PR #3's version: keep the E branch's.
+- **Step E is done** on `v2/step-e-console-editor` (items 1-7; all of `EDITOR_SPEC.md` section 9). Not pushed; no PR
+  yet (push and open PRs only when the owner asks; merge step PRs with merge commits).
 
   | Branch | State |
   |---|---|
-  | `v2/step-e-console-editor` | T11, T12, the E spec (decided), the E oracle (N1-N13), O13 merged in, E items 3 and 4. **Work continues here** |
-  | `v2/step-o13-rst-stack` | O13 (`d7c2308`), already merged into the E branch (`9a1d570`) |
+  | `v2/step-e-console-editor` | **Step E complete**: T11, T12, spec, oracle, O13 merged in, items 3-7. Ready for a PR to master |
+  | `v2/e-item6-wip` | item 6's four commits, merged into the E branch (`7ddc7d6`); can be deleted |
+  | `v2/step-o13-rst-stack` | O13, already merged into the E branch (`9a1d570`) |
   | `v2/step-l-leapc-audit` | step L, docs only (`9391422`, decisions `f5a36c5`), from master |
 
   Merging L and E into master: both append rows to the audit's section 9 ledger (and L adds section 5 rows O13-O19
   and section 10 decisions 7-9), so the second merge conflicts there; keep both sides' rows, in step order.
-- **Free space [M]:** HOME 1,050 B, DOCK cartridge 1,050, Blackjack 1,096/1,096, Gallery 1,021, EXROM 6,682. The floors
+- **Free space [M]:** HOME 1,078 B, DOCK cartridge 1,078, Blackjack 1,096/1,096, Gallery 1,021, EXROM 5,006. The floors
   in `tools/budget.toml` equal these.
-- **All owner decisions are made:** audit section 10 decisions 1-9, and E1-E10 in `EDITOR_SPEC.md` section 2 (E2:
-  fixed 8 KB store at `$D000`, dictionary ceiling `$D000`; E6: `EDIT` replaces `RECALL`; E7: leaving the view clears
-  the screen; E9: `EDIT` refuses in 64-column mode). O15 (FILL/CIRCLE to the EXROM) is approved for after E; O19 merges
-  to registers 0-15.
-- **Last full run [M]** (E item 4's commit):
-  - `make test`: 70 PASS, 0 FAIL, 1 SKIP; POWERON 7/7.
-  - `make edtest`: old group 19/19; new group 4/12 (N1-N3, N5 pass; N6-N13 wait for items 6-7).
-  - `make tapetest` 16/16 (with N4); `make harness` 0 failed; `make fusesave` 42 checks, 0 failed (see traps);
-    `make cartdiff` 26/26; `make check` passes; `make bench` within 1% of the baseline (every row faster or equal).
-  - `make repro` 266 files identical. `make tapetol`/`tapetol-fuse` last run at step S (the tape
-    receiver has not changed since).
+- **Step E in bytes [M]:** items 3-7 cost HOME +54 B (1,132 → 1,078 free, after O13's −506) against an estimate of
+  −110 to −200; the overrun is `EDIT` and its commit loop (+157 against +40-60). EXROM +1,676 B (estimate 2,200-2,600).
+  Item 5's merged redraw saved 178 B; RECALL's retirement 84.
+- **Last full run [M]** (item 7's commit): `make edtest` **31/31** (old 19/19, new 12/12); `make test` 70 PASS, 0
+  FAIL, 1 SKIP, POWERON 7/7; `make tapetest` 16/16; `make harness` 0 failed; `make cartdiff` 26/26; `make fusesave`
+  41 checks, 0 failed; `make bench` within 1% (sieve −1.6%, string −1.2%, the rest faster); `make repro` 266 files
+  identical; `make check` passes.
+
+## What step E built (details in EDITOR_SPEC.md 4, 5.1-5.3)
+
+- **Console:** one width-parameterised redraw (`WRAP_CALC_AT`, `ED_DRAW_ROWS`, `ED_DRAW_CURSOR`, the RAM `JP`
+  `ED_ROW_JP` at `$88FC` choosing `ED_ROW32`/`ED_ROW64` per row); E10 fixed (64-column hang, 64-column room check,
+  cursor on a full row: its own row, or the last cell on a 4th full row).
+- **View:** `EDIT name` / `EDIT` (core/edit.asm, HOME) calls `VIEW_SESSION`, EXROM service slot 6
+  (`rom/graphics_exrom.asm`); veneers 5-12 in `GRAPHICS_HOME_TABLE`; HOME cells the EXROM uses are copies in
+  `include/exrom_home_ram.inc`, checked by `tools/audit_layout.py`. The view's RAM is `$8AC0-$8AF2`. Leaving runs
+  the marked (`$8D`) lines with `INTERPRET_NESTED`; an error prints `LINE n` first (`EDIT_ERR_PREFIX`), and
+  `EDITOR_LOOP_LIVE` clears any marks left after the console line (`EDIT_CLEAR_MARKS`).
+- **The `EDIT ...` command line is taken off the store** when the view opens (`VIEW_TRIM`), so saved texts never
+  reopen the editor.
+- **RECALL retired**; `LIST-DEFS` is the dictionary head; 158 words (counted by walking the chain).
+- **View typing cost (N12) is now a gate:** key at end 42,198 T, DOWN 126,049, ENTER 162,624, a scroll in a 60-line
+  store 1,032,460 (0.3 s: all 23 rows redrawn, lines found by scanning from `STORE_START`).
 
 ## Next work, in order
 
-1. **Step E item 5: merged redraw** (`EDITOR_SPEC.md` E3, E10, section 9). `EDITOR_REDRAW` (219 B) and
-   `EDITOR_REDRAW64` (191 B) become one width-parameterised routine (about −150 B [E]). It fixes, by construction, the
-   64-column hang (HL lost across `MODE64_SCROLL_OUTPUT_UP`), the 64-column room check (uses the 32-column
-   `WRAP_CALC`) and the missing cursor on a full row. Update T12 cases 7, 10 and 14 to the spec's "new build must"
-   column in the same commit. Gate: typing cost (case 19) no worse than 1% plus one interrupt (2,000 T), the redraw
-   oracle (case 18) still passing. Design it together with item 6's needs: the view calls this engine through veneers.
-2. **Item 6: the full-screen view in the EXROM** (E3, E4, sections 3 and 5): store routines (find/replace/insert/delete
-   line, count), view redraw, navigation, key table, session marks (`$8D`), engine veneers after `GRAPHICS_HOME_TABLE`
-   at `$0100` (same length in HOME and cartridge builds). Budget 2.2-2.6 KB [E] of the EXROM's 6,682. Oracle hooks:
-   `STORE_END`, `VIEW_REDRAW_ALL` (section 5). Several commits; N7, N9, N13 judge it.
-3. **Item 7: `EDIT`** (E6, section 5's entry, refusals and leaving), `RECALL` retired (−74 B), docs and tutorial, the
-   audit ledger row for step E. Done when plain `make edtest` passes all 31 cases, with `make test`, `make tapetest`,
-   `make cartdiff`, `make fusesave`, `make bench`, `make repro`, `make check`.
-4. **O15** (after E): FILL and CIRCLE kernels to the EXROM (about −820 B HOME).
-5. **Step F: float rebuild** (audit section 4.2) with O10 and T13. Also: measure `UDIV10` as a call of Leap-C's
+1. **Owner:** review step E and ask for the PR (E branch → master), and decide on L's PR. Open points for the owner
+   are in the next section.
+2. **O15** (after E): FILL and CIRCLE kernels to the EXROM (about −820 B HOME). The EXROM now has 5,006 B free.
+3. **Step F: float rebuild** (audit section 4.2) with O10 and T13. Also: measure `UDIV10` as a call of Leap-C's
    `RT_UDIV` once O10 is in (L audit, output words).
-6. **K** (with O16, O17; about +62 B + words), **D** (with O18, the PLOT/LINE clip), **B** (BREAK latch, pause word).
-7. **Step Z** (audit section 4.4) with O14 (230 B of page-zero padding), O19, and `W_EMIT` through `rst $28` (about
-   60 B; deferred from O13 because only 47 of the 75 ROMs include `core/print.asm`).
+4. **K** (with O16, O17; about +62 B + words), **D** (with O18, the PLOT/LINE clip), **B** (BREAK latch, pause word).
+5. **Step Z** (audit section 4.4) with O14 (230 B of page-zero padding), O19, and `W_EMIT` through `rst $28`.
+
+## Open points for the owner (not blocking)
+
+- **Step E's HOME total is over its estimate** (+54 B against −110 to −200): `EDIT` and the commit loop are 157 B.
+  Candidates if HOME gets tight: share one `$8D` search between the commit loop and `EDIT_CLEAR_MARKS` (about −10 B);
+  move the bare-`EDIT`/refusal messages' handling further into the EXROM.
+- **The view's scroll is slow** (about 1 M T a scrolled line). A pixel scroll of rows 0-22 plus one new line, and a
+  remembered line pointer instead of scanning from `STORE_START`, would cut it to a small fraction; not specified, so
+  not done.
+- **64-column screen layout:** the ROM writes columns 0-31 to the first display file and 32-63 to the second
+  (`MODE64_CHAR_ADDR_SETUP`), and T12 reads it the same way. ZEsarUX's headless `save-screen` cannot capture the
+  512-pixel mode, so nothing here has checked how a real hi-res display presents those bytes. Unchanged by step E.
+- `SAVE-TEXT` still takes `addr len` (tutorial section 12), and no word gives the store's address and length, so
+  what `EDIT` edits cannot be saved to tape directly. A word for that (or `SAVE-TEXT` with no arguments saving the
+  store) was not in step E's scope; worth deciding before users rely on `EDIT`.
 
 ## How the owner wants the work done
 
@@ -66,7 +84,7 @@ behaviour, oracle table, order), `docs/V2/LEAPC_COMPARISON_AUDIT.md` (step L) an
 - **Budget floors:** never lower one without a ledger row and a history line in `tools/budget.toml`.
 - **Keep `IFDEF CARTRIDGE` code the same length in both builds** (`rom_identity.py --shared` in `make check`).
 
-## Facts that cost time to find (new in this session; the older ones follow)
+## Facts that cost time to find (steps E and O13; the older ones follow)
 
 - **Test tools.**
   - `tools/fharness.py` (T11): Machine (boot to the first `IO_READ_KEY`, snapshot, restore 3-5 ms, `call`,
@@ -97,7 +115,6 @@ behaviour, oracle table, order), `docs/V2/LEAPC_COMPARISON_AUDIT.md` (step L) an
   moved to `$F000-$F11F` (they were inside the store). `UDG_TABLE` `$F180`.
 - **Interpreter nesting.** `INTERPRET_NESTED` (an entry one instruction into `INTERPRET_RUN`) keeps `THROW_ROOT_SP`
   the outermost run's; `REPORT_INTERP_ERROR` unwinds to it. `LOAD-TEXT` uses it and keeps the outer `SRC_PTR`/`SRC_END`.
-- **Until item 7,** `RECALL` copies a span containing CR into the edit line unchanged (harmless; retired in item 7).
 
 ## Older facts (from the steps before E)
 
