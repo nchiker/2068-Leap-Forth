@@ -54,7 +54,7 @@ W_EDIT:
     or   a
     sbc  hl, de
     add  hl, de
-    jr   z, .end
+    jr   nc, .end                   ; at (or, after a store change by a run line, past) STORE_END
     push hl                         ; this line's start
 .byte:
     ld   a, (hl)

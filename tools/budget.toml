@@ -24,13 +24,13 @@ pad = 0xFF
 [[image]]
 file   = "forth_boot_rom0.bin"
 title  = "HOME ROM (Forth)"
-floor  = 1228
+floor  = 1041
 target = 200
 
 [[image]]
 file   = "forth_boot_cart.bin"
 title  = "HOME, DOCK cartridge build (Forth)"
-floor  = 1228
+floor  = 1041
 target = 200
 
 [[image]]
@@ -54,7 +54,7 @@ target = 200
 [[image]]
 file   = "graphics_exrom.bin"
 title  = "Graphics EXROM (chunk 5)"
-floor  = 6682
+floor  = 5006
 target = 150
 
 # Every floor change after the first commit of this file, newest last:
@@ -75,3 +75,6 @@ target = 150
 #   forth_boot_rom0.bin and forth_boot_cart.bin: 1050 -> 1228 (+178 B, raised), step E item 5: EDITOR_REDRAW and
 #     EDITOR_REDRAW64 merged into one width-parameterised redraw (docs/V2/EDITOR_SPEC.md section 4); the audit's
 #     section 9 row "E item 5".
+#   forth_boot_rom0.bin and forth_boot_cart.bin: 1228 -> 1041 (-187 B), graphics_exrom.bin: 6682 -> 5006 (-1,676 B),
+#     step E item 6: the full-screen view in the EXROM, its engine veneers, EDIT and the commit loop in Home
+#     (docs/V2/EDITOR_SPEC.md sections 5.1, 5.2); the audit's section 9 row "E item 6".

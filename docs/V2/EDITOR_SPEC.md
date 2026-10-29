@@ -302,6 +302,45 @@ changes the store cannot leave a mark behind. Item 7 adds the error report: a ce
 number, read by `INTERPRET_UNKNOWN_WORD` and `RUNTIME_ERROR_HOOK` before their message (`LINE n `, then clear every
 remaining mark).
 
+### 5.2 Item 6 as built [M, S]
+
+Built to 5.1, with these departures (each judged by N6-N13 and the redraw oracle):
+
+- **The `EDIT` command line is taken off the store** (`VIEW_TRIM`, EXROM). The console appends the line it is about
+  to run (E5), so `EDIT SQ` would become source, and a text saved with it would open the view again when loaded. The
+  session removes the store's last line when it is exactly the console's line after a terminator. With `NO EXROM`
+  the line stays (the EXROM is not there to remove it); N10 and N11 accept both.
+- **Marks left by an error are cleared after the console line**, not in the error hooks: `EDITOR_LOOP_LIVE` calls
+  `EDIT_CLEAR_MARKS` (one `CPIR` pass) when `VIEW_RESULT` is non-zero, which covers an unknown word, an uncaught
+  THROW, ABORT and QUIT alike. Item 7 adds only the `LINE n` prefix.
+- **HOME cells the EXROM uses** are copies in `include/exrom_home_ram.inc`, compared with the HOME symbols in both
+  builds by `tools/audit_layout.py` (`make check`).
+- **Redraw:** LEFT, RIGHT and UP/DOWN inside a line move only the cursor cell; the status row is drawn when its text
+  changes; `VIEW_BOTTOM` records the rows the last drawing used, so only those are blanked. The screen equals
+  `VIEW_REDRAW_ALL` after every key (N9).
+- **Refusals:** `LONG LINE` also covers a store whose last line has no terminator (an 8,192-byte text with no room
+  for the closing CR). Refusals that the model leaves open: the only line deleted is emptied and marked; ENTER and
+  insert-line are all-or-nothing when the store is full; BREAK with no room for the write-back stays in the view with
+  `STORE FULL`; after a delete the cursor is at column 0.
+- **Opening deep in a store** starts the fit from line n - 22, so it does not search from line 1.
+
+Sizes: HOME +187 B (veneers 24, engine split 6, `EDIT` 118 with its header, `EDIT_CLEAR_MARKS` 31, the loop's hook
+7, one `jr` to `jp` 1). EXROM +1,676 B: store routines 204, the view about 1,470 (`VIEW_KEY` 366, `VIEW_SESSION`
+230, `VIEW_DRAW_FROM` 146, `VIEW_FIT` 115, `VIEW_POST` 113, `VIEW_LEAVE` 104, ...). View typing cost (N12, the gate
+for later changes) [M]:
+
+| Key | T | Key | T |
+|---|---:|---|---:|
+| at the end of a short line | 42,196 | ENTER | 162,633 |
+| in the middle of a 100-character line | 173,378 | insert-line | 160,421 |
+| at the end of a 3-row line | 176,302 | delete-line | 118,612 |
+| DELETE | 38,250 | DOWN to the next line | 126,053 |
+| LEFT | 3,300 | UP inside a line | 10,564 |
+| scroll down one line (60-line store) | 1,032,460 | | |
+
+A scroll redraws all 23 rows through `ED_ROW32` (no pixel scroll) and finds lines by scanning from `STORE_START`;
+about 0.3 s a scrolled line at 3.5 MHz.
+
 ## 6. Words
 
 `EDIT` (new), `RECALL` (retired), `LIST-DEFS`, `SAVE-TEXT`, `VERIFY-TEXT`, `LOAD-TEXT` (format unchanged, CRs kept).
@@ -314,9 +353,9 @@ remaining mark).
 | `RECALL` retired (E6) | −74 | |
 | CR as whitespace (E1) | 0 | |
 | Store room check, dictionary ceiling check (E2a, E5) | +20-40 [E]; measured +16 (item 3) and +66 (item 4) | |
-| Engine veneers for the view (E3) | +15-25 | |
-| `EDIT` word and EXROM call | +40-60 | |
-| View, navigation, redraw, store routines (E4) | | +2,200-2,600 |
+| Engine veneers for the view (E3) | +15-25 [E]; measured +30 (item 6: 8 slots and the engine split) | |
+| `EDIT` word and EXROM call | +40-60 [E]; measured +157 (item 6: `EDIT` and its commit loop 118, `EDIT_CLEAR_MARKS` 31, hook 8) | |
+| View, navigation, redraw, store routines (E4) | | +2,200-2,600 [E]; measured +1,676 (item 6) |
 | **Total** | **about −110 to −200** | **+2,200-2,600** |
 
 ## 8. Oracle (written and run against the old build before the ROM changes)
