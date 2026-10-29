@@ -523,8 +523,16 @@ RUNTIME_ERROR_MSG: DB "STACK?", 0
     INCLUDE "kernel/math/math.asm"
     INCLUDE "kernel/io/io.asm"
     INCLUDE "kernel/interrupt/interrupt.asm"
+    DEFINE FONT_PLACED_LATER               ; the font goes after kernel/storage, below
     INCLUDE "kernel/graphics/graphics.asm"
     INCLUDE "kernel/storage/storage.asm"
+    ; ZEsarUX's tape autoload (on by default when a real tape is inserted) types J "" ENTER into the machine as soon as
+    ; the PC equals $11F8 with the HOME ROM paged in (the stock TS2068 ROM's key wait; ZEsarUX storage/tape.c,
+    ; MACHINE_ID_TIMEX_TS2068). Any instruction of this ROM starting there would trigger it, e.g. during LOAD-TEXT, and
+    ; the keys arrive at the console as a line `""` (found by make tapetest in step F). The font is data, never
+    ; executed: placed here it covers $11F8 whatever the code around it does.
+    INCLUDE "kernel/graphics/font.asm"
+    ASSERT FONT_TABLE <= $11F8 && FONT_TABLE_END > $11F8   ; move the font if this fails (data must cover $11F8)
     INCLUDE "kernel/bank/bank.asm"
     INCLUDE "core/dict.asm"
     DEFINE DECIMAL_NUMBER_ENABLED

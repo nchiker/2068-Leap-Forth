@@ -595,7 +595,7 @@ def case_1(ctx):
 
 
 BJ_FS = REPO + "/rom/forth_smoke_p52_blackjack_test.fs"
-BJ_EXPECT = [21, 18, 4, 22, 20, 3, 21, 12, 4, 17, 23, 1]       # rom/forth_smoke_p53_realtape.asm, CHECK_MEM16 at 62120..
+BJ_EXPECT = [21, 15, 4, 23, 12, 3, 21, 19, 4, 15, 23, 1]       # rom/forth_smoke_p53_realtape.asm, CHECK_MEM16 at 62120.. (seed 15785, step F O10)
 
 
 def case_2(ctx):
