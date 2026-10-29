@@ -6,8 +6,8 @@ behaviour, oracle table, order), `docs/V2/LEAPC_COMPARISON_AUDIT.md` (step L) an
 
 ## Where things stand
 
-- **master** is `0d45a2f` (PR #2: T → G → R0 → A → R1 → S). **PR #3** (`v2/handoff-after-merge`, a one-line edit of
-  this file) is still open; if it is merged, this file conflicts with it: keep this version.
+- **master** is `af61e35`: PR #2 (T → G → R0 → A → R1 → S, `0d45a2f`) and PR #3 (a three-line edit of this file,
+  merged 2026-10-29). When the E branch merges into master, this file conflicts with PR #3's version: keep this one.
 - **Branches, none pushed** (push and open PRs only when the owner asks; merge step PRs with merge commits):
 
   | Branch | State |
