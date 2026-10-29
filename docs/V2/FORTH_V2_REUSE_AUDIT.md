@@ -369,6 +369,12 @@ Leap-C has no Forth interpreter, no printer code, and no 64-column mode (removed
 **When.** L is read-only, so it can run alongside E's harness work. It must finish before D, K and B, which touch
 the same graphics and keyboard code, and before Z, whose scope it changes.
 
+**Results (2026-10-28, branch `v2/step-l-leapc-audit`):** `docs/V2/LEAPC_COMPARISON_AUDIT.md`, with the measured
+inventories in `docs/V2/evidence/l_*.md`. Nothing in Leap-C replaces a Forth routine outright; the paired graphics,
+keyboard and integer routines are the same V2 code. New items O13-O19 (section 5): the largest are O13 (data-stack
+calls through RST vectors, about −480 B [E]), O14 (230 B of page-zero padding not counted as free [M]) and O15
+(FILL and CIRCLE to the EXROM, about −820 B [E], owner decision). O18 is a latent defect (PLOT and LINE do not clip).
+
 ---
 
 ## 5. Other findings
@@ -387,6 +393,13 @@ the same graphics and keyboard code, and before Z, whose scope it changes.
 | O10 | Faster unsigned multiply/divide | 2 | Leap-C `RT_UMUL/RT_UDIV` | `kernel/math/math.asm` | ± | 60000/7: 3,584 → 1,479 T [L]. **Scheduled in step F (owner, 2026-10-28)**, §4.2 item 6 |
 | O11 | Dead code | — | — | io, graphics, mode64 | −64 B | Verify each before removal. **Done in step R0 (`de5d735`), −64 B [M]**, §6.7 |
 | O12 | `jp` → `jr` | — | Leap-C `tools/relax_jumps.py` | various | ≤ −30 B | Many sites are deliberately `jp`; lowest priority. **Done in step R0 (`bcf45ac`), −20 B [M]** (30 candidates; 10 left as `jp`), §6.7 |
+| O13 | `DPOP_HL` (137 calls) and `DPUSH_HL` (105) through RST vectors in page zero; `rst` is 1 B and 11 T against `call`'s 3 B and 17 T | — | Leap-C `RST_LDI`/`RST_STI`/`RST_ENTER`/`RST_LEAVE` | `core/dict.asm`, `rom/forth_boot.asm`, every caller | ~−480 B [E] | Step L. Recommended as its own step before E's code (L audit section 4); otherwise Z |
+| O14 | Page-zero padding: 230 B of `$FF` in both builds, not counted by `budget.py` | — | Leap-C page zero | `rom/forth_boot.asm` | up to ~−200 B [E] | Step L, [M]. Z |
+| O15 | `GFX_FILL` (487 B) and `GFX_CIRCLE` (368 B) kernels to the EXROM, as RECT and POLYGON | 3 | Leap-C moved them out of HOME | `kernel/graphics/graphics.asm`, `rom/graphics_exrom.asm` | ~−820 B HOME, +~860 B EXROM [E] | Step L. **Approved (decision 7), after E** |
+| O16 | `IO_DECODE_KEY` shares its table lookup (Forth 132 B, Leap-C 114 B) | 2 | Leap-C `platform/kernel/io` | `kernel/io/io.asm` | −18 B [E] | Step L. K |
+| O17 | Glyphs of `1` and `l` (differ in two pixels) | 2 | Leap-C D13 (`f209f21`) | `kernel/graphics/graphics.asm` | 0 | Step L. K |
+| O18 | PLOT and LINE do not clip y: `y >> 3` up to 31 indexes past `ROW_BASE_TABLE`; today the writes land in ROM [M], a latent RAM write | 2 | Leap-C `GFX_PLOT_CLIPPED` callers | `kernel/graphics/graphics.asm` `GFX_WRITE_PIXEL` | +4 B [E] | Step L, latent defect. D |
+| O19 | `SOUND_WRITE` and `AY_WRITE` are duplicates except the bound (0-16 against 0-15) | — | — | `core/sound.asm`, `core/soundext.asm` | −8 B [E] | Step L. Z; register 16 is the owner's call |
 
 **Provenance summary** [L, scan of HEAD against `48.rom`, `tc2068-0.rom`, `tc2068-1.rom`]: the only
 12-byte matches are the tape block I/O (§4.1) and the glyph builder (O2). Files written while
@@ -856,10 +869,10 @@ measured ledger row (§9).
 | **S** Storage rebuild | §4.1 items 1-5; T14 | −11 then +40-70 | +~60 | R0 |
 | **E** Console + editor rebuild | §4.3; line store first, then engine evaluation, then view; T11, T12 | −370 to +80 | +2,200-2,600 | S (in-place save), R1, T11 |
 | **F** Float rebuild | §4.2 (with O10, item 6); T13 | ~0 (±150), O10 not yet measured | 0 to +600 | R0, T11, T13 |
-| **L** Leap-C comparison audit (read-only) | §4.5 | 0 (it schedules work) | 0 | — (before D, K, B and Z) |
-| **Z** Size pass on retained code | §4.4; tools: z80-skills `shrink-z80` and its scripts | − (measure first; no estimate) | − | E, F |
-| **K** Keys and glyphs | O3 plus `[']`, `[CHAR]`, `\`, `[ ]` | +~100 | 0 | R0 or E savings |
-| **D** Display speed | O4 | ≤0 | 0 | — |
+| **L** Leap-C comparison audit (read-only) | §4.5; **done**, `LEAPC_COMPARISON_AUDIT.md` | 0 (it schedules work) | 0 | — (before D, K, B and Z) |
+| **Z** Size pass on retained code | §4.4; tools: z80-skills `shrink-z80` and its scripts; O14, O19 and, unless run earlier, O13 (step L) | − (measure first) | − | E, F |
+| **K** Keys and glyphs | O3 plus `[']`, `[CHAR]`, `\`, `[ ]`; O16, O17 (step L) | +~62 + words | 0 | R0 or E savings; L |
+| **D** Display speed | O4; O18 (step L) | ≤+4 | 0 | L |
 | **B** BREAK and timing | O6, O7 | +~35 | 0 | T8 benchmarks |
 | **A** AY BEEP (approved 2026-10-28) | O5 | −350-400 | 0 | R0 |
 
@@ -881,6 +894,7 @@ E and K.
 | **R1** Cartridge EXROM paging | `ce1579d`; spec `docs/V2/CARTRIDGE_EXROM_SPEC.md` | 469 [M] (cartridge 478; Blackjack 797, Gallery 802) | 6,682 [M] | Cartridge 781 → 478 free (-303): the six graphics words and the one-`OUT` paging variant (estimate -312). Home images unchanged. **Floors: cart lowered to 478** (ledger row for the lowered floor); others unchanged | Home build's code unchanged; `make bench` not affected | `make test`: 70 PASS, 0 FAIL, 1 SKIP [M]; `make cartdiff`: 26/26 identical, old build 26/26 fail, selftest 7/7 checks; `make repro` pass |
 | **S** Storage rebuild | `dcdc9ce` S1, `08c7ce6` S2, `9c42346` + `c39f674` S2 fixes, the docs/floors/ledger commit after them; spec `docs/V2/STORAGE_SPEC.md`, oracle `e7f0bae` | 627 [M] (cartridge 636; Blackjack 797, Gallery 802) | 6,682 [M] | Storage 1,141 → 983 B (−158): block I/O 327 → 316 (Leap-C clean-room, adopted), header layer 393 → 181, words 421 → 484 (+VERIFY-LIB, VERIFY-TEXT). **Floors raised to 627 HOME / 636 cart**; others unchanged | `make bench` within ±0.04%; a LIB SAVE/LOAD adds a CRC pass (~400 T/byte) | `make test` 70 PASS 0 FAIL 1 SKIP, POWERON 7/7 [M]; `make tapetest` 15/15 (old build 3/15); `make tapetol` 66/71, old 49/71, nothing narrower; `make repro`, `make check` pass; cartdiff 26/26 |
 | S follow-up: shared identity, Fuse | `bffccc8` V1 note, `e0d3fa9` + `24c429c` Fuse, `a1d78ff` shared identity | 626 [M] (cartridge 626; Blackjack 797, Gallery 801) | 6,682 [M] | Paging variants padded to equal length: HOME −1 B, cartridge −10 B, Gallery −1 B. **Floors lowered to 626 HOME / 626 cart / 801 Gallery** (ledger row for the lowered floors) | `make bench` every row ok | `make test` 70/0/1, POWERON 7/7; tapetest 15/15; tapetol 66/71 (ZEsarUX), tapetol-fuse 67/71 (old 48); fusesave 41/41 incl. Home ↔ cartridge LIB tapes; cartdiff 26/26; repro, check pass |
+| **L** Leap-C comparison audit | `9391422`, decisions `f5a36c5`; `docs/V2/LEAPC_COMPARISON_AUDIT.md` | 626 [M] (unchanged) | 6,682 [M] | 0 → 0 (read-only). Found: O13 ~−480 B, O14 230 B padding [M], O15 ~−820 B (owner), O16 −18 B, O17 0 B, O18 +4 B (latent defect), O19 −8 B | — | not run (no ROM change) |
 | **O13** RST data-stack calls (step L item, run before E's code by owner decision 8) | this commit (branch `v2/step-o13-rst-stack`) | 1,132 [M] (cartridge 1,132; Blackjack 1,119, Gallery 1,041) | 6,682 [M] (image identical) | HOME +506 free: 242 `call DPOP_HL`/`DPUSH_HL` → `rst` (−484), the two 11 B bodies moved into page-zero padding (−22); `include/rst_vectors.inc` shared by all 75 ROMs. Listing check: every byte difference in HOME, cartridge and both demos is a call→rst swap, an address moved consistently with the line pairing, or three hand-checked label expressions. **Floors raised to 1,132 HOME / 1,132 cart / 1,119, 1,119, 1,041 demos** | `make bench`: float −0.08%, pixel −0.86%, sieve −1.60%, string −1.21% (all faster); typing cost within ±324 T (the editor's key path hardly uses the data stack) | `make test` 70/0/1, POWERON 7/7; edtest 19/19; harness; tapetest 15/15; fusesave 41/41; cartdiff 26/26; repro (266 files), check pass |
 | **E item 3** Line store, CR as whitespace, LOAD-TEXT errors (`EDITOR_SPEC.md` section 9) | this commit | 1,116 [M] (cartridge 1,116; Blackjack 1,119, Gallery 1,041) | 6,682 [M] | HOME −16: `STORE_APPEND` 40 + 12 B message (was `WORKSPACE_APPEND` 71), `W_LOADTEXT` 56 → 91, `REPORT_INTERP_ERROR` 10 → 14, `SCAN_DEFS` 143 → 139, `WORD` 0 B. Fixes the workspace overrun and LOAD-TEXT's error handling (spec section 1). **Floors lowered to 1,116 HOME / 1,116 cart** (this row) | `make bench` faster than baseline on every row | `make test` 70/0/1, POWERON 7/7; edtest old 19/19 (case 12 updated to the spec), new N1-N3 pass; tapetest 16/16 (N4 prints 42 and 21); harness; fusesave 41/41 |
 | **E item 4** Dictionary ceiling `$D000` (`EDITOR_SPEC.md` E2a) | this commit | 1,050 [M] (cartridge 1,050; Blackjack 1,096, Gallery 1,021) | 6,682 [M] | HOME −66 (spec estimate +20-40 for items 3 and 4 together): `DICT_ROOM` 27 B, one call in each of `:`, CREATE, VARIABLE, CONSTANT, STRING (3 B each), ARRAY 7, `,` 6, `C,` 6, ALLOT 5; no common header builder exists. Dictionary 22 KB → 14 KB. Sprite buffers moved out of the store region (`$E800` → `$F000`, 0 B). **Floors lowered to 1,050 HOME / 1,050 cart / 1,096, 1,096, 1,021 demos** (this row) | `make bench` within 1% (pixel −0.88%, the rest faster) | `make test` 70/0/1, POWERON 7/7 (smoke p43 updated for the new FREE); edtest old 19/19, new N1-N3, N5 pass; tapetest 16/16; harness; fusesave 42/0 (cross phase retried after a Fuse tape_write abort, spec section 10); cartdiff 26/26; check pass |
@@ -921,3 +935,11 @@ Decided 2026-10-28 (owner): all six. Decision 3 was decided at the end of step S
    (2026-10-28): whatever takes the least code.** Applied in step S as rejection: V1 SAVE-LIB tapes are header type
    0, which LOAD-LIB (type 3) never matches, at no code cost. Later the same day the owner added that V1
    compatibility need not be maintained at all; V1 SAVE-TEXT tapes load only because the format is unchanged.
+
+Raised by step L, decided by the owner on 2026-10-28 (the audit's recommendations):
+
+7. **O15:** move the FILL and CIRCLE kernels (855 B) to the EXROM? **Decided: yes, after E** (once E's view has
+   taken its EXROM space). CIRCLE and FILL then need the graphics EXROM, as RECT, POLYGON and SPRITE-* already do;
+   every supported configuration carries it (HOME build, cartridge since R1, EightyOne).
+8. **O13 order:** **decided: its own step before E's code**, after E's spec and oracle.
+9. **O19:** **decided: the merged routine accepts registers 0-15**; register 16 does not exist on the AY.
