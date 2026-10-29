@@ -120,12 +120,13 @@
 ;
 ; RANDOMNESS: `0 RANDOMIZE` (reseed from the real Z80 R register — see
 ; core/mathfn.asm's own header) in a normal build, for genuine
-; unpredictable shuffles; `4 RANDOMIZE` (a fixed, verified seed) under
+; unpredictable shuffles; `15785 RANDOMIZE` (a fixed, verified seed) under
 ; BLACKJACK_TEST_MODE, so the exact shuffle — and therefore every dealt
-; card across every round — is precisely predictable and was
-; hand-verified against a real Python simulation of MATH_RND16's own
-; documented LFSR algorithm (kernel/math/math.asm) before ever choosing
-; the test keystroke script.
+; card across every round — is precisely predictable. Since step F (O10,
+; docs/V2/FLOAT_SPEC.md section 11.2) MATH_RND16 is Leap-C's xorshift; the
+; seed was chosen by replaying the game in Python on tools/fpforth.py's
+; rnd() over every seed, for one whose deals fit the keystroke script
+; below (the same replay on the earlier LFSR reproduced seed 4's rounds).
 ; ============================================================================
 
     INCLUDE "include/hardware.inc"
@@ -429,24 +430,23 @@ DICT_LATEST_INIT_GETKEY EQU H_GETKEY   ; the real final dictionary head
 ; nothing else ever reads or writes it.
 TEST_KEY_PTR EQU EDIT_LINE_BUF
 
-; Scripted keystroke script for `4 RANDOMIZE` (SRC_SEED below), hand-
-; verified against a real Python simulation of MATH_RND16's own
-; documented LFSR algorithm (kernel/math/math.asm) before being chosen
-; -- see this file's own header. Predicted, in GETKEY call order (a
+; Scripted keystroke script for `15785 RANDOMIZE` (SRC_SEED below), checked
+; against a Python replay of the game on MATH_RND16's xorshift (tools/
+; fpforth.py rnd()) -- see this file's own header. Predicted, in GETKEY call order (a
 ; real bug in an EARLIER draft of this exact table, caught by this
 ; ROM's own automated verification, left out the "PLAY AGAIN?" key
 ; after round 3 -- every round asks it, even a no-hit-needed natural
 ; blackjack round, so it's easy to undercount how many keys a script
 ; needs by treating "no player-turn key" as "no key at all"):
-;   Round 1: player dealt 10+A = natural 21 (BLACKJACK), no player-turn
-;            key needed at all; dealer shows 18 -- PLAY AGAIN? -> Y
-;   Round 2: player dealt Q+6=16, hits, draws K -> 26, BUSTS on that
-;            one hit (no STAND keypress needed -- busting ends the
-;            turn automatically) -- PLAY AGAIN? -> Y
-;   Round 3: player dealt A+J = natural 21 again (BLACKJACK), dealer
-;            shows 12 -- PLAY AGAIN? -> Y
-;   Round 4: player dealt 7+K=17, stands immediately; dealer hits
-;            2+6=8 -> +5=13 -> +10=23, busts -- PLAY AGAIN? -> N (end)
+;   Round 1: player dealt a natural 21 (BLACKJACK), no player-turn key
+;            needed at all; dealer 15 -- PLAY AGAIN? -> Y
+;   Round 2: player hits once and BUSTS at 23 (no STAND keypress needed --
+;            busting ends the turn automatically); dealer 12 -- PLAY
+;            AGAIN? -> Y
+;   Round 3: player dealt a natural 21 again (BLACKJACK), dealer 19 --
+;            PLAY AGAIN? -> Y
+;   Round 4: player stands on 15; the dealer draws to 23 and busts (WIN)
+;            -- PLAY AGAIN? -> N (end)
 TEST_KEY_TABLE: DB "Y","H","Y","Y","S","N",0
     ENDIF
 
@@ -459,7 +459,7 @@ TEST_KEY_TABLE: DB "Y","H","Y","Y","S","N",0
 ; so tools/check_asm.py's plain duplicate-label scan (which doesn't
 ; evaluate conditional assembly) has nothing to flag.
 ; ============================================================================
-SRC_SEED_TEST: DB "4 RANDOMIZE "
+SRC_SEED_TEST: DB "15785 RANDOMIZE "
 SRC_SEED_TEST_LEN EQU $ - SRC_SEED_TEST
 SRC_SEED_REAL: DB "0 RANDOMIZE "
 SRC_SEED_REAL_LEN EQU $ - SRC_SEED_REAL

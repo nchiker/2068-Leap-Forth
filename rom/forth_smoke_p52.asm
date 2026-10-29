@@ -62,23 +62,25 @@
 ; so this test payload no longer needs a stand-in for it either.
 ;
 ; GROUND TRUTH, independently established (not hand-computed or
-; assumed): rom/forth_demo_blackjack.asm rebuilt with -DBLACKJACK_TEST_MODE
-; and run under real headless Fuse (via --debugger-command, a breakpoint
-; at the post-SRC_VERIFY .hang loop, and `print` expressions reading
-; VPTR's own fixed 62120 log address directly — no GUI, no screenshot,
-; no key injection needed) produced, for the SAME seed and SAME keys:
-;   Round 1: PTOTAL=21 DTOTAL=18 OUTCOME=4 (BLACKJACK)
-;   Round 2: PTOTAL=22 DTOTAL=20 OUTCOME=3 (BUST)
-;   Round 3: PTOTAL=21 DTOTAL=12 OUTCOME=4 (BLACKJACK)
-;   Round 4: PTOTAL=17 DTOTAL=23 OUTCOME=1 (WIN)
-; (Rounds 1, 3, and 4 match rom/forth_demo_blackjack.asm's own header
-; narrative exactly; round 2's exact PTOTAL/DTOTAL aren't stated there
-; as precisely as this run's own direct memory read, which is treated as
-; authoritative — an actual emulator run, not a re-derivation of the
-; header's prose.) Checkpoint 2 below asserts its OWN loaded-via-tape
-; copy's VPTR log matches these 12 values exactly, plus a real FIND
-; lookup on "MAIN" to directly confirm the word is genuinely present in
-; the rebuilt dictionary (not just inferred from the game having run).
+; assumed): the game is deterministic given RANDOMIZE's seed and the
+; scripted keys, and MATH_RND16 is Leap-C's xorshift since step F (O10,
+; docs/V2/FLOAT_SPEC.md section 11.2). The expected log was computed by
+; replaying the game in Python on tools/fpforth.py's rnd() (the reference
+; model of that generator: 52 shuffle draws per round, the "Y H Y Y S N"
+; key script consumed in the order the Forth text asks for keys); the
+; same replay on the earlier LFSR reproduced the four rounds a real Fuse
+; run had logged for that generator's seed 4, which established the
+; replay. The seed, 15785, was chosen (rom/forth_demo_blackjack.asm
+; SRC_SEED_TEST) for deals that fit the key script with the same kinds of
+; round as before:
+;   Round 1: PTOTAL=21 DTOTAL=15 OUTCOME=4 (BLACKJACK)
+;   Round 2: PTOTAL=23 DTOTAL=12 OUTCOME=3 (BUST)
+;   Round 3: PTOTAL=21 DTOTAL=19 OUTCOME=4 (BLACKJACK)
+;   Round 4: PTOTAL=15 DTOTAL=23 OUTCOME=1 (WIN: the dealer busts)
+; Checkpoint 2 below asserts its OWN loaded-via-tape copy's VPTR log
+; matches these 12 values exactly, plus a real FIND lookup on "MAIN" to
+; directly confirm the word is genuinely present in the rebuilt
+; dictionary (not just inferred from the game having run).
 ;
 ; RAM LAYOUT for this test only (not part of forth_boot.asm's own real
 ; budget): FAKE_TAPE_BUF ($B400-$CFFF, 7168 bytes — both blocks together
@@ -213,40 +215,39 @@ COLD_START:
     ld   de, SRC_LOAD_BJ_LEN
     call INTERPRET_RUN
 
-    ; ---- confirm all 4 rounds' logged outcomes match the independently
-    ; established ground truth (see this file's own header). The 12
-    ; addresses are VPTR's own sequential 2-byte log slots (62120,
-    ; 62122, ... 62142) -- CHECK_MEM16 itself advances HL by 2 after
-    ; each check (see its own comment below), so only the FIRST address
-    ; is loaded explicitly; every check after the first continues
-    ; reading forward from exactly where the previous one left off. Done
-    ; before the FIND check below (an independent verification -- order
-    ; between the two doesn't matter, either failure reports the same
-    ; checkpoint 2 border code) purely so that check's own failure jump
-    ; lands within JR range of FAIL_TEST. ----
+    ; ---- confirm all 4 rounds' logged outcomes match the ground truth
+    ; (see this file's own header). The 12 addresses are VPTR's own
+    ; sequential 2-byte log slots (62120, 62122, ... 62142) -- CHECK_MEM16
+    ; itself advances HL by 2 after each check (see its own comment
+    ; below), so only the FIRST address is loaded explicitly; every check
+    ; after the first continues reading forward from exactly where the
+    ; previous one left off. Done before the FIND check below (an
+    ; independent verification -- order between the two doesn't matter,
+    ; either failure reports the same checkpoint 2 border code) purely so
+    ; that check's own failure jump lands within JR range of FAIL_TEST. ----
     ld   hl, 62120
     ld   de, 21
     call CHECK_MEM16
-    ld   de, 18
+    ld   de, 15
     call CHECK_MEM16
     ld   de, 4
     call CHECK_MEM16
 
-    ld   de, 22
+    ld   de, 23
     call CHECK_MEM16
-    ld   de, 20
+    ld   de, 12
     call CHECK_MEM16
     ld   de, 3
     call CHECK_MEM16
 
     ld   de, 21
     call CHECK_MEM16
-    ld   de, 12
+    ld   de, 19
     call CHECK_MEM16
     ld   de, 4
     call CHECK_MEM16
 
-    ld   de, 17
+    ld   de, 15
     call CHECK_MEM16
     ld   de, 23
     call CHECK_MEM16

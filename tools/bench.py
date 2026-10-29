@@ -66,7 +66,8 @@ BENCHES = ("sieve", "pixel", "float", "string")
 # (N, RESULT) printed by the ROM, from ~/2068-rom-benchmarks/benchmarks/forth/*.fs headers.
 EXPECTED = {
     "sieve": ("10", "551"),      # pi(4003)-1
-    "pixel": ("3000", "159"),    # seeded by `26725 RANDOMIZE` (was `0 RANDOMIZE`: see rom/bench/bench_pixel.asm)
+    "pixel": ("3000", "302"),    # seeded by `26725 RANDOMIZE` (rom/bench/bench_pixel.asm); 302 since step F's RND (Leap-C's
+                                 # xorshift, FLOAT_SPEC.md 11.2), 159 with the earlier LFSR
     "float": ("300", "-0.6523"),
     "string": ("400", "15"),
 }

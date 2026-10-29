@@ -12,13 +12,16 @@
 ;   4. 16 SQRT . 15 SQRT .        -> prints "4 3 " (PRINT_COL advances
 ;      by 4) -- truncating integer square root
 ;   5. 12345 RANDOMIZE, then ten calls to "100 RND ." -- RANDOMIZE with
-;      a fixed nonzero seed makes the whole LFSR sequence deterministic
+;      a fixed nonzero seed makes the whole sequence deterministic
 ;      (see kernel/math/math.asm's own MATH_RND_SEED header), so the
-;      exact ten results are known in advance (independently simulated
-;      in Python from MATH_RND16's own documented algorithm: 72, 70,
-;      35, 67, 33, 0, 84, 92, 96, 32) and therefore so is the exact
-;      printed width (PRINT_COL advances by 29: nine 2-digit results
-;      plus one 1-digit result, "0", each with a trailing space).
+;      exact ten results are known in advance (computed with
+;      tools/fpforth.py's rnd(), the reference model of MATH_RND16's
+;      xorshift generator and its high-word range scaling: 51, 31, 24,
+;      25, 31, 20, 59, 62, 18, 4; the earlier LFSR gave 72, 70, 35, 67,
+;      33, 0, 84, 92, 96, 32) and therefore so is the exact printed
+;      width (PRINT_COL advances by 29: nine 2-digit results plus one
+;      1-digit result, each with a trailing space -- the same width as
+;      before, by coincidence of the digit counts).
 ;
 ; Border goes GREEN (4) if all checkpoints pass; otherwise it shows the
 ; failing checkpoint's number.
