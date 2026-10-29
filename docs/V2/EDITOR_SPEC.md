@@ -63,6 +63,13 @@ the frame phase, so figures compare to within one interrupt.
   at column 32, which is off the row, so no cursor shows [M].
 - **BREAK does not stop a running program** (`: L BEGIN 0 UNTIL ; L` runs on with BREAK held): no interpreter poll.
   That is step B (O6), not E.
+- **An error in `LOAD-TEXT`'s text is mishandled** [M, oracle N3]. The unknown word is reported, but the handler
+  returns from the inner `INTERPRET_RUN` to the end of `LOAD-TEXT` and into the outer interpreter, which goes on
+  reading the `SRC_PTR`/`SRC_END` the inner run left: the rest of the text runs (a second `?` follows). When the
+  unknown word hits in compile state (`: SQ DUP *` CR `;` ...), the outer run ends one stack word off and the machine
+  restarts at `$0000`. `INTERPRET_RUN` also stores `THROW_ROOT_SP` on every entry, so after the nested run the outer
+  interpreter keeps the inner run's deeper SP [S]. E's `LOAD-TEXT` must stop at the error and leave the machine
+  intact (section 3).
 - After a refused key the wrap table keeps the refused line until the next redraw (`FWRAP_OVERFLOW` stays 1);
   nothing visible follows from it [M].
 
@@ -84,7 +91,7 @@ scan-based `RECALL`/`LIST-DEFS` already work this way.
 
 **E2. Store and dictionary keep apart.** Two options, measured in the oracle before the code:
 - (a) *Fixed store* (**decided**): the store keeps `$D000-$EFFF`; the dictionary's ceiling becomes `$D000`, checked
-  where a definition ends and in `ALLOT` (THROW -8, dictionary overflow). Dictionary space drops from 22 KB to
+  where definitions and data fields start, in `ALLOT`, `,` and `C,` (THROW -8, dictionary overflow; section 3). Dictionary space drops from 22 KB to
   14 KB. In-place LIB images (STORAGE_SPEC D4) are then limited to `$D000`.
 - (b) *Shared region*: the store sits at the top and grows down; dictionary and store share `$9800-$EFFF` with one
   check (`HERE` + guard < store start). More flexible, more code, and the store moves.
@@ -111,7 +118,8 @@ replay). `n RECALL` is retired: `EDIT` does its job on the real source, and V1 c
 
 **E10. The console's defects are fixed by the rebuild**, not patched first: the merged redraw (E3) has one grow loop,
 which must keep its pointer across the scroll (the 64-column hang); the room check uses the width in force; the
-cursor on a full row goes to column 0 of a new row, as a line one character longer would. Each has a T12 case whose
+cursor on a full row goes to column 0 of a new row, as a line one character longer would; a 128-character line has
+no fifth row, so its cursor sits on the last character's cell. Each has a T12 case whose
 expectation changes (section 8).
 
 **E7. Leaving the view clears the screen** and returns to the prompt with `PRINT_ROW`/`PRINT_COL` reset. Restoring
@@ -138,7 +146,9 @@ instead of `$0D`. Outside the view every terminator is `$0D` (E6's commit clears
   `STORE_LIMIT`) is not appended: `STORE FULL` is printed on its own line, and the line is still interpreted.
   Otherwise the text and a CR go at `STORE_END`.
 - *LOAD-TEXT*: the tape's data replaces the store (as today, up to 8,192 bytes); if its last byte is not CR, a CR is
-  added when there is room. Then the store is interpreted, as today. Lines longer than 128 characters (an old
+  added when there is room. Then the store is interpreted, as today. An error in the loaded text (an unknown word,
+  an uncaught THROW) stops the interpretation with the console's usual message and leaves the machine, the
+  dictionary built so far and the store intact; `THROW_ROOT_SP` is the outer interpreter's again afterwards. Lines longer than 128 characters (an old
   space-separated text) are kept as they are: the console interprets them, and `EDIT` refuses while one exists.
 - *SAVE-TEXT*, *VERIFY-TEXT*: the bytes `STORE_START` to `STORE_END`, unchanged format.
 - `WORD` treats every byte from 0 to space as a delimiter (E1).
@@ -153,7 +163,9 @@ routines' headers.
 own, no longer as the ceiling minus 8 KB. Every place that starts a definition or a data field (the header builder
 behind `:`, `CREATE`, `VARIABLE`, `CONSTANT`, `STRING`, `ARRAY`), `ALLOT`, `,` and `C,` refuses with THROW -8 when
 `HERE` would pass `DICT_RAM_CEILING` - 256; the 256-byte guard covers a definition's body compiled before its `;`.
-The code picks the fewest central points that cover these; the oracle (N5) checks the result. In-place LIB images
+The code picks the fewest central points that cover these; the oracle (N5) checks the result. An uncaught THROW
+prints the console's error text (today `STACK?` for every code), so N5 observes -8 through `CATCH` where it can
+(`ALLOT`, `,`, `C,`) and, for the defining words, by the error, `HERE` staying below the guard and the store's bytes. In-place LIB images
 (STORAGE_SPEC D4) are bounded by the same ceiling.
 
 ## 4. Console
@@ -260,8 +272,8 @@ Cases E adds (written and run on the old build with the next commit; expected re
 |---|---|---|---|
 | N1 | `store-lines` | committed lines are CR-ended in `$D000`, `STORE_END` exact; an empty ENTER appends nothing | (fails: space-separated) |
 | N2 | `store-full` | an append that does not fit prints `STORE FULL`, the line still runs, nothing at or above `$F000` changes | (fails: overrun) |
-| N3 | `cr-whitespace` | source with CR (and TAB) between words interprets as with spaces, through `INTERPRET_RUN` and `LOAD-TEXT`; a tape without a final CR gets one | (fails: CR is part of a word) |
-| N4 | `text-tape-roundtrip` | in `tools/tapetest.py` (its case 3 extended): a store of several CR-ended lines saved, decoded, played back, `LOAD-TEXT`: store byte-identical and the program runs | (passes with its space-separated text) |
+| N3 | `cr-whitespace` | source with CR (and TAB) between words interprets as with spaces, through `INTERPRET_RUN` and `LOAD-TEXT`; a tape without a final CR gets one; an unknown word in loaded text stops it with `name ?`, machine and store intact, and a later `ABORT` still works | (fails: CR is part of a word; the machine restarts) |
+| N4 | `text-tape-roundtrip` | in `tools/tapetest.py` (case N4, after case 3): nine CR-ended lines saved, decoded, played back, `LOAD-TEXT`: store byte-identical; prints 42, and 21 once CR is whitespace | (passes: the same bytes read as one long name there) |
 | N5 | `dict-ceiling` | definitions in a loop, and a large `ALLOT`, THROW -8 before `HERE` passes `$D000` - 256; the store is untouched (E2a) | (fails: store overwritten) |
 | N6 | `edit-open` | `EDIT SQ` shows the view on the last `: SQ` line (case-insensitive), status `LINE n/m`; `EDIT` alone opens a new line after the last | (fails: no `EDIT`) |
 | N7 | `edit-keys` | every row of the key table in section 5, store and screen checked after each key | (fails) |
@@ -284,7 +296,8 @@ Cases E adds (written and run on the old build with the next commit; expected re
 6. Engine veneers; the view in the EXROM (E4).
 7. `EDIT`, `RECALL` retired (E6); docs, tutorial, audit ledger.
 
-Each step: `make check`, `make test`, `make edtest`, `make harness`; `make tapetest` from step 3 on (text tapes).
+Each step: `make check`, `make test`, `make harness`, `make edtest EDTEST_GROUP=old` plus the new cases that step
+implements (all of them by the last step, when plain `make edtest` must pass); `make tapetest` from step 3 on.
 
 ## 10. Verification limits
 

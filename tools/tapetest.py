@@ -5,6 +5,15 @@ Runs the case table of spec section 8 (cases 1-14 and 11a; case 15 is p7/p52 in 
 ZEsarUX (through ts2068-debug / ZRCP), judging every case against the NEW contract of the spec.  It is written before
 the code: on the old build it is expected to FAIL several cases, and the failures are the defects of section 1.
 
+Step E adds case N4 (docs/V2/EDITOR_SPEC.md section 8, "text-tape-roundtrip"; ids: `--case N4`, run right after case 3):
+a store of nine CR-ended lines is put into memory at LOADTEXT_BUF with the store's end cell set (STORE_END, or
+WORKSPACE_END on the old build), `SAVE-TEXT` writes it from there (`<addr> <len> SAVE-TEXT N4TXT`), the capture is decoded
+(header and payload must be the store bytes, CRs included), played into a fresh machine, `LOAD-TEXT N4TXT`: the store must
+be byte-identical, no error, and the program must have run.  The old build interprets CR as part of a word and restarts
+on an unknown word inside LOAD-TEXT's text, so the text (N4_TEXT, whose comment says how) has no unknown token for it: it
+prints 42 there (first, space-separated line) and, on a build with STORE_END (CR is whitespace), 21 as well, from the
+CR-separated lines.  The case passes on the old build; on a new build it also demands the second effect.
+
 RUN   python3 -I tools/tapetest.py --build DIR [--case N ...] [--selftest] [--out FILE] [--jobs K] [--port P]
       DIR holds forth_boot_rom0.bin + graphics_exrom.bin (booted as one 24K --romfile) and forth_boot.sym.
       One line per case:  `case N <name>: PASS|FAIL <short reason>`,  then  `TAPETEST: PASS a FAIL b`.
@@ -597,15 +606,17 @@ def case_2(ctx):
     return v
 
 
-def save_and_capture(ctx, setup, cmd, v, label, space_after_s=None, extra_wait=0):
-    """Fresh emulator, no tape: setup lines, then `cmd` with the sender's MIC edges captured.  Returns
-    (Sess paused, blocks decoded, dict)."""
+def save_and_capture(ctx, setup, cmd, v, label, space_after_s=None, extra_wait=0, poke=None):
+    """Fresh emulator, no tape: setup lines, then `cmd` with the sender's MIC edges captured.  poke(s): called with the
+    paused session after the setup lines, to put bytes into memory.  Returns (Sess paused, blocks decoded, dict)."""
     s = ctx.session(capture=True).start()
     try:
         s.wait_idle()
         for ln in setup:
             if s.line(ln):
                 raise HarnessError("setup line raised an error: %r" % ln)
+        if poke:
+            poke(s)
         pre = s.snap()
         s.arm_capture()
         s.type_text(cmd)
@@ -661,6 +672,73 @@ def case_3(ctx):
         v.check(r["idle"], "no prompt after LOAD-TEXT of the captured tape")
         v.check(screen_has(s2.screen(), r"\b42\b"), "round trip: no 42 on the screen %s" % s2.screen()[-3:])
         v.check(s2.err_flag() == 0, "round trip: error reported")
+    finally:
+        s2.stop()
+    return v
+
+
+# Step E (docs/V2/EDITOR_SPEC.md section 8, N4): the text tape round trip of a STORE of CR-ended lines.  The bytes are put into
+# the store directly (STORE_START = LOADTEXT_BUF, end cell STORE_END, or WORKSPACE_END on the old build), SAVE-TEXT writes them
+# from the store, the capture is decoded and played into a fresh machine, LOAD-TEXT puts them back: the store must hold
+# the same bytes and the program must have run.
+#
+# HOW THE TEXT SURVIVES THE OLD BUILD.  There CR is part of a word (core/interp.asm W_WORD splits at a space only), and an
+# unknown word inside LOAD-TEXT's text does not return an error: the error path unwinds one level too far and the machine
+# restarts at $0000 (measured by tools/edtest.py N3), losing the store and the screen.  So the text has no unknown token
+# for the old build: its first line is ordinary space-separated Forth that ends with a lone colon, and every later line is
+# a single token, so that the old tokenizer sees `: ` followed by ONE token (all the remaining lines glued with their CRs,
+# 25 bytes, under WORD's 32-character limit) which the colon takes as the NAME of a new definition, and the text ends:
+#     : DBL DUP + ; 21 DBL . :<space> CR TRI CR DUP CR DBL CR + CR ; CR 7 CR TRI CR . CR
+# Old build: defines DBL, prints 42, defines a word with a name of 25 characters (CRs inside), no error.  A build in which
+# CR is whitespace (it has STORE_END) defines TRI = DUP DBL +, runs `7 TRI .` and prints 21 as well.  Both: the tape
+# carries the nine CR-ended lines byte for byte, SAVE-TEXT and LOAD-TEXT keep them, the store afterwards is identical, no
+# error.  What is not checked on the old build is the only thing the spec says it cannot do (table N4: "passes with its
+# space-separated text"): that lines run as lines.
+N4_TEXT = b": DBL DUP + ; 21 DBL . : \rTRI\rDUP\rDBL\r+\r;\r7\rTRI\r.\r"
+
+
+def case_n4(ctx):
+    v = Verdict()
+    b = ctx.b
+    text = N4_TEXT
+    end_cell = b.S["STORE_END"] if "STORE_END" in b.S else b.S["WORKSPACE_END"]
+    crws = "STORE_END" in b.S                  # the build whose WORD takes CR as whitespace (step E) has the new end cell
+    buf = b.S["LOADTEXT_BUF"]
+    v.check(text.count(b"\r") == 9 and text.endswith(b"\r"), "test text: nine CR-ended lines")
+
+    def poke(s):
+        s.dbg.pause()
+        s.z.command("write-memory-raw %d %s" % (buf, text.hex()))
+        s.z.command("write-memory-raw %d %s" % (end_cell, struct.pack("<H", buf + len(text)).hex()))
+
+    cmd = "%d %d SAVE-TEXT N4TXT" % (buf, len(text))
+    s, info = save_and_capture(ctx, [], cmd, v, "SAVE-TEXT", poke=poke)
+    try:
+        blks = info["blocks"]
+        v.check(info["idle"], "N4 SAVE-TEXT did not return")
+        if not v.check(len(blks) == 2, "N4 captured %d blocks, expected 2" % len(blks)):
+            return v
+        chk_header(v, "N4 SAVE-TEXT", blks[0], 0, "N4TXT", len(text), 0x8000, len(text))
+        f, payload, ok = tapes.unframe(blks[1]["data"])
+        v.check(f == 0xFF and ok, "N4 SAVE-TEXT data block flag/checksum (flag %s)" % f)
+        chk_bytes(v, "N4 SAVE-TEXT payload (the store bytes, CRs included)", payload, text)
+        v.note("N4 %d edges, %d blocks, %.1f s emulated" % (info["edges"], len(blks), info["emu_s"]))
+    finally:
+        s.stop()
+    s2, _ = play(ctx, tape_from_blocks(blks), [], "LOAD-TEXT N4TXT")
+    try:
+        r = finish(s2)
+        v.check(r["idle"], "N4 no prompt after LOAD-TEXT of the captured tape")
+        end = s2.rd16(end_cell)
+        v.check(end == buf + len(text), "N4 store end %04X, expected %04X" % (end, buf + len(text)))
+        chk_bytes(v, "N4 store after LOAD-TEXT", bytes(s2.rd(buf, max(0, min(end - buf, 8192)))), text)
+        rows = s2.screen()
+        v.check(screen_has(rows, r"\b42\b"), "N4 round trip: no 42 on the screen %s" % rows[-3:])
+        v.check(s2.err_flag() == 0, "N4 round trip: error reported")
+        if crws:
+            v.check(screen_has(rows, r"\b21\b"), "N4 round trip: the CR-separated lines did not run (no 21) %s" % rows[-3:])
+        v.note("N4 %s: expected 42%s on the screen, store %d bytes identical to the saved ones" % (
+            "new build (CR is whitespace)" if crws else "old build (CR is part of a word)", " and 21" if crws else "", len(text)))
     finally:
         s2.stop()
     return v
@@ -1021,6 +1099,7 @@ CASES = {
     "1": ("text_doubler", case_1, "pass"),
     "2": ("blackjack_p53", case_2, "pass"),
     "3": ("savetext_roundtrip", case_3, "header param 1 differs"),
+    "N4": ("text_tape_roundtrip", case_n4, "passes (42 only: CR is part of a word, the text is built for that)"),
     "4": ("savelib_roundtrip", case_4, "fails the format checks; round trip passes"),
     "5": ("foreign_identity", case_5, "n/a (loads as nothing; type 3 skipped)"),
     "6": ("v1_lib_tape", case_6, "loads"),
@@ -1040,7 +1119,7 @@ CASES = {
     "9L": ("legacy_wrong_flag", legacy_9, "reports success"),
     "10L": ("legacy_dropout", legacy_10, "reports success"),
 }
-ORDER = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "11a", "12", "13", "14"]
+ORDER = ["1", "2", "3", "N4", "4", "5", "6", "7", "8", "9", "10", "11", "11a", "12", "13", "14"]
 EXTRA = ["11L"]                             # judged like the cases, tallied apart
 LEGACY = ["7L", "8L", "8Z", "9L", "10L"]    # old build only (no ROM_IDENTITY): INFO lines, not judged
 

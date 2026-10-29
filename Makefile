@@ -302,9 +302,10 @@ harness: build/forth_boot_rom0.bin build/graphics_exrom.bin
 # wrapping, scrolling, the workspace and RECALL, 64 columns, BREAK, colours), the redraw oracle (after every key the screen
 # equals a full redraw) and the typing-cost baseline. About 45 s on 7 workers (3 minutes on 1); not part of `make test`. Ports
 # 10900-10919. EDTEST_BUILD=<build dir> runs it on another build instead (an older one in a git worktree); the result
-# is written to build/edtest.json.
+# is written to build/edtest.json. EDTEST_GROUP=old|new runs one group of cases (default both: the 19 that characterise the
+# old console and step E's N1-N13, docs/V2/EDITOR_SPEC.md section 8).
 edtest: build/forth_boot_rom0.bin build/graphics_exrom.bin
-	python3 -I tools/edtest.py --build $(or $(EDTEST_BUILD),build)
+	python3 -I tools/edtest.py --build $(or $(EDTEST_BUILD),build) --group $(or $(EDTEST_GROUP),both)
 
 repro:
 	tools/check_repro.sh

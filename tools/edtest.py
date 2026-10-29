@@ -8,12 +8,18 @@ defect still asserts the current behaviour (the defects are listed in the report
 A rebuilt editor is expected to FAIL the cases that describe behaviour step E changes on purpose; each such failure is a
 line to decide on, not a regression by itself.
 
-RUN   python3 -I tools/edtest.py [--build DIR] [--workers N] [--port P] [--json OUT] [-v] [substring ...]
+RUN   python3 -I tools/edtest.py [--build DIR] [--group old|new|both] [--workers N] [--port P] [--json OUT] [-v] [--selftest] [substring ...]
       DIR holds forth_boot_rom0.bin and graphics_exrom.bin (default: build/; DIR or DIR/build, as tools/fharness.py, so
       the images of an older build in a git worktree work).  Substrings select cases by name.  One PASS/FAIL line per
       case with its detail (a passing case's detail is cut short; -v prints it whole), then a summary.  JSON (default build/edtest.json): every case with its parts, the typing-cost
       numbers, the wall times.  Exit 0 = all cases pass, 1 = any case fails, 2 = harness error (bad build directory, port
       in use, no emulator could run a task).  Ports P .. P+workers-1, default 10900-10919 (fharness.py's range).
+      TWO GROUPS.  `old` = the 19 cases of T12 described below (what the console editor of the audit baseline does); `new` =
+      the cases step E adds (docs/V2/EDITOR_SPEC.md section 8, second table: N1-N3 and N5-N13; N4 is case N4 of
+      tools/tapetest.py) which describe what the REBUILT console, store and full-screen view must do and so FAIL on the old
+      build, each with the detail of the first thing that differs.  Default: both.  Every output line and the JSON carry the
+      group (`PASS old 7 line-full`, `FAIL new N5 dict-ceiling`); a substring may also be a case number (N5).  `--selftest` needs no
+      emulator: it drives the new cases' key sequences against a model of the view (see STEP E CASES).
 
 Derived from 2068-Leap-C tools/shelltest.py at its Phase 5 state: its case/expect registry, `full_reference` (after every
 key the screen equals a full redraw) and the `redraw-oracle` and `typing-cost` cases are ported; copied and adapted, not
@@ -92,6 +98,53 @@ CURRENT BEHAVIOURS THAT LOOK LIKE DEFECTS (asserted as they are; the case that s
   * After a refused key the wrap table keeps the refused line (FWRAP_OVERFLOW stays 1, 64 columns: 32-column rows) and the
     screen is not redrawn until the next accepted key; harmless as far as seen [line-full, console-64col].
 
+STEP E CASES (group new; EDITOR_SPEC.md sections 3 and 5 are the specification of every assertion; a comment `READING:` in the
+code marks each place where the text leaves a detail open and says which reading was taken, the strictest the text supports; where
+the text allows several outcomes the case accepts exactly those and reports which one the build chose)
+  N1 store-lines     committed lines are text + CR in the store at STORE_START (= LOADTEXT_BUF), STORE_END exact, an empty line
+                     appends nothing, an error line does.  STORE_END is the new name of the cell WORKSPACE_END; the case uses
+                     whichever the build has.
+  N2 store-full      an append that does not fit (STORE_END + length + 1 > $F000) is refused: `STORE FULL` on its own row, the line
+                     still runs, the store and $F000-$F0FF are unchanged; one that fits exactly is made; an empty line is no refusal.
+  N3 cr-whitespace   INTERPRET_RUN called directly on sources whose words are separated by CR, TAB, LF, NUL, SOH, US (and mixed),
+                     and LOAD-TEXT from a real tape (realtape-open: the emulator is reset by it and a worker whose emulator played a
+                     tape gets a new one) with CR and TAB, a text without a final CR (a CR is added) and an 8,192-byte text (no
+                     room: nothing added, nothing written at or above $F000).
+  N5 dict-ceiling    HERE is poked near $D000 - 256 (= $CF00, the new ceiling less its 256-byte guard; the old build's own ceiling
+                     is $F000) and: `: Wnn ;` in a loop is accepted only from HERE <= $CF00 and refused after, with HERE and
+                     LATEST unchanged and the store at $D000 intact; VARIABLE, CONSTANT, CREATE, ARRAY, STRING refused past the
+                     guard, an array that would pass it refused; `n ALLOT`, `,` and `C,` give THROW -8 under CATCH (to $CF00
+                     exactly allowed, one more refused; 20000, 28672 and 32767 refused, the last two carry past $FFFF); a
+                     200-byte definition below the guard is accepted and runs.  HOW A THROW SHOWS ON THIS BUILD: uncaught, it
+                     prints `STACK?` whatever its code (rom/forth_boot.asm RUNTIME_ERROR_HOOK discards it); `' word CATCH .`
+                     prints the code.  So -8 is asserted through CATCH, and `STACK?` for the uncaught form.
+  N6-N9, N12, N13    the full-screen view.  It is detected by row 23 reading `LINE n/m` while the machine waits for a key; on the
+                     old build `EDIT ...` gives `EDIT ?` and each case fails at once with that.  The cases keep a MODEL of the
+                     view (class VModel: store lines with their session marks, the cursor line in a buffer, the cursor
+                     offset; the key table of section 5 key by key; the console's word-wrap rule for the rows) and after every
+                     key compare, with the model, the store bytes (from STORE_START to STORE_END), all 23 rows, the status row
+                     and the one FLASH cell (the cursor).  `edtest.py --selftest` runs every sequence against the model
+                     itself in place of the emulator, to find test bugs before the ROM exists.
+  N6 edit-open       `EDIT SQ` opens on the last line where the words `:` and `SQ` follow each other (case-insensitive; not
+                     `: SQRT`, not `: X SQ`, not a `:` line followed by an `SQ` line), cursor at its start; bare `EDIT`; a 60-line store.
+  N7 edit-keys       the key table, 9 sequences (characters including all 95 printable codes, the limits, UP/DOWN, DELETE, ENTER,
+                     delete-line, insert-line, BREAK, scrolling, the control keys through the keyboard matrix).
+  N8 edit-commit     leaving: only marked lines run, in order, each with its mark cleared first (a line reads its own terminator);
+                     an unchanged session runs nothing; an error stops at `LINE n`; no $8D left.
+  N9 edit-redraw-oracle  after every key the 6,912-byte screen equals what the EXROM routine VIEW_REDRAW_ALL draws from the
+                     same state (called at the key wait from a checkpoint onto a blank screen, as the redraw-oracle case does with
+                     EDITOR_REDRAW), and the oracle sees a stray pixel, a stray FLASH cell and a missing cursor.  Fails with
+                     `no VIEW_REDRAW_ALL` when the symbol is absent.
+  N10 edit-refusals  NO EXROM (the stock-shaped EXROM, build/stock_shaped_exrom.bin: a temporary copy of the build directory is made
+                     for it and removed afterwards), LONG LINE (a 199-character line in the store), `NOSUCH ?`: one message, nothing changed
+                     (the store may gain the typed line), console still works.
+  N11 edit-64col     `EDIT` in 64-column mode prints 32COL FIRST and changes nothing.
+  N12 edit-typing-cost  T-states per key in the view (same method as typing-cost), 11 scenarios, each taken twice from a restored
+                     machine; passes when the two are equal; no threshold (the first measurement sets the gate); printed as a table.
+  N13 edit-store-full  with 0, 1 and 3 bytes of room: a change that would overflow the store (a grown line written back, a line
+                     inserted) is refused with `STORE FULL` on the status row until the next key, store and line unchanged; a change
+                     that fits exactly is made; delete-line gives room back.
+
 EMULATOR LIMITS: there is no hardware here.  Every verdict is ZEsarUX's (its Z80, its ULA/SCLD and paging, its keyboard
 matrix and its interrupt timing) running the ROM images; the screen is read from RAM, not from a display, so a colour,
 FLASH-blink or timing effect that exists only on a real TV is not seen (the FLASH attribute bit is read, its blinking is
@@ -99,16 +152,22 @@ not), the border colour is read from the ROM's shadow of port $FE, and a real ke
 A pass says what the emulator did, not that real hardware agrees.
 """
 import argparse
+import copy
+import functools
 import json
 import os
 import random
+import re
+import shutil
 import sys
+import tempfile
 import time
 
 sys.dont_write_bytecode = True
 HERE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE_DIR)                      # python3 -I does not put the script's directory on sys.path
 import fharness as fh                                                       # noqa: E402
+import tapes                                                                # noqa: E402
 from fharness import CTRL_KEYS, INVERSE_MARK, KEY_ENTER, Z_CAPS, Z_SPACE    # noqa: E402
 
 ROOT = fh.ROOT
@@ -405,11 +464,13 @@ def step(env, ck, label, base, ed, code):
 
 # ---------------------------------------------------------------------------------------------------- the registry
 CASES = []          # (name, title, fn, parts)
+GROUPS = {}         # case name -> (group, number): "old" = the 19 cases of T12 (numbered in order), "new" = step E's N1-N3, N5-N13
 
 
-def case(name, title, parts=("-",)):
+def case(name, title, parts=("-",), group="old", num=None):
     def deco(fn):
         CASES.append((name, title, fn, list(parts)))
+        GROUPS[name] = (group, num or str(1 + sum(1 for g, _ in GROUPS.values() if g == group)))
         return fn
     return deco
 
@@ -1318,42 +1379,1613 @@ def typing_cost(env, part):
     return ck.result()
 
 
+# ====================================================================================================================
+# STEP E: THE NEW CASES (group "new", EDITOR_SPEC.md section 8, second table, N1-N3 and N5-N13; N4 is in tapetest.py)
+# ====================================================================================================================
+# Written from the spec before the ROM code exists: they FAIL on the old build, each with the detail of the first thing
+# that differs.  Where the spec leaves a detail open the strictest reading its text supports is asserted and a comment
+# "READING:" says which; where the text allows several outcomes the case accepts exactly those and reports which one the
+# build chose (a note), so the choice is visible and can be turned into a rule.
+STORE_LIMIT = 0xF000                    # STORE_LIMIT: the store never writes at or above it (spec section 3)
+STORE_CAP = STORE_LIMIT - LOADTEXT_BUF  # 8,192 bytes
+DICT_CEIL = 0xD000                      # the new DICT_RAM_CEILING (E2a).  The contract is relative to this value, whatever
+GUARD = 256                             # symbol the build under test has (the old build's DICT_RAM_CEILING is $F000)
+CR, CRM = 0x0D, 0x8D                    # a line's terminator, and the session mark (CR with bit 7 set)
+STATUS_RE = re.compile(r"^LINE (\d+)/(\d+)")        # the view's status row (row 23)
+VIEW_MAXI = 10_000_000                  # instructions a key in the view may take before the harness calls it a hang
+SCREEN_ROWS = 23                        # rows 0-22 show lines, row 23 is the status row
+
+
+class ViewFail(Exception):
+    """The view (or the machine) did not behave: the part stops here and fails with this detail."""
+
+
+class ModelAmbiguous(Exception):
+    """A test sequence reached a state the spec leaves open (or a line needing a 5th row): a bug in the test sequence,
+    found by `edtest.py --selftest` before the ROM exists."""
+
+
+def guarded(fn):
+    """fn(env, part, ck): a ViewFail ends the part as a failure with its detail; so does a machine that stops answering."""
+    @functools.wraps(fn)
+    def run(env, part):
+        ck = Check()
+        try:
+            fn(env, part, ck)
+        except ViewFail as e:
+            ck.true("view", False, str(e))
+        except RuntimeError as e:
+            ck.true("machine", False, "%s" % e)
+        except ModelAmbiguous as e:
+            ck.true("TEST BUG", False, "%s" % e)
+        return ck.result()
+    return run
+
+
+def new_case(name, num, title, parts=("-",)):
+    return case(name, title, parts, group="new", num=num)
+
+
+# ---------------------------------------------------------------------------------------------------- store access
+def end_name(env):
+    """The store's end cell: STORE_END on the new build, WORKSPACE_END on the old one."""
+    return "STORE_END" if "STORE_END" in env.m.S else "WORKSPACE_END"
+
+
+def store_end(env):
+    return env.m.w16(env.S(end_name(env)))
+
+
+def store_read(env):
+    """The store's bytes: STORE_START (LOADTEXT_BUF) up to the end cell."""
+    end = store_end(env)
+    n = end - env.S("LOADTEXT_BUF")
+    if not 0 <= n <= STORE_CAP + 512:
+        raise ViewFail("%s = $%04X is not inside the store" % (end_name(env), end))
+    return env.m.read(env.S("LOADTEXT_BUF"), n) if n else b""
+
+
+def store_set(env, data):
+    """Put `data` into the store and set the end cell (the store as a loaded text would leave it)."""
+    buf = env.S("LOADTEXT_BUF")
+    if data:
+        env.m.write(buf, data)
+    env.m.poke16(env.S(end_name(env)), buf + len(data))
+
+
+def store_bytes(texts, marked=()):
+    """CR-ended lines (marked ones end with $8D)."""
+    return b"".join(t.encode("latin-1") + bytes([CRM if i in marked else CR]) for i, t in enumerate(texts))
+
+
+def digits(rows):
+    return re.findall(r"-?\d+", " ".join(rows[:SCREEN_ROWS]))
+
+
+def out_rows(env, mode64=False):
+    """The non-blank output rows (rows 0-22)."""
+    return [r for r in env.m.screen_rows(mode64=mode64)[:SCREEN_ROWS] if r]
+
+
+def last_out_row(env, mode64=False):
+    """The row the last console line printed its result on (PRINT_ROW is the next output row)."""
+    pr = env.print_pos()[0]
+    return env.m.screen_rows(mode64=mode64)[pr - 1] if pr >= 1 else ""
+
+
+def count_row(env, text, mode64=False):
+    return sum(1 for r in out_rows(env, mode64) if r == text)
+
+
+def seed_above_limit(env):
+    """A pattern in $F000-$F0FF (nothing lives there today; EDITOR_SPEC section 1): the case that must not touch it."""
+    pat = bytes((0xA5 ^ (i * 7)) & 0xFF for i in range(256))
+    env.m.write(STORE_LIMIT, pat)
+    return pat
+
+
+def read_above_limit(env):
+    return env.m.read(STORE_LIMIT, 256)
+
+
+def eq_bytes(ck, label, got, want):
+    """ck.eq for byte strings that may be kilobytes long: the first difference only."""
+    if got == want:
+        return True
+    n = next((i for i in range(min(len(got), len(want))) if got[i] != want[i]), min(len(got), len(want)))
+    ck.true(label, False, "differs at byte %d (got %d bytes, want %d): got %s, want %s" % (n, len(got), len(want), got[n:n + 14], want[n:n + 14]))
+    return False
+
+
+def typed_line_variants(before, cmd):
+    """The store a refused or otherwise harmless console command may leave: unchanged, or with the typed line appended as
+    a line (E5: the console appends every committed line; whether `EDIT ...` itself is appended is not specified, so both
+    are accepted)."""
+    return [before, before + cmd.encode("latin-1") + bytes([CR])]
+
+
+def tape_load(env, data, name="CRTXT", maxi=250_000_000, seed=False, pre=()):
+    """LOAD-TEXT of a text tape holding `data` (tapes.text_file) on the machine `env`: realtape-open resets the machine
+    and plays at once (tools/tapetest.py header), so the tape starts with a 4 s pause; boot and typing take about 1 s of
+    emulated time.  Returns the seed pattern (written once the prompt is back) when seed=True."""
+    m, con = env.m, env.con
+    d = tempfile.mkdtemp(prefix="edtest-tape-")
+    # ZEsarUX converts the tape to /tmp/zesarux-UID/tmp_<basename>.rwa, one name for every emulator that opens a file of
+    # that name: parallel workers must open files with different names
+    base = "edtest_%d_%s.tzx" % (os.getpid(), os.path.basename(d))
+    try:
+        path = os.path.join(d, base)
+        with open(path, "wb") as f:
+            f.write(tapes.tzx(tapes.text_file(name, data), lead_ms=4000))
+        con.boot()
+        m.cmd("realtape-open " + path)
+        pc = m.run_to([m.sym("IO_READ_KEY")], 60_000_000)
+        if pc != m.sym("IO_READ_KEY"):
+            raise ViewFail("no prompt after realtape-open (PC=%04X)" % pc)
+        con.caller = m.w16(m.regs()["SP"])
+        pat = seed_above_limit(env) if seed else None
+        for line in pre:                            # lines typed before the load (0.2 s of emulated time each)
+            con.type(line)
+        con.type("LOAD-TEXT " + name, enter=False)
+        con.key(KEY_ENTER, maxi=maxi)
+        return pat
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+        try:
+            os.remove("/tmp/zesarux-%d/tmp_%s.rwa" % (os.getuid(), base))
+        except OSError:
+            pass
+
+
+# ---------------------------------------------------------------------------------------------------- the view's model
+def wrows(text):
+    """The console's word-wrap rows of a line (spec section 5: one rule); a line needing a 5th row is a test bug."""
+    rows, overflow = wrap_model(text, 32)
+    if overflow:
+        raise ModelAmbiguous("line %r needs a 5th row" % text[:40])
+    return rows
+
+
+def row_index(rows, cursor):
+    """(row index, column) of an offset in a line's rows (EDIT_CURSOR_TO_ROWCOL, as cursor_model)."""
+    i = 0
+    while i != len(rows) - 1 and cursor >= rows[i + 1][0]:
+        i += 1
+    return i, cursor - rows[i][0]
+
+
+def row_texts(text):
+    return [text[s:s + ln].rstrip(" ") for s, ln in wrows(text)]
+
+
+KEYNAME = {LEFT: "LEFT", RIGHT: "RIGHT", UP: "UP", DOWN: "DOWN", DELETE: "DELETE", ENTER: "ENTER",
+           INSERT_LINE: "insert-line", DELETE_LINE: "delete-line", BREAK: "BREAK"}
+
+
+def keyname(code):
+    return KEYNAME.get(code, repr(chr(code)) if 32 <= code < 127 else "code %d" % code)
+
+
+def K(*parts):
+    """A key sequence: a str is typed, an int is a key code, (code, n) repeats it n times."""
+    out = []
+    for p in parts:
+        if isinstance(p, str):
+            out += [ord(c) for c in p]
+        elif isinstance(p, tuple):
+            out += [p[0]] * p[1]
+        else:
+            out.append(p)
+    return out
+
+
+class VModel:
+    """The view as the spec defines it (sections 3 and 5): store lines (text, marked), the cursor line copied into a buffer
+    (EDIT_BUF: edited by the console's engine, written back only when the line is left), the cursor offset in it.
+
+    READING: the store changes only when a line is left (UP/DOWN/ENTER/insert-line/BREAK write the line back if it changed
+    and mark it), when a line is inserted (ENTER, insert-line: a marked empty line) or deleted (delete-line, DELETE on an
+    empty line); characters, LEFT, RIGHT and DELETE inside a line change the buffer only.
+    A step returns the possible outcomes (a fork per choice the text leaves open):
+      * delete-line, DELETE on an empty line: the cursor goes to the line that took the deleted one's place (the new
+        last line if it was the last): its column is not specified (0 or the end); DELETE on an empty line may also go
+        to the end of the previous line;
+      * a line edited back to its old text, or an edit that touches the line without changing it, is `ambiguous`
+        (does `changed` mean different bytes or touched?): the test sequences never do it.
+    UP/DOWN: to the previous/next screen row of a wrapped line, at the same column or the row's end if shorter (the
+    cursor's current column, not a remembered one); past the first/last row to the previous/next line (the last row /
+    the first row of it), same rule.  A wrapped line entered by DOWN whose first row is shorter than the column is
+    ambiguous (row end or line end?): not used.  `cap`: the store's size limit in bytes (None: no limit): a write that
+    would pass it is refused, nothing changes, msg = "STORE FULL" until the next key."""
+
+    def __init__(self, texts, cur=0, col=0, marked=(), cap=None):
+        self.lines = [[t, i in marked] for i, t in enumerate(texts)]
+        self.cur, self.col = cur, col
+        self.buf = texts[cur] if texts else ""
+        self.touched = False
+        self.top = 0
+        self.exited = False
+        self.msg = None
+        self.cap = cap
+
+    def clone(self):
+        return copy.deepcopy(self)
+
+    # ---- what the machine must show
+    def n(self):
+        return len(self.lines)
+
+    def shown(self):
+        return [self.buf if i == self.cur else t for i, (t, _) in enumerate(self.lines)]
+
+    def store_bytes(self):
+        return b"".join(t.encode("latin-1") + bytes([CRM if (mk and not self.exited) else CR]) for t, mk in self.lines)
+
+    def store_len(self):
+        return sum(len(t) + 1 for t, _ in self.lines)
+
+    # ---- the keys
+    def step(self, code):
+        m = self.clone()
+        m.msg = None
+        return m._step(code)
+
+    def _fits(self, delta):
+        if self.cap is not None and delta > 0 and self.store_len() + delta > self.cap:
+            self.msg = "STORE FULL"
+            return False
+        return True
+
+    def _leave(self, extra=0):
+        """Write the cursor line back if it changed (marking it); False if the store has no room (nothing changed)."""
+        t, _ = self.lines[self.cur]
+        changed = self.buf != t
+        if not changed and self.touched:
+            raise ModelAmbiguous("a line edited back to its old text (changed or touched?): %r" % t[:30])
+        if not self._fits((len(self.buf) - len(t) if changed else 0) + extra):
+            return False
+        if changed:
+            self.lines[self.cur] = [self.buf, True]
+        self.touched = False
+        return True
+
+    def _goto(self, idx, col):
+        self.cur, self.buf, self.col, self.touched = idx, self.lines[idx][0], col, False
+
+    def _after_delete(self, idx, prev_end):
+        del self.lines[idx]
+        if not self.lines:
+            raise ModelAmbiguous("the only line deleted")
+        cands = []
+        if idx < len(self.lines):
+            cands = [(idx, 0), (idx, len(self.lines[idx][0]))]
+        else:
+            cands = [(idx - 1, 0), (idx - 1, len(self.lines[idx - 1][0]))]
+        if prev_end and 0 < idx < len(self.lines):
+            cands.append((idx - 1, len(self.lines[idx - 1][0])))
+        outs, seen = [], set()
+        for c, col in cands:
+            if (c, col) in seen:
+                continue
+            seen.add((c, col))
+            f = self.clone()
+            f._goto(c, col)
+            outs.append(f)
+        return outs
+
+    def _step(self, code):
+        buf, col = self.buf, self.col
+        if 32 <= code < 127:
+            if len(buf) >= MAX_LEN:
+                return [self]
+            nb = buf[:col] + chr(code) + buf[col:]
+            if wrap_model(nb, 32)[1]:
+                return [self]
+            self.buf, self.col, self.touched = nb, col + 1, True
+        elif code == LEFT:
+            self.col = max(0, col - 1)
+        elif code == RIGHT:
+            self.col = min(len(buf), col + 1)
+        elif code == DELETE:
+            if col > 0:
+                self.buf, self.col, self.touched = buf[:col - 1] + buf[col:], col - 1, True
+            elif buf == "":
+                return self._after_delete(self.cur, True)
+        elif code in (UP, DOWN):
+            self._updown(code == UP)
+        elif code in (ENTER, INSERT_LINE):
+            changed = self.buf != self.lines[self.cur][0]
+            if self._leave(1):
+                at = self.cur + 1 if code == ENTER else self.cur
+                self.lines.insert(at, ["", True])
+                self._goto(at, 0)
+            elif changed:
+                raise ModelAmbiguous("write-back plus insertion refused together: partial outcome not specified")
+        elif code == DELETE_LINE:
+            return self._after_delete(self.cur, False)
+        elif code == BREAK:
+            if not self._leave():
+                raise ModelAmbiguous("BREAK with a write-back that does not fit: leaving or staying is not specified")
+            self.exited = True
+        return [self]
+
+    def _updown(self, up):
+        rows = wrows(self.buf)
+        i, c = row_index(rows, self.col)
+        if c >= 32:
+            raise ModelAmbiguous("UP/DOWN from the cursor at the end of a full row")
+        if up and i > 0:
+            self.col = rows[i - 1][0] + min(c, rows[i - 1][1])
+        elif not up and i < len(rows) - 1:
+            self.col = rows[i + 1][0] + min(c, rows[i + 1][1])
+        elif (up and self.cur == 0) or (not up and self.cur == self.n() - 1):
+            pass
+        elif self._leave():
+            self._goto(self.cur + (-1 if up else 1), 0)
+            r2 = wrows(self.buf)
+            if up:
+                self.col = r2[-1][0] + min(c, r2[-1][1])
+            else:
+                if len(r2) > 1 and c > r2[0][1]:
+                    raise ModelAmbiguous("DOWN into a wrapped line whose first row is shorter than the column")
+                self.col = min(c, r2[0][1])
+
+
+def layout23(shown, top, partial):
+    """Rows 0-22 for the displayed lines from `top` down; a last line that does not fit is drawn as far as it goes
+    (partial) or not at all.  READING: the spec says the cursor line is always wholly on screen and nothing about a line
+    below it that does not fit, so both drawings are accepted."""
+    rows = []
+    for t in shown[top:]:
+        tr = row_texts(t)
+        if len(rows) + len(tr) <= SCREEN_ROWS:
+            rows += tr
+        else:
+            if partial:
+                rows += tr[:SCREEN_ROWS - len(rows)]
+            break
+    return rows + [""] * (SCREEN_ROWS - len(rows))
+
+
+class Obs:
+    """What the oracle sees of the view: the store, its end cell, the 24 screen rows and the FLASH cells."""
+
+    def __init__(self, store, end, rows, flash):
+        self.store, self.end, self.rows, self.flash = store, end, rows, flash
+
+
+def check_view(model, obs, prev_top):
+    """Compare an observation with the model.  Returns (errors, top line shown).
+    READING (scrolling): the spec fixes that the cursor line is wholly on screen and that the view scrolls "when a move
+    would leave it partly off", by whole lines; the new top line is not specified, so any top that shows the cursor line
+    wholly is accepted, but only when the old top would no longer do (the view does not scroll without need)."""
+    errs = []
+    want_store = model.store_bytes()
+    if obs.store != want_store:
+        n = next((i for i in range(min(len(obs.store), len(want_store))) if obs.store[i] != want_store[i]),
+                 min(len(obs.store), len(want_store)))
+        errs.append("store differs at byte %d (len %d, want %d): got %s, want %s" % (
+            n, len(obs.store), len(want_store), obs.store[n:n + 12], want_store[n:n + 12]))
+    shown = model.shown()
+    cur = model.cur
+    nrows = [len(wrows(t)) for t in shown]
+    status = obs.rows[SCREEN_ROWS]
+    if model.msg:
+        if model.msg not in status:
+            errs.append("status row %r should show %r" % (status, model.msg))
+    elif status != "LINE %d/%d" % (cur + 1, len(shown)):
+        errs.append("status row %r, want %r" % (status, "LINE %d/%d" % (cur + 1, len(shown))))
+    prev = min(prev_top, cur)
+    fits_prev = sum(nrows[prev:cur + 1]) <= SCREEN_ROWS
+    cands = []
+    for t in range(cur + 1):
+        if sum(nrows[t:cur + 1]) > SCREEN_ROWS or (fits_prev and t != prev):
+            continue
+        if any(layout23(shown, t, p) == obs.rows[:SCREEN_ROWS] for p in (False, True)):
+            cands.append(t)
+    if not cands:
+        t0 = prev
+        if not fits_prev:
+            t0 = cur
+            while t0 > 0 and sum(nrows[t0 - 1:cur + 1]) <= SCREEN_ROWS:
+                t0 -= 1
+        want = layout23(shown, t0, False)
+        bad = [r for r in range(SCREEN_ROWS) if want[r] != obs.rows[r]]
+        errs.append("screen rows %s do not match the lines from top line %d%s: row %d reads %r, want %r" % (
+            bad[:6], t0 + 1, "" if fits_prev else " (the view had to scroll; any top showing the cursor line is allowed)",
+            bad[0], obs.rows[bad[0]], want[bad[0]]))
+        return errs, prev
+    top = cands[0]
+    i, c = row_index(wrows(model.buf), model.col)
+    if c >= 32:
+        # READING: a cursor at the end of a full row is shown (E10) at column 0 of a row that may not exist (4 rows
+        # already, or the next line in the way); the cell is not asserted there, only that at most one cell flashes.
+        if len(obs.flash) > 1:
+            errs.append("cursor cells %s, want at most one" % obs.flash)
+    else:
+        want_cell = (sum(nrows[top:cur]) + i, c)
+        if obs.flash != [want_cell]:
+            errs.append("cursor (FLASH) cells %s, want %s" % (obs.flash, [want_cell]))
+    return errs, top
+
+
+# ---------------------------------------------------------------------------------------------------- driving the view
+class RealIO:
+    """The view on a real machine: keys through the latch (or the keyboard matrix), observations from memory."""
+
+    def __init__(self, env):
+        self.env = env
+
+    def key(self, code, via=None):
+        con = self.env.con
+        try:
+            if via == "matrix":
+                if code in CTRL_KEYS:
+                    con.press_code(CTRL_KEYS[code], maxi=VIEW_MAXI, what=code)
+                else:
+                    con.press(code, maxi=VIEW_MAXI)
+            else:
+                con.key(code, maxi=VIEW_MAXI)
+        except RuntimeError as e:
+            raise ViewFail("%s did not return to a key wait: %s" % (keyname(code), e))
+
+    def observe(self):
+        env, m = self.env, self.env.m
+        attrs = m.read(0x5800, 768)
+        flash = [(i // 32, i % 32) for i, a in enumerate(attrs) if a & 0x80]
+        return Obs(store_read(env), store_end(env), m.screen_rows(), flash)
+
+
+class FakeIO:
+    """A view that is the model itself (policy: scroll the least that shows the cursor line): drives the case sequences in
+    `--selftest` without an emulator, to find test bugs (a sequence the model finds ambiguous, a typo) before the ROM exists."""
+
+    def __init__(self, model):
+        self.model, self.top = model, 0
+        self._fit()
+
+    def _fit(self):
+        m = self.model
+        if m.exited:
+            return
+        nrows = [len(wrows(t)) for t in m.shown()]
+        self.top = min(self.top, m.cur)
+        if sum(nrows[self.top:m.cur + 1]) > SCREEN_ROWS:
+            t = m.cur
+            while t > 0 and sum(nrows[t - 1:m.cur + 1]) <= SCREEN_ROWS:
+                t -= 1
+            self.top = t
+
+    def pick(self, forks):
+        return forks[0]
+
+    def key(self, code, via=None):
+        self.model = self.pick(self.model.step(code))
+        self._fit()
+
+    def observe(self):
+        m = self.model
+        shown = m.shown()
+        nrows = [len(wrows(t)) for t in shown]
+        rows = layout23(shown, self.top, False) + [m.msg or "LINE %d/%d" % (m.cur + 1, m.n())]
+        i, c = row_index(wrows(m.buf), m.col)
+        flash = [] if c >= 32 else [(sum(nrows[self.top:m.cur]) + i, c)]
+        st = m.store_bytes()
+        return Obs(st, LOADTEXT_BUF + len(st), rows, flash)
+
+
+class VS:
+    """A view session: sends keys and checks the whole state (store bytes, screen rows, status row, cursor cell) against
+    the model after every one.  A mismatch raises ViewFail naming the key and what differs."""
+
+    def __init__(self, io, model, label):
+        self.io, self.model, self.label = io, model, label
+        self.n, self.hist, self.choices = 0, [], []
+
+    def check_now(self, what="opened"):
+        errs, top = check_view(self.model, self.io.observe(), self.model.top)
+        if errs:
+            raise ViewFail("%s %s: %s" % (self.label, what, "; ".join(errs[:3])))
+        self.model.top = top
+
+    def key(self, code, via=None):
+        self.n += 1
+        self.hist.append(keyname(code))
+        try:
+            forks = self.model.step(code)
+        except ModelAmbiguous as e:
+            raise ViewFail("TEST BUG at key %d (%s): %s" % (self.n, keyname(code), e))
+        self.io.key(code, via)
+        if forks[0].exited:
+            self.model = forks[0]
+            return self.model
+        obs = self.io.observe()
+        first = None
+        for f in forks:
+            errs, top = check_view(f, obs, self.model.top)
+            if not errs:
+                if len(forks) > 1:
+                    self.choices.append("key %d (%s): outcome %d of %d: cursor line %d offset %d" % (
+                        self.n, keyname(code), forks.index(f) + 1, len(forks), f.cur + 1, f.col))
+                f.top = top
+                self.model = f
+                return f
+            first = first or errs
+        raise ViewFail("%s key %d (%s) after %s: %s" % (self.label, self.n, keyname(code), " ".join(self.hist[-6:-1]) or "open",
+                                                          "; ".join(first[:3])))
+
+    def keys(self, seq, via=None):
+        for code in seq:
+            if self.key(code, via).exited:
+                break
+        return self.model
+
+
+def open_view(env, ck, cmd, mode64=False):
+    """Type `cmd` (an EDIT command) and ENTER.  Returns the status row's (n, m) when the view is open; otherwise records
+    the failure (quickly: on the old build the console answers `EDIT ?`) and returns None."""
+    m, con = env.m, env.con
+    try:
+        for ch in cmd:
+            con.key(ord(ch), maxi=VIEW_MAXI)
+        con.key(KEY_ENTER, maxi=VIEW_MAXI * 3)
+    except RuntimeError as e:
+        ck.true("%r returned to a key wait" % cmd, False, str(e))
+        return None
+    mt = STATUS_RE.match(m.screen_rows()[SCREEN_ROWS])
+    if mt:
+        return int(mt.group(1)), int(mt.group(2))
+    rows = out_rows(env, mode64)
+    if "EDIT ?" in rows:
+        ck.true("no EDIT", False, "the console answers 'EDIT ?'")
+    else:
+        ck.true("no view", False, "no view after %r: row 23 reads %r, output rows %s" % (
+            cmd, m.screen_rows()[SCREEN_ROWS], _short(rows[-3:])))
+    return None
+
+
+def start_view(env, ck, texts, name, idx, cap=None):
+    """Boot, load `texts` as the store, open `EDIT name`; returns a VS on the line idx (0-based) or None."""
+    env.boot()
+    store_set(env, store_bytes(texts))
+    if open_view(env, ck, "EDIT " + name) is None:
+        return None
+    vs = VS(RealIO(env), VModel(texts, cur=idx, cap=cap), name)
+    vs.check_now()
+    return vs
+
+
+def check_left(env, ck, label, want_store):
+    """After BREAK: the view is gone, the screen cleared and the console is back, the store holds `want_store` with every
+    terminator $0D."""
+    m = env.m
+    rows = m.screen_rows()
+    ck.true(label + ": row 23 no longer a status row", STATUS_RE.match(rows[SCREEN_ROWS]) is None, repr(rows[SCREEN_ROWS]))
+    ck.true(label + ": console waiting in the editor", env.con.in_editor())
+    got = store_read(env)
+    eq_bytes(ck, label + ": store", got, want_store)
+    ck.true(label + ": no $8D left in the store", CRM not in got)
+    ck.eq(label + ": edit line, cursor", env.edit_state(), ("", 0))
+    return rows
+
+
+# ===================================================================== N1 store lines
+@new_case("store-lines", "N1", "every committed line is appended to the store as its text followed by one CR ($0D), an empty line "
+                               "appends nothing, an error line is appended, a 128-character line is appended whole, STORE_END "
+                               "(the old build's WORKSPACE_END) follows exactly and nothing is written beyond it")
+@guarded
+def store_lines(env, part, ck):
+    m, con = env.m, env.con
+    buf = env.S("LOADTEXT_BUF")
+    env.boot()
+    ck.eq("%s at the start" % end_name(env), store_end(env), buf)
+    model = b""
+    # READING: "the console keeps appending committed lines" (E5): an error line and a line of blanks are committed lines
+    # too, so they are appended; only a line of length 0 is not (spec section 3, Append).  Text is kept as typed.
+    lines = ["1 2 + .", "5 6 *", "", "foo", "DROP", "  7 .", ("a" * 7 + " ") * 16]
+    for line in lines:
+        con.type(line)
+        if line:
+            model += line.encode("latin-1") + bytes([CR])
+        got = store_read(env)
+        ok = ck.eq("store after %r" % line[:24], got, model)
+        ok = ck.eq("%s after %r" % (end_name(env), line[:24]), store_end(env), buf + len(model)) and ok
+        if not ok:
+            return
+    ck.eq("zero beyond the end", m.read(buf + len(model), 32), bytes(32))
+    ck.note("%d bytes: lines CR-ended, the empty line absent, STORE_END = $%04X" % (len(model), buf + len(model)))
+
+
+# ===================================================================== N2 store full
+@new_case("store-full", "N2", "an append that does not fit (STORE_END + length + 1 > STORE_LIMIT $F000) is not made: STORE FULL is printed "
+                              "on its own line, the line still runs, the store and everything at and above $F000 stay as they were; "
+                              "one that fits exactly is made; an empty line is never a refusal", parts=("exact", "over", "edge"))
+@guarded
+def store_full(env, part, ck):
+    m, con = env.m, env.con
+    buf = env.S("LOADTEXT_BUF")
+    env.boot()
+    pat = seed_above_limit(env)
+    line22 = "1 2 + .".ljust(22)                                     # 22 characters + CR = 23 bytes, prints 3
+    if part == "exact":
+        end0 = STORE_LIMIT - 23
+    elif part == "over":
+        end0 = STORE_LIMIT - 16
+    else:
+        end0 = STORE_LIMIT - 2
+    fill = bytes([0x40 + (i % 26) if i % 31 != 30 else CR for i in range(end0 - buf)])
+    store_set(env, fill)
+    before = store_read(env)
+
+    def msgs():
+        return count_row(env, "STORE FULL")
+
+    # READING: "STORE FULL is printed on its own line": a row that reads exactly that.  Whether it comes before or after
+    # the line's own output is not specified: the case accepts both, and asserts the line ran (its output is there).
+    if part == "exact":
+        con.type(line22)
+        ck.eq("22 characters at 23 bytes from the limit: no refusal", msgs(), 0)
+        eq_bytes(ck, "store: the line and a CR at the old end", store_read(env), before + line22.encode() + bytes([CR]))
+        ck.eq(end_name(env), store_end(env), STORE_LIMIT)
+        ck.true("the line ran (3 on the screen)", "3" in digits(out_rows(env)), str(out_rows(env)[-3:]))
+        full = store_read(env)
+        con.type("5 .")
+        ck.eq("STORE FULL printed once on its own row", msgs(), 1)
+        ck.true("the refused line still ran (5 on the screen)", "5" in digits(out_rows(env)), str(out_rows(env)[-3:]))
+        eq_bytes(ck, "store unchanged by the refusal", store_read(env), full)
+        ck.eq(end_name(env), store_end(env), STORE_LIMIT)
+    elif part == "over":
+        con.type(line22)
+        ck.eq("STORE FULL printed once on its own row", msgs(), 1)
+        ck.true("the line ran (3 on the screen)", "3" in digits(out_rows(env)), str(out_rows(env)[-3:]))
+        eq_bytes(ck, "store unchanged", store_read(env), before)
+        ck.eq(end_name(env), store_end(env), end0)
+    else:
+        con.type("5")
+        ck.eq("1 character + CR into 2 free bytes: no refusal", msgs(), 0)
+        eq_bytes(ck, "store", store_read(env), before + b"5\r")
+        con.type("6")
+        ck.eq("one more: STORE FULL once", msgs(), 1)
+        eq_bytes(ck, "store unchanged", store_read(env), before + b"5\r")
+        con.key(KEY_ENTER)
+        ck.eq("an empty ENTER in a full store is not a refusal", msgs(), 1)
+        eq_bytes(ck, "store unchanged by it", store_read(env), before + b"5\r")
+    eq_bytes(ck, "$F000-$F0FF untouched", read_above_limit(env), pat)
+    ck.note("%s: store end $%04X, nothing at or above $F000 written" % (part, store_end(env)))
+
+
+# ===================================================================== N3 CR (and TAB) are whitespace
+@new_case("cr-whitespace", "N3", "source with CR, TAB, LF and other bytes up to space between its words interprets as with spaces: "
+                                 "through INTERPRET_RUN called directly, and through LOAD-TEXT from a tape (CR and TAB; a tape "
+                                 "without a final CR gets one when there is room, none when the store is full)",
+          parts=("interp", "mixed", "load-cr", "load-nocr", "load-full", "load-error"))
+@guarded
+def cr_whitespace(env, part, ck):
+    m, con = env.m, env.con
+    buf = env.S("LOADTEXT_BUF")
+    if part in ("interp", "mixed"):
+        # READING: spec section 3: "WORD treats every byte from 0 to space as a delimiter".  Every byte of that range is
+        # not tried; CR, TAB, LF, NUL, SOH and US stand for it.
+        if part == "interp":
+            variants = [("space", b" "), ("CR", b"\r"), ("TAB", b"\t"), ("LF", b"\n"), ("NUL", b"\x00"), ("SOH", b"\x01"),
+                        ("US", b"\x1f")]
+            toks = [b":", b"SQ", b"DUP", b"*", b";", b"7", b"SQ", b"."]
+            sources = [(n, d.join(toks) + d) for n, d in variants]
+        else:
+            sources = [("mixed", b" \r\t: SQ\r\r DUP\t*\n;\r 7\tSQ\r.")]
+        for name, src in sources:
+            env.boot()
+            store_set(env, src)
+            r = m.call("INTERPRET_RUN", regs={"HL": buf, "DE": len(src)})
+            if not ck.true("%s: INTERPRET_RUN returned" % name, r["ok"], "PC=%04X" % r["pc"]):
+                return
+            rows = m.screen_rows()
+            ck.eq("%s-separated source: row 1" % name, rows[1], "49")
+            ck.eq("%s-separated source: INTERP_ERROR_FLAG" % name, env.u8("INTERP_ERROR_FLAG"), 0)
+        ck.note("%d sources: `: SQ DUP * ; 7 SQ .` with each delimiter prints 49" % len(sources))
+        return
+    if part == "load-error":
+        # An unknown word in the loaded text (spec section 3, LOAD-TEXT): the first line runs (`1 .`), `FOO ?` is the usual
+        # message, the second line (`3 .`) does not run, and the machine stays intact: a word defined before the load still
+        # runs, the store is the tape's data, and an uncaught THROW and an ABORT typed afterwards return to the prompt
+        # normally (THROW_ROOT_SP is the outer interpreter's again).
+        data = b"1 . FOO 2 .\r3 .\r"
+        pat = tape_load(env, data, seed=True, pre=[": KEEP 7 ;"])
+        rows = m.screen_rows()
+        if store_end(env) == buf and read_above_limit(env)[:4] == bytes(4):
+            ck.true("the machine kept running", False, "LOAD-TEXT restarted the machine (cold start: seed, store, KEEP gone); "
+                    "screen %s" % _short(rows[:5]))
+            return
+        ck.true("FOO ? on the screen", "FOO ?" in rows, _short(rows[:6]))
+        ck.eq("1 printed by the first line, nothing from the rest (rows below the banner)", digits(rows[1:]), ["1"])
+        ck.eq("banner kept", rows[0], BANNER)
+        ck.true("back at the console key wait", env.con.in_editor() and env.edit_state() == ("", 0))
+        eq_bytes(ck, "store after LOAD-TEXT", store_read(env), data)
+        eq_bytes(ck, "$F000-$F0FF untouched", read_above_limit(env), pat)
+        env.con.type("KEEP .")
+        ck.eq("KEEP, defined before the load, still runs", last_out_row(env), "7 OK")
+        env.con.type("-8 THROW")
+        ck.eq("an uncaught THROW prints", last_out_row(env), "STACK?")
+        ck.true("and returns to the prompt", env.con.in_editor())
+        env.con.type("5 .")
+        ck.eq("the console works after the THROW", last_out_row(env), "5 OK")
+        env.con.type("ABORT")
+        ck.true("ABORT returns to the prompt", env.con.in_editor())
+        env.con.type("6 .")
+        ck.eq("the console works after ABORT", last_out_row(env), "6 OK")
+        ck.note("FOO ? shown, machine intact, store = tape data, THROW and ABORT return normally")
+        return
+    if part == "load-cr":
+        data = b": SQ\tDUP\t*\t;\r7\tSQ\t.\r"
+        want = data
+    elif part == "load-nocr":
+        data = b": SQ DUP *\r;\r7 SQ ."
+        want = data + b"\r"                                         # "if its last byte is not CR, a CR is added when there is room"
+    else:
+        head = b": SQ DUP * ;\r: Z ;\r7 SQ .\r"
+        pairs = (STORE_CAP - len(head) - 1) // 2
+        data = head + b"Z\r" * pairs + b" " * (STORE_CAP - len(head) - 2 * pairs)
+        want = data                                                 # no room: nothing is added, nothing is written past $F000
+        ck.eq("the tape text is 8,192 bytes ending in a space", (len(data), data[-1]), (STORE_CAP, 0x20))
+    pat = tape_load(env, data, maxi=400_000_000 if part == "load-full" else 250_000_000, seed=True)
+    rows = m.screen_rows()
+    if store_end(env) == buf and read_above_limit(env)[:4] == bytes(4):
+        # (the seed written after the boot is gone and the store is empty: a cold start.  The old build does this when
+        # LOAD-TEXT's text has an unknown word: the error path unwinds as if INTERPRET_RUN had been called from the prompt
+        # loop, one level too far)
+        ck.true("the machine kept running", False, "LOAD-TEXT restarted the machine (cold start: seed and store gone); screen %s" % _short(rows[:5]))
+        return
+    ck.eq("49 printed by the loaded program (rows below the banner)", digits(rows[1:]), ["49"])
+    ck.eq("INTERP_ERROR_FLAG", env.u8("INTERP_ERROR_FLAG"), 0)
+    eq_bytes(ck, "store after LOAD-TEXT", store_read(env), want)
+    ck.eq(end_name(env), store_end(env), buf + len(want))
+    eq_bytes(ck, "$F000-$F0FF untouched", read_above_limit(env), pat)
+    ck.note("%s: %d tape bytes, store %d bytes, 49 printed" % (part, len(data), len(want)))
+
+
+# ===================================================================== N5 dictionary ceiling
+@new_case("dict-ceiling", "N5", "the dictionary stops 256 bytes below $D000 (E2a): definitions in a loop (`: Wnn ;`), data words, and a "
+                                "large `n ALLOT`, `,` and `C,` are refused with THROW -8 before HERE passes $D000 - 256 "
+                                "(uncaught it prints STACK? whatever the code; CATCH shows -8), HERE and LATEST stay, and the store at "
+                                "$D000 is not written; what is allowed below the guard is accepted",
+          parts=("defs", "data", "allot", "body"))
+@guarded
+def dict_ceiling(env, part, ck):
+    m, con, S = env.m, env.con, env.S
+    buf = S("LOADTEXT_BUF")
+    guard_top = DICT_CEIL - GUARD                                  # $CF00
+    env.boot()
+    prefix = bytes([0x41 + (i % 26) if i % 50 != 49 else CR for i in range(600)])
+    store_set(env, prefix)
+
+    def here():
+        return m.w16(S("HERE"))
+
+    def latest():
+        return m.w16(S("LATEST"))
+
+    def poke_here(v):
+        m.poke16(S("HERE"), v)
+
+    def line(text):
+        con.type(text)
+        return last_out_row(env), env.u8("INTERP_ERROR_FLAG")
+
+    def store_ok(label):
+        return eq_bytes(ck, label + ": store bytes at $D000", m.read(buf, len(prefix)), prefix)
+
+    def refused(label, text):
+        h0, l0 = here(), latest()
+        row, flag = line(text)
+        ck.eq(label + ": refused (row, error flag)", (row, flag), ("STACK?", 1))
+        ck.eq(label + ": HERE, LATEST unchanged", (here(), latest()), (h0, l0))
+
+    if part == "defs":
+        # READING: "refuses when HERE would pass DICT_RAM_CEILING - 256" at "every place that starts a definition": a
+        # definition is accepted only if HERE was at or below $CF00 where it started, and is refused once it was past it
+        # (by at most the size of a header: the check may be made after the header is built, so a refusal is allowed from
+        # 16 bytes below $CF00); the body compiled after the start may pass $CF00 (that is what the guard is for) but
+        # never $D000.  A refusal leaves HERE and LATEST as they were; the refused name is not defined.
+        poke_here(guard_top - 30)
+        first_refusal, passed, log = None, None, []
+        for i in range(40):
+            h0, l0 = here(), latest()
+            row, flag = line(": W%02d ;" % i)
+            h1, l1 = here(), latest()
+            log.append((h0, h1, flag))
+            if flag:
+                first_refusal = i
+                ck.eq("refusal %d: STACK? row" % i, row, "STACK?")
+                ck.eq("refusal %d: HERE, LATEST unchanged" % i, (h1, l1), (h0, l0))
+                ck.true("refusal %d: HERE $%04X is not near $%04X" % (i, h0, guard_top), h0 > guard_top - 16)
+                break
+            ck.true("accepted definition %d started at HERE $%04X, past $%04X (ceiling - 256)" % (i, h0, guard_top), h0 <= guard_top)
+            ck.true("accepted definition %d ended at HERE $%04X, past $%04X" % (i, h1, DICT_CEIL), h1 <= DICT_CEIL)
+            if h1 > DICT_CEIL:
+                break
+        ck.true("a definition is refused within 40 lines (HERE $%04X)" % here(), first_refusal is not None)
+        if first_refusal is not None:
+            for j in range(2):
+                refused("after the first refusal, line %d" % j, ": X%d ;" % j)
+            line("W%02d" % first_refusal)
+            ck.eq("the refused name is not defined", last_out_row(env), "W%02d ?" % first_refusal)
+        store_ok("defs")
+        ck.note("%d definitions, first refusal at line %s, HERE $%04X" % (len(log), first_refusal, here()))
+    elif part == "data":
+        poke_here(guard_top + 8)
+        for text in ("VARIABLE V1", "1 CONSTANT K1", "CREATE C1", "10 ARRAY A1", "3 STRING S1"):
+            refused("past the guard: " + text, text)
+        # READING: a data field that would carry HERE past the guard is refused ("HERE would pass"), whatever its size: an
+        # array of 200 cells (400 bytes) started 4 bytes below $CF00 would end past $D000.
+        poke_here(guard_top - 4)
+        refused("`200 ARRAY` 4 bytes below the guard", "200 ARRAY AX")
+        refused("`300 STRING` 4 bytes below the guard", "300 STRING SX")
+        poke_here(guard_top - 200)
+        row, flag = line("VARIABLE VOK")
+        ck.eq("VARIABLE 200 bytes below the guard is accepted (row, flag)", (row, flag), ("OK", 0))
+        line("5 VOK ! VOK @ .")
+        ck.eq("and works", last_out_row(env), "5 OK")
+        store_ok("data")
+    elif part == "allot":
+        # How the build reports a THROW to the console (rom/forth_boot.asm RUNTIME_ERROR_HOOK, core/throwcatch.asm): an
+        # uncaught THROW prints the fixed text STACK? whatever the code (the code is dropped); CATCH leaves the code, which
+        # `.` prints.  The control below checks that on this build before the guard cases rely on it.
+        for t in (": T9 -8 THROW ;", ": A40 40 ALLOT ;", ": A1 1 ALLOT ;", ": B1 65 C, ;", ": B2 1234 , ;",
+                  ": A20K 20000 ALLOT ;", ": A28K 28672 ALLOT ;", ": A32K 32767 ALLOT ;"):
+            line(t)
+        line("T9")
+        ck.eq("control: an uncaught THROW -8 prints", last_out_row(env), "STACK?")
+        line("' T9 CATCH .")
+        ck.eq("control: CATCH leaves -8, `.` prints", last_out_row(env), "-8 OK")
+        natural = here()
+
+        def code(word):
+            h0 = here()
+            row, _ = line("' %s CATCH ." % word)
+            mt = re.match(r"^(-?\d+) OK$", row)
+            return (int(mt.group(1)) if mt else row), h0
+
+        def expect(label, word, want, hwant):
+            c, h0 = code(word)
+            ck.eq("%s: THROW code" % label, c, want)
+            ck.eq("%s: HERE after" % label, here(), hwant if hwant is not None else h0)
+
+        # READING: the check is on the new HERE, so reaching $CF00 exactly is allowed and one byte more is refused.
+        poke_here(guard_top - 40)
+        expect("40 ALLOT up to the guard", "A40", 0, guard_top)
+        expect("1 ALLOT past the guard", "A1", -8, None)
+        expect("C, past the guard", "B1", -8, None)
+        expect(", past the guard", "B2", -8, None)
+        h = here()
+        line("A1")
+        ck.eq("uncaught 1 ALLOT past the guard prints", (last_out_row(env), here()), ("STACK?", h))
+        poke_here(guard_top - 1)
+        expect("C, to the guard exactly", "B1", 0, guard_top)
+        expect("C, one past", "B1", -8, None)
+        poke_here(guard_top - 1)
+        expect(", needs 2 bytes, 1 left", "B2", -8, None)
+        poke_here(natural)
+        expect("20000 ALLOT from HERE $%04X" % natural, "A20K", -8, None)
+        expect("28672 ALLOT (HERE + n carries past $FFFF)", "A28K", -8, None)
+        expect("32767 ALLOT (HERE + n carries past $FFFF)", "A32K", -8, None)
+        store_ok("allot")
+    else:
+        poke_here(guard_top - 12)
+        h0 = here()
+        row, flag = line(": BIG")
+        ck.eq("`: BIG` 12 bytes below the guard is accepted (row, flag)", (row, flag), ("OK", 0))
+        for _ in range(6):
+            row, flag = line("1 DROP 2 DROP 3 DROP 4 DROP")
+            if flag:
+                break
+        ck.eq("a body of about 200 bytes typed in parts: last row, flag", (row, flag), ("OK", 0))
+        line(";")
+        body = here() - h0
+        ck.true("HERE $%04X after the definition is not past $%04X" % (here(), DICT_CEIL), here() <= DICT_CEIL)
+        line("BIG")
+        ck.eq("BIG runs", (last_out_row(env), env.u8("INTERP_ERROR_FLAG")), ("OK", 0))
+        store_ok("body")
+        # READING: a definition that starts past the guard is refused (`:` is a place that starts a definition).
+        env.boot()
+        store_set(env, prefix)
+        poke_here(guard_top + 4)
+        refused("`: BIG2 ;` past the guard", ": BIG2 ;")
+        store_ok("body, second half")
+        ck.note("a %d-byte definition from %d bytes below the guard is accepted and runs" % (body, 12))
+
+
+# ===================================================================== the stores the view cases use
+N6_STORE = [": SQ DUP * ;", ": CUBE DUP SQ * ;", "3 : sq 1 + ;", ": SQRT DROP ;", ": X SQ ;", ": SQUARE ;", ":", "SQ ."]
+N6_OPENS = [("SQ", 2), ("cube", 1), ("Sqrt", 3), ("x", 4), ("square", 5)]
+WRAP71 = "one two three four five six seven eight nine ten eleven twelve thirteen"       # 3 rows: 27, 27, 15
+WRAP70 = "the quick brown fox jumps over the lazy dog and keeps running far away"          # 3 rows: 30, 30, 8
+
+
+def big_store():
+    """60 one-row lines `: Wnn n ;`, two of them (W20, W40) wrapped to 3 rows."""
+    t = [": W%02d %d ;" % (i, i) for i in range(1, 61)]
+    t[19] = ": W20 " + "one two three four five six seven eight nine ten eleven twelve"
+    t[39] = ": W40 " + "the quick brown fox jumps over the lazy dog and keeps running far"
+    return t
+
+
+# ===================================================================== N6 EDIT opens the view
+@new_case("edit-open", "N6", "`EDIT SQ` opens the view on the last line in the store where the words `:` and `SQ` follow each other "
+                             "(case-insensitive; not `: SQRT`, not `: X SQ`, not across a line break), cursor at the line's start, "
+                             "status row `LINE n/m`, every line on screen; `EDIT` alone opens a new line after the last; in a "
+                             "60-line store the cursor line is on screen",
+          parts=("name", "bare", "scroll"))
+@guarded
+def edit_open(env, part, ck):
+    m = env.m
+    if part == "name":
+        # READING (spec section 5, Entry): "the last line in the store in which the words : and name follow each other",
+        # words separated by whitespace, case-insensitive: the match is per line, so `:` ending one line and `SQ` starting
+        # the next is not a match (N6_STORE lines 7 and 8), and `: X SQ` (both words, not adjacent) is not.
+        for name, idx in N6_OPENS:
+            vs = start_view(env, ck, N6_STORE, name, idx)
+            if vs is None:
+                return
+        ck.note("EDIT %s -> lines %s of %d, cursor at the line start, all lines on screen" % (
+            "/".join(n for n, _ in N6_OPENS), "/".join(str(i + 1) for _, i in N6_OPENS), len(N6_STORE)))
+    elif part == "bare":
+        env.boot()
+        orig = store_bytes(N6_STORE)
+        store_set(env, orig)
+        st = open_view(env, ck, "EDIT")
+        if st is None:
+            return
+        n = len(N6_STORE)
+        # READING: the new empty line is line m+1; the total is m+1 if the line exists in the store at once, m if it is only
+        # in the buffer until it is left (the spec's "n past the last line gives STORE_END, length 0" allows both).
+        ck.eq("cursor line number", st[0], n + 1)
+        ck.true("line count %d is %d or %d" % (st[1], n, n + 1), st[1] in (n, n + 1))
+        obs = RealIO(env).observe()
+        ck.eq("rows 0-22: the %d lines, then the empty new line" % n, obs.rows[:SCREEN_ROWS], layout23(N6_STORE + [""], 0, False))
+        ck.eq("cursor cell on the new line", obs.flash, [(n, 0)])
+        ck.true("store unchanged, or with the new empty line's mark ($8D)", obs.store in (orig, orig + bytes([CRM])), _short(obs.store[-12:]))
+        for ch in "5 .":
+            env.con.key(ord(ch), maxi=VIEW_MAXI)
+        obs = RealIO(env).observe()
+        ck.eq("the typed text is on the new line", obs.rows[n], "5 .")
+        env.con.key(BREAK, maxi=VIEW_MAXI * 3)
+        rows = check_left(env, ck, "BREAK", orig + b"5 .\r")
+        ck.eq("the new line's program ran: digits on screen", digits(rows), ["5"])
+    else:
+        big = big_store()
+        for name, idx in (("W55", 54), ("W01", 0), ("W60", 59), ("W40", 39)):
+            vs = start_view(env, ck, big, name, idx)
+            if vs is None:
+                return
+        ck.note("EDIT W55/W01/W60/W40 in a 60-line store (two wrapped lines): the cursor line is wholly on screen each time")
+
+
+# ===================================================================== N7 the key table, key by key
+def seq_chars():
+    """READING: only characters the font draws (GFX_PUTCHAR draws `[ \\ ] ^ ` { | } ~` as blanks, so the screen could not show
+    them: UNTYPEABLE is also the list of the undrawn codes); the typed lines are the last line of the store, because a cursor
+    at the end of a full row may claim a row of its own (E10) which would move the lines below it."""
+    store = [": AA 1 ;", ": BB 2 ;", ": CC 3 ;", ": DD 4 ;"]
+    drawn = "".join(chr(c) for c in range(32, 127) if chr(c) not in UNTYPEABLE)
+    keys = K(LEFT, RIGHT, RIGHT, RIGHT, "7 ", (LEFT, 2), "5", (RIGHT, 40), " 8", DOWN, (LEFT, 3), "q", (RIGHT, 3),
+             "()+-*/<>=;:,.?!@#$%&'\"_", ENTER, drawn, BREAK)
+    return store, "CC", 2, keys
+
+
+def seq_limits():
+    """Typing into a line until the console's limits refuse (4 rows, 128 characters), then room again."""
+    store = [": LL ;"]
+    word = "w" * 25
+    keys = K(ENTER, ((word + " ") * 3 + word), "w" * 9, " ", DELETE, (DELETE, 12), "k", (LEFT, 20), " ", "zz", (RIGHT, 99), BREAK)
+    return store, "LL", 0, keys
+
+
+def seq_updown():
+    store = [": UA 1 ;", WRAP71, "x", WRAP70, "", "tail"]
+    keys = K(UP, DOWN, (RIGHT, 20), (DOWN, 3), UP, (RIGHT, 2), (DOWN, 2), (DOWN, 2), (RIGHT, 28), (DOWN, 3), (DOWN, 2), (RIGHT, 4),
+             DOWN, (UP, 3), (UP, 4), (RIGHT, 1), (UP, 3), (UP, 2), UP, (DOWN, 2), (UP, 6), BREAK)
+    return store, "UA", 0, keys
+
+
+def seq_delete():
+    store = [": DA ;", "", "abc", "", "end", WRAP71]
+    keys = K(DELETE, (RIGHT, 3), DELETE, DOWN, DOWN, (RIGHT, 3), (DELETE, 3), DELETE,
+             DELETE, (RIGHT, 5), (DELETE, 2), (DOWN, 3), (RIGHT, 28), (DELETE, 2), (RIGHT, 10), DELETE, BREAK)
+    return store, "DA", 0, keys
+
+
+def seq_enter():
+    store = [": EA 1 ;", "second", "third"]
+    keys = K(ENTER, "x", ENTER, ENTER, (UP, 3), (DOWN, 4), (RIGHT, 3), ENTER, "z", DOWN, (RIGHT, 5), "9", ENTER, BREAK)
+    return store, "EA", 0, keys
+
+
+def seq_delete_line():
+    store = [": XA 1 ;", "b1", "b2", "b3", "b4", "b5"]
+    keys = K((DOWN, 2), DELETE_LINE, "q", DELETE_LINE, DOWN, DELETE_LINE, (UP, 2), DELETE_LINE, DOWN, BREAK)
+    return store, "XA", 0, keys
+
+
+def seq_insert_line():
+    store = [": IA 1 ;", "c1", "c2"]
+    keys = K(INSERT_LINE, "5", INSERT_LINE, (DOWN, 4), (RIGHT, 2), "!", INSERT_LINE, DOWN, BREAK)
+    return store, "IA", 0, keys
+
+
+def seq_scroll():
+    store = big_store()
+    keys = K((DOWN, 30), DOWN, ENTER, "end", (UP, 62), INSERT_LINE, "top", (DOWN, 25), DELETE_LINE, DELETE_LINE, (DOWN, 20), ENTER,
+             "mid", (UP, 3), BREAK)
+    return store, "W30", 29, keys
+
+
+def seq_matrix():
+    store = [": AA 1 ;", ": BB 2 ;", ": CC 3 ;"]
+    keys = K("ab", LEFT, RIGHT, DELETE, DOWN, UP, ENTER, "c", INSERT_LINE, DELETE_LINE, BREAK)
+    return store, "AA", 0, keys
+
+
+N7_SEQS = {"chars": seq_chars, "limits": seq_limits, "updown": seq_updown, "delete": seq_delete, "enter": seq_enter,
+           "delete-line": seq_delete_line, "insert-line": seq_insert_line, "scroll": seq_scroll, "matrix": seq_matrix}
+
+
+def run_seq(env, ck, seq, via=None, io_factory=None):
+    """Open the view for a sequence, send its keys with the check after each, and check the state left by BREAK."""
+    store, name, idx, keys = seq
+    vs = start_view(env, ck, store, name, idx)
+    if vs is None:
+        return None
+    vs.keys(keys, via)
+    if not vs.model.exited:
+        raise ViewFail("the sequence did not end with BREAK")
+    check_left(env, ck, "BREAK", vs.model.store_bytes())
+    return vs
+
+
+@new_case("edit-keys", "N7", "every row of the key table (spec section 5), the store bytes and the whole screen (rows, status row, cursor cell) "
+                            "checked against a model after each key: characters (all 95 printable codes), LEFT, RIGHT, the limits "
+                            "(4 rows, 128 characters), UP and DOWN inside a wrapped line and between lines and at the ends, DELETE "
+                            "(character, empty line, column 0), ENTER, delete-line, insert-line, BREAK, scrolling in a 60-line store, "
+                            "and the control keys through the keyboard matrix",
+          parts=tuple(N7_SEQS))
+@guarded
+def edit_keys(env, part, ck):
+    vs = run_seq(env, ck, N7_SEQS[part](), "matrix" if part == "matrix" else None)
+    if vs is not None:
+        ck.note("%d keys checked%s; %s" % (vs.n, "" if not vs.choices else ", outcomes the spec leaves open: " + "; ".join(vs.choices[:4]),
+                                         "store left: %d lines" % vs.model.n()))
+
+
+# ===================================================================== N8 leaving: what is interpreted
+N8_BASE = [": SQ DUP * ;", "1 .", "2 SQ .", "3 ."]
+# `marked`: L1 redefined (SQ becomes n*n+1), L2 and L3 untouched, L4 gets more words, a new line 5 uses the new SQ: if the marked
+# lines ran in another order, or an unmarked one ran, the digits differ (L3 would print 5, `9 SQ .` 81).
+N8_MARKED = K((RIGHT, 11), "1 + ", DOWN, DOWN, DOWN, " 4 .", ENTER, "9 SQ .", BREAK)
+N8_UNCHANGED = K(DOWN, DOWN, UP, RIGHT, LEFT, DOWN, DOWN, BREAK)
+# `error`: L2 -> `11 .`, L3 -> `FOO 2 SQ .` (an unknown word), L4 -> `13 .`: L2 runs and prints 11, L3 stops it with LINE 3 and FOO ?,
+# L4 is not run (13 must not appear) but its mark is cleared.
+N8_ERROR = K(DOWN, "1", DOWN, LEFT, "FOO ", DOWN, (LEFT, 3), "1", BREAK)
+
+
+def n8_selfmark():
+    """(head line, the line that reads its own terminator, keys): the new line 2 holds `<address of its own CR> C@ .`: its
+    mark must be cleared before it runs (prints 13, not 141)."""
+    head = ": T8 ;"
+    start = LOADTEXT_BUF + len(head) + 1
+    text = ""
+    for _ in range(3):
+        text = "%d C@ ." % (start + len(text))
+    assert text == "%d C@ ." % (start + len(text)), "the address does not settle"
+    return head, text, K(ENTER, text, BREAK)
+
+
+@new_case("edit-commit", "N8", "leaving interprets only the lines changed in the session, in store order, each with its mark cleared before "
+                               "it runs; an unchanged session interprets nothing; the first error stops it with `LINE n` before the "
+                               "error's message and the remaining marks are cleared without interpreting; no $8D is left in the store",
+          parts=("marked", "unchanged", "error", "selfmark"))
+@guarded
+def edit_commit(env, part, ck):
+    m = env.m
+    base = N8_BASE
+    if part == "marked":
+        vs = start_view(env, ck, base, "SQ", 0)
+        if vs is None:
+            return
+        vs.keys(N8_MARKED)
+        want = [": SQ DUP * 1 + ;", "1 .", "2 SQ .", "3 . 4 .", "9 SQ ."]
+        ck.eq("model's lines", [t for t, _ in vs.model.lines], want)
+        rows = check_left(env, ck, "after BREAK", store_bytes(want))
+        ck.eq("only the marked lines ran, in order (digits on screen)", digits(rows), ["3", "4", "82"])
+        env.con.type("5 SQ .")
+        ck.eq("SQ was redefined by the session", last_out_row(env), "26 OK")
+        ck.note("marked lines 1, 4, 5 ran in store order; lines 2, 3 did not; no $8D left")
+    elif part == "unchanged":
+        vs = start_view(env, ck, base, "SQ", 0)
+        if vs is None:
+            return
+        h0, l0 = m.w16(env.S("HERE")), m.w16(env.S("LATEST"))
+        vs.keys(N8_UNCHANGED)
+        rows = check_left(env, ck, "after BREAK", store_bytes(base))
+        # READING: "returns to the prompt" may print OK (the EDIT command line finishing); nothing else may be on screen,
+        # and nothing was defined or run.
+        ck.true("the screen shows nothing but an optional OK", [r for r in rows[:SCREEN_ROWS] if r] in ([], ["OK"]), _short(rows[:4]))
+        ck.eq("HERE, LATEST unchanged (nothing interpreted)", (m.w16(env.S("HERE")), m.w16(env.S("LATEST"))), (h0, l0))
+        ck.true("PRINT_COL 0, PRINT_ROW reset (0, or 1 after OK)", env.print_pos()[1] == 0 and env.print_pos()[0] in (0, 1), str(env.print_pos()))
+    elif part == "error":
+        vs = start_view(env, ck, base + ["4 ."], "SQ", 0)
+        if vs is None:
+            return
+        vs.keys(N8_ERROR)
+        want = [": SQ DUP * ;", "11 .", "FOO 2 SQ .", "13 .", "4 ."]
+        ck.eq("model's lines", [t for t, _ in vs.model.lines], want)
+        rows = check_left(env, ck, "after BREAK", store_bytes(want))
+        text = " ".join(r for r in rows[:SCREEN_ROWS] if r)
+        # READING: "the error's usual message preceded by LINE n": `LINE 3` then `FOO ?`, on one row or on two.
+        ck.true("LINE 3 then FOO ? on screen", re.search(r"LINE 3\s+FOO \?", text) is not None, _short(text))
+        ck.eq("digits: 11 ran, LINE 3, nothing after", digits(rows), ["11", "3"])
+        env.con.type("7 .")
+        ck.eq("the console works afterwards", last_out_row(env), "7 OK")
+        ck.note("error at line 3 stopped the commit; line 4 not run; marks cleared: %s" % _short(text, 60))
+    else:
+        head, text, keys = n8_selfmark()
+        vs = start_view(env, ck, [head], "T8", 0)
+        if vs is None:
+            return
+        vs.keys(keys)
+        rows = check_left(env, ck, "after BREAK", store_bytes([head, text]))
+        ck.eq("the line read its own terminator (digits on screen)", digits(rows), ["13"])
+
+
+# ===================================================================== N9 the redraw oracle for the view
+def blank_screen(m):
+    """Rows 0-23 of the 32-column screen blank: all pixels zero, every attribute ATTR_DEFAULT."""
+    for i in range(3):
+        m.write(0x4000 + 2048 * i, bytes(2048))
+    m.write(0x5800, bytes([m.S.get("ATTR_DEFAULT", 0x44)]) * 768)
+
+
+def view_reference(env):
+    """The screen a full view redraw draws from the view's state (EXROM routine VIEW_REDRAW_ALL, called at the key wait with
+    the machine put on a checkpoint first and the screen blanked, so that nothing of the live screen can leak into the
+    reference); the machine is put back exactly as it was."""
+    m = env.m
+    cp = m.checkpoint("oracle")
+    try:
+        blank_screen(m)
+        r = m.call("VIEW_REDRAW_ALL")
+        if not r["ok"]:
+            raise ViewFail("VIEW_REDRAW_ALL did not return (PC=%04X)" % r["pc"])
+        return read_screen(m)
+    finally:
+        m.rollback(cp)
+
+
+def o9_small():
+    return ([": AA 1 ;", ": BB 2 ;", ": CC 3 ;", ": DD 4 ;", ": EE 5 ;"], "CC",
+            K("hello", (LEFT, 3), "XY", (DELETE, 2), (RIGHT, 4), DOWN, "abc", UP, ENTER, "new", INSERT_LINE, "ins", DELETE_LINE,
+              (DOWN, 3), (UP, 5), DELETE, (RIGHT, 2), DELETE, DELETE_LINE, (UP, 2), DELETE_LINE))
+
+
+def o9_wrap():
+    grow = " alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi"
+    return ([": AA 1 ;", ": BB 2 ;", ": CC 3 ;", ": DD 4 ;"], "BB",
+            K((RIGHT, 8), grow, (UP, 2), (DOWN, 3), (LEFT, 40), (UP, 1), (RIGHT, 30), DELETE, (DELETE, 60), (DOWN, 1), ENTER, "mid",
+              (LEFT, 3), ENTER, "Z", (UP, 3), (DOWN, 6), (DELETE, 3)))
+
+
+def o9_scroll():
+    return (big_store(), "W30",
+            K((DOWN, 24), (UP, 8), ENTER, "x", (DOWN, 3), INSERT_LINE, DELETE_LINE, DELETE_LINE, (UP, 45), (DOWN, 50), INSERT_LINE,
+              "ins", (UP, 40), DELETE_LINE, (DOWN, 60), (UP, 30)))
+
+
+O9_SCENARIOS = {"small": o9_small, "wrap": o9_wrap, "scroll": o9_scroll}
+
+
+@new_case("edit-redraw-oracle", "N9", "after every key in the view the whole screen (bitmap and attributes, 6,912 bytes) equals the screen a "
+                                     "full redraw draws from the same state (VIEW_REDRAW_ALL called from a checkpoint onto a blank "
+                                     "screen), in scenarios that type, wrap, shift lines, insert, delete and scroll; and the oracle "
+                                     "sees a stray pixel, a stray FLASH attribute and a missing cursor",
+          parts=tuple(O9_SCENARIOS) + ("control",))
+@guarded
+def edit_redraw_oracle(env, part, ck):
+    m = env.m
+    if "VIEW_REDRAW_ALL" not in m.S:
+        ck.true("no VIEW_REDRAW_ALL", False, "the EXROM routine the oracle calls is not in the symbols (the old build has no view)")
+        return
+    if part == "control":
+        vs = start_view(env, ck, [": AA 1 ;", ": BB 2 ;"], "BB", 1)
+        if vs is None:
+            return
+        vs.keys(K("ab", DOWN))
+        now, ref = read_screen(m), view_reference(env)
+        ck.eq("a clean view equals its reference", first_diff(now, ref), None)
+        stray = bytearray(now)
+        stray[((21 * 8 & 0xC0) << 5) + ((21 * 8 & 0x38) << 2) + 0x100 * 3 + 5] ^= 0x10     # row 21, line 3, column 5
+        ck.true("a stray pixel byte is a difference", first_diff(bytes(stray), ref) is not None)
+        stray = bytearray(now)
+        stray[0x1800 + 22 * 32 + 7] |= 0x80
+        ck.true("a stray FLASH attribute is a difference", first_diff(bytes(stray), ref) is not None)
+        stray = bytearray(now)
+        cells = [i for i in range(768) if now[0x1800 + i] & 0x80]
+        ck.true("the view shows a cursor cell", len(cells) == 1, str(cells))
+        for i in cells:
+            stray[0x1800 + i] = m.S.get("ATTR_DEFAULT", 0x44)
+        ck.true("a missing cursor is a difference", first_diff(bytes(stray), ref) is not None)
+        ck.note("control: a clean view matches; a stray pixel, a stray FLASH cell and a missing cursor each differ")
+        return
+    store, name, keys = O9_SCENARIOS[part]()
+    idx = next(i for i, t in enumerate(store) if re.match(r"^(\d+ )?: %s\b" % name, t))
+    vs = start_view(env, ck, store, name, idx)
+    if vs is None:
+        return
+    io, bad, n = vs.io, [], 0
+    for code in keys:
+        io.key(code)
+        n += 1
+        if STATUS_RE.match(m.screen_rows()[SCREEN_ROWS]) is None:
+            raise ViewFail("the view was left at key %d (%s)" % (n, keyname(code)))
+        d = first_diff(read_screen(m), view_reference(env))
+        if d:
+            bad.append("key %d (%s): %s" % (n, keyname(code), d))
+    ck.true("%d keys: the screen equals a full redraw after every key" % n, not bad,
+            "; ".join(bad[:3]) + (" (+%d)" % (len(bad) - 3) if len(bad) > 3 else ""))
+    ck.note("%s: %d keys, 6912 bytes compared after each" % (part, n))
+
+
+# ===================================================================== N10 / N11 refusals
+def refusal(env, ck, cmd, msg, mode64=False):
+    """`cmd` (an EDIT command that must be refused): exactly the message `msg` is printed (an OK after it is allowed), no view
+    opens, the store, HERE, LATEST and the display mode are as they were, and the console works afterwards.  Returns False
+    when the console does not know EDIT (the old build): the failure is recorded and the case ends quickly."""
+    m, con, S = env.m, env.con, env.S
+    before = store_read(env)
+    h0, l0, g0 = m.w16(S("HERE")), m.w16(S("LATEST")), env.u8("GFX_MODE")
+    rows0 = out_rows(env, mode64)
+    for ch in cmd:
+        con.key(ord(ch), maxi=VIEW_MAXI)
+    con.key(KEY_ENTER, maxi=VIEW_MAXI * 3)
+    new = out_rows(env, mode64)[len(rows0):]
+    if new == ["EDIT ?"]:
+        ck.true("no EDIT", False, "the console answers 'EDIT ?'")
+        return False
+    ck.true("%s: output is %r (an OK after it is allowed)" % (cmd, msg), new in ([msg], [msg, "OK"]), "got %s" % _short(new))
+    ck.true("%s: no view opened" % cmd, STATUS_RE.match(m.screen_rows(mode64=mode64)[SCREEN_ROWS]) is None)
+    # READING: the console appends every committed line (E5); "changing nothing" is read as: the store's bytes are what they
+    # were, with the typed `EDIT ...` line at the end if the console appended it (the spec does not say if it does).
+    ck.true("%s: store unchanged" % cmd, store_read(env) in typed_line_variants(before, cmd), _short(store_read(env)[-30:]))
+    ck.eq("%s: HERE, LATEST, GFX_MODE" % cmd, (m.w16(S("HERE")), m.w16(S("LATEST")), env.u8("GFX_MODE")), (h0, l0, g0))
+    ck.true("%s: console waiting in the editor, empty line" % cmd, con.in_editor() and env.edit_state() == ("", 0))
+    con.type("1 2 + .")
+    ck.eq("%s: the console still works" % cmd, last_out_row(env, mode64), "3 OK")
+    return True
+
+
+@new_case("edit-refusals", "N10", "`EDIT` is refused with one message and nothing changed: NO EXROM (a stock-shaped EXROM, 8 KB of $00, in a "
+                                 "temporary copy of the build), LONG LINE (a 199-character line in the store, for `EDIT SQ` and `EDIT`), "
+                                 "and `NOSUCH ?` for a name that is not in the store; the console works afterwards",
+          parts=("noexrom", "longline", "notfound"))
+@guarded
+def edit_refusals(env, part, ck):
+    env.boot()
+    if part == "longline":
+        texts = [": SQ DUP * ;", ("abcdefgh " * 23)[:199], ": CUBE DUP SQ * ;"]
+        store_set(env, store_bytes(texts))
+        ok = refusal(env, ck, "EDIT SQ", "LONG LINE") and refusal(env, ck, "EDIT", "LONG LINE")
+        names = "EDIT SQ / EDIT with a 199-character line in the store"
+    else:
+        store_set(env, store_bytes(N6_STORE))
+        if part == "noexrom":
+            ok = refusal(env, ck, "EDIT SQ", "NO EXROM") and refusal(env, ck, "EDIT", "NO EXROM")
+            names = "EDIT SQ / EDIT with the stock-shaped EXROM"
+        else:
+            ok = all(refusal(env, ck, "EDIT " + n, n.upper() + " ?") for n in ("nosuch", "sq2", "dup"))
+            names = "EDIT nosuch / sq2 / dup (no `: name` line)"
+    if ok:
+        ck.note("%s: refused, store/HERE/LATEST unchanged, console works" % names)
+
+
+@new_case("edit-64col", "N11", "in 64-column mode `EDIT SQ` and `EDIT` print 32COL FIRST and change nothing (E9): no view, still 64 columns, "
+                               "store, HERE and LATEST as they were, the console works", )
+@guarded
+def edit_64col(env, part, ck):
+    env.boot(64)
+    store_set(env, store_bytes(N6_STORE))
+    ok = refusal(env, ck, "EDIT SQ", "32COL FIRST", True) and refusal(env, ck, "EDIT", "32COL FIRST", True)
+    if ok:
+        ck.eq("GFX_MODE still 2 (64 columns)", env.u8("GFX_MODE"), 2)
+        ck.note("EDIT SQ / EDIT refused with 32COL FIRST in 64 columns")
+
+
+# ===================================================================== N12 typing cost in the view
+def vcost_spec(which):
+    """(store texts, EDIT name, line index, setup keys, measured key) of a typing-cost scenario in the view."""
+    short = [": AA 1 ;", ": BB 2 ;", ": CC 3 ;"]
+    if which == "key-end-short":
+        return short, "BB", 1, K((RIGHT, 8)), ord("x")
+    if which == "key-mid-100":
+        return [": AA ;", ": BB " + GROW[:95], "tail"], "BB", 1, K((RIGHT, 50)), ord("x")
+    if which == "key-3row":
+        return [": AA ;", ": BB " + "a" * 65, "tail"], "BB", 1, K((RIGHT, 70)), ord("x")
+    if which == "delete":
+        return short, "BB", 1, K((RIGHT, 8)), DELETE
+    if which == "left":
+        return short, "BB", 1, K((RIGHT, 8)), LEFT
+    if which == "up-in-line":
+        return [": AA ;", ": BB " + WRAP71, "tail"], "BB", 1, K((RIGHT, 60)), UP
+    if which == "down-line":
+        return short, "BB", 1, K((RIGHT, 3)), DOWN
+    if which == "enter":
+        return short, "BB", 1, K((RIGHT, 8)), ENTER
+    if which == "insert-line":
+        return short, "BB", 1, K((RIGHT, 3)), INSERT_LINE
+    if which == "delete-line":
+        return short, "BB", 1, K((RIGHT, 3)), DELETE_LINE
+    if which == "scroll-down":
+        return big_store(), "W01", 0, K((DOWN, 22)), DOWN
+    raise KeyError(which)
+
+
+VCOST_CASES = [("key-end-short", "a key at the end of a short line"), ("key-mid-100", "a key in the middle of a 100-character line"),
+               ("key-3row", "a key at the end of a 3-row line"), ("delete", "DELETE at the end of a short line"),
+               ("left", "LEFT in a short line"), ("up-in-line", "UP inside a wrapped line"),
+               ("down-line", "DOWN to the next line"), ("enter", "ENTER at the end of a line (a line is inserted)"),
+               ("insert-line", "insert-line"), ("delete-line", "delete-line"),
+               ("scroll-down", "DOWN that scrolls a 60-line store")]
+
+
+def vcost_once(env, ck, which):
+    m, con = env.m, env.con
+    texts, name, idx, setup, key = vcost_spec(which)
+    env.boot()
+    store_set(env, store_bytes(texts))
+    if open_view(env, ck, "EDIT " + name) is None:
+        return None
+    for code in setup:
+        con.key(code, maxi=VIEW_MAXI)
+    m.tstates_reset()
+    con.key(key, maxi=VIEW_MAXI)
+    return m.tstates()
+
+
+@new_case("edit-typing-cost", "N12", "T-states from key delivery (latch write) to the next key wait, interrupts included, for a key at the end "
+                                    "of a short line, in the middle of a 100-character line, on a 3-row line, DELETE, LEFT, UP in a "
+                                    "wrapped line, DOWN, ENTER, insert-line, delete-line and a DOWN that scrolls, in the view; each figure "
+                                    "taken twice and equal; recorded, no threshold (the gate is set from this first measurement)",
+          parts=("a", "b"))
+@guarded
+def edit_typing_cost(env, part, ck):
+    names = VCOST_CASES[0::2] if part == "a" else VCOST_CASES[1::2]
+    table = {}
+    for which, what in names:
+        a = vcost_once(env, ck, which)
+        if a is None:
+            return
+        b = vcost_once(env, ck, which)
+        table[which] = [a, b]
+        ck.eq("%s repeatable" % which, a, b)
+    ck.data = {"t_states": table, "what": dict(VCOST_CASES)}
+    ck.note(", ".join("%s %d" % (k, v[0]) for k, v in table.items()))
+
+
+# ===================================================================== N13 store full in the view
+def full_store(room, tail):
+    """Store texts: one-row filler lines and then `tail`, with `room` bytes left below STORE_LIMIT."""
+    fill = STORE_CAP - room - sum(len(t) + 1 for t in tail)
+    lines = []
+    while fill >= 32:
+        lines.append("f%03d " % len(lines) + "x" * 26)             # 31 characters + CR = 32 bytes
+        fill -= 32
+    if fill:
+        lines.append("y" * (fill - 1))
+    return lines + tail
+
+
+N13_SEQS = {
+    # READING (section 5, last paragraph before Leaving): "A full store refuses the change that would overflow it: the line and
+    # the store stay as they were and STORE FULL shows on the status row until the next key."  The change is the write-back of a
+    # grown line when it is left, and the insertion of a line by ENTER or insert-line (1 byte: the terminator).  The sequences
+    # never ask for a write-back and an insertion together, and never BREAK with a write-back that does not fit: the text does not
+    # say what happens then.
+    "enter": (1, [": NF 1 ;"], "NF", K(ENTER, ENTER, INSERT_LINE, "x", UP, DELETE_LINE, ENTER, BREAK)),
+    "grow": (3, [": NG 1 ;", "tail"], "NG", K("abcde", DOWN, (DELETE, 2), DOWN, UP, UP, BREAK)),
+    "full": (0, [": NF 1 ;", "last"], "NF", K(ENTER, INSERT_LINE, "ab", DOWN, DELETE_LINE, ENTER, "z", BREAK)),
+}
+
+
+@new_case("edit-store-full", "N13", "in the view, a change that would overflow the store is refused: the line and the store stay as they were, "
+                                    "STORE FULL shows on the status row until the next key, nothing at or above $F000 changes; a change that "
+                                    "fits exactly is made; freeing space (delete-line) allows the change again",
+          parts=tuple(N13_SEQS))
+@guarded
+def edit_store_full(env, part, ck):
+    room, tail, name, keys = N13_SEQS[part]
+    texts = full_store(room, tail)
+    env.boot()
+    pat = seed_above_limit(env)
+    store_set(env, store_bytes(texts))
+    if open_view(env, ck, "EDIT " + name) is None:
+        return
+    model = VModel(texts, cur=len(texts) - len(tail), cap=STORE_CAP)
+    ck.eq("the test store leaves %d byte(s)" % room, STORE_CAP - model.store_len(), room)
+    vs = VS(RealIO(env), model, name)
+    vs.check_now()
+    vs.keys(keys)
+    ck.true("the sequence ends with BREAK", vs.model.exited)
+    check_left(env, ck, "BREAK", vs.model.store_bytes())
+    ck.true("STORE_END %04X is not past STORE_LIMIT" % store_end(env), store_end(env) <= STORE_LIMIT)
+    eq_bytes(ck, "$F000-$F0FF untouched", read_above_limit(env), pat)
+    ck.note("room %d: %d keys, refusals showed STORE FULL on the status row" % (room, vs.n))
+
+
+# ---------------------------------------------------------------------------------------------------- the model's self-test
+def selftest():
+    """No emulator: the sequences of the view cases are driven through VS against FakeIO (a view that is the model itself,
+    taking each fork of an open outcome in turn), which finds test bugs before the ROM exists: a typo, a key sequence that
+    reaches a state the spec leaves open (ModelAmbiguous), a line needing a 5th row, an address that does not settle.  Then the
+    checker is shown to see a wrong store, a wrong row, a wrong cursor cell and a missing STORE FULL."""
+    import random
+    seqs = []
+    for name, fn in N7_SEQS.items():
+        store, nm, idx, keys = fn()
+        seqs.append(("N7 " + name, store, idx, keys, None))
+    seqs.append(("N8 marked", N8_BASE, 0, N8_MARKED, None))
+    seqs.append(("N8 unchanged", N8_BASE, 0, N8_UNCHANGED, None))
+    seqs.append(("N8 error", N8_BASE + ["4 ."], 0, N8_ERROR, None))
+    head, text, keys = n8_selfmark()
+    seqs.append(("N8 selfmark", [head], 0, keys, None))
+    for name, (room, tail, nm, keys) in N13_SEQS.items():
+        texts = full_store(room, tail)
+        assert STORE_CAP - sum(len(t) + 1 for t in texts) == room, "full_store(%d) is off" % room
+        seqs.append(("N13 " + name, texts, len(texts) - len(tail), keys, STORE_CAP))
+    for text in N6_STORE + big_store() + [": BB " + GROW[:95], ": BB " + "a" * 65, ": BB " + WRAP71, WRAP70]:
+        wrows(text)
+    ok, total = True, 0
+    for label, store, idx, keys, cap in seqs:
+        for seed in range(25):
+            rng = random.Random(seed)
+
+            class Pick(FakeIO):
+                def pick(self, forks):
+                    return forks[rng.randrange(len(forks))]
+
+            vs = VS(Pick(VModel(store, cur=idx, cap=cap)), VModel(store, cur=idx, cap=cap), label)
+            try:
+                vs.check_now()
+                vs.keys(keys)
+                if not vs.model.exited:
+                    raise ViewFail("no BREAK")
+                total += vs.n
+            except (ViewFail, ModelAmbiguous) as e:
+                print("selftest FAIL %s (seed %d): %s" % (label, seed, e))
+                ok = False
+                break
+    # the checker must see differences
+    store = [": AA 1 ;", ": BB 2 ;", ": CC 3 ;"]
+    model = VModel(store, cur=1)
+    good = FakeIO(VModel(store, cur=1)).observe()
+    checks = [("a wrong store byte", lambda o: setattr(o, "store", o.store[:-1] + b"\x00")),
+              ("a wrong screen row", lambda o: o.rows.__setitem__(1, "XX")),
+              ("a wrong status row", lambda o: o.rows.__setitem__(23, "LINE 9/3")),
+              ("a wrong cursor cell", lambda o: setattr(o, "flash", [(0, 0)])),
+              ("two cursor cells", lambda o: setattr(o, "flash", o.flash + [(5, 5)]))]
+    errs, _ = check_view(model, good, 0)
+    if errs:
+        print("selftest FAIL: the good observation was refused: %s" % errs)
+        ok = False
+    for what, mutate in checks:
+        o = FakeIO(VModel(store, cur=1)).observe()
+        mutate(o)
+        errs, _ = check_view(model, o, 0)
+        if not errs:
+            print("selftest FAIL: %s was not seen" % what)
+            ok = False
+    full = VModel(full_store(0, [": NF 1 ;"]), cur=len(full_store(0, [": NF 1 ;"])) - 1, cap=STORE_CAP)
+    refused = full.step(ENTER)[0]
+    o = FakeIO(refused).observe()
+    o.rows[23] = "LINE %d/%d" % (refused.cur + 1, refused.n())
+    errs, _ = check_view(refused, o, 0)
+    if not errs:
+        print("selftest FAIL: a missing STORE FULL was not seen")
+        ok = False
+    print("edtest selftest: %s (%d sequences x 25 seeds, %d keys checked, checker sensitivity %d cases)" % (
+        "ok" if ok else "FAILED", len(seqs), total, len(checks) + 1))
+    return 0 if ok else 1
+
+
 # ---------------------------------------------------------------------------------------------------- the runner
+ALT_BUILD = {("edit-refusals", "noexrom"): "stock-shaped EXROM"}    # parts that run on a copy of the build with another EXROM
+TAPE_PARTS = {("cr-whitespace", p) for p in ("load-cr", "load-nocr", "load-full", "load-error")}   # parts that play a tape (realtape-open)
+
+
+def reboot_emulator(m):
+    """A new ZEsarUX process for the same Machine object.  A second `realtape-open` in the same emulator plays nothing
+    (measured: the second LOAD-TEXT found no tape, and the machine was reset as the open does), so a part that played a tape
+    leaves the worker with a fresh emulator for the next task."""
+    m._own_snapdir = False                          # (stop() would remove the ROM file and the snapshot start() needs)
+    try:
+        m.stop()
+    finally:
+        m._own_snapdir = True
+    m.start()
+
+
 def run_task(m, task):
     name, part = task
     for n, _, fn, _ in CASES:
         if n == name:
             t0 = time.time()
-            r = fn(Env(m), part)
+            try:
+                r = fn(Env(m), part)
+            finally:
+                if task in TAPE_PARTS:
+                    reboot_emulator(m)
             r["wall"] = time.time() - t0
             return r
     raise KeyError(name)
 
 
-def select(only):
-    return [c for c in CASES if not only or any(o in c[0] for o in only)]
+def select(only, group="both"):
+    return [c for c in CASES if (group == "both" or GROUPS[c[0]][0] == group)
+            and (not only or any(o in c[0] or o == GROUPS[c[0]][1] for o in only))]
+
+
+def make_stock_build(build):
+    """A temporary copy of the build (the files the harness reads) whose graphics_exrom.bin is build/stock_shaped_exrom.bin,
+    8 KB of $00: what a Home ROM fitted alone sees at the EXROM address.  Returns the directory (the caller removes it)."""
+    d = tempfile.mkdtemp(prefix="edtest-stock-")
+    try:
+        for f in ("forth_boot_rom0.bin", "forth_boot.sym"):
+            shutil.copy(os.path.join(build, f), d)
+        stock = os.path.join(build, "stock_shaped_exrom.bin")
+        if not os.path.isfile(stock):
+            stock = os.path.join(ROOT, "build", "stock_shaped_exrom.bin")
+        data = open(stock, "rb").read() if os.path.isfile(stock) else bytes(8192)
+        exrom = os.path.getsize(os.path.join(build, "graphics_exrom.bin"))
+        with open(os.path.join(d, "graphics_exrom.bin"), "wb") as f:
+            f.write(data[:exrom].ljust(exrom, b"\x00"))
+    except BaseException:
+        shutil.rmtree(d, ignore_errors=True)
+        raise
+    return d
 
 
 def _cut(text, n):
     return text if len(text) <= n else text[:n - 3] + "..."
 
 
-def run_all(build, workers, port0, only, json_out, verbose=False):
-    cases = select(only)
+def run_all(build, workers, port0, only, json_out, verbose=False, group="both"):
+    cases = select(only, group)
     if not cases:
-        raise ValueError("no case matches %r" % (only,))
+        raise ValueError("no case matches %r in group %s" % (only, group))
     tasks = [(c[0], p) for c in cases for p in c[3]]
     t0 = time.time()
-    res = fh.run_pool(build, tasks, run_task, workers, port0)
+    res = [None] * len(tasks)
+    plain = [i for i, t in enumerate(tasks) if t not in ALT_BUILD]
+    alt = [i for i, t in enumerate(tasks) if t in ALT_BUILD]
+    if plain:
+        for i, r in zip(plain, fh.run_pool(build, [tasks[i] for i in plain], run_task, workers, port0)):
+            res[i] = r
+    if alt:                                         # the stock-shaped EXROM parts, on a temporary copy of the build
+        d = make_stock_build(build)
+        try:
+            for i, r in zip(alt, fh.run_pool(d, [tasks[i] for i in alt], run_task, 1, port0)):
+                res[i] = r
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
     wall = time.time() - t0
     out, failed = [], 0
     by = {}
     for (name, part), r in zip(tasks, res):
         by.setdefault(name, []).append((part, r))
+    tally = {}
     for name, title, _, parts in cases:
+        group_of, num = GROUPS[name]
         rs = by[name]
         ok = all(r["ok"] for _, r in rs)
         failed += not ok
+        tally.setdefault(group_of, [0, 0])[0] += ok
+        tally[group_of][1] += 1
         if len(rs) == 1:
             detail = rs[0][1]["detail"]
         elif ok:
@@ -1361,7 +2993,7 @@ def run_all(build, workers, port0, only, json_out, verbose=False):
         else:
             detail = " | ".join("[%s] %s" % (p, r["detail"]) for p, r in rs if not r["ok"])
         wall_case = sum(r["wall"] for _, r in rs)
-        out.append(dict(case=name, title=title, ok=ok, detail=detail, wall=round(wall_case, 2),
+        out.append(dict(case=name, group=group_of, num=num, title=title, ok=ok, detail=detail, wall=round(wall_case, 2),
                         parts=[dict(part=p, ok=r["ok"], detail=r["detail"], wall=round(r["wall"], 2), port=r["worker"],
                                     data=r.get("data") or None) for p, r in rs]))
         line = detail
@@ -1370,20 +3002,36 @@ def run_all(build, workers, port0, only, json_out, verbose=False):
             line = _cut(first, 150 if len(rs) == 1 else 110)
             if len(rs) > 1:
                 line = "%d parts (%s): %s" % (len(rs), ", ".join(p for p, _ in rs), line)
-        print("%s %-22s %s  [%.1f s]" % ("PASS" if ok else "FAIL", name, line, wall_case), flush=True)
-    typing = None
+        elif not ok and not verbose:                # (a failing case: the first thing that differs in each failing part)
+            bad = [(p, r["detail"]) for p, r in rs if not r["ok"]]
+            firsts = [(p, d.split("; ")[0]) for p, d in bad]
+            if len(firsts) > 1 and len({d for _, d in firsts}) == 1:
+                line = "%d of %d parts: %s" % (len(firsts), len(rs), firsts[0][1])
+            elif len(rs) == 1:
+                line = firsts[0][1]
+            else:
+                line = " | ".join("[%s] %s" % fd for fd in firsts)
+            line = _cut(line, 300)
+        print("%s %-3s %-3s %-22s %s  [%.1f s]" % ("PASS" if ok else "FAIL", group_of, num or "", name, line, wall_case), flush=True)
+    typing, vtyping = None, None
     for c in out:
         if c["case"] == "typing-cost":
             typing = {p["part"]: p["data"] for p in c["parts"] if p.get("data")}
+        if c["case"] == "edit-typing-cost":
+            vtyping = {p["part"]: p["data"] for p in c["parts"] if p.get("data")}
     if typing:
         print_typing(typing)
+    if vtyping:
+        print_view_typing(vtyping)
     harness_error = all(r["detail"].startswith("TASK FAILED") for r in res) or any(
         r["detail"].startswith(("worker on port", "never ran")) for r in res)
-    print("edtest: %d/%d cases pass; %d tasks; wall %.1f s (%d worker(s))" % (len(out) - failed, len(out), len(tasks), wall,
-                                                                            min(workers or fh.default_workers(), len(tasks))))
+    print("edtest: %d/%d cases pass (%s); %d tasks; wall %.1f s (%d worker(s))" % (
+        len(out) - failed, len(out), ", ".join("%s %d/%d" % (g, t[0], t[1]) for g, t in sorted(tally.items(), reverse=True)),
+        len(tasks), wall, min(workers or fh.default_workers(), len(tasks))))
     if json_out:
         os.makedirs(os.path.dirname(os.path.abspath(json_out)), exist_ok=True)
-        json.dump(dict(build=build, failed=failed, cases=out, typing=typing, wall=round(wall, 2), workers=workers or fh.default_workers()),
+        json.dump(dict(build=build, failed=failed, group=group, groups={g: dict(passed=t[0], total=t[1]) for g, t in tally.items()},
+                       cases=out, typing=typing, view_typing=vtyping, wall=round(wall, 2), workers=workers or fh.default_workers()),
                   open(json_out, "w"), indent=1)
     return (2 if harness_error else (1 if failed else 0))
 
@@ -1397,18 +3045,30 @@ def print_typing(typing):
         print("  %-14s %12s %12s    %s" % (k, c[0], c[1], dict(COST_CASES)[k]))
 
 
+def print_view_typing(vtyping):
+    print("typing cost in the view, T-states from key delivery to the next key wait (two runs each, equal):")
+    for k, what in VCOST_CASES:
+        c = next((d["t_states"][k][0] for d in vtyping.values() if k in d.get("t_states", {})), None)
+        print("  %-14s %12s    %s" % (k, c, what))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--build", default=os.path.join(ROOT, "build"), help="directory with forth_boot_rom0.bin (DIR or DIR/build)")
+    ap.add_argument("--group", choices=("old", "new", "both"), default="both",
+                    help="old: the 19 cases that characterise the console editor; new: the step-E cases N1-N3, N5-N13; both (default)")
     ap.add_argument("--workers", type=int, default=None, help="emulators in parallel (default: fharness.default_workers())")
     ap.add_argument("--port", type=int, default=fh.PORT_LO, help="first ZRCP port (%d-%d)" % (fh.PORT_LO, fh.PORT_HI))
     ap.add_argument("--json", default=os.path.join(ROOT, "build", "edtest.json"), help="write the results here (default build/edtest.json)")
+    ap.add_argument("--selftest", action="store_true", help="no emulator: run the new cases' key sequences against the model of the view")
     ap.add_argument("-v", "--verbose", action="store_true", help="print the full detail of passing cases too")
-    ap.add_argument("only", nargs="*", help="run the cases whose name contains one of these")
+    ap.add_argument("only", nargs="*", help="run the cases whose name contains one of these (or whose number, N5, is this)")
     a = ap.parse_args()
+    if a.selftest:
+        return selftest()
     try:
         build = fh.resolve_build(a.build)
-        return run_all(build, a.workers, a.port, a.only, a.json, a.verbose)
+        return run_all(build, a.workers, a.port, a.only, a.json, a.verbose, a.group)
     except (FileNotFoundError, ValueError, RuntimeError) as e:
         print("edtest: harness error: %s" % e, file=sys.stderr)
         return 2
