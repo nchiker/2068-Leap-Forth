@@ -38,40 +38,49 @@ STORE_LIMIT      EQU STORE_START + LOADTEXT_MAX_LEN        ; $F000: the store ne
     ASSERT (STORE_LIMIT & $FF) == 0   ; LOAD-TEXT's room test below looks at the high byte only
 
 ; ============================================================================
-; SAVE-TEXT ( addr len "name" -- )
+; STORE_TRIMMED_LEN -- STORE_TRIM (core/recall.asm: the console line holding the command is not source), then
+; BC = DE = the store's length. A ROM without core/recall.asm defines STORE_TRIM as a bare RET.
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+STORE_TRIMMED_LEN:
+    call STORE_TRIM
+    ld   hl, (STORE_END)
+    ld   de, -STORE_START
+    add  hl, de
+    ld   b, h
+    ld   c, l
+    ld   d, h
+    ld   e, l
+    ret
+
+; ============================================================================
+; SAVE-TEXT ( "name" -- ) -- the line store to tape (EDITOR_SPEC.md section 3: the store is the one source;
+; the console line holding this command is trimmed off first, STORE_TRIM)
 ; ============================================================================
 H_SAVETEXT:
     DW   DICT_CHAIN_POINT               ; the including ROM sets this (DEFL)
     DB   9, "S","A","V","E","-","T","E","X","T"
 W_SAVETEXT:
     call STORAGE_PARSE_NAME
-    rst RST_DPOP                       ; len
-    ld   d, h
-    ld   e, l
-    rst RST_DPOP                       ; addr
+    call STORE_TRIMMED_LEN              ; bc = the store's length
     push ix
-    push hl
-    pop  ix
-    ld   b, d
-    ld   c, e                           ; parameter 2: the length, as V1 wrote it
-    ld   hl, STORAGE_NO_AUTOSTART       ; parameter 1
+    ld   ix, STORE_START
+    ld   hl, STORAGE_NO_AUTOSTART       ; parameter 1; parameter 2 (bc): the length, as V1 wrote it
     xor  a                              ; STORAGE_TYPE_TEXT
     call STORAGE_SAVE
     jp   STORAGE_END
 
 ; ============================================================================
-; VERIFY-TEXT ( addr len "name" -- ) -- compare a text tape of exactly len bytes with addr
+; VERIFY-TEXT ( "name" -- ) -- compare a text tape with the line store (its length must be the store's)
 ; ============================================================================
 H_VERIFYTEXT:
     DW   H_SAVETEXT
     DB   11, "V","E","R","I","F","Y","-","T","E","X","T"
 W_VERIFYTEXT:
     call STORAGE_PARSE_NAME
-    rst RST_DPOP                       ; len
-    ld   d, h
-    ld   e, l
-    rst RST_DPOP                       ; addr
+    call STORE_TRIMMED_LEN              ; de = the store's length
     push ix
+    ld   hl, STORE_START
     push hl
     push de
     xor  a                              ; STORAGE_TYPE_TEXT
@@ -101,6 +110,7 @@ H_LOADTEXT:
     DB   9, "L","O","A","D","-","T","E","X","T"
 W_LOADTEXT:
     call STORAGE_PARSE_NAME
+    call STORE_TRIM                     ; the command line is not source (core/recall.asm)
     push ix
     xor  a                              ; STORAGE_TYPE_TEXT
     call STORAGE_FIND

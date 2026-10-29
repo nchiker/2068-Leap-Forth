@@ -348,6 +348,7 @@ DICT_CHAIN_POINT DEFL H_INVERT
     INCLUDE "core/udg.asm"
 DICT_CHAIN_POINT DEFL H_UDG
     INCLUDE "core/loadtext.asm"
+STORE_TRIM: ret                 ; no console append here (core/recall.asm): nothing to trim
 
     DS   $4000 - $, $FF
 

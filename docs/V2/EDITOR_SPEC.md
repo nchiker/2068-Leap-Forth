@@ -151,7 +151,16 @@ instead of `$0D`. Outside the view every terminator is `$0D` (E6's commit clears
   dictionary built so far and the store intact; `THROW_ROOT_SP` is the outer interpreter's again afterwards. On success, the
   rest of the console line after `LOAD-TEXT name` is interpreted (the outer run's `SRC_PTR`/`SRC_END` are kept). Lines longer than 128 characters (an old
   space-separated text) are kept as they are: the console interprets them, and `EDIT` refuses while one exists.
-- *SAVE-TEXT*, *VERIFY-TEXT*: the bytes `STORE_START` to `STORE_END`, unchanged format.
+- *SAVE-TEXT name*, *VERIFY-TEXT name* ( "name" -- ): the bytes `STORE_START` to `STORE_END`, unchanged tape format;
+  VERIFY-TEXT also refuses a tape whose length differs from the store's. The store is the one authoritative source
+  (decided 2026-10-29: the `addr len` forms left over from before step E were a defect, found after item 7).
+- *The command line is not source.* The console appends the line before running it, so a line holding `SAVE-TEXT`,
+  `VERIFY-TEXT`, `LOAD-TEXT` or `EDIT` would otherwise become part of the program it saves, checks or edits (and a
+  loaded text would save, load or open the editor again). `STORE_APPEND` records where it put the line being run
+  (`STORE_LAST_LINE`, `$8BFE`; 0 when it appended nothing: an empty or refused line); `STORE_TRIM` moves `STORE_END`
+  back there once and clears the record. Those four words call it first, so a refused or loaded line is never cut, and
+  `EDIT`'s call also retires the record before the session moves lines. [HOME +48 B: `STORE_TRIM` 16, the record in
+  `STORE_APPEND` 11, `STORE_TRIMMED_LEN` 15, four calls 12, `SAVE-TEXT`/`VERIFY-TEXT` −6.]
 - `WORD` treats every byte from 0 to space as a delimiter (E1).
 
 **EXROM routines** (the view): line n's start and length (a scan counting terminators from `STORE_START`; n past the

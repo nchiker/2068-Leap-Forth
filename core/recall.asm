@@ -20,6 +20,8 @@
 
 ; ---- DEF_COUNT/DEF_TABLE: same confirmed-idle gap as STORE_END
 ; (core/loadtext.asm), continuing right after it ($8A74-$8A75). ----
+STORE_LAST_LINE EQU $8BFE  ; 2 bytes: STORE_APPEND's last append (0: none), for STORE_TRIM;
+                           ; the top of the free $8ABD-$8BFF (the view's RAM starts at $8AC0)
 DEF_TABLE_MAX  EQU 16
 DEF_COUNT      EQU $8A76   ; 1 byte: how many spans SCAN_DEFS found
                            ; (0-DEF_TABLE_MAX)
@@ -40,6 +42,8 @@ RECALL_SPAN_START EQU $8AB9   ; 2 bytes: SCAN_DEFS's own scratch
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 STORE_APPEND:
+    ld   de, 0
+    ld   (STORE_LAST_LINE), de      ; nothing appended for this line (yet)
     ld   a, b
     or   a
     ret  z                      ; empty line: nothing to append
@@ -54,6 +58,7 @@ STORE_APPEND:
     sbc  hl, bc                 ; room - len - 1: borrow if the line and its CR do not fit
     pop  hl
     jr   c, .full
+    ld   (STORE_LAST_LINE), de      ; where this line starts, for STORE_TRIM
     ldir
     ld   a, 13
     ld   (de), a
@@ -65,6 +70,22 @@ STORE_APPEND:
     jp   FORGET_PRINT_MSG       ; core/forget.asm: prints the message (its CR is a newline) and returns
 
 STORE_FULL_MSG: DB "STORE FULL", 13, 0
+
+; ============================================================================
+; STORE_TRIM -- the console's line off the end of the store (EDITOR_SPEC.md section 3: a line holding SAVE-TEXT,
+; VERIFY-TEXT, LOAD-TEXT or EDIT is a command, not source). STORE_APPEND records where it put the line being run
+; (STORE_LAST_LINE, 0 when it appended nothing); STORE_END goes back there, once.
+; Destroys: AF, HL
+; ============================================================================
+STORE_TRIM:
+    ld   hl, (STORE_LAST_LINE)
+    ld   a, h
+    or   l
+    ret  z                              ; nothing appended for this line, or trimmed already
+    ld   (STORE_END), hl
+    ld   hl, 0
+    ld   (STORE_LAST_LINE), hl
+    ret
 
 ; ============================================================================
 ; SCAN_DEFS ( -- )
