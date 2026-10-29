@@ -479,13 +479,9 @@ DICT_CHAIN_POINT DEFL H_SEMICOLON
     INCLUDE "core/control.asm"
     INCLUDE "core/ts2068.asm"
 DICT_CHAIN_POINT DEFL H_CLS
-    INCLUDE "core/float.asm"
-DICT_CHAIN_POINT DEFL H_FMINUS
-    INCLUDE "core/floatmul.asm"
-DICT_CHAIN_POINT DEFL H_FSTAR
-    INCLUDE "core/floatdiv.asm"
+    INCLUDE "core/fpcore.asm"
 DICT_CHAIN_POINT DEFL H_FSLASH
-    INCLUDE "core/decimal.asm"
+    INCLUDE "core/fpparse.asm"
     INCLUDE "core/print.asm"
 DICT_CHAIN_POINT DEFL H_DOT
     INCLUDE "core/beep.asm"

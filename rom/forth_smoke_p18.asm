@@ -1,25 +1,20 @@
 ; ============================================================================
 ; rom/forth_smoke_p18.asm — Phase 18 smoke ROM: F* (float multiply)
 ;
-; Same testing approach as rom/forth_smoke_p8.asm (F+/F-): no float
-; literal syntax exists, so this ROM seeds the float stack directly via
-; FPUSH before interpreting a source string containing just "F* ",
-; then checks the result on the float stack directly (CHECK_FTOP,
-; copied from forth_smoke_p8.asm's own helper).
+; Same testing approach as rom/forth_smoke_p8.asm (F+/F-): this ROM seeds
+; the float stack directly via FPUSH_HL before interpreting a source
+; string containing just "F* ", then compares the top cell with the
+; expected 5 bytes (CHECK_FTOP, copied from forth_smoke_p8.asm's helper).
+; Regenerated for the 5-byte Sinclair float format in step F (docs/V2/
+; FLOAT_SPEC.md); each expected row's comment is the tools/fpforth.py
+; expression that produced it (enc = fpmodel.encode).
 ;
-; FOUR CHECKPOINTS, each hand-verified in core/floatmul.asm's own
-; header before this ROM was written, covering every distinct code
-; path in F_NORMALIZE32:
-;   1. 2.0 (m=256,e=-7) * 3.0 (m=384,e=-7) = 6.0 -> (m=24576, e=-12).
-;      Shrink path, two iterations.
-;   2. 0.5 (m=256,e=-9) * 0.5 (m=256,e=-9) = 0.25 -> (m=16384, e=-16).
-;      Shrink path again, a different starting shape (squaring).
-;   3. 1.0 (m=1,e=0) * 1.0 (m=1,e=0) = 1.0 -> (m=16384, e=-14). The
-;      GROW path -- a product small enough to need shifting UP, not
-;      down, to reach a normalized magnitude.
-;   4. -2.0 (m=-256,e=-7) * 3.0 (m=384,e=-7) = -6.0 ->
-;      (m=-24576, e=-12). Sign handling: same magnitude as checkpoint
-;      1, opposite sign.
+; FOUR CHECKPOINTS:
+;   1. 2.0 * 3.0 = 6.0.
+;   2. 0.5 * 0.5 = 0.25 (squaring).
+;   3. 1.0 * 1.0 = 1.0 (a product that must be normalised up one bit).
+;   4. -2.0 * 3.0 = -6.0. Sign handling: same magnitude as checkpoint 1,
+;      opposite sign.
 ;
 ; Border goes GREEN (4) if all four pass; otherwise it shows the
 ; failing checkpoint's number.
@@ -57,92 +52,94 @@ COLD_START:
     xor  a
     ld   (STATE), a
 
-; ---- checkpoint 1: 2.0 * 3.0 = 6.0 (shrink path) ----
+; ---- checkpoint 1: 2.0 * 3.0 = 6.0 ----
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
-    ld   hl, 256
-    ld   a, -7
-    call FPUSH
-    ld   hl, 384
-    ld   a, -7
-    call FPUSH
+    ld   hl, C1_A
+    call FPUSH_HL
+    ld   hl, C1_B
+    call FPUSH_HL
     ld   hl, SRC_FSTAR
     ld   de, SRC_FSTAR_LEN
     call INTERPRET_RUN
-    ld   hl, 24576
-    ld   a, -12
+    ld   hl, C1_X
     call CHECK_FTOP
-    call FPOP
+    call FDROP_T
 
-; ---- checkpoint 2: 0.5 * 0.5 = 0.25 (shrink path, squaring) ----
+; ---- checkpoint 2: 0.5 * 0.5 = 0.25 (squaring) ----
     ld   a, 2
     ld   (CHECKPOINT_NUM), a
-    ld   hl, 256
-    ld   a, -9
-    call FPUSH
-    ld   hl, 256
-    ld   a, -9
-    call FPUSH
+    ld   hl, C2_A
+    call FPUSH_HL
+    ld   hl, C2_B
+    call FPUSH_HL
     ld   hl, SRC_FSTAR
     ld   de, SRC_FSTAR_LEN
     call INTERPRET_RUN
-    ld   hl, 16384
-    ld   a, -16
+    ld   hl, C2_X
     call CHECK_FTOP
-    call FPOP
+    call FDROP_T
 
-; ---- checkpoint 3: 1.0 * 1.0 = 1.0 (grow path) ----
+; ---- checkpoint 3: 1.0 * 1.0 = 1.0 (a product that needs normalising up) ----
     ld   a, 3
     ld   (CHECKPOINT_NUM), a
-    ld   hl, 1
-    ld   a, 0
-    call FPUSH
-    ld   hl, 1
-    ld   a, 0
-    call FPUSH
+    ld   hl, C3_A
+    call FPUSH_HL
+    ld   hl, C3_B
+    call FPUSH_HL
     ld   hl, SRC_FSTAR
     ld   de, SRC_FSTAR_LEN
     call INTERPRET_RUN
-    ld   hl, 16384
-    ld   a, -14
+    ld   hl, C3_X
     call CHECK_FTOP
-    call FPOP
+    call FDROP_T
 
 ; ---- checkpoint 4: -2.0 * 3.0 = -6.0 (sign handling) ----
     ld   a, 4
     ld   (CHECKPOINT_NUM), a
-    ld   hl, -256
-    ld   a, -7
-    call FPUSH
-    ld   hl, 384
-    ld   a, -7
-    call FPUSH
+    ld   hl, C4_A
+    call FPUSH_HL
+    ld   hl, C4_B
+    call FPUSH_HL
     ld   hl, SRC_FSTAR
     ld   de, SRC_FSTAR_LEN
     call INTERPRET_RUN
-    ld   hl, -24576
-    ld   a, -12
+    ld   hl, C4_X
     call CHECK_FTOP
-    call FPOP
-
-    jp   PASS_TEST
+    call FDROP_T
 
 ; ---- test-harness-only helpers: NOT dictionary words ----
-CHECK_FTOP:                      ; HL = expected mantissa, A = expected
-                                  ; exponent; float stack NOT popped
-    push af
-    ld   a, (iy+0)
-    cp   l
+CHECK_FTOP:                      ; HL -> 5 expected bytes; float stack NOT popped
+    push iy
+    pop  de
+    ld   b, 5
+.cmp:
+    ld   a, (de)
+    cp   (hl)
     jp   nz, FAIL_TEST
-    ld   a, (iy+1)
-    cp   h
-    jp   nz, FAIL_TEST
-    pop  af
-    ld   l, a
-    ld   a, (iy+2)
-    cp   l
-    jp   nz, FAIL_TEST
+    inc  de
+    inc  hl
+    djnz .cmp
     ret
+
+FDROP_T:                         ; drop the top float cell
+    ld   bc, 5
+    add  iy, bc
+    ret
+
+; ---- 5-byte cells [exponent][sign | m0][m1][m2][m3]; each comment is the fpforth expression (enc = fpmodel.encode)
+C1_A:   DB   $82, $00, $00, $00, $00     ; enc(2.0)
+C1_B:   DB   $82, $40, $00, $00, $00     ; enc(3.0)
+C1_X:   DB   $83, $40, $00, $00, $00     ; fpforth: mul(enc(2.0), enc(3.0))
+C2_A:   DB   $80, $00, $00, $00, $00     ; enc(0.5)
+C2_B:   DB   $80, $00, $00, $00, $00     ; enc(0.5)
+C2_X:   DB   $7F, $00, $00, $00, $00     ; fpforth: mul(enc(0.5), enc(0.5))
+C3_A:   DB   $81, $00, $00, $00, $00     ; enc(1.0)
+C3_B:   DB   $81, $00, $00, $00, $00     ; enc(1.0)
+C3_X:   DB   $81, $00, $00, $00, $00     ; fpforth: mul(enc(1.0), enc(1.0))
+C4_A:   DB   $82, $80, $00, $00, $00     ; enc(-2.0)
+C4_B:   DB   $82, $40, $00, $00, $00     ; enc(3.0)
+C4_X:   DB   $83, $C0, $00, $00, $00     ; fpforth: mul(enc(-2.0), enc(3.0))
 
 PASS_TEST:
     ld   a, 4                    ; green: all four checkpoints passed
@@ -172,9 +169,7 @@ SRC_FSTAR_LEN EQU $ - SRC_FSTAR
     INCLUDE "core/dict.asm"
     INCLUDE "core/interp.asm"
 DICT_CHAIN_POINT DEFL H_SEMICOLON
-    INCLUDE "core/float.asm"
-DICT_CHAIN_POINT DEFL H_FMINUS
-    INCLUDE "core/floatmul.asm"
+    INCLUDE "core/fpcore.asm"
 
     DS   $4000 - $, $FF
 

@@ -1,19 +1,16 @@
 ; ============================================================================
 ; rom/forth_smoke_p42.asm — Phase 42 smoke ROM: RAD, DEG
 ;
-; TWO CHECKPOINTS, exact-mantissa cases hand-derived by simulating the
-; REAL F_UMUL32/F_NORMALIZE32 algorithm in Python first (this project's
-; own established discipline — see core/floattrig.asm's own header for
-; the same treatment of PI/SIN/COS), not guessed from the ideal
-; mathematical values:
-;   1. RAD(90.0) = 90.0 * (18301,-20) -- Python-simulated
-;      F_UMUL32/F_NORMALIZE32 gives EXACTLY (25735,-14) = 1.57073974...,
-;      close to true PI/2 (1.5707963...) within this project's own
-;      already-established SIN/COS precision budget, not a coincidence.
-;   2. DEG(HALF_PI) = (25736,-14) * (29335,-9) -- same simulation gives
-;      EXACTLY (23039,-8) = 89.99609375, close to true 90.0 within the
-;      same budget -- a real round trip (radians back to degrees), not
-;      just one direction checked in isolation.
+; Regenerated for the 5-byte Sinclair float format in step F (docs/V2/
+; FLOAT_SPEC.md section 8.3); the expected cells are tools/fpforth.py's
+; frad and fdeg (each row's comment is the expression; HALF_PI is
+; fpforth's pi/2 constant, enc = fpmodel.encode).
+;
+; TWO CHECKPOINTS:
+;   1. RAD(90.0) = 90.0 * pi/180: the cell nearest pi/2 (1.5707963...).
+;   2. DEG(HALF_PI) = HALF_PI * 180/pi = 90.0 exactly -- a real round
+;      trip (radians back to degrees), not just one direction checked
+;      in isolation.
 ;
 ; Border goes GREEN (4) if both pass; otherwise it shows the failing
 ; checkpoint's number.
@@ -53,51 +50,52 @@ COLD_START:
 
     call GFX_CLS
 
-; ---- checkpoint 1: RAD(90.0) = (25735,-14) exactly ----
+; ---- checkpoint 1: RAD(90.0) = 90.0 * pi/180 ----
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
-    ld   hl, 23040
-    ld   a, -8
-    call FPUSH
+    ld   hl, C1_A
+    call FPUSH_HL
     call W_RAD
-    ld   hl, 25735
-    ld   a, -14
+    ld   hl, C1_X
     call CHECK_FTOP
-    call FPOP
+    call FDROP_T
 
-; ---- checkpoint 2: DEG(HALF_PI) = (23039,-8) exactly ----
+; ---- checkpoint 2: DEG(HALF_PI) = 90.0 ----
     ld   a, 2
     ld   (CHECKPOINT_NUM), a
-    ld   hl, 25736
-    ld   a, -14
-    call FPUSH
+    ld   hl, C2_A
+    call FPUSH_HL
     call W_DEG
-    ld   hl, 23039
-    ld   a, -8
+    ld   hl, C2_X
     call CHECK_FTOP
-    call FPOP
+    call FDROP_T
 
     jp   PASS_TEST
 
-; ============================================================================
-; CHECK_FTOP ( HL = expected mantissa, A = expected exponent -- )
-; Checks the float on top of the float stack WITHOUT popping it.
-; Identical to rom/forth_smoke_p30.asm's own CHECK_FTOP.
-; ============================================================================
-CHECK_FTOP:
-    push af
-    ld   a, (iy+0)
-    cp   l
+; ---- test-harness-only helpers: NOT dictionary words ----
+CHECK_FTOP:                      ; HL -> 5 expected bytes; float stack NOT popped
+    push iy
+    pop  de
+    ld   b, 5
+.cmp:
+    ld   a, (de)
+    cp   (hl)
     jp   nz, FAIL_TEST
-    ld   a, (iy+1)
-    cp   h
-    jp   nz, FAIL_TEST
-    pop  af
-    ld   l, a
-    ld   a, (iy+2)
-    cp   l
-    jp   nz, FAIL_TEST
+    inc  de
+    inc  hl
+    djnz .cmp
     ret
+
+FDROP_T:                         ; drop the top float cell
+    ld   bc, 5
+    add  iy, bc
+    ret
+
+; ---- 5-byte cells [exponent][sign | m0][m1][m2][m3]; each comment is the fpforth expression (enc = fpmodel.encode)
+C1_A:   DB   $87, $34, $00, $00, $00     ; enc(90.0)
+C1_X:   DB   $81, $49, $0F, $DA, $A3     ; fpforth: frad(enc(90.0))
+C2_A:   DB   $81, $49, $0F, $DA, $A2     ; HALF_PI
+C2_X:   DB   $87, $34, $00, $00, $00     ; fpforth: fdeg(HALF_PI)
 
 PASS_TEST:
     ld   a, 4                    ; green: both checkpoints passed
@@ -125,13 +123,11 @@ CHECKPOINT_NUM EQU $8800
     INCLUDE "core/dict.asm"
     INCLUDE "core/interp.asm"
 DICT_CHAIN_POINT DEFL H_SEMICOLON
-    INCLUDE "core/float.asm"
-DICT_CHAIN_POINT DEFL H_FMINUS
-    INCLUDE "core/floatmul.asm"
-DICT_CHAIN_POINT DEFL H_FSTAR
-    INCLUDE "core/floatdiv.asm"
+    INCLUDE "core/fpcore.asm"
 DICT_CHAIN_POINT DEFL H_FSLASH
-    INCLUDE "core/floattrig.asm"
+    INCLUDE "core/fpconv.asm"    ; (fpmath.asm's FINT)
+DICT_CHAIN_POINT DEFL H_FROUND
+    INCLUDE "core/fpmath.asm"
 
     DS   $4000 - $, $FF
 

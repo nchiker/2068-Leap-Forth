@@ -4,6 +4,7 @@
 ; (core/dictspace.asm); CREATE, DOES> (core/create.asm/core/does.asm);
 ; IMMEDIATE (core/immediate.asm); ABORT, QUIT (core/abortquit.asm); IN,
 ; OUT (core/portio.asm); FORGET (core/forget.asm)
+; (Regenerated for the 5-byte Sinclair float format in step F: the dummy float cells are 5 bytes.)
 ;
 ; ELEVEN checkpoints, numbered 0-10, reported by PRINTING the failing
 ; number (via `.`) rather than encoding it in the 3-bit border color —
@@ -258,9 +259,8 @@ COLD_START:
 ; ---- checkpoint 5: ABORT -- clears data AND float stacks ----
     ld   a, 5
     ld   (CHECKPOINT_NUM), a
-    ld   hl, $1234
-    ld   a, 5
-    call FPUSH                    ; seed the float stack with a dummy value
+    ld   hl, DUMMY_F1
+    call FPUSH_HL                 ; seed the float stack with a dummy value (5-byte cell)
     ld   hl, SRC_ABORT
     ld   de, SRC_ABORT_LEN
     call INTERPRET_RUN             ; 42 ABORT 99
@@ -277,9 +277,8 @@ COLD_START:
 ; ---- checkpoint 6: QUIT -- data AND float stack CONTENTS survive ----
     ld   a, 6
     ld   (CHECKPOINT_NUM), a
-    ld   hl, $5678
-    ld   a, 3
-    call FPUSH                      ; a fresh dummy float
+    ld   hl, DUMMY_F2
+    call FPUSH_HL                   ; a fresh dummy float (5-byte cell)
     ld   hl, SRC_QUIT
     ld   de, SRC_QUIT_LEN
     call INTERPRET_RUN               ; 42 QUIT 99
@@ -293,12 +292,10 @@ COLD_START:
                                           ; nothing else
     push iy
     pop  hl
-    ld   de, FSTACK_TOP
-    dec  de
-    dec  de
-    dec  de
+    ld   de, FSTACK_TOP - 5              ; one 5-byte cell
     call CHECK_HL_DE                     ; the dummy float is still there
-    call FPOP                             ; tidy up
+    ld   bc, 5
+    add  iy, bc                           ; tidy up (drop it)
 
 ; ---- checkpoint 7: ABORT/QUIT also reset CATCH_DEPTH/LEAVE_DEPTH ----
     ld   a, 7
@@ -537,6 +534,10 @@ SRC_IMM_USE_LEN EQU $ - SRC_IMM_USE
 SRC_IMM_CALL: DB "BAR "
 SRC_IMM_CALL_LEN EQU $ - SRC_IMM_CALL
 
+; dummy float cells (values unchecked): fpforth enc(1.5), enc(2.5)
+DUMMY_F1: DB $81, $40, $00, $00, $00
+DUMMY_F2: DB $82, $20, $00, $00, $00
+
 SRC_ABORT: DB "42 ABORT 99 "
 SRC_ABORT_LEN EQU $ - SRC_ABORT
 SRC_QUIT: DB "42 QUIT 99 "
@@ -571,8 +572,8 @@ SRC_F2_PROOF_LEN EQU $ - SRC_F2_PROOF
     DEFINE THROW_CATCH_ENABLED
     INCLUDE "core/interp.asm"
 DICT_CHAIN_POINT DEFL H_SEMICOLON
-    INCLUDE "core/float.asm"
-DICT_CHAIN_POINT DEFL H_FMINUS
+    INCLUDE "core/fpcore.asm"
+DICT_CHAIN_POINT DEFL H_FSLASH
     INCLUDE "core/print.asm"
 DICT_CHAIN_POINT DEFL H_DOT
     INCLUDE "core/doloop.asm"

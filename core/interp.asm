@@ -286,57 +286,32 @@ FIND:
 ; addr must be a counted string. flag=1 and n=the parsed value on
 ; success; flag=0 (n=0, not meaningful) if the string is empty, is a
 ; lone "-", or contains any non-digit.
+; With DECIMAL_NUMBER_ENABLED (core/fpparse.asm): a token with a point or an
+; exponent is a float, pushed on the float stack, and the stack effect is
+; ( addr -- 2 ); an integer outside -32768..65535 or a float beyond the
+; float range is THROW -43 (docs/V2/FLOAT_SPEC.md section 6).
 ; ============================================================================
 NUMBER:
     rst RST_DPOP
     ld   a, (hl)
     or   a
-    jp   z, .fail                 ; JP, not JR -- unconditionally, in
-                                   ; both the DECIMAL_NUMBER_ENABLED and
-                                   ; plain builds: tools/
-                                   ; check_z80_opcodes.py flagged both
-                                   ; forms as within 10 bytes of JR's
-                                   ; +-127 limit at one point or another,
-                                   ; so JP (no range limit at all) beats
-                                   ; carrying two branches to track
+    jp   z, .fail                 ; JP, not JR: with and without
+                                   ; DECIMAL_NUMBER_ENABLED the distance
+                                   ; to .fail changes, and tools/
+                                   ; check_z80_opcodes.py flags a JR
+                                   ; within 10 bytes of its limit
+    IFDEF DECIMAL_NUMBER_ENABLED
+    jp   NUMBER_PARSE             ; core/fpparse.asm: integers, floats and
+                                   ; their range errors in one routine
+                                   ; (HL -> the token, A = its length);
+                                   ; the integer loop below is not
+                                   ; assembled. A ROM that does not
+                                   ; define DECIMAL_NUMBER_ENABLED keeps
+                                   ; this NUMBER byte for byte.
+    ELSE
     ld   (NUM_COUNT), a
     inc  hl
     ld   (NUM_PTR), hl
-    IFDEF DECIMAL_NUMBER_ENABLED
-    ; Phase 23 (core/decimal.asm) hook: a token containing '.' is a
-    ; decimal literal, parsed and pushed onto the FLOAT stack entirely
-    ; by DECIMAL_PARSE_AND_PUSH, not by any of the plain-integer code
-    ; below. Gated behind DECIMAL_NUMBER_ENABLED (the including ROM
-    ; must DEFINE it before this INCLUDE) so that every ROM which
-    ; doesn't opt in gets this NUMBER completely unchanged, byte for
-    ; byte — confirmed directly by diffing a rebuilt
-    ; rom/forth_smoke_p3.asm against its own pre-Phase-23 output, not
-    ; just reasoned about.
-    call CHECK_FOR_DOT
-    or   a
-    jp   nz, DECIMAL_PARSE_AND_PUSH
-    ld   hl, (NUM_PTR)          ; REQUIRED: CHECK_FOR_DOT's own header
-                                 ; says plainly "Destroys: ... HL" (it
-                                 ; walks its OWN copy of HL to scan the
-                                 ; whole token) -- the very next lines
-                                 ; below read (hl) expecting it to still
-                                 ; point at the token's first character,
-                                 ; an assumption this call just broke. A
-                                 ; real bug, not a hypothetical: without
-                                 ; this reload, a negative integer like
-                                 ; "-5" reads garbage instead of '-' for
-                                 ; its sign check, silently skips the
-                                 ; sign-consuming step, and then fails
-                                 ; in the digit loop on the unconsumed
-                                 ; '-' itself -- found via a real Fuse
-                                 ; run, not by inspection (positive
-                                 ; integers never triggered it: the
-                                 ; garbage byte only needed to not
-                                 ; equal '-' by coincidence, which is
-                                 ; overwhelmingly likely, so the sign
-                                 ; check's wrong answer happened to be
-                                 ; harmless for them).
-    ENDIF
     xor  a
     ld   (NUM_NEG), a
     ld   a, (hl)
@@ -398,6 +373,7 @@ NUMBER:
     ld   hl, 1
     rst RST_DPUSH
     ret
+    ENDIF
 .fail:
     ld   hl, 0
     rst RST_DPUSH
@@ -673,11 +649,11 @@ INTERPRET_NESTED:
     or   a
     jr   z, .badword
     IFDEF DECIMAL_NUMBER_ENABLED
-    ; Phase 23 (core/decimal.asm): flag=2 means NUMBER already pushed a
-    ; FLOAT onto the float stack (DECIMAL_PARSE_AND_PUSH), not an
-    ; integer onto the data stack — nothing below this check applies to
-    ; it. Gated the same way as NUMBER's own hook, for the same reason:
-    ; a ROM without core/float.asm INCLUDEd can't even resolve FPOP.
+    ; flag=2 means NUMBER already pushed a FLOAT onto the float stack
+    ; (core/fpparse.asm), not an integer onto the data stack — nothing
+    ; below this check applies to it. Gated the same way as NUMBER's own
+    ; hook, for the same reason: a ROM without core/fpcore.asm INCLUDEd
+    ; can't even resolve COMPILE_FLOAT_LITERAL.
     cp   2
     jr   z, .gotfloat
     ENDIF
@@ -693,9 +669,12 @@ INTERPRET_NESTED:
     or   a
     jr   z, .loop                  ; interpreting: float already on the
                                     ; float stack, nothing more to do
-    call FPOP                      ; compiling: take the float back off
-    call COMPILE_FLOAT_LITERAL     ; the float stack and compile it as
-    jp   .loop                     ; a literal instead -- JP, not JR:
+    push iy                        ; compiling: compile the float on top of
+    pop  hl                        ; the float stack as a literal instead
+    call COMPILE_FLOAT_LITERAL     ; and drop it
+    ld   bc, 5
+    add  iy, bc
+    jp   .loop                     ; -- JP, not JR:
                                     ; tools/check_z80_opcodes.py flagged
                                     ; this displacement within 10 bytes
                                     ; of JR's +-127 limit
@@ -713,18 +692,18 @@ INTERPRET_NESTED:
     IFDEF RUNTIME_ERROR_CHECK_ENABLED
 ; ============================================================================
 ; STACK_CHECK (Phase 38, internal, not a dictionary word) — confirms IX
-; (the integer stack) and IY (the float stack, core/float.asm) both
+; (the integer stack) and IY (the float stack, core/fpcore.asm) both
 ; still sit within their own defined ranges (core/dict.asm's own
-; DSTACK_TOP/DSTACK_LIMIT; core/float.asm's own FSTACK_TOP/
+; DSTACK_TOP/DSTACK_LIMIT; core/fpcore.asm's own FSTACK_TOP/
 ; FSTACK_LIMIT), called once per word from INTERPRET_RUN's own .loop —
 ; see that routine's own comment on why that ONE spot catches every
 ; word's own stack misuse without touching any individual word's code.
 ;
 ; GATED behind DEFINE RUNTIME_ERROR_CHECK_ENABLED, the including ROM's
-; own opt-in (exactly like core/decimal.asm's own
+; own opt-in (exactly like core/fpparse.asm's own
 ; DECIMAL_NUMBER_ENABLED) — every existing ROM that doesn't define it
 ; gets this file's own compiled bytes byte-for-byte unchanged. A ROM
-; that DOES define it MUST also INCLUDE core/float.asm before
+; that DOES define it MUST also INCLUDE core/fpcore.asm before
 ; INCLUDEing this file (for FSTACK_TOP/FSTACK_LIMIT to already be
 ; resolvable) and must itself define RUNTIME_ERROR_HOOK (exactly like
 ; INTERPRET_UNKNOWN_WORD, below) — reached the same proven way: a bare
@@ -740,7 +719,7 @@ INTERPRET_NESTED:
 ; nothing on the stack) that would otherwise silently read/corrupt
 ; whatever memory happens to sit just past the stack's own boundary
 ; (DSTACK_LIMIT and FSTACK_TOP are adjacent, not coincidentally — see
-; core/float.asm's own header). It does NOT catch a word that pops
+; core/fpcore.asm's own header). It does NOT catch a word that pops
 ; garbage and then pushes something back, netting to an
 ; IN-RANGE-but-wrong stack depth — a real, narrower limitation, the
 ; same category of "can't verify what it can't observe" this project's

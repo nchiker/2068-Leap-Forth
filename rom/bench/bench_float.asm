@@ -42,6 +42,8 @@ COLD_START:
     ld   (LEAVE_DEPTH), a
     ld   a, DEFAULT_ATTR
     ld   (CURRENT_ATTR), a
+    ld   a, 4
+    ld   (F_PLACES), a
     xor  a
     ld   (PRINT_COL), a
     ld   (PRINT_ROW), a
@@ -89,19 +91,15 @@ DICT_CHAIN_POINT DEFL H_SEMICOLON
     INCLUDE "core/control.asm"
     INCLUDE "core/ts2068.asm"
 DICT_CHAIN_POINT DEFL H_CLS
-    INCLUDE "core/float.asm"
-DICT_CHAIN_POINT DEFL H_FMINUS
-    INCLUDE "core/floatmul.asm"
-DICT_CHAIN_POINT DEFL H_FSTAR
-    INCLUDE "core/floatdiv.asm"
+    INCLUDE "core/fpcore.asm"
 DICT_CHAIN_POINT DEFL H_FSLASH
-    INCLUDE "core/floatconv.asm"
-DICT_CHAIN_POINT DEFL H_FROUND
-    INCLUDE "core/floatprint.asm"
-DICT_CHAIN_POINT DEFL H_FDOT
-    INCLUDE "core/decimal.asm"
+    INCLUDE "core/fpparse.asm"
     INCLUDE "core/print.asm"
 DICT_CHAIN_POINT DEFL H_DOT
+    INCLUDE "core/fpprint.asm"
+DICT_CHAIN_POINT DEFL H_FDOT
+    INCLUDE "core/fpconv.asm"
+DICT_CHAIN_POINT DEFL H_FROUND
     INCLUDE "core/beep.asm"
 DICT_CHAIN_POINT DEFL H_BEEP
     INCLUDE "core/sound.asm"

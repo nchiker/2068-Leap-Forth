@@ -574,8 +574,8 @@ def do_beep(fw, cs):
         frames, hl = g["DE"], g["HL"]
         if g["IY"] != FSTACK_TOP or g["IX"] != DSTACK_TOP:
             return "stacks at BEEP_PLAY: IX=$%04X IY=$%04X, wanted $%04X $%04X" % (g["IX"], g["IY"], DSTACK_TOP, FSTACK_TOP)
-        if hl != cs["i"][0]:
-            return "semitones at BEEP_PLAY %d, wanted %d" % (s16(hl), s16(cs["i"][0]))
+        if hl != cs["i"][0] & 0xFFFF:                       # (a negative semitone count is the 16-bit pattern in HL)
+            return "semitones at BEEP_PLAY %d, wanted %d" % (s16(hl), s16(cs["i"][0] & 0xFFFF))
     else:
         why = settle(r)
         if why:
@@ -831,7 +831,7 @@ def legacy_cell(c):
 def t_speed(m, fw, a):
     """T-states of one call on fixed operands: the least of 3 runs (a frame interrupt may fall inside a run)."""
     runs = []
-    legacy = "PLACES" not in fw.words           # READING: a build without PLACES has the old 3-byte cells; its operands are
+    legacy = fw.syms.get("FSTACK_LIMIT") == 0x8C00   # READING: the old build (3-byte cells, FSTACK_LIMIT $8C00); its operands are
     fw.cell = 3 if legacy else 5                #   written in that format (same values) so that the old figures are real
     f = [legacy_cell(x) for x in a.get("f", ())] if legacy else a.get("f", ())
     try:
@@ -1100,7 +1100,7 @@ def new_checks(count, seed, int_n):
         ([], "1E38 1E38 ' F* CATCH .", "-43"),
         ([], "1.5E38 1.5E38 ' F+ CATCH .", "-43"),
         ([], "-1.0 ' FSQRT CATCH .", "-46"),
-        ([], "40000.0 ' F>S CATCH .", "-43"),
+        ([], "65536.0 ' F>S CATCH .", "-43"),   # READING: 40000.0 is inside -32768..65535 (spec 8.1), 65536.0 is not
         ([], "-32769.0 ' F>S CATCH .", "-43"),
         ([], "11 ' PLACES CATCH .", "-43"),
         ([], "-1 ' PLACES CATCH .", "-43"),

@@ -74,10 +74,10 @@
 ; unused), no
 ; editor.asm (this ROM never runs the live line editor — it drives the
 ; game directly via INTERPRET_RUN, never EDITOR_LOOP_LIVE), no
-; FSQRT/SIN/COS/PI/RAD/DEG/F./F>S/FROUND (core/floatsqrt/floattrig/
-; floatprint/floatconv — the game needs only enough float support for
-; BEEP's own fduration argument: core/float.asm + core/floatmul.asm +
-; core/floatdiv.asm, which BEEP_COMPUTE genuinely calls internally —
+; FSQRT/SIN/COS/PI/RAD/DEG/F./F>S/FROUND (core/fpmath/fpprint/fpconv —
+; the game needs only enough float support for BEEP's own fduration
+; argument: core/fpcore.asm (the engine and F+ F- F* F/) and the literal
+; parser core/fpparse.asm, which BEEP genuinely calls internally —
 ; confirmed by reading core/beep.asm's own header before cutting
 ; anything, not guessed), no THROW/CATCH, EXECUTE, ', ACCEPT/INPUT,
 ; STICK, FREE, LPRINT/LLIST, ULAPLUS, VLIST, or the Phase 50
@@ -92,11 +92,11 @@
 ; core/control.asm must immediately precede both, unchanged from
 ; forth_boot.asm's own ordering.
 ;
-; DECIMAL LITERALS: DEFINE DECIMAL_NUMBER_ENABLED + core/decimal.asm
+; DECIMAL LITERALS: DEFINE DECIMAL_NUMBER_ENABLED + core/fpparse.asm
 ; ARE included (unlike everything trimmed above) specifically so BEEP's
 ; own duration argument can be written as a real fractional literal
 ; (`12 0.3 BEEP`) instead of a whole-second-only S>F workaround —
-; core/decimal.asm defines no dictionary words of its own (confirmed by
+; core/fpparse.asm defines no dictionary words of its own (confirmed by
 ; grepping it for "H_" — none), so it costs no chain-order bookkeeping,
 ; only code size, and that cost is easily affordable given how much the
 ; trimming above already freed.
@@ -329,13 +329,9 @@ DICT_CHAIN_POINT DEFL H_SEMICOLON
     INCLUDE "core/ts2068.asm"       ; hardcoded onto H_UNTIL -- must
                                       ; follow core/control.asm directly
 DICT_CHAIN_POINT DEFL H_CLS
-    INCLUDE "core/float.asm"
-DICT_CHAIN_POINT DEFL H_FMINUS
-    INCLUDE "core/floatmul.asm"
-DICT_CHAIN_POINT DEFL H_FSTAR
-    INCLUDE "core/floatdiv.asm"
+    INCLUDE "core/fpcore.asm"
 DICT_CHAIN_POINT DEFL H_FSLASH
-    INCLUDE "core/decimal.asm"       ; no dictionary words -- chain-neutral
+    INCLUDE "core/fpparse.asm"       ; no dictionary words -- chain-neutral
     INCLUDE "core/print.asm"
 DICT_CHAIN_POINT DEFL H_DOT
     INCLUDE "core/beep.asm"

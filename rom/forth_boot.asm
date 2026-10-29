@@ -14,7 +14,7 @@
 ; turned interrupts on. See rom/forth_smoke_p9.asm's own header for the
 ; full story of what had to be fixed first (a dictionary-chain
 ; structural bug spanning core/control.asm, core/storage.asm, and
-; core/float.asm) and how the real interrupt wiring below was confirmed
+; core/fpcore.asm) and how the real interrupt wiring below was confirmed
 ; against 2068-Leap's own working ROM files, not guessed.
 ;
 ; The full dictionary is assembled here: every word from every phase
@@ -57,7 +57,7 @@
 ; DICT_LATEST_COLD's own LINK chain through the assembled .bin)
 ; rather than incrementing this number by eye — that's exactly the habit
 ; that let it drift, repeatedly.
-; DECIMAL_NUMBER_ENABLED is also DEFINEd here (core/decimal.asm,
+; DECIMAL_NUMBER_ENABLED is also DEFINEd here (core/fpparse.asm,
 ; Phase 23) — not a dictionary word, a NUMBER/INTERPRET_RUN parsing
 ; capability: typing a literal like `3.5` now pushes a real float
 ; directly, in both interpret and compile contexts.
@@ -269,6 +269,8 @@ COLD_CLEAR_END EQU UDG_TABLE + UDG_COUNT * 8
                                    ; live: text appeared black-on-white
                                    ; instead of the intended green-on-
                                    ; black terminal look
+    ld   a, 4
+    ld   (F_PLACES), a            ; core/fpprint.asm: F. prints 4 decimals
     ld   a, 1
     ld   (FWRAP_OLD_COUNT), a ; required once at cold start -- see
                                   ; core/editor.asm's own header on this
@@ -543,22 +545,16 @@ DICT_CHAIN_POINT DEFL H_SEMICOLON
 DICT_CHAIN_POINT DEFL H_CLS
     INCLUDE "core/storage.asm"
 DICT_CHAIN_POINT DEFL H_LOADLIB
-    INCLUDE "core/float.asm"
-DICT_CHAIN_POINT DEFL H_FMINUS
-    INCLUDE "core/floatmul.asm"
-DICT_CHAIN_POINT DEFL H_FSTAR
-    INCLUDE "core/floatdiv.asm"
+    INCLUDE "core/fpcore.asm"
 DICT_CHAIN_POINT DEFL H_FSLASH
-    INCLUDE "core/decimal.asm"
+    INCLUDE "core/fpparse.asm"
     INCLUDE "core/print.asm"
 DICT_CHAIN_POINT DEFL H_DOT
-    INCLUDE "core/floatprint.asm"
+    INCLUDE "core/fpprint.asm"
 DICT_CHAIN_POINT DEFL H_FDOT
-    INCLUDE "core/floatsqrt.asm"
-DICT_CHAIN_POINT DEFL H_FSQRT
-    INCLUDE "core/floatconv.asm"
+    INCLUDE "core/fpconv.asm"
 DICT_CHAIN_POINT DEFL H_FROUND
-    INCLUDE "core/floattrig.asm"
+    INCLUDE "core/fpmath.asm"
 DICT_CHAIN_POINT DEFL H_DEG
     INCLUDE "core/beep.asm"
 DICT_CHAIN_POINT DEFL H_BEEP

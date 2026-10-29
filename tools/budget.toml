@@ -24,31 +24,31 @@ pad = 0xFF
 [[image]]
 file   = "forth_boot_rom0.bin"
 title  = "HOME ROM (Forth)"
-floor  = 1738
+floor  = 1495
 target = 200
 
 [[image]]
 file   = "forth_boot_cart.bin"
 title  = "HOME, DOCK cartridge build (Forth)"
-floor  = 1738
+floor  = 1495
 target = 200
 
 [[image]]
 file   = "forth_demo_blackjack_rom0.bin"
 title  = "HOME ROM (Blackjack demo)"
-floor  = 1201
+floor  = 821
 target = 200
 
 [[image]]
 file   = "forth_demo_blackjack_cart.bin"
 title  = "HOME, DOCK cartridge build (Blackjack demo)"
-floor  = 1201
+floor  = 821
 target = 200
 
 [[image]]
 file   = "forth_demo_gallery_rom0.bin"
 title  = "HOME ROM (Shooting Gallery demo)"
-floor  = 1130
+floor  = 750
 target = 200
 
 [[image]]
@@ -93,3 +93,7 @@ target = 150
 #     (+105 B, raised: its test seed text is 4 B longer), forth_demo_gallery_rom0.bin: 1021 -> 1130 (+109 B, raised),
 #     step F item O10: kernel/math's multiply and divide on Leap-C's register-only routines (-92 B), RND on Leap-C's
 #     xorshift with a multiply for the range (-17 B); docs/V2/FLOAT_SPEC.md section 11, the audit's section 9 row "F O10".
+#   forth_boot_rom0.bin and forth_boot_cart.bin: 1738 -> 1495 (-243 B), forth_demo_blackjack_*: 1201 -> 821 (-380 B),
+#     forth_demo_gallery_rom0.bin: 1130 -> 750 (-380 B), step F item 4: the 5-byte float engine (core/fpcore, fpparse,
+#     fpprint, fpconv, fpmath) for today's 14 float words, BEEP's float part, the shared number parser; the demos carry
+#     the engine and the parser for their BEEP literals; docs/V2/FLOAT_SPEC.md, the audit's section 9 row "F item 4".

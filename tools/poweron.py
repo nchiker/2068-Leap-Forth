@@ -93,9 +93,8 @@ PORT_LO, PORT_HI = 10820, 10839
 RAM_BASE, RAM_SIZE = 0x4000, 0xC000
 PATTERNS = ("zero", "ones", "alt", "addr", "random:1", "random:2", "random:3", "random:4")
 FREE_REGS = ("AF", "BC", "DE", "HL", "IX", "IY", "SP", "AF'", "BC'", "DE'", "HL'")
-# EQUs in the .sym file that are numbers, not addresses (core/floattrig.asm fixed-point constants,
-# core/beep.asm's clock constant); PORT_* are I/O port numbers.  Excluded from the address -> symbol map.
-NOT_ADDRESS = {"PI_M", "TWO_PI_M", "HALF_PI_M", "TABLE_STEP_M", "DEG_CONST_M", "CPU_CLOCK_M"}
+# EQUs in the .sym file that are numbers, not addresses (core/beep.asm's clock constant); PORT_* are I/O port numbers.  Excluded from the address -> symbol map.
+NOT_ADDRESS = {"CPU_CLOCK_M"}
 CHUNK = 500000          # opcodes per `run`, as tools/run_rom_tests.sh
 MAX_INSTR = 20000000    # generous opcode cap for the boot (the boot takes well under 1M)
 

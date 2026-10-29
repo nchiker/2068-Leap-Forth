@@ -157,7 +157,7 @@ def fsqrt(n):
     if is_neg(n):
         raise Throw(-46)
     x = bytes([(n[0] + 130) >> 1, 0, 0, 0, 0])      # 0.5 * 2^(e' - 128), e' = floor((e + 130) / 2)
-    for _ in range(5):
+    for _ in range(4):                                # (4 steps: the guess is within sqrt 2, 2^-40 after 4)
         x = add(x, div(n, x))
         x = bytes([x[0] - 1]) + x[1:]                 # / 2 on the exponent byte (x > 0, far above 2^-127)
     return x

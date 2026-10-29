@@ -211,6 +211,45 @@ W_DOT:
     call W_EMIT
     ret
 
+; ============================================================================
+; PRINT_UDEC16 (internal) — HL = unsigned 16-bit value; prints it as
+; decimal digits with no leading zeros (prints "0" for zero), no
+; trailing space. The digit-collection idiom of W_DOT below without its
+; sign and trailing-space handling; core/recall.asm's LIST-DEFS prints
+; with it. Destroys: AF, BC, DE, HL
+; ============================================================================
+PRINT_UDEC16:
+    ld   a, h
+    or   l
+    jr   nz, .hasdigits
+    ld   hl, "0"
+    rst RST_DPUSH
+    call W_EMIT
+    ret
+.hasdigits:
+    ld   c, 0
+.divloop:
+    ld   a, h
+    or   l
+    jr   z, .printdigits
+    call UDIV10
+    push af
+    inc  c
+    jr   .divloop
+.printdigits:
+    ld   b, c
+.printloop:
+    pop  af
+    add  a, "0"
+    ld   l, a
+    ld   h, 0
+    push bc
+    rst RST_DPUSH
+    call W_EMIT
+    pop  bc
+    djnz .printloop
+    ret
+
 DICT_LATEST_INIT_PRINT EQU H_DOT   ; head of the dictionary once this
                                    ; file's own words are included
 
