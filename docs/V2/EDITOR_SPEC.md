@@ -238,6 +238,70 @@ session, so the oracle calls it directly at the view's key wait).
 screen (scroll, insert, delete, a line changing its row count) redraws from the cursor line down, or the whole view
 when it scrolls. After every key the screen equals a full view redraw from the same state (N9).
 
+### 5.1 Design of item 6 (decided at item 5)
+
+**Split.** HOME: the engine (item 5), its veneers, `EDIT` and the commit. EXROM (`rom/graphics_exrom.asm`, service
+slot 6, `VIEW_SESSION`): the entry checks that need the store, the store routines, the view's layout, redraw, keys
+and status row. The EXROM stays paged in for the whole session; it calls HOME only through `GRAPHICS_HOME_TABLE`
+and the RAM veneer `ED_ROW_JP`. Item 6 brings a minimal `EDIT` (open by name or bare, leave, commit) so that N7,
+N9 and N13 can run; item 7 adds the refusals, the error report `LINE n`, `RECALL`'s retirement and the docs.
+
+**Veneers** appended to `GRAPHICS_HOME_TABLE` (slots 0-4 unchanged; same bytes in HOME and cartridge builds):
+
+| Slot | Target | Contract |
+|---|---|---|
+| 5 | `WRAP_CALC` | the edit line's table, with E10's row (item 5) |
+| 6 | `WRAP_CALC_AT` | HL = text, A = length, C = cursor or `$FF` |
+| 7 | `ED_DRAW_ROWS` | the table's rows from `FWRAP_TOP` |
+| 8 | `ED_DRAW_CURSOR` | the cursor from the table and `FWRAP_TOP` |
+| 9 | `EDITOR_EDIT_KEY` | A = key; the console's editing without a redraw: carry = ENTER (not handled), NC + NZ = the line or cursor changed, NC + Z = nothing changed (DELETE or LEFT at 0, RIGHT at the end, a refused or ignored key). `EDITOR_PROCESS_KEY` becomes `call EDITOR_EDIT_KEY / ret c / ret z / call EDITOR_REDRAW / or a / ret` |
+| 10 | `IO_READ_KEY` | the key wait (the oracle's "key wait" is this PC) |
+| 11 | `EDIT_CURSOR_TO_ROWCOL` | B = `FWRAP_TOP` + row index, C = column |
+| 12 | `FORGET_PRINT_MSG` | HL = zero-terminated text through `W_EMIT` (CR is a newline), core/forget.asm: the EXROM's messages (`32COL FIRST`, `LONG LINE`, `STORE FULL`) print from the EXROM while it is paged in |
+
+**Store routines (EXROM).** A terminator is `$0D` or `$8D`. Each routine records its registers in its header.
+`STORE_LINE` (line n → start, length; n = count gives `STORE_END`, 0), `STORE_COUNT`, and one gap routine
+`STORE_GAP` (HL = position, signed delta: checks `STORE_END` + delta ≤ `STORE_LIMIT` first and returns carry with
+nothing changed, else moves `[position, STORE_END)` with `LDIR`/`LDDR` and updates `STORE_END`); replace, insert and
+delete are a gap plus a copy or a terminator write. (The spec's "HOME's block-move routine" does not exist; `LDIR`/`LDDR`
+inline are smaller than a veneer.) A write-back stores `EDIT_BUF`'s text and `$8D`; an inserted line is a lone `$8D`.
+"Changed" means the bytes differ (`EDIT_BUF`/`EDIT_LEN` against the store line), compared when the line is left.
+
+**Entry (`VIEW_SESSION`).** In: `WORD_BUF` = the name (length 0: bare `EDIT`). Refusals in this order, each changing
+nothing: 64-column mode (`32COL FIRST`); a line over 128 characters or one that needs a fifth row at 32 columns
+(`LONG LINE`: neither can be the engine's line); the name not found (result 1: HOME jumps to
+`INTERPRET_UNKNOWN_WORD`, which prints `name ?` from `WORD_BUF` as for an unknown word). Matching: per line, the
+words `:` and the name adjacent, words split at bytes 0-32, compared without case. Bare `EDIT` inserts an empty
+marked line after the last one at once (the line count includes it); with no room it refuses with `STORE FULL`. The
+result is a RAM cell (`EXROM_CALL_SLOT` loses A).
+
+**Layout.** View state in RAM `$8AC0` up (free: `$8ABD-$8BFF`): top line, cursor line, line count, message flag,
+the cursor line's screen row and row count, the previous cursor cell. A line's rows are `WRAP_CALC_AT` on its text
+in the store (C = `$FF`); the cursor line's are `WRAP_CALC` on `EDIT_BUF` (E10's row included). Scrolling is the
+least that keeps the cursor line whole: top = min(top, cursor line), then top + 1 while the rows from top to the
+cursor line exceed 23. A line below that does not fit is drawn as far as row 22 goes (both drawings are allowed).
+
+**Redraw.** `VIEW_REDRAW_ALL` (the oracle's): rows 0-22 from the top line (each line `WRAP_CALC_AT` or `WRAP_CALC`,
+then `FWRAP_TOP` and `ED_DRAW_ROWS`), blank rows below through `ED_ROW_JP` with D = 0, the status row, then the
+cursor (`WRAP_CALC`, `FWRAP_TOP` = the cursor line's row, `ED_DRAW_CURSOR`). After a key: the top changed → all;
+the cursor moved to another line, or the cursor line's row count changed, or lines were inserted or deleted → from
+the upper of the old and new cursor lines down; else the cursor line's rows only. The status row (`LINE n/m`, or
+`STORE FULL` until the next key) is drawn after every key. Every cell drawn through `ED_ROW32` gets `ATTR_DEFAULT`,
+which also removes an old cursor; a cursor left on a row not redrawn is reset with slot 1 (`GFX_SET_ATTR`).
+
+**Keys** as section 5's table, the view's own first (UP, DOWN, ENTER, delete-line, insert-line, BREAK, DELETE at
+column 0), the rest to slot 9. Within a wrapped line UP/DOWN keep the column (the row's end if shorter) from slot
+11's row and column and the table; into another line: UP to its last row, DOWN to its first, same rule. Deleting
+the only line leaves it empty (marked) instead. After a delete the cursor is at column 0 of the line that took the
+deleted one's place, or of the new last line.
+
+**Leaving and commit (HOME, `EDIT`).** After the session: `GFX_CLS`, `PRINT_ROW`/`PRINT_COL` to 0, then until no
+`$8D` is left: find the first marked line, clear its mark, run it with `INTERPRET_NESTED` (saving and restoring
+`SRC_PTR`/`SRC_END`, as `LOAD-TEXT` does). The scan restarts from the store's start each time, so a line that
+changes the store cannot leave a mark behind. Item 7 adds the error report: a cell holding the running line's
+number, read by `INTERPRET_UNKNOWN_WORD` and `RUNTIME_ERROR_HOOK` before their message (`LINE n `, then clear every
+remaining mark).
+
 ## 6. Words
 
 `EDIT` (new), `RECALL` (retired), `LIST-DEFS`, `SAVE-TEXT`, `VERIFY-TEXT`, `LOAD-TEXT` (format unchanged, CRs kept).
