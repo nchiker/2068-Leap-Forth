@@ -726,13 +726,19 @@ ED_ROW64:
     ENDIF
 
 ; ============================================================================
-; EDITOR_PROCESS_KEY ( A = key code -- )
+; EDITOR_EDIT_KEY ( A = key code -- ) -- the console's editing without a
+; redraw (step E item 6: the full-screen view edits its line with this).
 ; Out: carry set if A was ENTER (a line is ready in EDIT_BUF/EDIT_LEN;
-; caller decides what to do with it — see EDITOR_LOOP_LIVE below).
-; Carry clear otherwise (key handled, or ignored if unmapped/out of
-; range — no error is ever raised here, matching every earlier phase's
-; scope: this is a shell, not something a Forth program can catch an
-; exception from).
+;      not handled here); otherwise carry clear and
+;      NZ = the line or the cursor changed, Z = nothing changed (DELETE or
+;      LEFT at 0, RIGHT at the end, a refused or ignored key).
+; Destroys: AF, BC, DE, HL
+;
+; EDITOR_PROCESS_KEY ( A = key code -- ) is EDITOR_EDIT_KEY and, when
+; something changed, EDITOR_REDRAW. Out: carry set if A was ENTER (see
+; EDITOR_LOOP_LIVE below). No error is ever raised here, matching every
+; earlier phase's scope: this is a shell, not something a Forth program
+; can catch an exception from.
 ;
 ; ROOM CHECK, CHANGED FOR WORD WRAP: the raw "EDIT_LEN < EDIT_MAX_LEN"
 ; check alone is no longer sufficient — the buffer might have physical
@@ -746,7 +752,7 @@ ED_ROW64:
 ; silently ignored — the same user-visible outcome ("buffer full") the
 ; original single-row version had, just at a much higher real capacity.
 ; ============================================================================
-EDITOR_PROCESS_KEY:
+EDITOR_EDIT_KEY:
     cp   KEY_ENTER
     jr   nz, .not_enter
     scf
@@ -758,7 +764,7 @@ EDITOR_PROCESS_KEY:
     or   a
     jr   z, .done
     call DELETE_CHAR_BEFORE_CURSOR
-    jr   .redraw_and_done
+    jr   .changed
 .not_delete:
     cp   KEY_CURSOR_LEFT
     jr   nz, .not_left
@@ -767,7 +773,7 @@ EDITOR_PROCESS_KEY:
     jr   z, .done
     dec  a
     ld   (EDIT_CURSOR), a
-    jr   .redraw_and_done
+    jr   .changed
 .not_left:
     cp   KEY_CURSOR_RIGHT
     jr   nz, .not_right
@@ -777,7 +783,7 @@ EDITOR_PROCESS_KEY:
     jr   nc, .done             ; already at or past the end
     inc  a
     ld   (EDIT_CURSOR), a
-    jr   .redraw_and_done
+    jr   .changed
 .not_right:
     cp   " "
     jr   c, .done              ; below space: unmapped/control, ignore
@@ -797,20 +803,25 @@ EDITOR_PROCESS_KEY:
     call WRAP_CALC
     ld   a, (FWRAP_OVERFLOW)
     or   a
-    jr   z, .fits                  ; the whole line still fits in
+    jr   z, .changed               ; the whole line still fits in
                                     ; FWRAP_MAX_ROWS rows -- keep it
     call DELETE_CHAR_BEFORE_CURSOR  ; undo the speculative insert --
                                     ; the just-inserted char is
                                     ; immediately before EDIT_CURSOR,
                                     ; exactly DELETE_CHAR_BEFORE_CURSOR's
                                     ; own contract
-    jr   .done
-.fits:
-    jr   .redraw_and_done
-
-.redraw_and_done:
-    call EDITOR_REDRAW
 .done:
+    xor  a                      ; NC, Z: nothing changed
+    ret
+.changed:
+    or   1                      ; NC, NZ
+    ret
+
+EDITOR_PROCESS_KEY:
+    call EDITOR_EDIT_KEY
+    ret  c
+    ret  z
+    call EDITOR_REDRAW
     or   a
     ret
 
@@ -899,6 +910,11 @@ EDITOR_LOOP_LIVE:
     ld   d, 0
     ld   e, a
     call INTERPRET_RUN
+    IFDEF CORE_EDIT_ASM
+    ld   a, (VIEW_RESULT)           ; core/edit.asm: EDIT ran, and an error may have left
+    or   a                          ; changed-line marks in the store
+    call nz, EDIT_CLEAR_MARKS
+    ENDIF
     ; found live by the user: a successfully-run line gave no visible
     ; confirmation at all -- it just vanished, indistinguishable from
     ; nothing having happened. An error already prints "?"/"STACK?"
@@ -917,6 +933,6 @@ EDITOR_LOOP_LIVE:
     rst RST_DPUSH
     call W_EMIT
 .no_ok:
-    jr   EDITOR_LOOP_LIVE
+    jp   EDITOR_LOOP_LIVE
 
     ENDIF
