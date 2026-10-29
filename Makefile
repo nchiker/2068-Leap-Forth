@@ -254,8 +254,8 @@ audio: build/forth_boot_rom0.bin build/stock_shaped_exrom.bin
 
 # Differential test of the cartridge's EXROM paging (step R1, docs/V2/CARTRIDGE_EXROM_SPEC.md section 8): the same
 # typed Forth program on the home build and on the cartridge build, on ZEsarUX and on TSRun's real core under Node
-# (tools/cart_diff.py's header says what is compared). About 15 minutes; not part of `make test`; needs a TSRun
-# checkout (TSRUN_DIR, default ~/TSRun) and Node. Ports 10930-10949.
+# (tools/cart_diff.py's header says what is compared). About 75 seconds (keys typed in emulated time, 4 ZEsarUX workers;
+# --jobs N); not part of `make test`; needs a TSRun checkout (TSRUN_DIR, default ~/TSRun) and Node. Ports 10930-10949.
 cartdiff: build/forth_boot_rom0.bin build/graphics_exrom.bin build/forth_boot.dck
 	python3 tools/cart_diff.py --home-dir . --cart-dir .
 
