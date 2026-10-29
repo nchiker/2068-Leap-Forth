@@ -24,7 +24,7 @@ byte for byte.
 | Reference | What it is | What F takes |
 |---|---|---|
 | Leap-C `src/runtime/fpcore.asm` (`b918527`, 1,461 B [M] in `leapc_exrom.lst`) | The re-engineered V2 calculator: unpacked working form `[sign][exp][m0..m3][guard]` (40-bit mantissa), `FUNPK`/`FPACK` (round to nearest on the guard's top bit), `FNORM`, `FADD` (the larger magnitude first, alignment by bit shifts, 40-bit sum), `FMUL` (32 × 32 shift-and-add, the top 40 bits), `FDIV` (40 quotient bits, restoring, with a 33rd remainder bit), `FDONE` (one normalising step, the range), `FCMP`, `FRI`/`TOI`, `XF_FTOA` (128.32 fixed point, every integer digit, the decimals rounded half up), `XF_ATOF` (32-bit digit accumulator, a decimal exponent, scaling by exact powers 10^1..10^13) | The format, the unpacked form, every algorithm, so that `fpmodel.py` stays the oracle unchanged. Not taken: the `XF_OP` dispatch and its table, `FRU`, INC/DEC/PINC/PDEC and `F_OLD` (C operators), the `f F l L` suffixes, `PRINT_BUF`, `F_ERR`'s compile/run split |
-| Leap-C `tools/fpmodel.py` (319 lines) | Bit-exact Python model of the above: `unpack`, `pack`, `norm`, `add`, `mul`, `div`, `cmp`, `fri`, `toi`, `neg`, `atof`, `ftoa`, `value`, `encode` | Vendored unchanged as `tools/fpmodel.py` (upstream commit recorded, checked like `tapeblock.asm` by `tools/check_upstream.py`) |
+| Leap-C `tools/fpmodel.py` (319 lines) | Bit-exact Python model of the above: `unpack`, `pack`, `norm`, `add`, `mul`, `div`, `cmp`, `fri`, `toi`, `neg`, `atof`, `ftoa`, `value`, `encode` | Vendored unchanged as `tools/fpmodel.py` (upstream commit and sha256 recorded in `tools/fpforth.py`, checked by `floattest.py --selftest`); its `ftoa` is not Forth's (section 7) |
 | Leap-C `tools/floattest.py` (227 lines) | Calls every operation through the ROM (`lcharness.Machine.call`) on operands chosen to cover the format (zeros, powers of two, all-ones mantissas, both signs, exponents at the range's ends, random patterns, near-equal pairs for cancellation, integer boundaries); checks the model against Python floats within 2^-30; error cases through a stop frame | T13's operand generators (`interesting`, `near`), its case mix and its error-frame method, rebuilt on `tools/fharness.py` and on Forth's words (section 13) |
 | Leap V2 SQR (`rom/exrom_v2_vm_core.asm` `BUILTIN_FN_SQR`, `54cd877`) | Newton's method, 5 steps of x = (x + n/x)/2, the halving done by decrementing the exponent byte (exact, about 22 kT less than a divide); first guess 2^⌊(e+2)/2⌋ from the exponent; negative: an error; 0: 0 | The algorithm as is (section 8.1) |
 | Leap V2 SIN/COS/TAN (`rom/exrom_v2_float_fn.asm`, 5.9-5.10) | Degrees: exact integer reduction mod 360 to [0°, 90°], then x = a·π/180 and the odd minimax series x + x³(c3 + c5x² + c7x⁴ + c9x⁶ + c11x⁸), coefficients fitted for \|x\| ≤ 91° (relative error 4.8e-11), within about 2 ulp; COS(x) = SIN(x + 90); TAN = SIN/COS with a division-by-zero guard; \|x\| ≥ 32768° is error 15 | The series and its 5 coefficients and π/180 (`SIN_COEFFS`, 30 B) as is. The reduction is rebuilt for radians (section 8.2): Forth's SIN/COS take radians, and RAD/DEG stay (audit 4.2 item 3) |
@@ -85,9 +85,10 @@ dispatcher, no `XF_OP` table). Unchanged from Leap-C, so that `fpmodel.py` is th
   255: error), `FNORM`, `FADD` (with `FSWAP`), `FDONE`, `FSIGN`, `FCMP`, `FFROM` (16-bit integer in), `TOI` (out:
   truncated toward 0, the low 16 bits), `NEG`, the byte helpers `FSHL`, `FSHR`, `FADDN`, `FSUBN`, `FZERO`, `FMUL10`,
   `FDIV10`, the table `POW10` (10^1..10^13, exact);
-- `FTOA` and `ATOF` (sections 7 and 6), adapted at their ends only: FTOA emits its characters instead of filling
-  `PRINT_BUF` (the integer digits, produced right to left, are pushed on the machine stack and popped in order: at
-  most 39 digits, 78 B of stack); ATOF reads a counted token instead of a NUL-ended C string.
+- `ATOF` (section 6), adapted at its ends only: it reads a counted token instead of a NUL-ended C string. `FTOA` is
+  rebuilt for exact rounding (section 7); it emits its characters instead of filling `PRINT_BUF` (the integer
+  digits, produced right to left, are pushed on the machine stack and popped in order: at most 39 digits, 78 B of
+  stack).
 
 What changes around it:
 
@@ -104,10 +105,16 @@ What changes around it:
   sets). They compute the same numbers: `fpmodel.mul` is ⌊x32·y32 / 2^24⌋ exactly (the additions never reach the bits
   shifted out), and `fpmodel.div` is the exact restoring quotient, so any implementation of those two functions is
   bit-exact with the model, and T13 checks it. About 3.5 kT per F* and 4.5 kT per F/ [E], within ±30 B of `fpcore`'s
-  `FMUL` + `FDIV` (160 B) [E]. Precondition: neither interrupt routine touches the alternate registers. Forth's
-  own does not [S: no `exx` in kernel/ or core/]. The stock ROM's routine in the cartridge build is checked in
-  ZEsarUX before the code is written (alternate registers set to a pattern, frames run, read back); if it does touch
-  them, the kernels run with interrupts held off for at most about 5 kT (+4 B). **Decided: the register kernels.**
+  `FMUL` + `FDIV` (160 B) [E]. Precondition: neither interrupt routine touches the alternate registers the kernels use.
+  Forth's own does not [S: no `exx` in kernel/ or core/; `ex af, af'` only in the tape code, with interrupts off]. The
+  stock ROM's, which serves interrupts in the cartridge build [M, ZEsarUX 13.0, 2026-10-29, the stock ROMs alone]:
+  over one interrupt (pattern set at `$0038`, run to the return) BC', DE', HL' and AF' all come back unchanged; over
+  2 million instructions of the idle stock ROM (on the order of a hundred interrupts) BC', DE', HL' stay unchanged
+  while AF' changes (the stock ROM's own main code, which never runs in the cartridge build). The key-decoding path of
+  the stock routine was not exercised (keys sent to a paused emulator are not seen). So the kernels use `exx` (BC',
+  DE', HL') and never AF', and step F adds a cartdiff case doing `F*` and `F/` while keys are typed (the cartridge
+  build's results must equal HOME's). If that case ever differs, the kernels run with interrupts held off (at most
+  about 5 kT, +4 B). **Decided: the register kernels.**
 - **Alignment in FADD** shifts whole bytes first, then bits (the same ⌊y / 2^d⌋, so the same results): an exponent
   difference of 30 costs about 6 kT with bit shifts only [E]; whole bytes first, under 1.5 kT, for about +15 B [E].
   Done if the byte budget allows (it does on the section 14 estimate).
@@ -135,9 +142,17 @@ decimal.asm 248, NUMBER's loop about 60 S]).
 
 - **`PLACES ( n -- )`** sets the number of decimals both words print, 0-9 (a RAM byte, 4 after the cold start);
   another n: THROW −43 (F4).
-- **`F.`** prints `FTOA` with `PLACES` decimals rounded half up (as `fpmodel.ftoa`): every integer digit, then `.` and
-  the decimals (none and no point when `PLACES` is 0), `-` for a negative value, then a space, as today. One change
-  from the model: when every printed digit is 0, no `-` (`-0.00001 F.` prints `0.0000`, not C's `-0.0000`). With 4
+- **`F.`** prints every integer digit, then `.` and `PLACES` decimals (none and no point when `PLACES` is 0), `-` for
+  a negative value, then a space, as today. The decimals are the value's exact binary digits rounded half up (away
+  from 0 in magnitude), so `0.25` with 1 place prints `0.3` and `0.03125` with 4 `0.0313`. That is a change from
+  Leap-C's `XF_FTOA`, which adds ⌊2^31/10^p⌋ (just under half) to a 32-bit fraction, so exact ties round down
+  (`0.25` gives `0.2`) and 9 places are not resolved for small values (`-6e-10` gives `0.000000000`); found by the
+  T13 harness draft. The rebuild: the value as 128.64 fixed point (16 integer bytes, 8 fraction bytes; a value
+  below 2^-64 is 0, and rounds to 0 at any of the 0-9 places anyway), the decimals produced by ×10 into a 9-byte
+  buffer, then rounded on the rest (its top bit: half or more is up) with the carry propagated back through the
+  buffer and into the integer part, then the integer digits produced right to left on the machine stack (about +30 B
+  against `XF_FTOA`, 13 B more RAM). `tools/fpforth.py` models it as exact rational rounding. When every printed
+  digit is 0, no `-` (`-0.00001 F.` prints `0.0000`, not C's `-0.0000`). With 4
   decimals, as today: `2.0 FSQRT F.` prints `1.4142` where today `1.4141`, and `1.0 SIN F.` `0.8415` where today
   `0.8408` (rounding and precision).
 - **`FS.`** prints scientific notation (the ANS word): `[-]d.ddddEn` with `PLACES` decimals, the exponent n in decimal
@@ -148,7 +163,8 @@ decimal.asm 248, NUMBER's loop about 60 S]).
      one less or more).
   3. a = a / 10^n: for n > 0 divide, for n < 0 multiply, by `POW10` entries in steps of at most 13 (as ATOF).
   4. If a ≥ 10: a = a / 10, n + 1; else if a < 1: a = a × 10, n − 1 (one step suffices: n is never off by two).
-  5. The digits are FTOA(a, `PLACES`); if they read `10.`… (rounding carried), print `1.` and the zeros, n + 1.
+  5. The digits are F.'s for a with `PLACES` decimals; if they read `10.`… (rounding carried), print `1.` and the
+     zeros, n + 1.
   Scaling costs at most 3 roundings, so the printed digits can differ from the exact decimal in the last of 9 or so
   places; with 4 decimals never visibly [checked by T13 against Python's `%.4E`].
 - Very large values print all their integer digits with `F.` (up to 39); `FS.` is the way to read them.
@@ -164,7 +180,7 @@ decimal.asm 248, NUMBER's loop about 60 S]).
 | `S>F` | exact | exact (`FFROM`, signed) |
 | `F>S` | floor (`-2.5 F>S` gives −3), high bits lost silently | truncation toward 0 (`fpmodel.toi`, ANS `F>D`'s rule; `-2.5 F>S` gives −2; `FLOOR` gives the floor); the integer part must be in −32768..65535 (the range a literal may have), else THROW −43 (F3) |
 | `FROUND` | half up (−2.5 gives −2) | half away from 0 (−2.5 gives −3, 2.5 gives 3) (F3) |
-| `FSQRT` | 32-bit integer root; negative gives 0 | Leap V2's Newton (`54cd877`): 0 gives 0, negative THROW −46; first guess: exponent byte 128 + ⌊(e − 126) / 2⌋ (arithmetic shift), mantissa bytes 0 (0.5); 5 steps of x = x + n/x with the exponent byte then decremented (the halving). Within 2 ulp of `math.sqrt` [checked by T13] |
+| `FSQRT` | 32-bit integer root; negative gives 0 | Leap V2's Newton (`54cd877`): 0 gives 0, negative THROW −46; first guess: exponent byte ⌊(e + 130) / 2⌋ (Leap V2's 128 + ((e − 126) `sra` 1), without its sign error for e ≥ 254, where e − 126 reads as negative and the guess is 2^-64), mantissa bytes 0 (0.5); 5 steps of x = x + n/x with the exponent byte then decremented (the halving). Within 0.75 ulp of `math.sqrt` in the model [M, 2,000 values from e^-80 to e^80 and the exponent range's ends] |
 | `PI` | 3-byte constant | the 5-byte π (`$82 $49 $0F $DA $A2`) |
 | `SIN` `COS` | table, ~1e-3 | section 8.2 |
 | `RAD` `DEG` | × 0.0174532 / × 57.294922 | × π/180 (Leap V2's `SIN_COEFFS` entry `$7B $0E $FA $35 $13`) / × 180/π (`fpmodel.encode(180/π)`) |
@@ -178,20 +194,24 @@ first cleared bit was set, or (`FLOOR`) x is negative and any cleared bit was se
 
 Steps (each an `fpcore` operation: `tools/fpforth.py` follows the same steps, so the ROM is checked bit for bit):
 
-1. t = x × `INV_PI` (1/π, `fpmodel.encode(1/π)`).
+1. t = x × `INV_PI` (1/π, `fpmodel.encode(1/π)`); for COS, t = t + ½.
 2. k = t rounded half away from 0 (as `FROUND`); \|t\| ≥ 32767.5 (\|x\| above about 102,940): THROW −43 (F6: no
    digit of a sine is right at that size in a 32-bit mantissa).
 3. kf = k as a float (`FFROM`); r = (x − kf × P1) − kf × P2 (Cody-Waite), with P1 = π rounded to 17 significant bits
    (so kf × P1, at most 15 + 17 bits, is exact, and x − kf × P1 is exact by Sterbenz's lemma) and P2 = π − P1 to 32
-   bits (`fpmodel.encode`). \|r\| ≤ π/2 plus rounding, inside the series' fitted range (\|r\| ≤ 1.588, 91°).
+   bits (`fpmodel.encode`); for COS, r = r + π/2 (`HALF_PI`). \|r\| ≤ π/2 plus rounding, inside the series' fitted
+   range (\|r\| ≤ 1.588, 91°).
 4. Leap V2's series on r, unchanged: x² = r × r, x³ = r × x², P = c3 + x²(c5 + x²(c7 + x²(c9 + x² c11))), s = r +
    x³ × P, coefficients `SIN_COEFFS` (5 × 5 B, Leap V2 5.10).
 5. k odd: s = −s.
 
-**COS** x = SIN(x + π/2) (`HALF_PI` constant; as today and as Leap V2's COS = SIN(x + 90)). **TAN** x = SIN x / COS x;
-a cosine of exactly 0: THROW −42. Accuracy [E, checked by T13 against `math`]: about 2 ulp for \|x\| ≤ π/2, absolute
-error under 2^-30 for \|x\| ≤ 100, growing to about 2^-29 at the range's end (P2's rounding, about \|k\| × 2^-49 plus
-the series). 9 multiplies and 6 additions per SIN.
+**COS** shifts by π/2 inside the reduction (cos x = sin(x + π/2) with k = round(x/π + ½) and the π/2 added to the
+small r), not as SIN(x + π/2): adding π/2 to a large x first rounds away up to half of x's last place (1.4e-8 at
+\|x\| ≈ 70 in the model), which today's COS and Leap V2's COS = SIN(x + 90) accept. **TAN** x = SIN x / COS x; a
+cosine of exactly 0: THROW −42. Accuracy of the model [M, `tools/fpforth.py` self-test, 2,000 random x per range,
+against Python's `math`]: SIN within 1.4 ulp for \|x\| ≤ π/2; absolute error of SIN at most 3.8e-10 and of COS 5.3e-10
+for any \|x\| up to 102,000 (T13 gates: 3 ulp, 2^-30 ≈ 9.3e-10). 9 multiplies and 6 additions per SIN (COS one
+addition more each side).
 
 **Placement:** HOME (section 14 shows room). The EXROM fallback, used only if a measured step leaves HOME below its
 floor plus the 200 B target: SQR, SIN, COS and TAN move to the EXROM behind service slot 7 (free since step E) with a
@@ -259,9 +279,9 @@ no symbol of the build lies in them) [M]. Every gap is inside the cold start's z
 
 | Range | B | Use after F |
 |---|---:|---|
-| `$8594-$85BE` | 43 | `FP_RAM`: `FX` 7, `FY` 7, `FQ` 5, `FDEXP` 2, `FFLAGS` 1, `FMT` 20 (from `FP_RAM + 20`, overlapping `FDEXP`/`FFLAGS` as in Leap-C: never live together), 1 spare; `fpcore`'s `ASSERT` on the layout kept |
-| `$85BF-$85CB` | 13 | `FSQ_N` 5 (FSQRT's argument), `FTRIG_R2` 5 (r² in the series), `FTRIG_K` 2 (k, its parity is the sign), `F_PLACES` 1 (F4 b) |
-| `$85CC-$879F` | 468 | still free |
+| `$8594-$85C8` | 53 | `FP_RAM`: `FX` 7, `FY` 7, `FQ` 5, `FDEXP` 2, `FFLAGS` 1, `FMT` 24 (128.64 fixed point, from `FP_RAM + 20`, overlapping `FDEXP`/`FFLAGS` as in Leap-C: never live together), `FDIG` 9 (F.'s decimals); `fpcore`'s `ASSERT` on the layout kept |
+| `$85C9-$85D5` | 13 | `FSQ_N` 5 (FSQRT's argument), `FTRIG_R2` 5 (r² in the series), `FTRIG_K` 2 (k, its parity is the sign), `F_PLACES` 1 |
+| `$85D6-$879F` | 458 | still free |
 | `$87A0-$87BE`, `$8840-$8855` | 31 + 22 | today's float cells: free after F |
 | `$80DB-$80E0` | 6 | `DIV_DIVIDEND`, `DIV_QUOT`, `DIV_COUNTER`, `MATH_SIGN`: free after O10 |
 
@@ -397,8 +417,15 @@ count; and `RND`'s generator and range).
 | **new** (the spec; fail on the old build) | Engine, bit for bit against `fpmodel` on the generators of Leap-C's floattest (300 cases each): `F+ F- F* F/` (near pairs for cancellation), `F< F=` flags, `S>F` (all boundaries), `F>S`, `FROUND`, `FNEGATE`, `FABS`; literals (the 20 texts of Leap-C's list without suffixes, plus random `d.dEn`, signs, integers, 10+ digit integers); `F.` text on 300 values; `FSQRT`, `SIN`, `COS`, `TAN`, `RAD`, `DEG` bit for bit against `fpforth` and within the section 8 accuracy of Python's `math`; the model against Python's floats within 2^-30 (as Leap-C); errors −42, −43, −46 (the literal `1E39`, the integer literals `100000` and `-40000`, `40000.0 F>S`, `11 PLACES`); `F.` with `PLACES` 0-9 and the `-0.0000` rule; `FS.` text against `fpforth` and against Python's `%.<p>E` digits; `FLOOR`, `FMIN`, `FMAX`, `F>`, `F0<`, `F0=`, `FDEPTH`, `F@ F!`, `FVARIABLE`, `FCONSTANT` (typed and compiled); the float stack: 204 cells push and pop, the 205th push reported by `STACK?`; uncaught-THROW messages typed at the console (`1.0 0.0 F/` prints `DIVISION BY ZERO`, `5 THROW` `ERROR 5`, `' NOSUCHWORD` `UNDEFINED WORD`, `-1.0 FSQRT` `INVALID ARGUMENT`); integer `*` `/` `MOD` on 40,000 pairs against Python (O10); `RND`: 1,000 results after `n RANDOMIZE` equal the model's, `6 RND` gives all 36 consecutive pairs in 3,600 calls, `0 RANDOMIZE` reseeds from R (two boots give different first values) |
 | **speed** (recorded, not gated) | T-states per word on fixed operands: `F+` (exponent difference 0, 8, 30), `F*`, `F/`, `F.`, `FS.`, a literal, `FSQRT`, `SIN`, `*`, `/` (60000 7), `MOD`, `RND`; old and new build side by side in the ledger row |
 
-Run on the old build first (`make floattest FLOATTEST_BUILD=<old>`): the old group passes, the new group fails, and the
-old speed figures are recorded. That run, with this spec, is the oracle commit.
+Run on the old build first: the old group passes, the new group fails, and the old speed figures are recorded. That
+run, with this spec, is the oracle commit. **Result [M]** (`docs/V2/evidence/t13_old_build.txt`, 69 s on 7 workers):
+`floattest: 19/64 checks pass (old 14/14, new 5/50)`. The five new-group checks that pass on the old build do so by
+design: integer `*`, `/`, `MOD` (O10 keeps today's contract), `0 RANDOMIZE reseeds from R` (today's seeding is kept)
+and the model against Python (no ROM). Every other new check fails: 22 words missing, 3-byte cells, no errors or
+messages, the LFSR. Old speed (T-states): F+ 861 / 1,058 / 1,696 (exponent difference 0 / 8 / 30), F* 8,372, F/
+11,138, F. 30,591, literal 3.14159 13,244, literal 12345 1,926, FSQRT 12,273, SIN 50,165, `*` 1,787, `/` 60000 7
+3,949, MOD 3,949, RND 3,925. The harness's own readings are marked `READING:` in `tools/floattest.py` (the THROW
+slot at `$FF3E`, since THROW's `rst` pushes below the slot; text read after CLS; BEEP's frames read at `BEEP_PLAY`).
 
 ## 14. Byte budget [E unless marked]
 
@@ -408,7 +435,7 @@ old speed figures are recorded. That run, with this spec, is the oracle commit.
 | Removed: `NUMBER`'s digit loop, `BEEP`'s `FLOAT_TO_INT16` and float glue | about −110 |
 | Removed (O10): the five math routines | −178 [M] |
 | Engine (`fpcore`'s 1,461 B [L, M in `leapc_exrom.lst`] less FTOA 211, ATOF 338, `POW10` 65, the dispatch 39 and INC/DEC 35; register kernels; FADD's byte alignment) | about +800 |
-| FTOA (emitting, with `FMUL10`/`FDIV10`) | about +260 |
+| F.'s digits (exact rounding, emitting, with `FMUL10`/`FDIV10`) | about +290 |
 | ATOF (counted token, sign, integer path) with `POW10` | about +440 |
 | FSQRT, SIN/COS (reduction, series, 5 coefficients, π/180, 1/π, P1, P2), TAN | about +370 |
 | Today's 14 words' headers and glue on the new engine, BEEP's float part, the error entries | about +230 |
@@ -418,7 +445,7 @@ old speed figures are recorded. That run, with this spec, is the oracle commit.
 | Error messages (section 8.4) | about +115 |
 | Range checks (integer literals, `F>S`), the `-0.0000` rule | about +28 |
 | `RND` (xorshift, multiply range, R seeding, against the LFSR's 88) | about −30 |
-| **Net, as decided** | **about +370 B used: HOME 1,629 → about 1,260 free** |
+| **Net, as decided** | **about +400 B used: HOME 1,629 → about 1,230 free** (O10 with RND measured: 109 B more free, estimate 118) |
 
 The demos lose about 290 B each (section 10.1). The estimates are coarse (±250 B). Every code commit measures its own row; if HOME would fall below 1,000 B free, the
 EXROM fallback for the transcendentals (section 8.2) is proposed to the owner before going on. Floors in
