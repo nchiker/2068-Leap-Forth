@@ -1,7 +1,9 @@
 ; ============================================================================
-; core/fpconv.asm — S>F, F>S, FROUND and FLOOR (step F, docs/V2/FLOAT_SPEC.md sections 8.1, 8.4)
+; core/fpconv.asm -- S>F, F>S, FROUND and FLOOR: float/integer conversion (docs/V2/FLOAT_SPEC.md sections 8.1, 8.4)
 ;
-; Builds on core/fpcore.asm and core/dict.asm (this file's first header chains through DICT_CHAIN_POINT).
+; Needs core/fpcore.asm and core/dict.asm. Chained from DICT_CHAIN_POINT (set by the including ROM before the
+; INCLUDE); every word may destroy all registers except IX (the data stack pointer), IY (the float stack pointer)
+; and SP.
 ;
 ;   S>F    ( n -- r )   exact: the signed 16-bit integer as a float
 ;   F>S    ( r -- n )   truncated toward 0 (-2.5 gives -2); the integer part must be in -32768..65535 (the range an
@@ -20,10 +22,10 @@
     DEFINE CORE_FPCONV_ASM
 
 ; ============================================================================
-; S>F ( n -- r )
+; S>F ( n -- r ) -- the signed 16-bit integer as a float, exact
 ; ============================================================================
 H_STOF:
-    DW   DICT_CHAIN_POINT   ; the including ROM sets this (DEFL) to the chain this file extends, just before INCLUDEing it
+    DW   DICT_CHAIN_POINT
     DB   3, "S", ">", "F"
 W_STOF:
     rst  RST_DPOP
@@ -40,7 +42,7 @@ W_STOF:
     jp   FPACK
 
 ; ============================================================================
-; F>S ( r -- n )
+; F>S ( r -- n ) -- truncate toward 0; THROW -43 outside -32768..65535
 ; ============================================================================
 H_FTOS:
     DW   H_STOF
@@ -68,10 +70,11 @@ W_FTOS:
     rst  RST_DPUSH
     ret
 
-DICT_LATEST_INIT_FLOATCONV EQU H_FTOS   ; head of the dictionary as of S>F, F>S
+DICT_LATEST_INIT_FLOATCONV EQU H_FTOS
 
 ; ============================================================================
-; FINT -- (iy+0) = its integral value: A = 0 rounds half away from 0 (FROUND), A = 1 toward minus infinity (FLOOR)
+; FINT -- replace the top float by its integral value (not a dictionary word)
+; In:  A = 0 rounds half away from 0 (FROUND), A = 1 toward minus infinity (FLOOR)
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 FINT:
@@ -150,7 +153,7 @@ FINT:
     jr   .pack
 
 ; ============================================================================
-; FROUND ( r1 -- r2 )
+; FROUND ( r1 -- r2 ) -- round to the nearest integral value, ties away from 0
 ; ============================================================================
 H_FROUND:
     DW   H_FTOS
@@ -160,7 +163,7 @@ W_FROUND:
     jp   FINT
 
 ; ============================================================================
-; FLOOR ( r1 -- r2 )  toward minus infinity (-2.5 gives -3, 2.5 gives 2)
+; FLOOR ( r1 -- r2 ) -- round toward minus infinity (-2.5 gives -3, 2.5 gives 2)
 ; ============================================================================
 H_FLOOR:
     DW   H_FROUND
@@ -169,6 +172,6 @@ W_FLOOR:
     ld   a, 1
     jp   FINT
 
-DICT_LATEST_INIT_FROUND EQU H_FLOOR   ; head of the dictionary once this file is included (FROUND, FLOOR)
+DICT_LATEST_INIT_FROUND EQU H_FLOOR
 
     ENDIF

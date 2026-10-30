@@ -1,72 +1,30 @@
 ; ============================================================================
-; core/array.asm — Phase 26: ARRAY and CELLS
+; core/array.asm -- ARRAY and CELLS: arrays of cells
 ;
-; Builds on core/dict.asm and core/interp.asm (both must be INCLUDEd
-; first — this file's own first header chains through DICT_CHAIN_POINT,
-; same convention as every other core/ file) and reuses core/interp.asm's
-; own COMPILE_LITERAL/COMPILE_BYTE/W_WORD/DPOP_HL/HERE/LATEST plumbing
-; and header-construction shape, exactly as core/variable.asm's own
-; VARIABLE/CONSTANT already do (the header-building steps are
-; duplicated here rather than factored out, for the same reason
-; core/variable.asm's own header gives: never modify an
-; already-stable, widely-shared file for a later phase's convenience).
-;
-; WHAT THIS ADDS — a real gap found by a direct audit of 2068-Leap's
-; own BASIC ROM (`~/ts2068rom`) against this project's dictionary:
-; BASIC's DIM (numeric arrays) had no Forth equivalent at all.
-;   ARRAY ( n "name" -- )   creates <name> such that
-;             <name> ( -- addr ) pushes the address of a fresh,
-;             zero-initialized block of n 2-byte CELLS — read/write
-;             individual elements with plain @ and ! (Phase 2,
-;             core/dict.asm) at addr + (index CELLS), the same address-
-;             arithmetic idiom real Forth systems use for arrays; there
-;             is no dedicated indexing word, matching ANS Forth's own
-;             convention (CREATE/ALLOT-based arrays are always indexed
-;             this way, not through a special operator)
-;   CELLS ( n -- n*2 )      converts a cell COUNT into a byte OFFSET —
-;             this project's own cell size is 2 bytes (every DPUSH_HL/
-;             DPOP_HL moves 16 bits), so CELLS is just a left shift,
-;             but writing `n CELLS` instead of `n 2 *` at every array
-;             access site names the intent and would keep working
-;             unchanged if the cell size ever did (it won't, but this
-;             costs nothing and matches how real Forth code is written)
-;
-; USAGE: `10 ARRAY NUMS` reserves a 10-cell (20-byte) array; `3 CELLS
-; NUMS + @` reads element 3; `99 3 CELLS NUMS + !` writes 99 to it.
-; Like ARRAY itself, neither VARIABLE nor CONSTANT before it used a
-; real CREATE/DOES> (this project doesn't have one) — ARRAY's own
-; runtime is the identical compiled-literal-then-RET idiom, just with
-; n*2 reserved bytes after it instead of a fixed 2.
-;
-; NO BOUNDS CHECKING, matching every other memory-touching word in this
-; project (@, !, and now ARRAY's own elements) — see core/dict.asm's
-; own established "no error recovery yet" scope note, unchanged here.
+; Needs core/dict.asm and core/interp.asm (COMPILE_LITERAL, COMPILE_BYTE, W_WORD, HERE, LATEST). ARRAY
+; builds its header the way VARIABLE and CONSTANT in core/variable.asm do; the steps are repeated here
+; rather than factored out of that file.
+; `10 ARRAY NUMS` makes a zeroed 10-cell (20-byte) array; `3 CELLS NUMS + @` reads element 3 and
+; `99 3 CELLS NUMS + !` writes it. There is no bounds check.
+; Chained from DICT_CHAIN_POINT (set by the including ROM before the INCLUDE); every word may destroy
+; all registers except IX (the data stack pointer), IY and SP.
 ; ============================================================================
 
     IFNDEF CORE_ARRAY_ASM
     DEFINE CORE_ARRAY_ASM
 
 ; ============================================================================
-; ARRAY ( n "name" -- )
+; ARRAY ( n "name" -- ) -- create name ( -- addr ), leaving the address of n zeroed cells
+; The word's body is CALL DOLIT + the address of the elements, then RET; the elements follow it.
+; Errors: DICT_ROOM refuses (the dictionary guard) when the elements would not fit
 ; ============================================================================
 H_ARRAY:
-    DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL,
-                            ; not EQU) to whatever word chain this
-                            ; file should extend, immediately before
-                            ; INCLUDEing this file
+    DW   DICT_CHAIN_POINT
     DB   5, "A", "R", "R", "A", "Y"
 W_ARRAY:
     rst RST_DPOP           ; hl = n (cell count)
-    push hl                 ; stashed briefly on the Z80 hardware stack
-                             ; -- safe: symmetric push/pop within this
-                             ; one routine's own body, and everything
-                             ; between here and the matching pop below
-                             ; only touches the IX-based data stack,
-                             ; never SP (core/variable.asm's own
-                             ; W_CONSTANT documents this same technique
-                             ; for its own value-across-name-parsing
-                             ; case)
-    add  hl, hl                  ; E2a: the elements (n * 2 bytes) must fit below the ceiling guard;
+    push hl                 ; kept on the machine stack: only the IX data stack is touched until the pop
+    add  hl, hl                  ; the elements (n * 2 bytes) must fit below the ceiling guard;
     sbc  a, a                     ; n * 2 past $FFFF (carry) forces the high byte to $FF, which
     or   h                        ; DICT_ROOM refuses whatever HERE is
     ld   h, a
@@ -85,8 +43,7 @@ W_ARRAY:
     ld   (de), a
     inc  de
     ld   hl, (WORD_SRC_ADDR)
-    ld   a, (hl)                  ; name length (already <= 31, W_WORD
-                                   ; truncates at 32)
+    ld   a, (hl)                  ; name length (W_WORD truncates at 32)
     ld   (de), a
     inc  de
     inc  hl                       ; hl -> first name char
@@ -101,29 +58,20 @@ W_ARRAY:
     inc  de
     djnz .namecopy
 .namedone:
-    ld   (HERE), de                ; HERE now points to this word's own
-                                    ; body, right where the compiled
-                                    ; literal below will start
+    ld   (HERE), de                ; HERE = this word's body, where the literal below starts
 
     ld   hl, (HERE)
-    ld   de, 6                     ; 5-byte compiled literal (CALL
-                                    ; DOLIT + 2-byte target) + 1-byte
-                                    ; RET -- the array's own elements
-                                    ; sit right after both
-    add  hl, de                    ; hl = the array's own base address
+    ld   de, 6                     ; 5-byte literal (CALL DOLIT + 2-byte target) + 1-byte RET;
+    add  hl, de                    ; the elements follow both: hl = their base address
     call COMPILE_LITERAL           ; compiles CALL DOLIT + that address
     ld   a, $C9                    ; Z80 RET opcode
     call COMPILE_BYTE
 
-    pop  hl                        ; hl = n, restored (still the cell
-                                    ; count from this routine's own
-                                    ; entry -- nothing since the push
-                                    ; above touched SP)
+    pop  hl                        ; hl = n
     add  hl, hl                    ; hl = n*2 -- byte count to zero
     ld   b, h
     ld   c, l                      ; bc = byte count
-    ld   hl, (HERE)                ; hl == the array's own base address,
-                                    ; exactly as computed above
+    ld   hl, (HERE)                ; hl = the elements' base address
     ld   a, b
     or   c
     jr   z, .noinit                ; n=0 -- nothing to zero
@@ -143,7 +91,7 @@ W_ARRAY:
     ret
 
 ; ============================================================================
-; CELLS ( n -- n*2 )
+; CELLS ( n -- n*2 ) -- a cell count as a byte offset (a cell is 2 bytes)
 ; ============================================================================
 H_CELLS:
     DW   H_ARRAY
@@ -154,7 +102,6 @@ W_CELLS:
     rst RST_DPUSH
     ret
 
-DICT_LATEST_INIT_ARRAY EQU H_CELLS   ; head of the dictionary once this
-                                      ; file's own words are included
+DICT_LATEST_INIT_ARRAY EQU H_CELLS
 
     ENDIF
