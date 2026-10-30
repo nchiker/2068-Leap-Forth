@@ -1,7 +1,7 @@
 ; ============================================================================
 ; core/udg.asm -- UDG: the address of a user-defined graphic's bitmap
 ;
-; UDG_TABLE (include/sysvars.inc) holds 21 slots of 8 bytes for the character codes 144-164;
+; UDG_TABLE (include/forth_layout.inc) holds 21 slots of 8 bytes for the character codes 144-164;
 ; kernel/graphics/graphics.asm's GFX_CHAR_TO_FONT_OFFSET routes those codes there, so EMIT of 144-164
 ; draws whatever bytes the program has stored in the slot. The slot number is not range-checked: an
 ; out-of-range n gives an address that nothing reads as a UDG.

@@ -5,7 +5,7 @@
 ; (EXROM_CALL_SLOT) INCLUDEd first. The including ROM sets DICT_CHAIN_POINT (DEFL).
 ; Dictionary words destroy every register except IX/IY/SP.
 ;
-; Each word stages its arguments in the GFX_FILL_* / GFX_CIRCLE_* cells (include/sysvars.inc)
+; Each word stages its arguments in the GFX_FILL_* / GFX_CIRCLE_* cells (include/forth_layout.inc)
 ; and tail-jumps to EXROM_CALL_SLOT, whose RET returns to the inner interpreter. Without the
 ; EXROM, its magic/ABI check fails and they do nothing, as RECT does. A ROM that does not
 ; include core/rectfill.asm has neither word.

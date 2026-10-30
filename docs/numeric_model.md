@@ -113,7 +113,7 @@ own words, nothing in the integer core depends on it. The details are in
   generator); `RANDOMIZE` seeds as before.
 - **Checking it.** `tools/fpmodel.py` (2068-Leap-C's bit-exact model of
   `fpcore`, vendored unchanged) and `tools/fpforth.py` (Forth's words
-  composed of its operations) are the oracle: `make floattest` compares
+  composed of its operations) are the oracle: `make test` (its float suite, `tools/floattest.py`) compares
   the ROM's results with them byte for byte in an emulator.
 
 ## Reversibility

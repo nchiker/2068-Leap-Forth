@@ -396,7 +396,7 @@ POLY_DRAW_IMPL:
 ; Out: none
 ; Destroys: AF, BC, DE, HL (writes SPRITE_OP_PTR/CELL, SPRITE_CELL_ROW/COL)
 ; Each cell is a raw copy of 9 bytes (8 bitmap scanlines + the attribute byte; see
-; SPRITE_SLOT_BYTES in include/sysvars.inc). The cell offsets come from SPRITE_CELL_OFFSETS. The
+; SPRITE_SLOT_BYTES in include/forth_layout.inc). The cell offsets come from SPRITE_CELL_OFFSETS. The
 ; Home veneers destroy DE, so SPRITE_OP_PTR is reloaded from memory after each call.
 ; ============================================================================
 SPRITE_TRANSFER_IMPL:
@@ -673,7 +673,7 @@ SPRITE_MUL_A_HL:
 ; coordinates, not from reading drawn pixels, so the fill cannot leak through a diagonal gap in
 ; a Bresenham outline. Concave shapes with non-integer edge ratios can be a pixel off near a
 ; concave vertex (the error accumulator rounds rows differently); the outline hides it.
-; The edge table (POLY_FILL_EDGE_*, include/sysvars.inc) is RAM, not scratch inside this image:
+; The edge table (POLY_FILL_EDGE_*, include/forth_layout.inc) is RAM, not scratch inside this image:
 ; chunk 5 is this ROM while it is paged in.
 ; ============================================================================
 POLY_FILL_IMPL:
