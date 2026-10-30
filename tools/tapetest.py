@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """tapetest.py - the tape storage oracle (docs/V2/STORAGE_SPEC.md section 8, audit step S).
 
-Runs the case table of spec section 8 (cases 1-14 and 11a; case 15 is p7/p52 in `make test`) against a ROM build on
+Runs the case table of spec section 8 (cases 1-14 and 11a) and case 15 (a SAVE-LIB over 512 bytes, loaded by a wildcard
+LOAD-LIB) against a ROM build on
 ZEsarUX (through ts2068-debug / ZRCP), judging every case against the NEW contract of the spec.  It is written before
 the code: on the old build it is expected to FAIL several cases, and the failures are the defects of section 1.
 
@@ -763,10 +764,20 @@ def case_n4(ctx):
 
 
 def case_4(ctx):
+    return lib_roundtrip(ctx, [LL_LINE, ": SQ DUP * ; : CUBE DUP SQ * ;"], "LIBA", "LOAD-LIB LIBA", "5 CUBE .", r"\b125\b")
+
+
+def case_15(ctx):
+    """A dictionary over 512 bytes (several tape bytes past one page) saved, then loaded by a wildcard LOAD-LIB."""
+    return lib_roundtrip(ctx, [LL_LINE, "CREATE BIG 600 ALLOT : SQ DUP * ;"], "LIBB", "LOAD-LIB", "7 SQ .", r"\b49\b")
+
+
+def lib_roundtrip(ctx, setup, name, load_cmd, probe, want_re):
+    """SAVE-LIB `name` after `setup`: the captured header and data judged, then the captured tape loaded into a fresh
+    machine with `load_cmd`: the dictionary must come back byte for byte and `probe` must print `want_re`."""
     v = Verdict()
     b = ctx.b
-    setup = [LL_LINE, ": SQ DUP * ; : CUBE DUP SQ * ;"]
-    s, info = save_and_capture(ctx, setup, "SAVE-LIB LIBA", v, "SAVE-LIB")
+    s, info = save_and_capture(ctx, setup, "SAVE-LIB " + name, v, "SAVE-LIB")
     try:
         blks = info["blocks"]
         post = s.snap()
@@ -776,7 +787,7 @@ def case_4(ctx):
                 "SAVE-LIB moved HERE/LATEST")
         if not v.check(len(blks) == 2, "captured %d blocks, expected 2" % len(blks)):
             return v
-        chk_header(v, "SAVE-LIB", blks[0], 3, "LIBA", len(dict_a) + 2, b.identity if b.has_identity else None,
+        chk_header(v, "SAVE-LIB", blks[0], 3, name, len(dict_a) + 2, b.identity if b.has_identity else None,
                    post["latest"])
         if not b.has_identity:
             v.check(False, "no ROM_IDENTITY in this build (header param 1 cannot carry it)")
@@ -790,7 +801,7 @@ def case_4(ctx):
     finally:
         s.stop()
     # round trip into a fresh machine (the tape = exactly what the ROM sent)
-    s2, _ = play(ctx, tape_from_blocks(blks), [], "LOAD-LIB LIBA")
+    s2, _ = play(ctx, tape_from_blocks(blks), [], load_cmd)
     try:
         r = finish(s2)
         v.check(r["idle"], "no prompt after LOAD-LIB of the captured tape")
@@ -800,10 +811,10 @@ def case_4(ctx):
         v.check(b2["latest"] == post["latest"], "round trip: LATEST %04X, expected %04X" % (b2["latest"], post["latest"]))
         chk_bytes(v, "round trip: dictionary bytes", dict_b, dict_a)
         v.check(s2.err_flag() == 0, "round trip: error reported")
-        if not s2.line("5 CUBE ."):
-            v.check(screen_has(s2.screen(), r"\b125\b"), "round trip: loaded word CUBE did not print 125 %s" % s2.screen()[-2:])
+        if not s2.line(probe):
+            v.check(screen_has(s2.screen(), want_re), "round trip: %r did not print %s %s" % (probe, want_re, s2.screen()[-2:]))
         else:
-            v.check(False, "round trip: CUBE not found after the load")
+            v.check(False, "round trip: %r failed after the load" % probe)
     finally:
         s2.stop()
     return v
@@ -1142,6 +1153,7 @@ CASES = {
     "12": ("space_in_save", case_12, "header + data captured"),
     "13": ("two_headers", case_13, "pass"),
     "14": ("verify", case_14, "n/a"),
+    "15": ("savelib_large_wildcard", case_15, "n/a"),
     "11L": ("space_in_search_loadlib", case_11l, "(extra) wildcard LOAD-LIB + SPACE: phantom header, length 0"),
     "7L": ("legacy_crc", legacy_7, "loads the corrupt image"),
     "8L": ("legacy_len1", legacy_8, "RAM corrupted / hang"),
@@ -1149,7 +1161,7 @@ CASES = {
     "9L": ("legacy_wrong_flag", legacy_9, "reports success"),
     "10L": ("legacy_dropout", legacy_10, "reports success"),
 }
-ORDER = ["1", "2", "3", "N4", "4", "5", "6", "7", "8", "9", "10", "11", "11a", "12", "13", "14"]
+ORDER = ["1", "2", "3", "N4", "4", "15", "5", "6", "7", "8", "9", "10", "11", "11a", "12", "13", "14"]
 EXTRA = ["11L"]                             # judged like the cases, tallied apart
 LEGACY = ["7L", "8L", "8Z", "9L", "10L"]    # old build only (no ROM_IDENTITY): INFO lines, not judged
 
