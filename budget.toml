@@ -1,0 +1,135 @@
+# Leap-Forth ROM budgets and the budget ledger (after 2068-Leap-C's budget.toml; CONTRIBUTING.md).
+#
+# tools/budget.py measures every component from the production listings: a component is a list of source files (each
+# byte belongs to the file that emitted it) and/or [start_label, end_label) ranges ("$end": the end of the code).
+# `make budget` prints the table; `make check` fails when a component is over its budget (base budget + the ledger's
+# changes), a byte belongs to no component, or an image's free space (after its last non-pad byte) is below its
+# reserve floor.
+#
+# When a component would exceed its budget (Leap-C project_plan.md 1.2): shrink it; move cold code to the EXROM;
+# reallocate from another component or from the reserve, with a ledger entry and its measured reason; ask the owner
+# if the reserve would fall below its floor. The base budgets are the sizes measured at Simplify (2026-10-30). The
+# reserve floors are the owner's targets (decision 1, 2026-10-28): HOME 200 B, EXROM 150 B.
+
+[home]
+image = "forth_boot_rom0.bin"
+listing = "forth_boot.lst"
+symbols = "forth_boot.sym"
+base = 0x0000
+reserve_floor = 200
+
+[[home.component]]
+id = "boot"
+title = "Page zero, cold start, the dictionary's assembly glue"
+budget = 772
+files = ["forth_boot.asm", "rst_vectors.inc", "hardware.inc", "forth_layout.inc", "keys.inc", "graphics_exrom_abi.inc"]
+
+[[home.component]]
+id = "kernel"
+title = "Hardware layer: screen and font, keyboard and interrupt, memory, 16-bit math, EXROM paging"
+budget = 2643
+files = ["graphics.asm", "font.asm", "io.asm", "interrupt.asm", "memory.asm", "math.asm", "bank.asm"]
+
+[[home.component]]
+id = "tape"
+title = "Tape: block send and receive (Leap-C's clean-room code), headers, the LIB and TEXT words"
+budget = 1024
+files = ["storage.asm", "tapeblock.asm", "tapeword.asm", "loadtext.asm"]
+
+[[home.component]]
+id = "interp"
+title = "Interpreter and compiler: dictionary, control structures, defining words, errors, CATCH and THROW"
+budget = 2291
+files = ["interp.asm", "dict.asm", "control.asm", "loop.asm", "loopext.asm", "doloop.asm", "create.asm", "variable.asm", "does.asm", "immediate.asm", "tick.asm", "execute.asm", "forget.asm", "dictspace.asm", "abortquit.asm", "throwcatch.asm", "vlist.asm", "free.asm"]
+
+[[home.component]]
+id = "integer"
+title = "Integer words: stack, arithmetic, logic, comparison, memory, arrays, ports"
+budget = 828
+files = ["stackops.asm", "arith.asm", "logic.asm", "compare.asm", "bytemem.asm", "mathfn.asm", "array.asm", "portio.asm"]
+
+[[home.component]]
+id = "float"
+title = "Floats: the 5-byte core (Leap-C's fpcore), parsing, printing, conversion, functions, the float stack"
+budget = 3015
+files = ["fpcore.asm", "fpparse.asm", "fpprint.asm", "fpconv.asm", "fpmath.asm", "fpstack.asm"]
+
+[[home.component]]
+id = "text"
+title = "Strings and output: the string words, EMIT . TYPE .\" CR SPACE, the printer"
+budget = 1516
+files = ["string.asm", "stringext.asm", "print.asm", "dotquote.asm", "outwords.asm", "printer.asm"]
+
+[[home.component]]
+id = "graphics"
+title = "Graphics words: PLOT LINE CLS BORDER, colours, HIRES, UDG, ULAplus, the EXROM words' HOME stubs"
+budget = 691
+files = ["ts2068.asm", "moregfx.asm", "color.asm", "hires.asm", "udg.asm", "ulaplus.asm", "rectfill.asm", "shapes.asm", "polygon.asm", "sprite.asm"]
+
+[[home.component]]
+id = "sound"
+title = "Sound: BEEP on the AY, SOUND and the AY words"
+budget = 338
+files = ["beep.asm", "sound.asm", "soundext.asm"]
+
+[[home.component]]
+id = "console"
+title = "Console and editor: the line editor, the line store, EDIT's HOME side, KEY, ACCEPT, INPUT, STICK"
+budget = 1513
+files = ["editor.asm", "recall.asm", "edit.asm", "input.asm", "key.asm", "stick.asm"]
+
+[exrom]
+image = "graphics_exrom.bin"
+listing = "graphics_exrom.lst"
+symbols = "graphics_exrom.sym"
+base = 0xA000
+reserve_floor = 150
+
+[[exrom.component]]
+id = "table"
+title = "The service table and its unimplemented-slot stub"
+budget = 51
+ranges = [["GRAPHICS_EXROM_TABLE", "RECT_FILL_IMPL"]]
+
+[[exrom.component]]
+id = "rect"
+title = "RECT"
+budget = 356
+ranges = [["RECT_FILL_IMPL", "POLY_DRAW_IMPL"]]
+
+[[exrom.component]]
+id = "polygon"
+title = "POLYGON and POLYGON-FILL"
+budget = 763
+ranges = [["POLY_DRAW_IMPL", "SPRITE_TRANSFER_IMPL"], ["POLY_FILL_IMPL", "STORE_NEXT"]]
+
+[[exrom.component]]
+id = "sprites"
+title = "SPRITE-DEFINE, SPRITE-SHOW, SPRITE-HIDE"
+budget = 364
+ranges = [["SPRITE_TRANSFER_IMPL", "POLY_FILL_IMPL"]]
+
+[[exrom.component]]
+id = "view"
+title = "The full-screen editor (EDIT's view) and its line-store routines"
+budget = 2435
+ranges = [["STORE_NEXT", "CIRCLE_IMPL"]]
+
+[[exrom.component]]
+id = "circle"
+title = "CIRCLE"
+budget = 234
+ranges = [["CIRCLE_IMPL", "FILL_IMPL"], ["CIRCLE_MASK_TABLE", "$end"]]
+
+[[exrom.component]]
+id = "fill"
+title = "FILL"
+budget = 693
+ranges = [["FILL_IMPL", "CIRCLE_MASK_TABLE"]]
+
+# The ledger: one entry per reallocation, newest last.
+#   [[ledger]]
+#   image = "home"          # or "exrom"
+#   component = "float"     # a component id, or "reserve_floor"
+#   delta = 40              # bytes added to (or, negative, taken from) the budget
+#   reason = "what and why, with the measurement"

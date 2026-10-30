@@ -30,7 +30,7 @@ make             # build/forth_boot_rom0.bin (HOME), graphics_exrom.bin (EXROM),
 make check       # strict assembly, opcode and source checks, the RAM layout guard, ROM budgets, provenance,
                  # the adopted tape code, the tape tools' self-test, ROM_IDENTITY
 make repro       # two clean builds must give identical hashes
-make budget      # free bytes per image against the floors (tools/budget.toml)
+make budget      # free bytes per image against the floors (budget.toml)
 make test        # ZEsarUX: every suite on a pool of emulators (tools/run_tests.py), about 10 minutes
 make test-fast   # the development subset, about 2 minutes
 make tapetol     # the tape receiver's tolerance (TAPETOL_BASE=<old build dir> compares two builds)
@@ -58,7 +58,7 @@ Continuous integration (`.github/workflows/build.yml`) installs sjasmplus 1.23.1
 ## Rules for changes
 
 - **ROM space is the hard limit.** `make check` fails when an image's free space falls below its floor in
-  `tools/budget.toml`. When something does not fit: shrink, move cold code to the EXROM, reallocate, then ask the owner.
+  `budget.toml`. When something does not fit: shrink, move cold code to the EXROM, reallocate, then ask the owner.
 - **Every change to behaviour comes with tests** that fail without it: a Forth test in `tests/` (lines with
   `\ expect:`), or a case in one of the suites above.
 - **Symbolic layout only:** RAM addresses live in `include/forth_layout.inc` (`make check` proves it). Every routine's

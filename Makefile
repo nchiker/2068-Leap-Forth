@@ -3,7 +3,7 @@
 #                     forth_zesarux.bin (the two as one 24 KB file for ZEsarUX), graphics_exrom.dck, SHA256SUMS
 #   make check        strict assembly, opcode and source checks, RAM layout guard, budgets, provenance, the
 #                     adopted tape code, the tape tools' self-test, ROM_IDENTITY
-#   make budget       free bytes per image against the floors (tools/budget.toml)
+#   make budget       free bytes per image against the floors (budget.toml)
 #   make test         every suite in ZEsarUX (tools/run_tests.py): boot, the Forth tests in tests/, the editor,
 #                     floats, FILL and CIRCLE, the benchmarks, power-on RAM, tape
 #   make test-fast    the development subset (boot, Forth tests, editor, floats and shapes without speeds)
