@@ -1,9 +1,10 @@
 ; ============================================================================
-; core/fpstack.asm — the float stack words, comparisons and memory (step F item 5, docs/V2/FLOAT_SPEC.md 8.3)
+; core/fpstack.asm -- the float stack words, comparisons and memory (docs/V2/FLOAT_SPEC.md 8.3)
 ;
-; Builds on core/fpcore.asm (FBIN, FCMP, FPUSH_HL, FPOP_DE, FNEG_TOP, COMPILE_FLOAT_LITERAL from core/fpparse.asm)
-; and core/variable.asm (VAR_HEADER, VAR_END, VARIABLE_N). Included by rom/forth_boot.asm only; its first header
-; chains through DICT_CHAIN_POINT. Flags are -1 (true) and 0, as `<`.
+; Needs core/fpcore.asm (FBIN, FCMP, FPUSH_HL, FPOP_DE, FNEG_TOP), core/fpparse.asm (COMPILE_FLOAT_LITERAL)
+; and core/variable.asm (VAR_HEADER, VAR_END, VARIABLE_N). Included by rom/forth_boot.asm only. Chained from
+; DICT_CHAIN_POINT (set by the including ROM before the INCLUDE); every word may destroy all registers except IX
+; (the data stack pointer), IY (the float stack pointer) and SP. Flags are -1 (true) and 0, as `<`.
 ;
 ;   FDUP ( r -- r r )   FDROP ( r -- )   FSWAP ( r1 r2 -- r2 r1 )   FOVER ( r1 r2 -- r1 r2 r1 )
 ;   FDEPTH ( -- n )     the floats on the float stack
@@ -22,16 +23,16 @@
     DEFINE CORE_FPSTACK_ASM
 
 ; ============================================================================
-; FDUP ( r -- r r )  (the engine's FDUP, core/fpmath.asm)
+; FDUP ( r -- r r ) -- the engine's FDUP (core/fpmath.asm)
 ; ============================================================================
 H_FDUP:
-    DW   DICT_CHAIN_POINT   ; the including ROM sets this (DEFL) to the chain this file extends, just before INCLUDEing it
+    DW   DICT_CHAIN_POINT
     DB   4, "F", "D", "U", "P"
 W_FDUP:
     jp   FDUP
 
 ; ============================================================================
-; FDROP ( r -- )
+; FDROP ( r -- ) -- drop the top float
 ; ============================================================================
 H_FDROP:
     DW   H_FDUP
@@ -42,7 +43,7 @@ W_FDROP:
     ret
 
 ; ============================================================================
-; FSWAP ( r1 r2 -- r2 r1 )
+; FSWAP ( r1 r2 -- r2 r1 ) -- exchange the top two floats (the engine's FSWAP is FX <-> FY)
 ; ============================================================================
 H_FSWAP:
     DW   H_FDROP
@@ -65,7 +66,7 @@ W_FSWAP:
     ret
 
 ; ============================================================================
-; FOVER ( r1 r2 -- r1 r2 r1 )
+; FOVER ( r1 r2 -- r1 r2 r1 ) -- copy the second float to the top
 ; ============================================================================
 H_FOVER:
     DW   H_FSWAP
@@ -78,7 +79,7 @@ W_FOVER:
     jp   FPUSH_HL
 
 ; ============================================================================
-; FDEPTH ( -- n )  the cells on the float stack: (FSTACK_TOP - IY) / 5, by counting the fives
+; FDEPTH ( -- n ) -- the floats on the float stack: (FSTACK_TOP - IY) / 5, by counting the fives
 ; ============================================================================
 H_FDEPTH:
     DW   H_FOVER
@@ -101,7 +102,7 @@ W_FDEPTH:
     ret
 
 ; ============================================================================
-; FNEGATE ( r -- -r )   FABS ( r -- |r| )  (a zero cell is all zero bytes: its sign bit is clear already)
+; FNEGATE ( r -- -r )   FABS ( r -- |r| ) -- change / clear the sign (a zero cell is all zero bytes: its sign bit is clear already)
 ; ============================================================================
 H_FNEGATE:
     DW   H_FDEPTH
@@ -117,11 +118,12 @@ W_FABS:
     ret
 
 ; ============================================================================
-; FCMPA -- the two top cells' comparison: both cells are unpacked (FBIN: the left operand r1 in FX, r2 in FY) and
+; FCMPA -- compare the two top cells: both are unpacked (FBIN: the left operand r1 in FX, r2 in FY) and
 ;          one dropped, so IY -> r1
 ; Out: A = -1 for r1 < r2, 0 for equal, 1 for r1 > r2; r2 still lies below IY (FSEL uses it)
 ; Destroys: AF, BC, DE, HL, BC', DE', HL'
-; FFLAGZ -- drops one cell and pushes the flag: -1 when Z (the caller's test of A), else 0
+; FFLAGZ -- drop one cell and push the flag: -1 when Z (the caller's test of A), else 0
+; Out: flag on the data stack. Destroys: AF, BC, HL
 ; ============================================================================
 FCMPA:
     call FBIN
@@ -142,7 +144,7 @@ FFLAGZ:
     ret
 
 ; ============================================================================
-; F< F> F= ( r1 r2 -- flag )
+; F< F> F= ( r1 r2 -- flag ) -- r1 < r2, r1 > r2, r1 = r2
 ; ============================================================================
 H_FLESS:
     DW   H_FABS
@@ -169,7 +171,7 @@ W_FEQUAL:
     jr   FFLAGZ
 
 ; ============================================================================
-; F0< F0= ( r -- flag )  the sign bit of the second byte / the exponent byte (0 for a zero)
+; F0< F0= ( r -- flag ) -- r < 0 (the sign bit of the second byte) / r = 0 (the exponent byte is 0)
 ; ============================================================================
 H_FZEROLESS:
     DW   H_FEQUAL
@@ -189,8 +191,8 @@ W_FZEROEQ:
     jr   FFLAGZ
 
 ; ============================================================================
-; FMIN FMAX ( r1 r2 -- r3 )  the lesser / the greater; for equal values the cells are the same bytes
-; FSEL -- Z: copy r2 (below IY after FCMPA) over r1, the result (r1 stays otherwise)
+; FMIN FMAX ( r1 r2 -- r3 ) -- the lesser / the greater; for equal values the cells are the same bytes
+; FSEL -- if Z, copy r2 (below IY after FCMPA) over r1, the result; otherwise r1 stays
 ; ============================================================================
 H_FMIN:
     DW   H_FZEROEQ
@@ -215,7 +217,7 @@ FSEL:
     jp   FPOP_DE                       ; r2 over r1, IY -> r1 again
 
 ; ============================================================================
-; F@ ( addr -- r )   F! ( r addr -- )
+; F@ ( addr -- r )   F! ( r addr -- ) -- fetch / store the 5 bytes at addr
 ; ============================================================================
 H_FFETCH:
     DW   H_FMAX
@@ -233,7 +235,7 @@ W_FSTORE:
     jp   FPOP_DE
 
 ; ============================================================================
-; FVARIABLE ( "name" -- )  like VARIABLE with 5 zero data bytes
+; FVARIABLE ( "name" -- ) -- like VARIABLE with 5 zero data bytes: name ( -- addr )
 ; ============================================================================
 H_FVARIABLE:
     DW   H_FSTORE
@@ -243,7 +245,7 @@ W_FVARIABLE:
     jp   VARIABLE_N
 
 ; ============================================================================
-; FCONSTANT ( r "name" -- )  the word's code is CALL DOFLIT, the 5 bytes, RET (what a float literal compiles to)
+; FCONSTANT ( r "name" -- ) -- name ( -- r ); its code is CALL DOFLIT, the 5 bytes, RET (what a float literal compiles to)
 ; ============================================================================
 H_FCONSTANT:
     DW   H_FVARIABLE
@@ -257,6 +259,6 @@ W_FCONSTANT:
     call W_FDROP
     jp   VAR_END
 
-DICT_LATEST_INIT_FPSTACK EQU H_FCONSTANT   ; head of the dictionary once this file is included
+DICT_LATEST_INIT_FPSTACK EQU H_FCONSTANT
 
     ENDIF

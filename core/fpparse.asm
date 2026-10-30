@@ -1,8 +1,8 @@
 ; ============================================================================
-; core/fpparse.asm — the number parser: integers and floats, one routine (step F, docs/V2/FLOAT_SPEC.md section 6)
+; core/fpparse.asm -- the number parser: integers and floats, one routine (docs/V2/FLOAT_SPEC.md section 6)
 ;
-; Builds on core/fpcore.asm. core/interp.asm's NUMBER jumps here when the ROM defines DECIMAL_NUMBER_ENABLED (its own
-; integer loop is then not assembled); a ROM without it keeps NUMBER as it was. No dictionary words.
+; Needs core/fpcore.asm. core/interp.asm's NUMBER jumps here when the ROM defines DECIMAL_NUMBER_ENABLED (its own
+; integer loop is then not assembled). No dictionary words.
 ;
 ; The grammar is Leap-C's XF_ATOF (src/runtime/fpcore.asm, MIT, same copyright holder) without its suffixes:
 ;   [-] digits [. digits] [E|e [+|-] digits]   or   [-] . digits [exponent]
@@ -21,9 +21,11 @@
     DEFINE CORE_FPPARSE_ASM
 
 ; ============================================================================
-; NUMBER_PARSE (jumped to by NUMBER, which has popped the address)
+; NUMBER_PARSE -- parse a token as an integer or a float (jumped to by NUMBER, which has popped the address)
 ; In:  HL -> the counted token, A = its length (not 0)
-; Out: as NUMBER above
+; Out: as NUMBER above; a NUL stored after the token
+; Errors: THROW -43 (an integer outside -32768..65535, a float beyond the range)
+; Destroys: AF, BC, DE, HL, BC', DE', HL'
 ; ============================================================================
 NUMBER_PARSE:
     ld   c, a
@@ -272,8 +274,10 @@ NUMBER_PARSE:
     ret
 
 ; ============================================================================
-; DOFLIT (internal) — runtime half of a compiled float literal: CALL DOFLIT, then the 5 bytes of the float. Pushes
-; them on the float stack and returns past them (core/interp.asm's DOLIT idiom).
+; DOFLIT -- the run-time half of a compiled float literal (not a dictionary word)
+; In:  the return address -> the 5 bytes of the float (core/interp.asm's DOLIT idiom)
+; Out: the float pushed on the float stack; returns past it
+; Destroys: AF, BC, DE, HL
 ; ============================================================================
 DOFLIT:
     pop  hl
@@ -281,7 +285,10 @@ DOFLIT:
     jp   (hl)
 
 ; ============================================================================
-; COMPILE_FLOAT_LITERAL (internal) — HL -> the 5 bytes of a float: compiles CALL DOFLIT and the 5 bytes at HERE
+; COMPILE_FLOAT_LITERAL -- compile CALL DOFLIT and the 5 bytes of a float at HERE (not a dictionary word)
+; In:  HL -> the 5 bytes
+; Out: HERE advanced
+; Destroys: AF, BC, DE, HL
 ; ============================================================================
 COMPILE_FLOAT_LITERAL:
     push hl

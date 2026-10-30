@@ -1,76 +1,21 @@
 ; ============================================================================
-; core/ts2068.asm — Phase 5: TS2068 vocabulary (PLOT, LINE, BORDER)
+; core/ts2068.asm -- PLOT, LINE, BORDER, CLS: TS2068 screen words
 ;
-; Builds on core/dict.asm, core/interp.asm, and core/control.asm (all
-; must be INCLUDEd first — chains its own dictionary entries onto
-; core/control.asm's H_UNTIL, and uses DPOP_HL). This is the first
-; Phase to also require kernel/ modules: kernel/graphics/graphics.asm
-; must be INCLUDEd too (its own internal INCLUDEs pull in
-; include/sysvars.inc, which is why it matters for address planning —
-; see the note below).
-;
-; WHAT THIS ADDS — thin wrappers, matching include/kernel_api.inc
-; almost 1:1, exactly as docs/PROJECT_PLAN.md's Phase 5 description
-; promised:
-;   PLOT   ( x y -- )          GFX_WRITE_PIXEL
-;   LINE   ( x1 y1 x2 y2 -- )  GFX_LINE (reads its args from sysvars)
-;   (CIRCLE moved to the EXROM in step O15: core/shapes.asm)
-;   BORDER ( color -- )        GFX_SET_BORDER
-;
-; BEEP originally lived here too (raw hardware-timing units, no
-; conversion) — MOVED OUT as of the real, semitone/seconds BEEP
-; (core/beep.asm, replacing it in rom/forth_boot.asm's own dictionary)
-; and core/rawbeep.asm (the original word, byte-for-byte unchanged,
-; kept only for rom/forth_smoke_p5.asm's own historical checkpoint).
-; kernel/sound/sound.asm is therefore no longer a dependency of THIS
-; file — see core/beep.asm's own header for where that dependency
-; (and BEEP itself) now lives.
-;
-; All four remaining words take plain 16-bit stack cells but only ever
-; use the LOW BYTE of each — every TS2068 screen coordinate, radius,
-; and color fits in 8 bits (kernel_api.inc's own comments already
-; document x as 0-255, y as 0-191, color as 0-7), and GFX_LINE_X0/Y0/
-; X1/Y1 (include/sysvars.inc) are all
-; declared as single bytes, not words. No range checking is done —
-; matching every earlier phase's "no error recovery yet" scope note,
-; not an oversight specific to this file.
-;
-; A SETTABLE CURRENT ATTRIBUTE, since Phase 15: PLOT/LINE/CIRCLE read
-; their attribute byte from CURRENT_ATTR (below), not a hardcoded
-; constant — core/color.asm's INK/PAPER (Phase 15) modify CURRENT_ATTR
-; directly, and nothing here needs to know that file exists. Before
-; Phase 15 this was a fixed compile-time constant (DEFAULT_ATTR, still
-; the correct *initial* value — white paper, black ink, the classic
-; Spectrum power-on default); now it's a REQUIRED runtime
-; initialization, exactly like core/print.asm's own PRINT_ROW/PRINT_COL
-; convention: whatever ROM INCLUDEs this file must set
-; `ld a, DEFAULT_ATTR` / `ld (CURRENT_ATTR), a` at cold start, or
-; PLOT/LINE will draw with whatever garbage happens to be in
-; that uninitialized RAM byte. Every ROM in this project that already
-; included this file (rom/forth_smoke_p5.asm, rom/forth_smoke_p9.asm,
-; rom/forth_boot.asm) was updated to do this and re-verified under real
-; Fuse when this change landed — see docs/PROJECT_PLAN.md's Phase 15
-; section.
-;
-; RAM ADDRESS PLANNING — READ BEFORE ADDING MORE SCRATCH HERE:
-; CURRENT_ATTR's own address ($87CB) was placed by literally assembling
-; every kernel/ module this ROM needs together and inspecting the
-; resulting .sym file for a free byte, not guessed — core/interp.asm's
-; own header tells the story of a real collision this project already
-; had between its own scratch and 2068-Leap's kernel/BASIC sysvars.
-; Repeat that check for anything added here later, don't assume a gap
-; is empty by inspection alone.
+; Thin wrappers over kernel/graphics/graphics.asm (which must be INCLUDEd), chained onto core/control.asm's
+; H_UNTIL. Each argument cell contributes only its low byte (x 0-255, y 0-191, colour 0-7); there is no
+; range checking. PLOT, LINE and the shapes draw with CURRENT_ATTR, which core/color.asm's INK, PAPER,
+; BRIGHT and FLASH modify; the ROM must initialise it to DEFAULT_ATTR at cold start. CURRENT_ATTR's
+; address comes from include/forth_layout.inc; check a new scratch byte there against the other users.
+; Every word may destroy all registers except IX (the data stack pointer), IY and SP.
 ; ============================================================================
 
     IFNDEF CORE_TS2068_ASM
     DEFINE CORE_TS2068_ASM
 
-DEFAULT_ATTR EQU $38   ; paper 7 (white), ink 0 (black), no bright/flash —
-                       ; the classic Spectrum-family power-on default;
-                       ; the value CURRENT_ATTR must be initialized to
+DEFAULT_ATTR EQU $38   ; paper 7 (white), ink 0 (black), no bright/flash; CURRENT_ATTR's start value
 
 ; ============================================================================
-; PLOT ( x y -- )
+; PLOT ( x y -- ) -- set the pixel (GFX_WRITE_PIXEL); nothing if x or y is above 255
 ; ============================================================================
 H_PLOT:
     DW   H_UNTIL
@@ -89,7 +34,7 @@ W_PLOT:
     ret
 
 ; ============================================================================
-; LINE ( x1 y1 x2 y2 -- )
+; LINE ( x1 y1 x2 y2 -- ) -- draw a line (GFX_LINE, which reads its arguments from the GFX_LINE_* bytes)
 ; ============================================================================
 H_LINE:
     DW   H_PLOT
@@ -115,7 +60,7 @@ W_LINE:
     ret
 
 ; ============================================================================
-; BORDER ( color -- )
+; BORDER ( color -- ) -- set the border colour (GFX_SET_BORDER)
 ; ============================================================================
 H_BORDER:
     DW   H_LINE
@@ -126,30 +71,11 @@ W_BORDER:
     call GFX_SET_BORDER
     ret
 
-DICT_LATEST_INIT_P5 EQU H_BORDER   ; head of the dictionary as of Phase
-                                    ; 5 (PLOT/LINE/BORDER) --
-                                    ; a historical snapshot; must NOT be
-                                    ; repointed at CLS below
+DICT_LATEST_INIT_P5 EQU H_BORDER   ; the chain head before CLS, not this file's head
 
 ; ============================================================================
-; CLS ( -- )  Phase 36. Clears the screen -- kernel/graphics's own
-; GFX_CLS has been called internally since the very first boot ROM
-; (COLD_START, the editor's own line-shrink path, every smoke ROM's own
-; setup), but nothing ever exposed it as a word a user could actually
-; type, a real and simply-overlooked gap.
-;
-; REAL BUG FOUND AND FIXED: GFX_CLS alone always resets the whole
-; attribute area to a hardcoded ATTR_DEFAULT, ignoring whatever PAPER/
-; INK was actually set beforehand -- despite docs/forth_tutorial.md's
-; own long-standing claim that "CLS honors the current PAPER". Real
-; Sinclair BASIC doesn't work that way either: ts2068rom's own
-; BASIC_STMT_CLS calls GFX_CLS, then repaints the attribute area with
-; BASIC_COMPUTE_PRINT_ATTR's current ink/paper/bright/flash byte via
-; GFX_PAINT_ATTR, then resets the print position to (0,0) -- CLS
-; clears the screen, it doesn't reset your chosen colors. Mirrored
-; here exactly, just against this project's own CURRENT_ATTR sysvar
-; (core/color.asm's INK/PAPER already maintain it) instead of a
-; separately-computed byte.
+; CLS ( -- ) -- clear the screen, repaint the attributes with CURRENT_ATTR, home the print position
+; GFX_CLS alone resets the attributes to ATTR_DEFAULT; CLS keeps the chosen colours, as BASIC's CLS does.
 ; ============================================================================
 H_CLS:
     DW   H_BORDER
@@ -159,17 +85,8 @@ W_CLS:
     ld   a, (CURRENT_ATTR)
     call GFX_PAINT_ATTR
 
-    ; High Resolution Graphics mode (core/hires.asm's HIRES, Phase 55)
-    ; keeps its own real per-scanline attribute data in the Second
-    ; Display File instead of the normal attribute area GFX_PAINT_ATTR
-    ; just repainted above. GFX_SET_MODE's own mode-ENTRY transition
-    ; already clears that area once, but CLS called *while already in
-    ; HIRES* is an ordinary thing a program does mid-run to clear the
-    ; screen for a fresh drawing, and left every stale attribute byte
-    ; in place until this fix -- real gap, not a hypothetical one (see
-    ; core/hires.asm's own header). GFX_MODE only ever reaches 1 in a
-    ; ROM that wires HIRES in at all, so this is a harmless no-op read
-    ; everywhere else.
+    ; In HIRES (GFX_MODE 1) the per-scanline attributes live in the Second Display File, which
+    ; GFX_PAINT_ATTR does not touch: clear it to CURRENT_ATTR too.
     ld   a, (GFX_MODE)
     cp   1
     jr   nz, .not_hires
@@ -186,7 +103,6 @@ W_CLS:
     ret
     ASSERT PRINT_COL == PRINT_ROW + 1
 
-DICT_LATEST_INIT_CLS EQU H_CLS   ; head of the dictionary once this
-                                  ; file's own word (CLS) is included
+DICT_LATEST_INIT_CLS EQU H_CLS
 
     ENDIF

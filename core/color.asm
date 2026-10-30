@@ -1,55 +1,22 @@
 ; ============================================================================
-; core/color.asm — Phase 15: INK and PAPER; Phase 60: BRIGHT; Phase 61: FLASH
+; core/color.asm -- INK, PAPER, BRIGHT, FLASH: the drawing colour
 ;
-; Builds on core/dict.asm, core/interp.asm, and core/ts2068.asm (all
-; must be INCLUDEd first — this file's own first header chains through
-; DICT_CHAIN_POINT; needs core/ts2068.asm specifically for
-; CURRENT_ATTR, which that file's own header now documents as a
-; required runtime initialization since this phase).
-;
-; WHAT THIS ADDS — the color half of docs/forth_tutorial.md's "More
-; graphics and sound" gap:
-;   INK   ( n -- )   sets the ink (foreground) color PLOT/LINE/CIRCLE
-;             draw with from now on, 0-7 (only the low 3 bits of n are
-;             used — no range checking, matching every earlier phase's
-;             "no error recovery yet" scope note)
-;   PAPER ( n -- )   sets the paper (background) color the same way
-;   BRIGHT ( n -- )  1 = high-intensity INK/PAPER from now on, 0 =
-;             normal intensity (only bit 0 of n is meaningful, same
-;             "no range checking" scope as INK/PAPER). Added Phase 60,
-;             well after INK/PAPER — CURRENT_ATTR's bit 6 always
-;             existed and was always left untouched by INK/PAPER
-;             (see layout note below), but nothing set it until now.
-;   FLASH ( n -- )   1 = INK/PAPER flash (hardware-blinks) from now on,
-;             0 = steady. Added Phase 61, same session as BRIGHT and
-;             the same reasoning: bit 7 always existed, was always
-;             left untouched by every word above, but nothing set it
-;             from user code until now. The flashing CURSOR (Phase 33)
-;             is unrelated — it sets bit 7 directly via
-;             GFX_INVERT_ATTR on its own screen cell, not through
-;             CURRENT_ATTR, and is unaffected by this word either way.
-;
-; ATTRIBUTE BYTE LAYOUT (standard Spectrum-family: bits 0-2 = ink,
-; bits 3-5 = paper, bit 6 = bright, bit 7 = flash — core/ts2068.asm's
-; own DEFAULT_ATTR, $38, is paper 7/ink 0 in this same layout, bright
-; and flash both off). INK replaces bits 0-2 of CURRENT_ATTR, leaving
-; every other bit untouched; PAPER replaces bits 3-5 the same way;
-; BRIGHT replaces bit 6 the same way; FLASH replaces bit 7 the same
-; way — each is a read-modify-write against whatever CURRENT_ATTR
-; already holds, not a fresh byte, so calling one never undoes another.
+; Each word is a read-modify-write of its own bits of CURRENT_ATTR (core/ts2068.asm; must be INCLUDEd,
+; and initialised at run time), so calling one never undoes another. Attribute layout: bits 0-2 ink,
+; 3-5 paper, 6 bright, 7 flash (DEFAULT_ATTR $38 is paper 7, ink 0). The arguments are masked, not
+; range-checked. The flashing cursor sets bit 7 of its own screen cell, not of CURRENT_ATTR.
+; Chained from DICT_CHAIN_POINT (set by the including ROM before the INCLUDE); every word may destroy
+; all registers except IX (the data stack pointer), IY and SP.
 ; ============================================================================
 
     IFNDEF CORE_COLOR_ASM
     DEFINE CORE_COLOR_ASM
 
 ; ============================================================================
-; INK ( n -- )
+; INK ( n -- ) -- set the ink colour (low 3 bits of n) that PLOT, LINE and CIRCLE draw with
 ; ============================================================================
 H_INK:
-    DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL,
-                            ; not EQU) to whatever word chain this
-                            ; file should extend, immediately before
-                            ; INCLUDEing this file
+    DW   DICT_CHAIN_POINT
     DB   3, "I", "N", "K"
 W_INK:
     rst RST_DPOP
@@ -64,7 +31,7 @@ W_INK:
     ret
 
 ; ============================================================================
-; PAPER ( n -- )
+; PAPER ( n -- ) -- set the paper colour (low 3 bits of n)
 ; ============================================================================
 H_PAPER:
     DW   H_INK
@@ -85,7 +52,7 @@ W_PAPER:
     ret
 
 ; ============================================================================
-; BRIGHT ( n -- )
+; BRIGHT ( n -- ) -- bit 0 of n: 1 = high intensity, 0 = normal
 ; ============================================================================
 H_BRIGHT:
     DW   H_PAPER
@@ -109,7 +76,7 @@ W_BRIGHT:
     ret
 
 ; ============================================================================
-; FLASH ( n -- )
+; FLASH ( n -- ) -- bit 0 of n: 1 = flashing ink/paper, 0 = steady
 ; ============================================================================
 H_FLASH:
     DW   H_BRIGHT
@@ -133,7 +100,6 @@ W_FLASH:
     ld   (CURRENT_ATTR), a
     ret
 
-DICT_LATEST_INIT_COLOR EQU H_FLASH   ; head of the dictionary once this
-                                      ; file's own words are included
+DICT_LATEST_INIT_COLOR EQU H_FLASH
 
     ENDIF

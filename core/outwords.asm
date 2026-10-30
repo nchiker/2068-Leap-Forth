@@ -1,44 +1,22 @@
 ; ============================================================================
-; core/outwords.asm — Phase 46: CR, SPACE, SPACES
+; core/outwords.asm -- CR, SPACE, SPACES: output shorthands
 ;
-; Builds on core/dict.asm (DPUSH_HL) and core/print.asm (needs W_EMIT,
-; Phase 10) — both must be INCLUDEd first.
-;
-; WHAT THIS ADDS: the output ergonomics every other Forth-visible EMIT
-; user has had to hand-roll until now (`13 EMIT` for a newline, `32
-; EMIT` for a space) — real, felt friction, not a missing feature
-; anyone had actually needed for anything beyond convenience, which is
-; exactly why it was skipped this long.
-;   CR     ( -- )    13 EMIT
-;   SPACE  ( -- )    32 EMIT
-;   SPACES ( n -- )   n spaces. NO input validation on n (matching this
-;             project's own SOUND/STICK convention) — n=0 does nothing;
-;             a negative n loops close to 65536 times before it
-;             naturally hits zero as an unsigned counter, not guarded
-;             against, exactly as candid about that as this project's
-;             other unchecked-input words already are.
-;
-; SPACES' OWN COUNTER LIVES IN MEMORY (SPACES_COUNT), NOT A REGISTER
-; PAIR — a real bug caught here before ever running it made it into a
-; first draft that kept the count in BC across each call to W_SPACE:
-; W_EMIT (core/print.asm) explicitly loads B=row and C=column before
-; calling GFX_PUTCHAR, so BC does not survive being used as a loop
-; counter across a W_SPACE/W_EMIT call, the exact same class of bug
-; already caught once this same phase in rom/forth_smoke_p46.asm's own
-; ANY_PIXEL_SET_IN_CELL helper (GFX_READ_PIXEL clobbering DE there).
+; Needs core/print.asm (W_EMIT). SPACES does not validate n: 0 prints nothing, a negative n counts down
+; through about 65536 spaces.
+; SPACES keeps its counter in memory (SPACES_COUNT), not in BC or HL: W_EMIT loads B and C for
+; GFX_PUTCHAR and pops HL, so no register survives a call to W_SPACE.
+; Chained from DICT_CHAIN_POINT (set by the including ROM before the INCLUDE); every word may destroy
+; all registers except IX (the data stack pointer), IY and SP.
 ; ============================================================================
 
     IFNDEF CORE_OUTWORDS_ASM
     DEFINE CORE_OUTWORDS_ASM
 
 ; ============================================================================
-; CR ( -- )
+; CR ( -- ) -- 13 EMIT
 ; ============================================================================
 H_CR:
-    DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL,
-                            ; not EQU) to whatever word chain this
-                            ; file should extend, immediately before
-                            ; INCLUDEing this file
+    DW   DICT_CHAIN_POINT
     DB   2, "C","R"
 W_CR:
     ld   hl, 13
@@ -47,7 +25,7 @@ W_CR:
     ret
 
 ; ============================================================================
-; SPACE ( -- )
+; SPACE ( -- ) -- 32 EMIT
 ; ============================================================================
 H_SPACE:
     DW   H_CR
@@ -59,7 +37,7 @@ W_SPACE:
     ret
 
 ; ============================================================================
-; SPACES ( n -- )
+; SPACES ( n -- ) -- print n spaces
 ; ============================================================================
 H_SPACES:
     DW   H_SPACE
@@ -73,16 +51,10 @@ W_SPACES:
     or   l
     ret  z
     dec  hl
-    ld   (SPACES_COUNT), hl   ; stored back BEFORE calling W_SPACE --
-                               ; see this file's own header on why HL
-                               ; can't just stay loaded across that
-                               ; call either (W_EMIT's own DPOP_HL
-                               ; would clobber it same as BC)
+    ld   (SPACES_COUNT), hl   ; stored back before W_SPACE, which destroys HL
     call W_SPACE
     jr   .loop
 
-DICT_LATEST_INIT_OUTWORDS EQU H_SPACES   ; head of the dictionary once
-                                          ; this file's own words are
-                                          ; included
+DICT_LATEST_INIT_OUTWORDS EQU H_SPACES
 
     ENDIF

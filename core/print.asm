@@ -1,55 +1,26 @@
 ; ============================================================================
-; core/print.asm — EMIT and . (print)
+; core/print.asm -- EMIT and . : print a character, print a number
 ;
-; Builds on core/dict.asm and core/interp.asm (both must be INCLUDEd
-; first — this file's first header chains through DICT_CHAIN_POINT,
-; same convention as core/control.asm/core/storage.asm/core/float.asm —
-; see core/control.asm's own header for the full reasoning) and needs
-; kernel/graphics/graphics.asm INCLUDEd alongside it.
-;
-; WHAT THIS ADDS:
-;   EMIT ( char -- )   print one character at the current output
-;                      position, advancing it (wrapping at column 32,
-;                      scrolling at row 22 — see below)
-;   .    ( n -- )      print n as a signed decimal number, followed by
-;                      a space (the standard Forth convention, so
-;                      consecutive `.`s read as space-separated numbers)
-;
-; OUTPUT POSITION: PRINT_ROW/PRINT_COL, own state, separate from
-; core/editor.asm's EDIT_CURSOR (that's the INPUT line's cursor, on its
-; own fixed row, EDIT_ROW = 23; this is where the NEXT character EMIT
-; writes goes, anywhere in rows 0-22). Confining EMIT's own output to
-; rows 0-22 means it can never overwrite the input line — reaching row
-; 23 instead scrolls everything up one row (kernel/graphics's own
-; GFX_SCROLL_TEXT_UP, built for exactly this row split) and continues
-; at row 22. Both cells must be initialized by whatever ROM uses this
-; file (0, 0 is the natural starting position) — this file doesn't
-; assume a default, matching every other core/ file's own RAM-state
-; convention (core/dict.asm's DSTACK_TOP, etc.).
-;
-; A CR CHARACTER ($0D) MOVES TO A NEW LINE rather than being printed as
-; a glyph — the one piece of "control character" handling EMIT does;
-; nothing else (tab, backspace, ...) is interpreted specially yet.
-;
-; `.` NEEDS AN UNSIGNED DIVIDE BY 10 that kernel/math doesn't provide
-; (MATH_DIVIDE16 is signed, which would misread magnitudes above 32767
-; — including the magnitude of -32768 itself, a real edge case this
-; file's own UDIV10 gets right: negating $8000 in 16-bit two's
-; complement gives back $8000, which is exactly 32768 read as
-; unsigned — correct, not a coincidence, verified by hand before
-; writing UDIV10 the way it's written below). UDIV10 is a private
-; helper, not added to kernel/math, matching this project's practice of
-; never modifying an inherited kernel/ file — kernel/math stays exactly
-; as inherited.
+; Needs core/dict.asm, core/interp.asm and kernel/graphics/graphics.asm. Chained from DICT_CHAIN_POINT
+; (set by the including ROM before the INCLUDE); every word may destroy all registers except IX (the data
+; stack pointer), IY and SP.
+; The output position is PRINT_ROW/PRINT_COL, separate from core/editor.asm's EDIT_CURSOR (the input line,
+; row 23). The ROM must initialise both (0, 0 is the natural start). EMIT stays in rows 0-22: reaching row
+; 23 scrolls the screen up one row (GFX_SCROLL_TEXT_UP) and continues at row 22. Column 32 wraps. CR ($0D)
+; starts a new line instead of printing a glyph; no other control character is special.
+; If core/ts2068.asm is INCLUDEd (CORE_TS2068_ASM defined), EMIT also stamps CURRENT_ATTR into the cell.
+; `.` needs an unsigned divide by 10, which kernel/math lacks (MATH_DIVIDE16 is signed and would misread
+; magnitudes above 32767, including that of -32768): UDIV10 is the private helper. Negating $8000 gives
+; $8000, which read as unsigned is the right magnitude 32768.
 ; ============================================================================
 
     IFNDEF CORE_PRINT_ASM
     DEFINE CORE_PRINT_ASM
 
 ; ============================================================================
-; UDIV10 (internal, not a dictionary word) — HL = value (0-65535) ->
-; HL = value/10, A = value MOD 10 (0-9). Classic 16-iteration
-; shift-and-subtract restoring division, specialized for divisor 10.
+; UDIV10 -- unsigned divide by 10, 16 shift-and-subtract steps (not a dictionary word)
+; In:  HL = value (0-65535)
+; Out: HL = value / 10, A = value mod 10 (0-9)
 ; Destroys: AF, B
 ; ============================================================================
 UDIV10:
@@ -67,7 +38,7 @@ UDIV10:
     ret
 
 ; ============================================================================
-; EMIT ( char -- )
+; EMIT ( char -- ) -- print one character at the output position and advance it
 ; ============================================================================
 H_EMIT:
     DW   DICT_CHAIN_POINT
@@ -87,27 +58,14 @@ W_EMIT:
     ld   a, (EMIT_CHAR_TMP)
     call GFX_PUTCHAR            ; A=char, B=row, C=column
 
-    IFDEF CORE_TS2068_ASM       ; CURRENT_ATTR only exists once
-                                ; core/ts2068.asm is included (several
-                                ; smoke ROMs use EMIT without it) --
-                                ; guarded so this stays a no-op, zero
-                                ; extra bytes, everywhere else
-    ld   a, (PRINT_ROW)          ; reload row/col from the sysvars
-    ld   b, a                    ; rather than preserving BC across
-    ld   a, (PRINT_COL)          ; GFX_PUTCHAR (which destroys it) --
-    ld   c, a                    ; same "value must survive a call ->
-    ld   a, (CURRENT_ATTR)       ; use memory, not a register" pattern
-    call GFX_SET_ATTR            ; kernel/graphics's own GFX_PRINT_
-                                  ; STRING_ATTR header already documents
-    ENDIF                         ; BASIC-style: stamp the current
-                                  ; INK/PAPER attribute into the cell
-                                  ; just printed, same as real Sinclair
-                                  ; BASIC's PRINT (ts2068rom's own
-                                  ; BASIC_COMPUTE_PRINT_ATTR) -- until
-                                  ; now EMIT only wrote the bitmap byte,
-                                  ; so INK/PAPER had no visible effect
-                                  ; on any printed text anywhere in this
-                                  ; project (only PLOT/LINE/CIRCLE/FILL)
+    IFDEF CORE_TS2068_ASM       ; CURRENT_ATTR exists only with core/ts2068.asm
+    ld   a, (PRINT_ROW)          ; GFX_PUTCHAR destroys BC: reload row/col from memory
+    ld   b, a
+    ld   a, (PRINT_COL)
+    ld   c, a
+    ld   a, (CURRENT_ATTR)
+    call GFX_SET_ATTR            ; stamp the current INK/PAPER attribute into the cell
+    ENDIF
     jr   .advance
 
 .newline:
@@ -130,22 +88,18 @@ W_EMIT:
 .nextrow:
     ld   a, (PRINT_ROW)
     inc  a
-    cp   23                     ; row 23 is core/editor.asm's own
-                                ; EDIT_ROW -- EMIT's output never goes
-                                ; there
+    cp   23                     ; row 23 is core/editor.asm's EDIT_ROW -- EMIT's output never goes there
     jr   c, .storerow
     call GFX_SCROLL_TEXT_UP
     ld   b, 22
-    call GFX_CLEAR_ROW           ; GFX_SCROLL_TEXT_UP's own contract:
-                                 ; "row 22 left for the caller to draw"
+    call GFX_CLEAR_ROW           ; GFX_SCROLL_TEXT_UP leaves row 22 for the caller to draw
     ld   a, 22
 .storerow:
     ld   (PRINT_ROW), a
     ret
 
 ; ============================================================================
-; . ( n -- )
-; Prints n as a signed decimal number, followed by a space.
+; . ( n -- ) -- print n as a signed decimal number followed by a space
 ; ============================================================================
 H_DOT:
     DW   H_EMIT
@@ -160,8 +114,8 @@ W_DOT:
     rst RST_DPUSH
     call W_EMIT
     pop  hl
-    xor  a                       ; negate hl -- correct even for $8000,
-    sub  l                       ; see this file's own header
+    xor  a                       ; negate hl -- correct even for $8000
+    sub  l
     ld   l, a
     ld   a, 0
     sbc  a, h
@@ -175,9 +129,7 @@ W_DOT:
     call W_EMIT
     jr   .donedigits
 .hasdigits:
-    ld   c, 0                    ; digit count, collected on the Z80
-                                 ; hardware stack below -- UDIV10 never
-                                 ; touches C, confirmed by reading it
+    ld   c, 0                    ; digit count; the digits wait on the machine stack (UDIV10 keeps C)
 .divloop:
     ld   a, h
     or   l
@@ -193,9 +145,7 @@ W_DOT:
     add  a, "0"
     ld   l, a
     ld   h, 0
-    push bc                       ; W_EMIT (via GFX_PUTCHAR) destroys BC
-                                  ; -- preserve our own djnz counter
-                                  ; around the call
+    push bc                       ; W_EMIT destroys BC: keep the djnz counter
     rst RST_DPUSH
     call W_EMIT
     pop  bc
@@ -207,11 +157,10 @@ W_DOT:
     ret
 
 ; ============================================================================
-; PRINT_UDEC16 (internal) — HL = unsigned 16-bit value; prints it as
-; decimal digits with no leading zeros (prints "0" for zero), no
-; trailing space. The digit-collection idiom of W_DOT below without its
-; sign and trailing-space handling; core/recall.asm's LIST-DEFS prints
-; with it. Destroys: AF, BC, DE, HL
+; PRINT_UDEC16 -- print an unsigned number in decimal, no leading zeros, no trailing space
+; In:  HL = value
+; Out: "0" for zero; printed through W_EMIT (core/recall.asm's LIST-DEFS uses it)
+; Destroys: AF, BC, DE, HL
 ; ============================================================================
 PRINT_UDEC16:
     ld   a, h
@@ -245,7 +194,6 @@ PRINT_UDEC16:
     djnz .printloop
     ret
 
-DICT_LATEST_INIT_PRINT EQU H_DOT   ; head of the dictionary once this
-                                   ; file's own words are included
+DICT_LATEST_INIT_PRINT EQU H_DOT
 
     ENDIF

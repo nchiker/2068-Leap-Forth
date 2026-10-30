@@ -1,77 +1,24 @@
 ; ============================================================================
-; core/ulaplus.asm — Phase 48: ULAPLUS, PALETTE
+; core/ulaplus.asm -- ULAPLUS and PALETTE: the ULAplus palette
 ;
-; Builds on core/dict.asm (DPOP_HL) only — no kernel INCLUDE needed,
-; pure port I/O.
-;
-; PORTED FROM 2068-LEAP'S OWN ALREADY-WORKING IMPLEMENTATION
-; (~/ts2068rom/basic/basic.asm's BASIC_ULAPLUS_DISABLE and its EXROM
-; body), not designed from scratch — same "recover proven, tested
-; code" approach. The real hardware
-; mechanics: ULAPlus is controlled by two 16-bit ports (both already
-; declared in include/hardware.inc, inherited unchanged from that same
-; project): write a register number to PORT_ULAPLUS_SELECT, then the
-; data byte for that register to PORT_ULAPLUS_DATA.
-;   - Register 64 (ULAPLUS_MODE_GROUP) is the enable/disable switch —
-;     bit 0 of its data byte turns the whole extension on or off.
-;   - Registers 0-63 are the palette itself, one GGGRRRBB byte each.
-;
-; ULAPlus REPLACES THE MEANING OF THE EXISTING ATTRIBUTE COLOR BITS,
-; not a separate pixel-setting mechanism — 2068-Leap's own docs state
-; this plainly ("A program still uses INK, PAPER, BRIGHT, and FLASH;
-; ULAplus changes the [colors those bits map to]"). This is why this
-; file adds ONLY these two words: every existing color/graphics word
-; in this project (INK, PAPER, PLOT, LINE, CIRCLE, FILL, ...) already
-; writes the same attribute bits ULAPlus reinterprets, so nothing else
-; needs to change for ULAPlus to take effect once enabled.
-;
-; TEST-FIDELITY CAVEAT, carried over from this project's own backlog
-; (docs/PROJECT_PLAN.md): the real Timex Sinclair 2068 almost
-; certainly never had genuine ULAPlus hardware — it's a modern
-; retrofit extension designed for later Sinclair-compatible machines,
-; unofficially patched into this session's own Fuse build (and
-; 2068-Leap's own docs note the same: "Upstream Fuse 1.9.1 does not
-; expose ULAplus for the TS2068... requires the optional
-; patches/0001-Add-ULAplus-support-for-Timex-machines.patch or
-; ZEsarUX"). What CAN be confirmed here is that this project's own
-; port writes match the same protocol 2068-Leap's own long-tested BASIC
-; implementation uses, and that Fuse's ULAPlus patch visibly responds
-; to them (screenshots, this file's own smoke ROM). Whether that
-; matches genuine unpatched TS2068/SCLD silicon remains exactly as
-; unconfirmed as it was before this phase — building this doesn't
-; resolve that, it just gives 2068-Forth the same capability 2068-Leap
-; already has under the identical caveat.
-;
-; WHAT THIS ADDS:
-;   ULAPLUS ( flag -- )   nonzero enables the extended palette, zero
-;             disables it (reverts to the standard 8-color ULA
-;             palette). NO input validation beyond keeping bit 0 of
-;             the flag — matching this project's own SOUND/STICK
-;             convention, not 2068-Leap's own BASIC-level "INVALID
-;             ARGUMENT" error (this project has no such mechanism to
-;             raise it through, and THROW/CATCH exists but inventing a
-;             new error code for this one word isn't warranted).
-;   PALETTE ( index value -- )   writes value (0-255, GGGRRRBB) into
-;             palette register index (0-63). Out-of-range index/value
-;             pass straight to the hardware ports unguarded, same
-;             convention.
+; ULAplus is set through two ports (include/hardware.inc): write a register number to
+; PORT_ULAPLUS_SELECT, then its data byte to PORT_ULAPLUS_DATA. Register 64 (ULAPLUS_MODE_GROUP) bit 0
+; switches the extension on or off; registers 0-63 are the palette, one GGGRRRBB byte each. ULAplus
+; reinterprets the attribute bits INK, PAPER, BRIGHT and FLASH already write, so no other word changes.
+; Neither word validates its arguments: an out-of-range index or value goes to the ports as it is.
+; ULAplus is a later retrofit; a stock TS2068 almost certainly lacks it (the emulator patches provide it).
+; Needs core/dict.asm only. Chained from DICT_CHAIN_POINT (set by the including ROM before the
+; INCLUDE); every word may destroy all registers except IX (the data stack pointer), IY and SP.
 ; ============================================================================
 
     IFNDEF CORE_ULAPLUS_ASM
     DEFINE CORE_ULAPLUS_ASM
 
-; ULAPLUS_MODE_GROUP (the mode/enable register's own index, 64) is
-; already declared in include/hardware.inc, inherited unchanged from
-; 2068-Leap along with the two port constants this file uses.
-
 ; ============================================================================
-; ULAPLUS ( flag -- )
+; ULAPLUS ( flag -- ) -- enable the extended palette if bit 0 of flag is set, else disable it
 ; ============================================================================
 H_ULAPLUS:
-    DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL,
-                            ; not EQU) to whatever word chain this
-                            ; file should extend, immediately before
-                            ; INCLUDEing this file
+    DW   DICT_CHAIN_POINT
     DB   7, "U","L","A","P","L","U","S"
 W_ULAPLUS:
     rst RST_DPOP            ; hl = flag
@@ -85,28 +32,24 @@ W_ULAPLUS:
     ret
 
 ; ============================================================================
-; PALETTE ( index value -- )
+; PALETTE ( index value -- ) -- write value (GGGRRRBB) to palette register index (0-63)
 ; ============================================================================
 H_PALETTE:
     DW   H_ULAPLUS
     DB   7, "P","A","L","E","T","T","E"
 W_PALETTE:
     rst RST_DPOP             ; hl = value
-    push hl                    ; stash it on the machine stack -- no
-                                ; named scratch needed for two values
-                                ; this short-lived
+    push hl                    ; kept on the machine stack
     rst RST_DPOP               ; hl = index
     ld   a, l
     ld   bc, PORT_ULAPLUS_SELECT
     out  (c), a
-    pop  hl                      ; hl = value, restored
+    pop  hl                      ; hl = value
     ld   a, l
     ld   bc, PORT_ULAPLUS_DATA
     out  (c), a
     ret
 
-DICT_LATEST_INIT_ULAPLUS EQU H_PALETTE   ; head of the dictionary once
-                                          ; this file's own words are
-                                          ; included
+DICT_LATEST_INIT_ULAPLUS EQU H_PALETTE
 
     ENDIF

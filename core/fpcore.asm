@@ -1,5 +1,5 @@
 ; ============================================================================
-; core/fpcore.asm — the float engine and F+ F- F* F/ (step F, docs/V2/FLOAT_SPEC.md sections 4, 5, 9)
+; core/fpcore.asm -- the float engine and F+ F- F* F/ (docs/V2/FLOAT_SPEC.md sections 4, 5, 9)
 ;
 ; Floats are the Sinclair 5-byte format: [exponent][sign | mantissa bits 30-24][23-16][15-8][7-0], value
 ; 0.1m x 2^(exponent - 128) (the leading 1 implicit), 0 for exponent 0, always normalised. The float stack is
@@ -23,6 +23,8 @@
 ;
 ; Exports for the other float files: the engine routines below, FPUSH_HL (push the 5 bytes at HL), FPOP_DE (copy the
 ; top to (DE) and drop it), FMULP/FDIVP/FADDP (top op a constant), FPOP_FX, FNEG_TOP, the error entries, POW10.
+; Chained from DICT_CHAIN_POINT (set by the including ROM before the INCLUDE); every word may destroy all
+; registers except IX (the data stack pointer), IY (the float stack pointer) and SP.
 ; ============================================================================
 
     IFNDEF CORE_FPCORE_ASM
@@ -109,7 +111,7 @@ FZEROX:                                ; FX = 0. Destroys: AF, B, HL
     jr   FZERO
 
 ; ============================================================================
-; Errors: one entry, F_THROW, with the ANS code in HL (a ROM without THROW/CATCH stops here)
+; Errors: one entry, F_THROW, with the ANS code in HL; it pushes the code and jumps to W_THROW
 ; ============================================================================
 F_RANGE:                               ; -43 floating-point result out of range
     ld   hl, -43
@@ -123,8 +125,6 @@ F_THROW:
     IFDEF THROW_CATCH_ENABLED
     rst  RST_DPUSH
     jp   W_THROW
-    ELSE
-    jr   $
     ENDIF
 
 ; ============================================================================
@@ -289,7 +289,7 @@ FADD:
 .sub:
     call FSUBN
     jp   FNORM
-FSWAP:                                 ; FX <-> FY
+FSWAP:                                 ; FX <-> FY. Destroys: AF, BC, DE, HL
     ld   hl, FX
     ld   de, FY
     ld   b, 7
@@ -366,7 +366,7 @@ FDONE:                                 ; FX's mantissa = FQ, exponent HL + DE
 .out:
     jp   m, FZEROX
     jp   F_RANGE
-; FSIGN -- FX's sign = the product's or quotient's; HL = ex, DE = ey. Destroys: AF, DE, HL
+; FSIGN -- FX's sign = the product's or quotient's sign. Out: HL = ex, DE = ey. Destroys: AF, DE, HL
 FSIGN:
     ld   hl, FX + U_S
     ld   a, (FY + U_S)
@@ -697,7 +697,7 @@ FCONSTX:                               ; FX = the constant at HL, FY = the top c
     jp   FUNPK
 
 ; ============================================================================
-; F+ ( r1 r2 -- r1+r2 )
+; F+ ( r1 r2 -- r1+r2 ) -- float add
 ; ============================================================================
 H_FPLUS:
     DW   DICT_CHAIN_POINT   ; the including ROM sets this (DEFL) to the chain this file extends, just before INCLUDEing it
@@ -708,7 +708,7 @@ W_FPLUS:
     jp   FPACK
 
 ; ============================================================================
-; F- ( r1 r2 -- r1-r2 )
+; F- ( r1 r2 -- r1-r2 ) -- float subtract: FADD with FY's sign flipped
 ; ============================================================================
 H_FMINUS:
     DW   H_FPLUS
@@ -723,7 +723,7 @@ W_FMINUS:
     jp   FPACK
 
 ; ============================================================================
-; F* ( r1 r2 -- r1*r2 )
+; F* ( r1 r2 -- r1*r2 ) -- float multiply
 ; ============================================================================
 H_FSTAR:
     DW   H_FMINUS
@@ -734,7 +734,7 @@ W_FSTAR:
     jp   FPACK
 
 ; ============================================================================
-; F/ ( r1 r2 -- r1/r2 )
+; F/ ( r1 r2 -- r1/r2 ) -- float divide; THROW -42 for r2 = 0
 ; ============================================================================
 H_FSLASH:
     DW   H_FSTAR

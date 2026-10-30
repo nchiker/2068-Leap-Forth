@@ -1,25 +1,10 @@
 ; ============================================================================
-; core/logic.asm — Phase 46: AND, OR, XOR, INVERT
+; core/logic.asm -- AND, OR, XOR, INVERT: bitwise logic
 ;
-; Builds on core/dict.asm (DPOP_HL/DPUSH_HL) only — no kernel INCLUDE
-; needed.
-;
-; WHAT THIS ADDS: bitwise logical operations, entirely absent from the
-; dictionary until now (core/compare.asm's own `=`/`<`/`>` produce
-; boolean flags but never combine them, and `0=` — core/control.asm,
-; Phase 4 — is a boolean NOT of a flag, not a bitwise complement).
-; These operate on all 16 bits of each cell, the standard ANS Forth
-; contract — used both for genuine bit manipulation and, via TRUE/
-; FALSE-style all-1s/all-0s flags, for combining boolean conditions.
-;   AND    ( a b -- a&b  )
-;   OR     ( a b -- a|b  )
-;   XOR    ( a b -- a^b  )
-;   INVERT ( a -- ~a )   bitwise one's-complement, the real ANS Forth
-;             name for this — deliberately NOT called NOT (some older
-;             Forths use that name, but this project already has `0=`
-;             doing logical negation of a flag; a second, DIFFERENTLY
-;             behaved word spelled NOT would be a real footgun next to
-;             it, not a helpful synonym).
+; All 16 bits of each cell are combined. INVERT is the bitwise complement; 0= (core/control.asm) is the
+; logical NOT of a flag, which is why this word is not called NOT.
+; Chained from DICT_CHAIN_POINT (set by the including ROM before the INCLUDE); every word may destroy
+; all registers except IX (the data stack pointer), IY and SP.
 ; ============================================================================
 
     IFNDEF CORE_LOGIC_ASM
@@ -29,10 +14,7 @@
 ; AND ( a b -- a&b )
 ; ============================================================================
 H_AND:
-    DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL,
-                            ; not EQU) to whatever word chain this
-                            ; file should extend, immediately before
-                            ; INCLUDEing this file
+    DW   DICT_CHAIN_POINT
     DB   3, "A","N","D"
 W_AND:
     ld   l, (ix+0)
@@ -92,7 +74,7 @@ W_XOR:
     ret
 
 ; ============================================================================
-; INVERT ( a -- ~a )
+; INVERT ( a -- ~a ) -- bitwise one's complement
 ; ============================================================================
 H_INVERT:
     DW   H_XOR
@@ -106,8 +88,6 @@ W_INVERT:
     ld   (ix+1), a
     ret
 
-DICT_LATEST_INIT_LOGIC EQU H_INVERT   ; head of the dictionary once
-                                       ; this file's own words are
-                                       ; included
+DICT_LATEST_INIT_LOGIC EQU H_INVERT
 
     ENDIF
