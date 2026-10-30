@@ -1,21 +1,15 @@
 ; ============================================================================
 ; rom/forth_smoke_p17.asm — Phase 17 smoke ROM: FILL and AT-XY
 ;
-; THREE CHECKPOINTS:
-;   1. FILL: draw a CIRCLE outline, set INK, FILL its interior --
-;      verify (a) a pixel inside the circle is now SET (it wasn't
-;      before -- an outline alone doesn't fill its own interior),
-;      (b) the covering cell's attribute has the new ink color (proving
-;      FILL picked up CURRENT_ATTR, like PLOT/LINE/CIRCLE since
-;      Phase 15), (c) a pixel far outside the circle stays CLEAR
-;      (proving the fill stayed bounded, not spilling everywhere)
-;   2. AT-XY + EMIT: 10 5 AT-XY then EMIT -- verify PRINT_ROW/PRINT_COL
+; TWO CHECKPOINTS (a third, FILL of a CIRCLE outline, moved to rom/test_shapes.asm
+; in step O15 item 4 with CIRCLE, which now lives in the EXROM):
+;   1. AT-XY + EMIT: 10 5 AT-XY then EMIT -- verify PRINT_ROW/PRINT_COL
 ;      land exactly there AND a real pixel was drawn in that exact
 ;      screen cell (not just internal state)
-;   3. AT-XY near the column-31 wrap boundary, then two EMITs -- proves
+;   2. AT-XY near the column-31 wrap boundary, then two EMITs -- proves
 ;      AT-XY doesn't disturb core/print.asm's own existing wrap logic
 ;
-; Border goes GREEN (4) if all three pass; otherwise it shows the
+; Border goes GREEN (4) if both pass; otherwise it shows the
 ; failing checkpoint's number.
 ; ============================================================================
 
@@ -57,35 +51,11 @@ COLD_START:
 
     call GFX_CLS
 
-; ---- checkpoint 1: FILL ----
+; ---- checkpoint 1: AT-XY + EMIT ----
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
     ld   hl, SRC_CP1
     ld   de, SRC_CP1_LEN
-    call INTERPRET_RUN
-    ld   b, 50
-    ld   c, 50
-    call GFX_READ_PIXEL          ; center of the circle must now be SET
-    or   a
-    jp   z, FAIL_TEST
-    ld   b, 6                     ; cell covering (50,50): row 50/8=6
-    ld   c, 6                     ; col 50/8=6
-    call GFX_CELL_ATTR_ADDR
-    ld   a, (hl)
-    and  $07
-    cp   4                        ; ink 4, set right before FILL
-    jp   nz, FAIL_TEST
-    ld   b, 0
-    ld   c, 0
-    call GFX_READ_PIXEL          ; far outside the circle: must stay CLEAR
-    or   a
-    jp   nz, FAIL_TEST
-
-; ---- checkpoint 2: AT-XY + EMIT ----
-    ld   a, 2
-    ld   (CHECKPOINT_NUM), a
-    ld   hl, SRC_CP2
-    ld   de, SRC_CP2_LEN
     call INTERPRET_RUN
     ld   a, (PRINT_ROW)
     cp   5
@@ -95,11 +65,11 @@ COLD_START:
     jp   nz, FAIL_TEST
     call CHECK_CELL_HAS_PIXEL_R5C10
 
-; ---- checkpoint 3: AT-XY near the wrap boundary ----
-    ld   a, 3
+; ---- checkpoint 2: AT-XY near the wrap boundary ----
+    ld   a, 2
     ld   (CHECKPOINT_NUM), a
-    ld   hl, SRC_CP3
-    ld   de, SRC_CP3_LEN
+    ld   hl, SRC_CP2
+    ld   de, SRC_CP2_LEN
     call INTERPRET_RUN
     ld   a, (PRINT_ROW)
     cp   11
@@ -113,8 +83,8 @@ COLD_START:
 ; ---- test-harness-only helpers: NOT dictionary words ----
 ; GFX_READ_PIXEL's real contract is B=x (pixel column), C=y (pixel
 ; row) -- a different convention from GFX_CELL_ATTR_ADDR's B=row/C=col
-; used above in checkpoint 1; conflating the two was a real bug caught
-; here before trusting this checkpoint.
+; (this ROM's earlier FILL checkpoint used both; conflating the two was a
+; real bug caught there).
 CHECK_CELL_HAS_PIXEL_R5C10:        ; checks row 5, col 10 (pixel x
                                     ; 80-87, pixel y 40-47) for at
                                     ; least one set pixel
@@ -143,7 +113,7 @@ CHECK_CELL_HAS_PIXEL_R5C10:        ; checks row 5, col 10 (pixel x
     ret
 
 PASS_TEST:
-    ld   a, 4                    ; green: all three checkpoints passed
+    ld   a, 4                    ; green: both checkpoints passed
     out  (PORT_ULA), a
     jr   PASS_TEST
 
@@ -161,14 +131,11 @@ INTERPRET_UNKNOWN_WORD:
 
 CHECKPOINT_NUM EQU $8808
 
-SRC_CP1: DB "50 50 20 CIRCLE 4 INK 50 50 FILL "
+SRC_CP1: DB "10 5 AT-XY 65 EMIT "
 SRC_CP1_LEN EQU $ - SRC_CP1
 
-SRC_CP2: DB "10 5 AT-XY 65 EMIT "
+SRC_CP2: DB "31 10 AT-XY 65 EMIT 66 EMIT "
 SRC_CP2_LEN EQU $ - SRC_CP2
-
-SRC_CP3: DB "31 10 AT-XY 65 EMIT 66 EMIT "
-SRC_CP3_LEN EQU $ - SRC_CP3
 
 ; ---- dictionary: included here, after the vector table and the
 ; self-test code above, not before ORG $0000 ----

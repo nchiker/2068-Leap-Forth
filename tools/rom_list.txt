@@ -27,6 +27,7 @@ test_rect                  test     gfx   4
 test_polygon               test     gfx   4     
 test_sprite                test     gfx   4     
 test_poly_fill             test     gfx   4     
+test_shapes                test     gfx   4     CIRCLE (EXROM) and FILL; was in p5 and p17
 test_exrom_isolation       test     a5    4     needs an 8K EXROM whose byte 0 is $A5
 
 forth_smoke                smoke    none  4     

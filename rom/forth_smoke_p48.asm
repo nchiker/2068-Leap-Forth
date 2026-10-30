@@ -8,16 +8,17 @@
 ; checking a register). There is no register-level way to confirm a
 ; palette swap actually changed what the hardware displays.
 ;
-; WHAT IT DOES: draws a filled circle using INK 2 (the standard ULA
-; palette's own red, already well-established by every earlier
-; CIRCLE-drawing smoke ROM in this project, e.g. Phase 17's own).
-; Then, WITHOUT EVER TOUCHING THAT CIRCLE'S OWN ATTRIBUTE BYTES AGAIN,
+; WHAT IT DOES: draws a diamond outline with four LINEs using INK 2
+; (the standard ULA palette's own red). It was a filled CIRCLE until step
+; O15 item 4 moved CIRCLE and FILL out of the Home ROM: this ROM checks
+; ULAplus, not those words, so it draws with LINE.
+; Then, WITHOUT EVER TOUCHING THAT SHAPE'S OWN ATTRIBUTE BYTES AGAIN,
 ; reprograms palette register 2 to $FC (252 = bright yellow-ish, per
 ; this project's own GGGRRRBB documentation — see core/ulaplus.asm's
 ; own header) and enables ULAPLUS. Hangs forever with the border
 ; yellow (6).
 ;
-; WHAT A CORRECT SCREENSHOT SHOULD SHOW: the SAME circle, never
+; WHAT A CORRECT SCREENSHOT SHOULD SHOW: the SAME diamond, never
 ; redrawn, now displaying in the NEW custom color instead of standard
 ; red — proof that ULAPlus genuinely changes what an EXISTING
 ; attribute value displays (a real display-time palette lookup, not
@@ -77,7 +78,7 @@ INTERPRET_UNKNOWN_WORD:
 .hang:
     jr   .hang
 
-SRC_TEST: DB "2 INK 100 100 30 CIRCLE 100 100 FILL 2 252 PALETTE 1 ULAPLUS "
+SRC_TEST: DB "2 INK 100 70 130 100 LINE 130 100 100 130 LINE 100 130 70 100 LINE 70 100 100 70 LINE 2 252 PALETTE 1 ULAPLUS "
 SRC_TEST_LEN EQU $ - SRC_TEST
 
 ; ---- dictionary: included here, after the vector table and the

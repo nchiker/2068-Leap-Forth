@@ -110,10 +110,6 @@
                                  ; (sysvars.inc; caller normalizes
                                  ; corner order first) — fills a
                                  ; rectangle
-    EXTERN GFX_CIRCLE           ; no register args — reads GFX_CIRCLE_
-                                 ; XC/YC/R/ATTR/OVER (sysvars.inc) —
-                                 ; draws a circle outline (midpoint
-                                 ; circle algorithm)
     EXTERN GFX_FILL             ; no register args — reads GFX_FILL_X/
                                  ; Y/ATTR (sysvars.inc) — 4-connected
                                  ; flood fill from that seed point,

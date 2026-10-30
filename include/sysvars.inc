@@ -1313,43 +1313,24 @@ GFX_LINE_E2:         DEFS 2           ; 2 bytes ($6196-$6197) — this
                                  ; call (which destroys HL) to be
                                  ; usable by the second
 
-; GFX_CLIP_* — GFX_PLOT_CLIPPED's own scratch. GFX_CIRCLE's computed
-; points (center +/- radius) can legitimately land off-screen (negative
-; or >255/>191); GFX_PLOT_CLIPPED wraps GFX_WRITE_PIXEL with a bounds
-; check rather than letting an out-of-range value get silently
-; truncated into a byte and plotted on the wrong edge of the screen.
-; Same "value must survive a destructive call" reasoning as everywhere
-; else in this block — the bounds check itself needs A as scratch.
-GFX_CLIP_ATTR:       DEFS 1           ; 1 byte
-GFX_CLIP_OVER:       DEFS 1           ; 1 byte
-
-; GFX_CIRCLE_* — CIRCLE's own working storage, midpoint circle
-; algorithm. X/Y are the algorithm's own octant offsets (0..r), always
-; bytes; D is the signed 16-bit decision variable. Verified in Python
-; against a reference implementation before any Z80 was written,
-; including the x=0 pole case (handled once, before the main loop —
-; see GFX_CIRCLE_PLOT_POLES) and the x==y diagonal case (the loop's
-; "swapped" 4 points are skipped there — see GFX_CIRCLE_PLOT_GENERAL) —
-; both verified to be exact-duplicate points, not just visually close,
-; so skipping them changes nothing about the rendered circle but does
-; matter for OVER 1/XOR correctness (plotting the same pixel twice
-; would toggle it back off). That same verification also caught that
-; x-y needs real 16-bit width during the decision-variable update
-; (observed up to +/-238 across tested radii — well outside an 8-bit
-; signed byte's -128..127 range), not the 8-bit SUB an unverified
-; implementation would reach for.
-GFX_CIRCLE_XC:       DEFS 1           ; 1 byte — center x (0-255)
-GFX_CIRCLE_YC:       DEFS 1           ; 1 byte — center y (0-191)
-GFX_CIRCLE_R:        DEFS 1           ; 1 byte — radius (0-255; off-screen
-                                 ; points from a large radius are
-                                 ; clipped by GFX_PLOT_CLIPPED, not
-                                 ; rejected here)
-GFX_CIRCLE_ATTR:     DEFS 1           ; 1 byte
-GFX_CIRCLE_OVER:     DEFS 1           ; 1 byte
-GFX_CIRCLE_X:        DEFS 1           ; 1 byte — current octant x offset
-GFX_CIRCLE_Y:        DEFS 1           ; 1 byte — current octant y offset
-GFX_CIRCLE_D:        DEFS 2           ; 2 bytes ($61A9-$61AA) — signed
-                                 ; 16-bit decision variable
+; GFX_CIRCLE_* — CIRCLE's working storage (step O15 item 4, docs/V2/
+; FILL_CIRCLE_SPEC.md sections 5-7). The Home word core/shapes.asm stores
+; the centre, the radius and the attribute here; CIRCLE_IMPL in rom/
+; graphics_exrom.asm (chunk 5, the midpoint loop of 2068-Leap-C's circle)
+; reads them and uses the same cells as its loop state. All of it is
+; signed 16-bit, so a centre or a radius beyond the screen (or below zero)
+; is clipped, not truncated into a byte. These cells replace the old
+; GFX_CIRCLE_* (x, y, d, over: byte-sized, for the Home kernel's
+; GFX_CIRCLE) and GFX_CLIP_* (GFX_PLOT_CLIPPED's scratch); the block is
+; exactly the 11 bytes they took, so no later sysvar moves (asserted below).
+GFX_CIRCLE_XC:       DEFS 2           ; centre x (in)
+GFX_CIRCLE_YC:       DEFS 2           ; centre y (in)
+GFX_CIRCLE_R:        DEFS 2           ; radius (in); the loop reuses it as
+                                      ; the octant's x offset (px)
+GFX_CIRCLE_ATTR:     DEFS 1           ; attribute byte (in)
+GFX_CIRCLE_PY:       DEFS 2           ; the octant's y offset, 0 up
+GFX_CIRCLE_ERR:      DEFS 2           ; midpoint error term
+    ASSERT GFX_MODE == $81C6             ; nothing after the block moved
 
 ; GFX_MODE / PORT_FF_SHADOW — MODE's own state. GFX_MODE is this
 ; project's own friendly 0/1 numbering (0=Normal, 1=High Resolution

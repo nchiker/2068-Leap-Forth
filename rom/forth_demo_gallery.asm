@@ -304,6 +304,8 @@ DICT_CHAIN_POINT DEFL H_REPEAT
 DICT_CHAIN_POINT DEFL H_FLASH
     INCLUDE "core/rectfill.asm"
 DICT_CHAIN_POINT DEFL H_RECT
+    INCLUDE "core/shapes.asm"           ; CIRCLE (step O15): a stub into the EXROM
+DICT_CHAIN_POINT DEFL H_CIRCLE
     INCLUDE "core/sprite.asm"
 DICT_CHAIN_POINT DEFL H_SPRITEHIDE
     INCLUDE "core/doloop.asm"
