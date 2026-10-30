@@ -1266,9 +1266,9 @@ def speed_tasks():
 
 def build_checks(group, count, seed, int_n, only):
     L = []
-    if group in ("old", "all"):
+    if group in ("old", "gated", "all"):
         L += old_checks()
-    if group in ("new", "all"):
+    if group in ("new", "gated", "all"):
         L += new_checks(count, seed, int_n)
     if group in ("speed", "all"):
         L += speed_tasks()
@@ -1284,28 +1284,28 @@ def cut(s, n):
     return s if len(s) <= n else s[:n - 3] + "..."
 
 
-def run_all(build, workers, port0, only, json_out, verbose, group, count, seed, int_n):
+def suite(build, only=(), json_out=None, verbose=False, group="all", count=300, seed="13", int_n=40000):
+    """The checks as one fharness.Suite (tools/run_tests.py; run_all runs it alone)."""
     checks = build_checks(group, count, seed, int_n, only)
     if not checks:
-        print("floattest: no check matches", file=sys.stderr)
-        return 2
-    t0 = time.time()
-    flat = []                                      # (check index, task)
-    for ci, c in enumerate(checks):
-        for t in c.tasks:
-            flat.append((ci, t))
-    order = sorted(range(len(flat)), key=lambda i: -flat[i][1]["weight"])      # long tasks first
-    results = {}
-    if flat:
-        res = fh.run_pool(build, [flat[i][1] for i in order], run_task, workers, port0)
-        for i, r in zip(order, res):
-            results[i] = r
+        raise ValueError("floattest: no check matches %r" % (only,))
+    flat = [t for c in checks for t in c.tasks]
+    return fh.Suite("float", flat, run_task, lambda res, wall: report(checks, res, wall, build, json_out, verbose, group,
+                                                                       count, seed, int_n))
+
+
+def run_all(build, workers, port0, only, json_out, verbose, group, count, seed, int_n):
+    return suite(build, only, json_out, verbose, group, count, seed, int_n).run_alone(build, workers, port0)
+
+
+def report(checks, res, wall, build, json_out, verbose, group, count, seed, int_n):
+    results = dict(enumerate(res))
+    flat = res
     parent = {}
     for ci, c in enumerate(checks):
         if c.parent:
             kind, cnt = c.parent
             parent[ci] = model_py(random.Random("%s:model" % seed), cnt)
-    wall = time.time() - t0
     out, tally = [], {}
     speed = {}
     pos = 0
@@ -1416,7 +1416,7 @@ def selftest(count, seed, int_n):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--build", default=os.path.join(ROOT, "build"), help="directory with forth_boot_rom0.bin (DIR or DIR/build)")
-    ap.add_argument("--group", choices=("old", "new", "speed", "all"), default="all", help="old: kept behaviour; new: the spec; speed: T-states; all (default)")
+    ap.add_argument("--group", choices=("old", "new", "speed", "gated", "all"), default="all", help="old: kept behaviour; new: the spec; speed: T-states; gated: old and new; all (default)")
     ap.add_argument("--count", type=int, default=300, help="random cases per operation (default 300)")
     ap.add_argument("--int-pairs", type=int, default=40000, help="pairs for the integer * / MOD checks (default 40000)")
     ap.add_argument("--seed", default="13", help="seed of the random cases (default 13)")

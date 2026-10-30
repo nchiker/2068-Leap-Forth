@@ -76,8 +76,8 @@ from ts2068_debug.process import ZEsarUXProcess as _ZProcess, terminate_emulator
 FAST_ARGS = [] if os.environ.get("FORTH_REALTIME") else ["--emulatorspeed", "1000", "--frameskip", "49"]
 PORT_LO, PORT_HI = 10900, 10919     # this harness's ports (make test 10760 up, bench 10780, poweron 10820-10839,
                                     # ay_audio 10880-10899, cart_diff 10930-10949, tapetest 10960-10979, tapetol 10980-10999)
-PORT_RANGES = ((10900, 10919), (10840, 10859), (10860, 10879))  # every range a Machine / run_pool accepts (tools/floattest.py: the second;
-                                    # tools/shapetest.py: the third)
+PORT_RANGES = ((10900, 10919), (10840, 10859), (10860, 10879), (10760, 10779))  # every range a Machine / run_pool accepts
+                                    # (tools/floattest.py: the second; tools/shapetest.py: the third; tools/run_tests.py: the fourth)
 RET_SLOT = 0xFF00                   # return address slot for routine calls (unused by the ROM: the header)
 STOP_ADDR = 0xFF02                  # `jr $` written here; routine calls return to it
 GLYPH_PROG = 0xFF10                 # the glyph rendering program and its code list
@@ -653,6 +653,58 @@ def _worker(build, port, tq, rq, fn, tasks, restore):
         if m is not None:
             m.stop()
         rq.put(("exit", port, None))
+
+
+class Suite:
+    """A suite's tasks and how to report their results: tools/run_tests.py runs every suite's tasks on one pool.
+    run(machine, task) -> dict(ok, detail, ...) as run_pool's fn; report(results, wall) prints the suite's lines and
+    returns 0 (pass), 1 (a check failed) or 2 (harness error).  stock: indices of the tasks that need the stock-shaped
+    EXROM (8 KB of $00; run on a copy of the build, stock_build)."""
+
+    def __init__(self, name, tasks, run, report, stock=()):
+        self.name, self.tasks, self.run, self.report, self.stock = name, list(tasks), run, report, set(stock)
+
+    def run_alone(self, build, workers=None, port0=PORT_LO):
+        """The suite on its own pools (the standalone tools)."""
+        t0 = time.time()
+        res = run_suites([self], build, workers, port0)[0]
+        return self.report(res, time.time() - t0)
+
+
+def stock_build(build):
+    """A temporary copy of the build (the files the harness reads) whose graphics_exrom.bin is 8 KB of $00: what a Home
+    ROM fitted alone sees at the EXROM address.  Returns the directory (the caller removes it)."""
+    d = tempfile.mkdtemp(prefix="forth-stock-")
+    for f in ("forth_boot_rom0.bin", "forth_boot.sym"):
+        shutil.copy(os.path.join(build, f), d)
+    with open(os.path.join(d, "graphics_exrom.bin"), "wb") as f:
+        f.write(bytes(os.path.getsize(os.path.join(build, "graphics_exrom.bin"))))
+    return d
+
+
+def run_suites(suites, build, workers=None, port0=PORT_LO):
+    """Every suite's tasks on one pool (long tasks first), the stock-EXROM tasks on a second pool after it.  Returns
+    each suite's results in its task order."""
+    build = resolve_build(build)
+    main, stock = [], []
+    for si, s in enumerate(suites):
+        for ti, t in enumerate(s.tasks):
+            (stock if ti in s.stock else main).append((si, ti))
+    weight = lambda k: -(suites[k[0]].tasks[k[1]].get("weight", 1) if isinstance(suites[k[0]].tasks[k[1]], dict) else 1)
+    main.sort(key=weight)
+    fn = lambda m, k: suites[k[0]].run(m, suites[k[0]].tasks[k[1]])
+    out = [[None] * len(s.tasks) for s in suites]
+    if main:
+        for k, r in zip(main, run_pool(build, main, fn, workers, port0)):
+            out[k[0]][k[1]] = r
+    if stock:
+        d = stock_build(build)
+        try:
+            for k, r in zip(stock, run_pool(d, stock, fn, min(workers or default_workers(), 2), port0)):
+                out[k[0]][k[1]] = r
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+    return out
 
 
 def default_workers():

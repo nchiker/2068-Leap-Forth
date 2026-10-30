@@ -1,0 +1,16 @@
+\ Sieve of Eratosthenes, 10 passes over 2000 flags (~/2068-rom-benchmarks benchmarks/forth/sieve.fs)
+2000 CONSTANT SIZE
+10 CONSTANT REPS
+SIZE ARRAY FLAG
+VARIABLE COUNT
+: CLEAR-FLAGS SIZE 1+ 0 DO 1 I CELLS FLAG + ! LOOP ;
+: RUN-SIEVE CLEAR-FLAGS 0 COUNT ! SIZE 1+ 0 DO
+I CELLS FLAG + @ IF
+I I + 3 + DUP I +
+BEGIN DUP SIZE 1+ < WHILE
+DUP CELLS FLAG + 0 SWAP ! OVER +
+REPEAT 2DROP COUNT @ 1+ COUNT !
+THEN LOOP ;
+: BENCH REPS 0 DO RUN-SIEVE LOOP COUNT @ . ;
+\ bench: sieve
+BENCH                  \ expect: 551
