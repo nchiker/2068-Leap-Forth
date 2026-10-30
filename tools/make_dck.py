@@ -22,11 +22,22 @@ ZEsarUX: smartload the .dck, then hard reset.
 
 Usage:  tools/make_dck.py build/forth_boot_cart.bin build/forth_boot.dck [build/graphics_exrom.bin]
 """
+import os
+import re
 import sys
 
-# include/graphics_exrom_abi.inc: GRAPHICS_EXROM_MAGIC, GRAPHICS_EXROM_ABI, and the trailer's
-# offset ($A000 + MAX_SLOTS * 3 + 1 - $A000 = 8 * 3 + 1)
-MAGIC, ABI, TRAILER = 0xF0, 1, 8 * 3 + 1
+# include/graphics_exrom_abi.inc: GRAPHICS_EXROM_MAGIC, GRAPHICS_EXROM_ABI, and the trailer's offset
+# (GRAPHICS_EXROM_MAGIC_ADDR - $A000 = MAX_SLOTS * 3 + 1), read from the include so they cannot drift from it
+def abi_constants():
+    inc = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'include', 'graphics_exrom_abi.inc')
+    v = {}
+    for line in open(inc):
+        m = re.match(r'\s*(GRAPHICS_EXROM_(?:MAGIC|ABI|MAX_SLOTS))\s+EQU\s+\$?([0-9A-Fa-f]+)\b', line)
+        if m:
+            v[m.group(1)] = int(m.group(2), 16 if '$' in line.split('EQU')[1] else 10)
+    return v['GRAPHICS_EXROM_MAGIC'], v['GRAPHICS_EXROM_ABI'], v['GRAPHICS_EXROM_MAX_SLOTS'] * 3 + 1
+
+MAGIC, ABI, TRAILER = abi_constants()
 
 if len(sys.argv) not in (3, 4):
     sys.exit(__doc__)

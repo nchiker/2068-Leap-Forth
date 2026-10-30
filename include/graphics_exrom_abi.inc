@@ -26,8 +26,8 @@
     DEFINE INCLUDE_GRAPHICS_EXROM_ABI_INC
 
 GRAPHICS_EXROM_MAGIC     EQU $F0
-GRAPHICS_EXROM_ABI       EQU 1
-GRAPHICS_EXROM_MAX_SLOTS EQU 8
+GRAPHICS_EXROM_ABI       EQU 2
+GRAPHICS_EXROM_MAX_SLOTS EQU 16
 
 ; Computed, not hand-typed: rom/graphics_exrom.asm's own service table
 ; is GRAPHICS_EXROM_MAX_SLOTS slots of 3 bytes each, immediately

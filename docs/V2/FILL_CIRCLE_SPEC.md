@@ -136,7 +136,8 @@ A point set ordering does not matter (OR). Result for 0 <= xc, yc, r <= 255: the
 * **Service slots (O15-1):** the table grows from 8 to 16 slots (`GRAPHICS_EXROM_MAX_SLOTS` 16, `GRAPHICS_EXROM_ABI`
   2); FILL is slot 7, CIRCLE slot 8, 9-15 reserved. The magic/ABI pair moves from `$A019` to `$A031`;
   `include/graphics_exrom_abi.inc` computes it and every caller reads it from there; `tools/make_dck.py`'s trailer
-  check (offset 25) and its EightyOne twin read the offset from the include. The EXROM costs 24 B more.
+  check (offset 25, hard-coded) reads magic, ABI and offset from the include (the EightyOne script checks no
+  trailer). The EXROM costs 24 B more.
 * **Words (HOME):** `FILL` pops y, x into `FILL_X`/`FILL_Y` (16-bit), copies `CURRENT_ATTR`, and jumps to
   `EXROM_CALL_SLOT` with slot 7. `CIRCLE` pops r, yc, xc (16-bit) and attr, slot 8. The HIRES test moves into the
   EXROM (`GFX_MODE` is a sysvar the EXROM already sees). Both bodies about 18 B [E].
