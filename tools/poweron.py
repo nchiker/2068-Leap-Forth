@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Power-on RAM qualification for the Forth boot ROM (idea ported from 2068-Leap-C's
-tools/poweron.py; it does not use Leap-C's Machine class, it drives the `ts2068-debug` CLI the way
-tools/run_rom_tests.sh does).
+tools/poweron.py; it does not use Leap-C's Machine class, it drives the `ts2068-debug` CLI).
 
 A real TS2068 powers on with whatever its DRAM holds (and its reset button keeps the RAM); the
 Z80 reset leaves AF BC DE HL IX IY SP and the shadow set undefined (the chip only guarantees
@@ -40,21 +39,18 @@ CURRENT_ATTR, FWRAP_OLD_COUNT, PRINT_COL, PRINT_ROW); the editor and ISR init wr
 Everything NOT in UNDEFINED_REGIONS is classified DEFINED, so a difference there is a FAIL. The table
 lists only regions with a recorded reason (checked by grep of core/ kernel/ rom/forth_boot.asm
 rom/graphics_exrom.asm include/, step G, 2026-10-28):
-  * the machine stack below the live SP ($F600..SP-1): a stack is written before it is read, and what is
-    left below SP is the leftover of the boot's calls and PUSHes, including pushes of the (scrambled)
-    registers.  The live stack (SP..$FEFF) is DEFINED.  $F600 is EXTENSION_MODULE_LIMIT, "genuine stack
-    headroom starts at $F600" (the old include/sysvars.inc; the layout's lowest stack byte is MACHINE_STACK_LIMIT,
-    $F3C8, in include/forth_layout.inc);
-  * $FF00-$FFFF: above the initial SP, nothing allocates there (include/forth_layout.inc: MACHINE_STACK_TOP is $FF00);
-  * $5B00-$7FFF: GFX_FILL_SHADOW / GFX_FILL_STACK (FILL_IMPL fills the first from the screen and sets its stack
-    pointer on entry, rom/graphics_exrom.asm), display file 2 at $6000 (displayed only in HIRES, which
-    clears it on entry: kernel/graphics .clear_highres) and ZX_SYSVAR_CHARS $5C36 (only
-    written, core/printer.asm);
-  * $F000-$F17F: no Forth symbol ($F000-$F0FF) and LABEL_TABLE ($F100-$F17F, BASIC labels): no reader;
-  * $F228-$F3C3 and $F400-$F5FF: EDIT_LINE_BUF, DETOK_BUF, STR_FUNC_POOL, DEF_FN / extension state and the
-    extension module window: free in include/forth_layout.inc (the old names are gone), no reader in the Forth sources;
-  * $F3C4-$F3FF: GFX_LINE_X0..Y1 / ATTR / OVER, which the LINE word (core/ts2068.asm) and the EXROM's
-    sprite code (rom/graphics_exrom.asm) set before every GFX_LINE call.
+  * the machine stack below the live SP ($F600..SP-1): a stack is written before it is read; what is left below SP
+    is the boot's calls and PUSHes, including pushes of the scrambled registers.  The live stack (SP..$FEFF) is
+    DEFINED.  (include/forth_layout.inc gives the stack $F3C8-$FEFF; $F3C8-$F5FF is covered by the two lines below.)
+  * $FF00-$FFFF: above the initial SP (MACHINE_STACK_TOP), nothing allocates there;
+  * $5B00-$7FFF: GFX_FILL_SHADOW / GFX_FILL_STACK (FILL fills the first from the screen and sets its stack pointer on
+    entry, rom/graphics_exrom.asm), display file 2 at $6000 (shown only in HIRES, which clears it on entry) and
+    ZX_SYSVAR_CHARS $5C36 (only written, core/printer.asm);
+  * $F000-$F17F: the sprite buffers (read only for a slot whose SPRITE_SLOT_DEFINED flag, cleared at cold start, is
+    set by SPRITE-DEFINE, which writes the buffers first) and free space;
+  * $F228-$F3C3 and $F400-$F5FF: free in include/forth_layout.inc;
+  * $F3C4-$F3FF: GFX_LINE_X0..Y1, which LINE (core/ts2068.asm) and the EXROM's sprite code set before every
+    GFX_LINE call, and free space.
 NOT in the table, so they must come out identical to the zero boot: the bitmap and attributes
 ($4000-$5AFF), everything COLD_START clears ($8000-DICT_RAM_CEILING) and UDG_TABLE ($F180-$F227, read by
 W_UDG and the glyph lookup: audit O1).  A region added to the table needs the same kind of grep evidence;
@@ -96,7 +92,7 @@ PATTERNS = ("zero", "ones", "alt", "addr", "random:1", "random:2", "random:3", "
 FREE_REGS = ("AF", "BC", "DE", "HL", "IX", "IY", "SP", "AF'", "BC'", "DE'", "HL'")
 # EQUs in the .sym file that are numbers, not addresses (core/beep.asm's clock constant); PORT_* are I/O port numbers.  Excluded from the address -> symbol map.
 NOT_ADDRESS = {"CPU_CLOCK_M"}
-CHUNK = 500000          # opcodes per `run`, as tools/run_rom_tests.sh
+CHUNK = 500000          # opcodes per `run`
 MAX_INSTR = 20000000    # generous opcode cap for the boot (the boot takes well under 1M)
 
 # (name, lo, hi_exclusive, reason): bytes whose value after the boot may legitimately depend on

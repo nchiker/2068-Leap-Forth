@@ -47,7 +47,7 @@ Checks performed, and which real bug each one guards against:
 3. JR/DJNZ range — both have an 8-bit signed displacement, +-127 bytes
    from the instruction after the jump. A loop body or branch that
    grows past that range assembles fine right up until it doesn't;
-   this project has hit it twice for real (the stackops smoke test's
+   this project has hit it twice for real (a former stackops test ROM's
    `jr nz,FAIL` chain, and the arithmetic engine's own loops once a
    fix lengthened their bodies). Uses a real per-mnemonic Z80
    instruction-length table and proper local-label scoping (same

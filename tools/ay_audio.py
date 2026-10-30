@@ -15,7 +15,7 @@ sound), types a scale of `n 0.3 BEEP` lines at the prompt, and then measures the
     each 1/50 s window, to show a change to the chime's waits left the sound the same.
 
 Notes above about 2.2 kHz are not measurable from a 15.6 kHz capture by edge counting and are left to the register
-check in rom/forth_smoke_p31.asm. Nothing is listened to: this is the emulator's own sound output, as a file.
+check in tests/sound/ay.fs. Nothing is listened to: this is the emulator's own sound output, as a file.
 
 Usage: tools/ay_audio.py [--rom build/forth_boot_rom0.bin] [--sym build/forth_boot.sym] [--port 10880]
                          [--out DIR] [--compare-chime OTHER_ROM.bin]

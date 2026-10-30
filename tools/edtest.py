@@ -141,8 +141,8 @@ the text allows several outcomes the case accepts exactly those and reports whic
                      same state (called at the key wait from a checkpoint onto a blank screen, as the redraw-oracle case does with
                      EDITOR_REDRAW), and the oracle sees a stray pixel, a stray FLASH cell and a missing cursor.  Fails with
                      `no VIEW_REDRAW_ALL` when the symbol is absent.
-  N10 edit-refusals  NO EXROM (the stock-shaped EXROM, build/stock_shaped_exrom.bin: a temporary copy of the build directory is made
-                     for it and removed afterwards), LONG LINE (a 199-character line in the store), `NOSUCH ?`: one message, nothing changed
+  N10 edit-refusals  NO EXROM (an EXROM of 8 KB of $00: fharness.stock_build makes a temporary copy of the build directory
+                     for it), LONG LINE (a 199-character line in the store), `NOSUCH ?`: one message, nothing changed
                      (the store may gain the typed line), console still works.
   N11                retired in step M6 (`EDIT` in 64-column mode printed 32COL FIRST: there is no 64-column mode).
   N12 edit-typing-cost  T-states per key in the view (same method as typing-cost), 11 scenarios, each taken twice from a restored
