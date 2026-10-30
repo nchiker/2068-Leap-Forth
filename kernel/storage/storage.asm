@@ -1,30 +1,23 @@
 ; ============================================================================
 ; kernel/storage/storage.asm -- tape SAVE/LOAD: the header layer over the block I/O
 ;
-; Rebuilt in audit step S against docs/V2/STORAGE_SPEC.md (sections 3-5); 2068-Leap V2's
-; kernel/storage/storage.asm was the reference for the header search's SPACE handling.
-;
-; STORAGE_SEND_BLOCK / STORAGE_RECEIVE_BLOCK are Leap-C's clean-room block I/O
-; (kernel/storage/tapeblock.asm, adopted unchanged, spec D1 and section 3). Above it:
+; STORAGE_SEND_BLOCK / STORAGE_RECEIVE_BLOCK are Leap-C's block I/O (kernel/storage/tapeblock.asm,
+; docs/V2/STORAGE_SPEC.md section 3). Above them:
 ;   STORAGE_SAVE       a 17-byte header block, then the data block only if the header went out whole
 ;   STORAGE_FIND       the header search: the first header of a type (and name) on the tape
 ;   STORAGE_LOAD_DATA  the data block after a found header, loaded or verified
-;   STORAGE_CRC        CRC-16/CCITT-FALSE, for the LIB image's trailer (spec D4)
-; The wire format is the standard one, so tapes made by the stock ROM's routines still read
-; (V1 compatibility is not a requirement, spec D2). The words are in core/storage.asm (LIB) and core/loadtext.asm (TEXT).
+;   STORAGE_CRC        CRC-16/CCITT-FALSE, for the LIB image's trailer
+; The wire format is the standard one. The words are in core/storage.asm (LIB) and core/loadtext.asm
+; (TEXT).
 ;
-; Every routine here leaves interrupts off (the block I/O's `di`) except STORAGE_SAVE, which
-; enables them; the words' common tail (STORAGE_END, core/storage.asm) enables them.
-;
-; Test hooks: a ROM that DEFINEs STORAGE_TEST_FAKE_SEND and/or STORAGE_TEST_FAKE_RECEIVE supplies
-; STORAGE_TEST_SEND_BLOCK / STORAGE_TEST_RECEIVE_BLOCK with the section-3 contract (an in-RAM
-; tape: rom/forth_smoke_p7.asm, p52).
+; Every routine here leaves interrupts off (the block I/O's `di`) except STORAGE_SAVE, which enables
+; them; the words' common tail (STORAGE_END, core/storage.asm) enables them.
 ; ============================================================================
 
 STORAGE_TYPE_HEADER EQU $00         ; flag byte of a header block
 STORAGE_TYPE_DATA   EQU $FF         ; flag byte of a data block
-STORAGE_TYPE_TEXT   EQU 0           ; header types (spec section 4): SAVE-TEXT, as in V1
-STORAGE_TYPE_LIB    EQU 3           ;   SAVE-LIB (V1 used 0, so V1 LIB tapes are not found)
+STORAGE_TYPE_TEXT   EQU 0           ; header types (spec section 4): SAVE-TEXT
+STORAGE_TYPE_LIB    EQU 3           ;   SAVE-LIB
 
 STORAGE_HEADER_TYPE_OFF      EQU 0
 STORAGE_HEADER_NAME_OFF      EQU 1
@@ -40,21 +33,14 @@ STORAGE_BLOCK_GAP_FRAMES     EQU 50      ; STORAGE_SAVE's pause between header a
     ASSERT STORAGE_HEADER_NAME_OFF + STORAGE_HEADER_FILENAME_LEN = STORAGE_HEADER_LENGTH_OFF ; (include/forth_layout.inc)
     ASSERT STORAGE_HEADER_PARAM2_OFF + 2 = STORAGE_HEADER_PAYLOAD_LEN
 
-    IFDEF STORAGE_TEST_FAKE_SEND
-STORAGE_SEND_BLOCK EQU STORAGE_TEST_SEND_BLOCK
-    ELSE
-STORAGE_SEND_BLOCK EQU TAPE_SEND_BLOCK
-    ENDIF
-    IFDEF STORAGE_TEST_FAKE_RECEIVE
-STORAGE_RECEIVE_BLOCK EQU STORAGE_TEST_RECEIVE_BLOCK
-    ELSE
+STORAGE_SEND_BLOCK    EQU TAPE_SEND_BLOCK
 STORAGE_RECEIVE_BLOCK EQU TAPE_RECV_BLOCK
-    ENDIF
     INCLUDE "kernel/storage/tapeblock.asm"
 
-; The identity a LIB image carries (spec D3): $8000 | the CRC-16 of this ROM image with this
-; cell zeroed, patched in after assembly by tools/rom_identity.py for the product images. An
-; unpatched ROM (every test ROM) reads $0000, which is consistent within that ROM.
+; ============================================================================
+; ROM_IDENTITY -- the identity a LIB image carries: $8000 | the CRC-16 of this ROM image with this
+; cell zeroed, patched in after assembly by tools/rom_identity.py (an unpatched build reads $0000)
+; ============================================================================
 ROM_IDENTITY:
     DW   0
 
@@ -84,11 +70,11 @@ STORAGE_SAVE:
     pop  de
     pop  ix
     jr   nc, .stopped
-    ei                                  ; the gap between the blocks: 50 frames (1 s at 50 Hz),
-    ld   b, STORAGE_BLOCK_GAP_FRAMES    ;   as on a stock tape. Without it the data block's pilot
-.gap:                                   ;   follows the header's closing edge by ~2,400 T, which
-    halt                                ;   tape tools (tools/tapes.py's decoder among them) read
-    djnz .gap                           ;   as more bits of the header
+    ei                                  ; the gap between the blocks: 50 frames, as on a stock tape;
+    ld   b, STORAGE_BLOCK_GAP_FRAMES    ;   without it the data block's pilot follows the header's
+.gap:                                   ;   closing edge by ~2,400 T and tape decoders read it as
+    halt                                ;   more bits of the header
+    djnz .gap
     ld   a, STORAGE_TYPE_DATA
     call STORAGE_SEND_BLOCK
 .stopped:
@@ -137,20 +123,25 @@ STORAGE_FIND:
     dec  c
     jr   nz, .name
     ret                                 ; carry clear: the last cp was equal
-.failed:                                ; a timeout counts as an attempt too, so the search
-    call STORAGE_SPACE_HELD             ;   waits up to 15 x ~8.6 s for the user to press play
+.failed:                                ; a timeout counts as an attempt too: up to 15 x ~8.6 s
+    call STORAGE_SPACE_HELD             ;   of waiting for play
     jr   nc, STORAGE_STOPPED
 .refused:
     djnz .next
     scf
     ret
 
+; STORAGE_STOPPED -- the search stopped by SPACE. Out: carry set, B = $FF
 STORAGE_STOPPED:
     ld   b, $FF
     scf
     ret
 
-; Out: carry clear = SPACE is down. Destroys: AF
+; ============================================================================
+; STORAGE_SPACE_HELD -- is SPACE down
+; Out: carry clear = SPACE is down
+; Destroys: AF
+; ============================================================================
 STORAGE_SPACE_HELD:
     ld   a, $7F
     in   a, (PORT_ULA)

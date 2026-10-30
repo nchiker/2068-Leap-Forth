@@ -10,7 +10,7 @@
 | Commit | `d31d785da273d41812ed6204476116e4e5f364c6` (2026-10-22, the file's last change; 1.0.0-beta.2) |
 | Code hash | `86c072a2b364cd78e4db9de6f2dd2e33e55e4111ee4aa12fd0f14852cf01d61e` |
 | Code lines | 237 |
-| Local modifications | the header comment (lines 1-23) is Forth's own; no code changes |
+| Local modifications | the header comment (lines 1-22) is Forth's own; no code changes |
 | Clean-room record | Leap-C `docs/TAPE_CLEANROOM.md`, `docs/TAPE_SIGNAL_SPEC.md` (not re-checked here) |
 
 The code hash is sha256 over the file's code with comments and blank lines removed and whitespace collapsed, one

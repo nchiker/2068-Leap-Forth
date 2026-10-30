@@ -1,85 +1,17 @@
 ; ============================================================================
-; rom/forth_boot.asm — the first real, live, bootable 2068-Forth ROM
+; rom/forth_boot.asm -- the HOME ROM image (forth_boot_rom0.bin, 16 KB at $0000)
 ;
-; Distinct from every rom/forth_smoke_p*.asm file in this project: those
-; are automated regression tests with no keyboard input and a
-; border-color pass/fail signal; this is the actual product — it boots,
-; prints a banner, plays the startup sound tracked as an open product
-; requirement since Phase 4 (docs/PROJECT_PLAN.md, "Product requirement
-; — startup screen plays a startup sound"), and hands control to
-; core/editor.asm's EDITOR_LOOP_LIVE for real, live, interactive use —
-; the same live interpreter loop Phase 6 built but could not safely
-; call, because kernel/io's IO_READ_KEY only consumes a key already
-; latched by a real IM 1 interrupt, and no ROM before this one ever
-; turned interrupts on. See rom/forth_smoke_p9.asm's own header for the
-; full story of what had to be fixed first (a dictionary-chain
-; structural bug spanning core/control.asm, core/storage.asm, and
-; core/fpcore.asm) and how the real interrupt wiring below was confirmed
-; against 2068-Leap's own working ROM files, not guessed.
+; Assembles the whole HOME image: the RST/NMI vectors, the fixed GRAPHICS_HOME_TABLE, COLD_START and
+; the interactive loop's error hooks, then the kernel (kernel/), then the dictionary (core/*.asm),
+; chained into one list by the DICT_CHAIN_POINT splices (each core file's first header links to the
+; point set before its INCLUDE). The EXROM image (rom/graphics_exrom.asm) is built separately and
+; reaches HOME only through GRAPHICS_HOME_TABLE.
 ;
-; The full dictionary is assembled here: every word from every phase
-; (DROP/DUP/SWAP/OVER/+/-, *, /, :/;, 0=/IF/ELSE/THEN/BEGIN/UNTIL/WHILE/
-; REPEAT, PLOT/LINE/CIRCLE/BORDER/CLS, SAVE-LIB/LOAD-LIB/SAVE-TEXT/
-; LOAD-TEXT, F+/F-, F*, F., F/, EMIT/., .", CR/SPACE/SPACES, FSQRT,
-; S>F/F>S/FROUND, PI/SIN/COS/RAD/DEG, BEEP, SOUND, ULAPLUS/PALETTE,
-; =/</>, VARIABLE/CONSTANT, INK/PAPER/BRIGHT/FLASH, HIRES/NORMAL,
-; DO/LOOP/LEAVE/+LOOP/I/J, FILL/AT-XY,
-; KEY/KEY?/BREAK?, ABS/SGN/MOD/SQRT/RND/RANDOMIZE, 1+/1-/NEGATE/MAX/MIN,
-; ARRAY/CELLS, S"/TYPE/STRING/PLACE/COUNT/LEN/VAL, C@/C!, STICK,
-; ACCEPT/INPUT, CHR/STR/UPPER/LOWER/LEFT/RIGHT/SEARCH/CODE, EXECUTE,
-; HERE/,/C,/ALLOT/CREATE/DOES>/IMMEDIATE, FREE, THROW/CATCH,
-; ROT/2DUP/2DROP/?DUP/PICK, AND/OR/XOR/INVERT, ' (TICK), LPRINT/LLIST,
-; VLIST, ABORT/QUIT, IN/OUT, FORGET, UDG, TONE/VOLUME/MIXER/NOISE/
-; ENVELOPE, LIST-DEFS, EDIT, EXIT — 158 words total (re-derived at step E
-; item 7 by walking the chain: EDIT in, RECALL out, and the steps since the
-; last count).
-; RE-DERIVED, NOT HAND-COUNTED: this comment's own earlier draft
-; (claiming 93) had already gone stale twice over — once discovered
-; during a Phase-24-era consolidation pass (missing the original Phase
-; 2 primitives and most of Phases 24-32), and again silently after
-; Phase 49/50 with nobody re-deriving it (the comment said so itself,
-; rather than guess). Both times the number was hand-counted or hand-
-; incremented from prose. This time (and again for Phase 60/61's
-; BRIGHT/FLASH, Phase 62's BREAK?, and Phase 64's LIST-DEFS/RECALL —
-; the count had again drifted silently at 148 real words when this
-; comment still said 143, missing Phase 63's own TONE/VOLUME/MIXER/
-; NOISE/ENVELOPE entirely) it's the result of actually assembling this
-; file and walking the real dictionary's own LINK chain in the compiled
-; binary, byte for byte, from LATEST's own seed (DICT_LATEST_COLD)
-; down to the LINK=0 sentinel — the same class of check that caught two
-; real dictionary-orphaning bugs earlier in this project's history (a
-; chain-point set to the wrong tail marker silently drops every word
-; after it, which eyeballing headers can miss but walking the real chain
-; cannot). 150 unique names, zero duplicates, zero shadowing, chained
-; into one LATEST list via the same DICT_CHAIN_POINT splices
-; rom/forth_smoke_p9.asm introduced and proved. Whoever next adds a
-; phase: re-run this same walk (build this ROM, then follow
-; DICT_LATEST_COLD's own LINK chain through the assembled .bin)
-; rather than incrementing this number by eye — that's exactly the habit
-; that let it drift, repeatedly.
-; DECIMAL_NUMBER_ENABLED is also DEFINEd here (core/fpparse.asm,
-; Phase 23) — not a dictionary word, a NUMBER/INTERPRET_RUN parsing
-; capability: typing a literal like `3.5` now pushes a real float
-; directly, in both interpret and compile contexts.
+; The DEFINEs below switch on code in the core files: DECIMAL_NUMBER_ENABLED (a literal like `3.5`
+; pushes a float), RUNTIME_ERROR_CHECK_ENABLED, THROW_CATCH_ENABLED, COMPILE_ONLY_CHECK_ENABLED and
+; TRACK_STORE_END.
 ;
-; WHAT ISN'T HERE YET, stated plainly: no live automated test exercises
-; the interactive loop this file actually boots into — by its nature,
-; that needs a real or simulated keyboard, not a fixed source string.
-; Manual confirmation in Fuse (or real hardware) with an actual keyboard
-; remains the honest gap, exactly as core/editor.asm's own header
-; already says for EDITOR_LOOP_LIVE.
-;
-; STARTUP SOUND (revised after real live-audio testing — see
-; core/sound.asm's own header for the full "8 15 SOUND produced static,
-; not a tone" story): no longer SOUND_BEEP's raw hardware-timing beeper.
-; An old-Mac-style startup chord — C4/E4/G4 rung out together across
-; all three AY channels and held ~800ms — picked by the user from
-; several presented options (a single-channel rising arpeggio and a
-; simpler two-note beep among them). Same clock/formula core/sound.asm's
-; own header already uses for its own confirmed-clean tone; held with
-; one HALT per display frame (the wait BEEP uses, since step A; it was
-; a FRAMES-polling CHIME_DELAY before), so interrupts must already be
-; enabled — KBD_ISR_INIT/IM1/EI now run BEFORE the chime, not after.
+; Interrupts are enabled before STARTUP_CHIME because the chime waits with HALT.
 ; ============================================================================
 
     INCLUDE "include/hardware.inc"
@@ -89,15 +21,13 @@
 
     INCLUDE "include/forth_layout.inc"
 
-; ---- RST 00: cold start ----
+; RST 00: cold start
 RST_00:
     di
     jp   COLD_START
 
     INCLUDE "include/rst_vectors.inc"
-; ---- RST 38 / IM 1 maskable interrupt entry point — real wiring,
-; confirmed from 2068-Leap's own working ROM files (e.g.
-; rom/test_arr3.asm's own RST_38), not guessed. ----
+; RST 38: the IM 1 interrupt
 RST_38:
     call KBD_ISR_TICK
     ei
@@ -107,133 +37,72 @@ RST_38:
 NMI_ENTRY:
     retn
 
-
     DS   $0100 - $, $FF
 
 ; ============================================================================
-; GRAPHICS_HOME_TABLE — fixed-address JP veneers for EXROM-resident
-; graphics code (rom/graphics_exrom.asm) to call into Home through.
-; Real routines like GFX_WRITE_PIXEL move every time this ROM's own
-; dictionary grows or shrinks; code assembled as a separate, standalone
-; EXROM image has no way to track that automatically the way a single
-; concatenated build would. Fixed slots at a fixed, low, never-moving
-; address are the fix — same shape as 2068-Leap's own inherited EXT_
-; SERVICE_TABLE veneers (include/sysvars.inc), reused here for the same
-; reason rather than inventing a different mechanism. Append-only: an
-; existing slot's position must never change once an EXROM image has
-; been built against it.
+; GRAPHICS_HOME_TABLE -- fixed-address JP veneers through which the EXROM calls into HOME
+; The HOME routines move whenever the dictionary changes; the slots do not. Append-only: a slot's
+; position never changes once an EXROM image is built against it (tools/export_home_symbols.py reads
+; this table from the source: the `DS $0100 - $, $FF` pad above it fixes the base).
 ; ============================================================================
 GRAPHICS_HOME_TABLE:
-    jp   GFX_WRITE_PIXEL          ; slot 0 — B=x, C=y, A=attr, D=OVER
-    jp   GFX_SET_ATTR             ; slot 1 — A=attr, B=row, C=col
-    jp   GFX_LINE                 ; slot 2 — no register args; reads
-                                  ; GFX_LINE_X0/Y0/X1/Y1/ATTR/OVER
-    jp   GFX_ROW_BASE_ADDR        ; slot 3 — A=row -> HL=that row's
-                                  ; bitmap base address (scanline 0)
-    jp   GFX_CELL_ATTR_ADDR       ; slot 4 — B=row, C=col -> HL=addr
-; Step E item 6 (docs/V2/EDITOR_SPEC.md section 5.1): the full-screen view
-; in the EXROM edits and draws with the console's own engine.
-    jp   WRAP_CALC                ; slot 5 — the edit line's wrap table
-    jp   WRAP_CALC_AT             ; slot 6 — HL=text, A=length, C=cursor/$FF
-    jp   ED_DRAW_ROWS             ; slot 7 — the table's rows from FWRAP_TOP
-    jp   ED_DRAW_CURSOR           ; slot 8 — the cursor from table, FWRAP_TOP
-    jp   EDITOR_EDIT_KEY          ; slot 9 — A=key; carry=ENTER, NZ=changed
-    jp   IO_READ_KEY              ; slot 10 — the key wait -> A
-    jp   EDIT_CURSOR_TO_ROWCOL    ; slot 11 — B=row, C=col
-    jp   FORGET_PRINT_MSG         ; slot 12 — HL=zero-terminated text
+    jp   GFX_WRITE_PIXEL          ; slot 0: B=x, C=y, A=attr, D=OVER
+    jp   GFX_SET_ATTR             ; slot 1: A=attr, B=row, C=col
+    jp   GFX_LINE                 ; slot 2: no registers; reads GFX_LINE_X0/Y0/X1/Y1/ATTR/OVER
+    jp   GFX_ROW_BASE_ADDR        ; slot 3: A=row -> HL=that row's bitmap base (scanline 0)
+    jp   GFX_CELL_ATTR_ADDR       ; slot 4: B=row, C=col -> HL=addr
+    jp   WRAP_CALC                ; slot 5: the edit line's wrap table
+    jp   WRAP_CALC_AT             ; slot 6: HL=text, A=length, C=cursor/$FF
+    jp   ED_DRAW_ROWS             ; slot 7: the table's rows from FWRAP_TOP
+    jp   ED_DRAW_CURSOR           ; slot 8: the cursor from table, FWRAP_TOP
+    jp   EDITOR_EDIT_KEY          ; slot 9: A=key; carry=ENTER, NZ=changed
+    jp   IO_READ_KEY              ; slot 10: the key wait -> A
+    jp   EDIT_CURSOR_TO_ROWCOL    ; slot 11: B=row, C=col
+    jp   FORGET_PRINT_MSG         ; slot 12: HL=zero-terminated text
 
 ; ============================================================================
-; COLD_START
+; COLD_START -- reset entry: initialise the machine and the system cells, print the banner, chime,
+; and enter the interactive loop
+; In:  none (RST 00, interrupts off)
+; Out: does not return (jumps to EDITOR_LOOP_LIVE)
 ; ============================================================================
 COLD_START:
     ld   sp, MACHINE_STACK_TOP
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
-    ; Establish a known DECR (port $FF) baseline before anything reads
-    ; or read-modify-writes PORT_FF_SHADOW (kernel/graphics and kernel/
-    ; bank both do). The MEM_FILL_ZERO call below happens
-    ; to zero PORT_FF_SHADOW's own RAM byte too ($81C7 falls in its
-    ; $8000-DICT_RAM_CEILING range), but that only fixes the shadow --
-    ; real hardware's actual port $FF is a hardware register with its
-    ; own arbitrary power-on state, not RAM, and nothing else in this
-    ; build ever OUTs a known value to it. Do that explicitly rather
-    ; than relying on an emulator happening to power up port $FF at 0
-    ; (real bug, found reviewing PR #1's CART_START, which already got
-    ; this right for the cartridge build -- see docs/PROJECT_PLAN.md).
+    ; Port $FF (DECR) is a hardware register with an arbitrary power-on state: write a known value
+    ; before anything reads or read-modify-writes PORT_FF_SHADOW (kernel/graphics, kernel/bank)
     xor  a
     ld   (PORT_FF_SHADOW), a
     out  (PORT_SCLD), a
 
-    ; Real hardware and accuracy-oriented emulators don't guarantee RAM
-    ; is zeroed at power-on -- only some emulators happen to pre-zero
-    ; it, which is exactly the class of bug 2068-Leap's own MEM_COLD_
-    ; INIT exists to prevent (see kernel/memory/memory.asm's header).
-    ; Zero the whole dictionary/stack/workspace RAM range ($8000
-    ; through DICT_RAM_CEILING, core/free.asm) before anything below
-    ; reads or writes into it, so nothing here can show leftover
-    ; power-on garbage instead of a clean, empty system.
-    ;
-    ; The clear runs on through UDG_TABLE ($F180-$F227, above
-    ; DICT_RAM_CEILING): nothing initialised it, so CHR$ 144-164 (W_UDG,
-    ; the glyph lookup) showed power-on garbage. Found by tools/poweron.py
-    ; (audit O1). Extending the one fill costs no bytes; a second
-    ; MEM_FILL_ZERO call for the table would cost 9. The $F000-$F17F
-    ; between them is unused by Forth, so clearing it is harmless.
+    ; Power-on RAM is not guaranteed zero: clear $8000 up to COLD_CLEAR_END (core/free.asm's
+    ; DICT_RAM_CEILING, then UDG_TABLE, which nothing else initialises; the gap between them is
+    ; unused). One fill is smaller than two.
     ASSERT COLD_CLEAR_END > DICT_RAM_CEILING
     ld   hl, RAM_CELLS_BASE
     ld   bc, COLD_CLEAR_END - RAM_CELLS_BASE
     call MEM_FILL_ZERO
 
-    ld   hl, DICT_LATEST_COLD          ; the full chain's own head —
-                                    ; see this file's own header (Phase
-                                    ; 64 -- core/recall.asm's LIST-DEFS
-                                    ; -- spliced on after core/edit.asm's
-                                    ; EDIT, after core/loadtext.asm)
+    ld   hl, DICT_LATEST_COLD          ; the head of the full chain
     ld   (LATEST), hl
 
-    ; Phase 64 (core/recall.asm): STORE_END starts undefined RAM at
-    ; cold boot -- must be STORE_START (an empty store) before the
-    ; first live-typed line's own STORE_APPEND call (core/editor.asm's
-    ; EDITOR_LOOP_LIVE), or that call reads garbage and can write outside
-    ; LOADTEXT_BUF entirely. A later LOAD-TEXT resets it again to cover
-    ; exactly what it received (core/loadtext.asm's own W_LOADTEXT).
+    ; STORE_END must be STORE_START (an empty store) before the first typed line is appended
     ld   hl, STORE_START
     ld   (STORE_END), hl
     ld   hl, FORTH_DICT_RAM
     ld   (HERE), hl
     xor  a
     ld   (STATE), a
-    ld   (LEAVE_DEPTH), a         ; core/doloop.asm's own LEAVE
-                                   ; bookkeeping -- must start at 0
-    ld   (CATCH_DEPTH), a         ; core/throwcatch.asm's own CATCH
-                                   ; bookkeeping -- must start at 0
-    ld   a, ATTR_DEFAULT          ; required since Phase 15 -- see
-    ld   (CURRENT_ATTR), a        ; core/ts2068.asm's own header.
-                                   ; kernel/graphics/graphics.asm's
-                                   ; ATTR_DEFAULT ($44, black paper/
-                                   ; bright green ink), NOT core/
-                                   ; ts2068.asm's own DEFAULT_ATTR ($38,
-                                   ; white paper/black ink) -- GFX_CLS
-                                   ; just cleared the whole screen to
-                                   ; ATTR_DEFAULT above, and EMIT (core/
-                                   ; print.asm) stamps CURRENT_ATTR onto
-                                   ; every printed character, so seeding
-                                   ; it from the stale $38 constant made
-                                   ; the first typed character (and
-                                   ; every one after, until INK/PAPER is
-                                   ; used) render white-paper/black-ink
-                                   ; against the green-on-black screen
-                                   ; GFX_CLS had just painted -- found
-                                   ; live: text appeared black-on-white
-                                   ; instead of the intended green-on-
-                                   ; black terminal look
+    ld   (LEAVE_DEPTH), a         ; core/doloop.asm: must start at 0
+    ld   (CATCH_DEPTH), a         ; core/throwcatch.asm: must start at 0
+    ld   a, ATTR_DEFAULT          ; the attribute GFX_CLS paints (not core/ts2068.asm's DEFAULT_ATTR):
+    ld   (CURRENT_ATTR), a        ;   EMIT stamps CURRENT_ATTR on every character
     ld   a, 4
     ld   (F_PLACES), a            ; core/fpprint.asm: F. prints 4 decimals
     ld   a, 1
-    ld   (FWRAP_OLD_COUNT), a ; required once at cold start -- see
-                                  ; core/editor.asm's own header on this
-                                  ; cell
+    ld   (FWRAP_OLD_COUNT), a
 
     call GFX_CLS
     ld   hl, BANNER
@@ -241,65 +110,30 @@ COLD_START:
     ld   c, 0
     call GFX_PRINT_STRING
 
-    ; EMIT/.'s own output position starts on the row right under the
-    ; banner, not (0,0) -- (0,0) is where BANNER's own text just went,
-    ; and PRINT_ROW/PRINT_COL have no idea the banner was ever printed
-    ; (core/print.asm's own header: both cells must be initialized by
-    ; whatever ROM uses it, no assumed default). Found live: typing
-    ; "65 EMIT" silently overwrote the banner's own "2" with "A"
-    ; instead of appearing as new, visible output.
+    ; EMIT's output position starts on the row under the banner (PRINT_ROW/PRINT_COL have no default)
     xor  a
     ld   (PRINT_COL), a
     ld   a, 1
     ld   (PRINT_ROW), a
 
-    call KBD_ISR_INIT               ; must run before EI -- confirmed
-                                    ; 2068-Leap ordering
+    call KBD_ISR_INIT               ; before EI
     im   1
-    ei                              ; must be on before the chime: its
-                                    ; waits HALT for the frame interrupt
+    ei                              ; before the chime: it waits with HALT
 
     call STARTUP_CHIME
 
     jp   EDITOR_LOOP_LIVE
 
 ; ============================================================================
-; STARTUP_CHIME — an old-Mac-style startup chord: C4/E4/G4 across all
-; three AY channels, echoing the classic System 7-era Macintosh boot
-; chime (picked from several options presented to the user, including
-; the original rising single-channel arpeggio this replaces). Periods
-; use the same TS2068 AY clock (1,764,000 Hz) and
-; period = clock/(16*freq) formula core/sound.asm's own header already
-; derives its confirmed-clean tone from.
-;
-; REVISED after a real recording (WAV) of the first version was made
-; and analyzed by FFT: the notes themselves were exactly right (261.7/
-; 330.0/391.7 Hz measured against a 262/330/392 Hz target, no
-; clipping), so the "didn't sound correct" report wasn't a wrong-pitch
-; bug — it's the AY's raw square waves. Three of them snapping to full
-; volume in the same instant produces a harsh click (an audible step
-; discontinuity) plus a buzzy stack of clashing square-wave harmonics,
-; quite unlike the real Mac's smooth SAMPLED synth chime. Two real
-; fixes for that, neither changing the notes themselves: (1) a stepped
-; volume ramp on attack/release instead of an instant on/off, so each
-; note fades in/out rather than clicking; (2) a staggered entrance —
-; Channel A rings first, then B, then C roll in on top of it (like an
-; actual bell chime), rather than all three hitting at once.
-;
-; Channel A's tone-period FINE byte is chip register 0; SOUND_WRITE
-; reaches it since step R0 (O9), so it is simply the first table entry.
+; STARTUP_CHIME -- a startup chord: C4/E4/G4 on the three AY channels, entering one after another
+; with a stepped volume ramp, held about 440 ms, then faded out
+; Walks CHIME_TABLE: a pair is (AY register, value) for SOUND_WRITE; a pair $FF,n waits n frames
+; (SOUND_WRITE's registers are 0-16, so $FF is free); $FE ends the table.
+; In:  interrupts on (the waits HALT)
+; Out: all three channels silent
+; Destroys: AF, BC, HL
 ; ============================================================================
 STARTUP_CHIME:
-    ; Table-driven: every remaining event is either a SOUND_WRITE
-    ; (register, value) pair or a frame wait (tick count), walked from
-    ; CHIME_TABLE below rather than unrolled inline -- byte-identical
-    ; event sequence, same order, same values, just data instead of 27
-    ; repeated `ld b,N:ld c,N:call SOUND_WRITE` / 11 repeated
-    ; `ld b,N:call CHIME_DELAY` blocks (since replaced by an inline HALT loop). $FF as the first byte of a pair
-    ; means "the second byte is a frame count to wait, not a
-    ; register" -- safe, since SOUND_WRITE's own register range is
-    ; 0-16 (see its own header) and never reaches 255. $FE marks the
-    ; table's end.
     ld   hl, CHIME_TABLE
 .loop:
     ld   a, (hl)
@@ -315,86 +149,46 @@ STARTUP_CHIME:
     call SOUND_WRITE
     jr   .loop
 .delay:
-    ld   a, (hl)                    ; tick count: one HALT per display
-    inc  hl                         ; frame (interrupts are on, see the
-.hold:                              ; header), the same wait BEEP uses
+    ld   a, (hl)                    ; frame count: one HALT per frame
+    inc  hl
+.hold:
     halt
     dec  a
     jr   nz, .hold
     jr   .loop
 
 CHIME_TABLE:
-    ; Channel A tone period fine (165) and coarse (period 421, C4 ~262
-    ; Hz); Channel B
-    ; tone period fine/coarse (period 334, E4 ~330 Hz); Channel C tone
-    ; period fine/coarse (period 281, G4 ~392 Hz); mixer (all three
-    ; tones on, all noise off); all three channels silent until their
-    ; own staggered attack below.
+    ; tone periods: A 421 (C4, ~262 Hz), B 334 (E4, ~330 Hz), C 281 (G4, ~392 Hz); the mixer: all
+    ; three tones on, noise off; all three volumes 0
     DB   0,165, 1,1,  2,78,  3,1,  4,25,  5,1,  7,248,  8,0,  9,0,  10,0
-    ; ---- staggered, ramped attack: A rolls in first, then B, then C,
-    ; each fading up over 3 steps instead of snapping to full volume --
-    ; a $FF,3 pair is a 3-frame wait, same gap used throughout ----
-    DB   8,4,  $FF,3,  8,8,  $FF,3,  8,12, $FF,3   ; gap before B enters
-    DB   9,4,  $FF,3,  9,8,  $FF,3,  9,12, $FF,3   ; gap before C enters
-    DB   10,4, $FF,3,  10,8, $FF,3,  10,12         ; full chord now sounding
-    DB   $FF,22                      ; hold the full chord ~440ms
-    ; ---- release: all three fade down together ----
+    ; staggered, stepped attack: A, then B, then C, each up over 3 steps
+    DB   8,4,  $FF,3,  8,8,  $FF,3,  8,12, $FF,3
+    DB   9,4,  $FF,3,  9,8,  $FF,3,  9,12, $FF,3
+    DB   10,4, $FF,3,  10,8, $FF,3,  10,12
+    DB   $FF,22                      ; hold the full chord
+    ; release: all three fade down together
     DB   8,8,  9,8,  10,8,  $FF,3
     DB   8,4,  9,4,  10,4,  $FF,3
-    DB   8,0,  9,0,  10,0            ; the AY holds its last register
-                                     ; state indefinitely otherwise
+    DB   8,0,  9,0,  10,0            ; the AY holds its registers otherwise
     DB   $FE,0                       ; end of table
 
 BANNER: DB "2068-FORTH", 0
 
 ; ============================================================================
-; INTERPRET_UNKNOWN_WORD — core/interp.asm's hook for a token that's
-; neither a known word nor a valid number. Every rom/forth_smoke_p*.asm
-; file hangs here on purpose (a bug in fixed, hand-written test source
-; should stop hard and loud). That's the wrong choice for a live,
-; interactive system: a real typo would otherwise need a hardware
-; reset to recover from. INTERPRET_RUN reaches this hook via a bare
-; `jp`, not `call`, so the Z80 return-address stack at this point still
-; holds exactly one entry — INTERPRET_RUN's own caller
-; (EDITOR_LOOP_LIVE's `call INTERPRET_RUN`).
-;
-; Prints "?" followed by a newline (both via core/print.asm's own
-; W_EMIT, called directly — safe to do mid-line, since EMIT's own data-
-; stack use is self-contained: it pops exactly what it's given, however
-; much of the interpreter's own expression-in-progress is sitting below
-; that at this point) before returning straight to EDITOR_LOOP_LIVE,
-; which starts a fresh prompt on the next line. A genuine typo now
-; looks visibly different from one that happened to be typed slightly
-; differently and got silently discarded — real, if minimal, error
-; feedback, not just error recovery. Still real, open follow-up work:
-; no distinction is made between "unknown word" and other possible
-; failures (there's only one kind right now), and the rest of the
-; current line is simply abandoned rather than reporting which word
-; specifically wasn't understood.
+; INTERPRET_UNKNOWN_WORD -- core/interp.asm's hook for a token that is neither a word nor a number
+; Reached by a bare `jp` from INTERPRET_RUN, so SP holds only INTERPRET_RUN's return address.
+; Resets both stacks, prints the word and "?", and returns to EDITOR_LOOP_LIVE with the rest of the
+; line abandoned (through REPORT_INTERP_ERROR).
+; In:  WORD_BUF = the token
+; Out: STATE = 0, INTERP_ERROR_FLAG = 1, both stacks empty; returns to the outermost INTERPRET_RUN's
+;      caller
+; Destroys: all registers
 ; ============================================================================
 INTERPRET_UNKNOWN_WORD:
-    ; real bugs, found live (2026-09-03): (1) STATE was left stuck at 1
-    ; forever after an unknown word hit mid-compile (e.g. a dropped
-    ; keystroke merging two intended words into one during live typing),
-    ; silently compiling every subsequent line typed instead of running
-    ; it; (2) NUMBER's own .fail path (core/interp.asm) pushes a
-    ; placeholder n=0 ahead of its flag, and .badword jumps here without
-    ; ever popping it, leaving one stray value behind on the data stack.
-    ; Both are this hook's own job to clean up -- core/interp.asm's own
-    ; .badword comment says so, and STACK_CHECK's sibling error path
-    ; (RUNTIME_ERROR_HOOK below) already resets both stacks the same way
-    ; before reporting, so this now matches that same abort contract.
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
     call EDIT_ERR_PREFIX          ; core/edit.asm: `LINE n ` while EDIT commits line n
-    ; print the actual unrecognized word before the "?", not just a
-    ; bare "?" with no clue which token failed -- WORD_BUF (core/
-    ; interp.asm) still holds it untouched: INTERPRET_RUN's own .loop
-    ; already proved it's nonzero-length before ever reaching FIND/
-    ; NUMBER/here, and neither of those touches WORD_BUF itself. W_EMIT
-    ; destroys BC (loads PRINT_ROW/PRINT_COL into it, core/print.asm),
-    ; so both are saved/restored around every call, not trusted to
-    ; survive.
+    ; print the token before the "?" (W_EMIT destroys BC, so B and HL are saved around it)
     ld   a, (WORD_BUF)
     ld   b, a
     ld   hl, WORD_BUF+1
@@ -419,34 +213,30 @@ INTERPRET_UNKNOWN_WORD:
     ld   hl, 13
     rst RST_DPUSH
     call W_EMIT
-REPORT_INTERP_ERROR:              ; shared tail with RUNTIME_ERROR_HOOK's
-                                   ; own .msgdone below -- byte-identical,
-                                   ; merged rather than duplicated
+
+; ============================================================================
+; REPORT_INTERP_ERROR -- the shared tail of INTERPRET_UNKNOWN_WORD and RUNTIME_ERROR_HOOK
+; In:  none
+; Out: STATE = 0, INTERP_ERROR_FLAG = 1 (EDITOR_LOOP_LIVE prints no OK); SP = THROW_ROOT_SP, then
+;      `ret` to that frame's return address
+; Destroys: AF
+; ============================================================================
+REPORT_INTERP_ERROR:
     xor  a
     ld   (STATE), a
     ld   a, 1
-    ld   (INTERP_ERROR_FLAG), a   ; tells EDITOR_LOOP_LIVE not to print
-                                   ; its own OK for this line -- see
-                                   ; INTERP_ERROR_FLAG's own header
-                                   ; (core/interp.asm)
-    ld   sp, (THROW_ROOT_SP)      ; back to the OUTERMOST INTERPRET_RUN's
-                                   ; caller, even from a nested run
-                                   ; (LOAD-TEXT's text): the whole
-                                   ; interpretation stops, not just the
-                                   ; innermost run. A no-op at the
-                                   ; outermost level.
-    ret
+    ld   (INTERP_ERROR_FLAG), a   ; EDITOR_LOOP_LIVE prints no OK for this line
+    ld   sp, (THROW_ROOT_SP)      ; back to the outermost INTERPRET_RUN's caller, even from a nested
+    ret                           ;   run (LOAD-TEXT): the whole interpretation stops
 
 ; ============================================================================
-; RUNTIME_ERROR_HOOK — Phase 38's own required hook for
-; core/interp.asm's STACK_CHECK (see that routine's own header): called
-; the same proven way INTERPRET_UNKNOWN_WORD already is (a bare `jp`,
-; stack depth already restored to "INTERPRET_RUN's own caller, one
-; entry" before this is reached), so a plain `ret` here correctly
-; unwinds straight back to EDITOR_LOOP_LIVE, abandoning the rest of
-; the current line exactly like an unknown word already does. Both
-; data stacks are already reset to empty by the time this runs — this
-; hook's only job is reporting.
+; RUNTIME_ERROR_HOOK -- core/interp.asm's STACK_CHECK error hook, and the report of an uncaught THROW
+; Reached like INTERPRET_UNKNOWN_WORD (a bare `jp`; both stacks already empty). Prints the message of
+; THROW_CODE from RUNTIME_ERROR_TABLE, `ERROR n` for a code not in it, or `STACK?` when THROW_CODE
+; is 0 (STACK_CHECK), then a newline, and ends through REPORT_INTERP_ERROR.
+; In:  THROW_CODE (cleared here)
+; Out: as REPORT_INTERP_ERROR
+; Destroys: all registers
 ; ============================================================================
 RUNTIME_ERROR_HOOK:
     call EDIT_ERR_PREFIX          ; core/edit.asm: `LINE n ` while EDIT commits line n
@@ -489,17 +279,13 @@ RUNTIME_ERROR_HOOK:
     ld   hl, 13
     rst RST_DPUSH
     call W_EMIT
-    ; same fix as INTERPRET_UNKNOWN_WORD's own STATE reset -- an
-    ; IMMEDIATE word's runtime error while compiling could otherwise
-    ; leave STATE stuck too. Byte-identical to that routine's own tail,
-    ; so shared via REPORT_INTERP_ERROR instead of duplicated here.
     jr   REPORT_INTERP_ERROR
 
 RUNTIME_ERROR_MSG: DB "STACK?", 0
 RUNTIME_ERROR_PFX: DB "ERROR ", 0
 
-; The messages of an uncaught THROW (docs/V2/FLOAT_SPEC.md section 8.4): the low byte of the code (all are -1 to -255),
-; then the text, NUL-ended; a 0 byte ends the table.
+; The messages of an uncaught THROW (docs/V2/FLOAT_SPEC.md section 8.4): the code's low byte (all
+; are -1 to -255), then the text, NUL-ended; a 0 byte ends the table.
 RUNTIME_ERROR_TABLE:
     DB   -8, "DICTIONARY FULL", 0
     DB   -13, "UNDEFINED WORD", 0
@@ -510,36 +296,23 @@ RUNTIME_ERROR_TABLE:
     DB   -46, "INVALID ARGUMENT", 0
     DB   0
 
-; ---- kernel + dictionary: included here, after the vector table and
-; the boot code above, not before ORG $0000. DICT_CHAIN_POINT splices
-; match rom/forth_smoke_p9.asm's own, already proven under Fuse. ----
+; ---- the kernel and the dictionary (after the boot code) ----
     INCLUDE "kernel/memory/memory.asm"
     INCLUDE "kernel/math/math.asm"
     INCLUDE "kernel/io/io.asm"
     INCLUDE "kernel/interrupt/interrupt.asm"
-    DEFINE FONT_PLACED_LATER               ; the font goes after kernel/storage, bank and dict, below
     INCLUDE "kernel/graphics/graphics.asm"
     INCLUDE "kernel/storage/storage.asm"
-    ; ZEsarUX's tape autoload (on by default when a real tape is inserted) types J "" ENTER into the machine as soon as
-    ; the PC equals $11F8 with the HOME ROM paged in (the stock TS2068 ROM's key wait; ZEsarUX storage/tape.c,
-    ; MACHINE_ID_TIMEX_TS2068). Any instruction of this ROM starting there would trigger it, e.g. during LOAD-TEXT, and
-    ; the keys arrive at the console as a line `""` (found by make tapetest in step F). The font is data, never
-    ; executed: placed here it covers $11F8 whatever the code around it does.
-    ; Step O15 items 4-5: the graphics kernel got smaller, so the font moved below $11F8; bank.asm, dict.asm,
-    ; interp.asm and control.asm (order-independent in memory) now come first to push it back over.
+    ; The font (included below) must cover $11F8: ZEsarUX's tape autoload types J "" ENTER into the
+    ; machine when the PC reaches $11F8 with the HOME ROM paged in (the stock ROM's key wait), which
+    ; any code starting there would trigger (during LOAD-TEXT). Data is never executed. The files
+    ; before it only set where the font falls; the ASSERT below checks it.
     INCLUDE "kernel/bank/bank.asm"
     INCLUDE "core/dict.asm"
     DEFINE DECIMAL_NUMBER_ENABLED
     DEFINE RUNTIME_ERROR_CHECK_ENABLED
     DEFINE THROW_CATCH_ENABLED
-    DEFINE COMPILE_ONLY_CHECK_ENABLED   ; this is the live, interactive
-                                        ; REPL -- the one ROM where a
-                                        ; mistyped IF/DO/."/etc. at the
-                                        ; prompt is a real, reachable
-                                        ; case, not just a smoke-test
-                                        ; hypothetical (see core/
-                                        ; interp.asm's own header on
-                                        ; this flag)
+    DEFINE COMPILE_ONLY_CHECK_ENABLED   ; a mistyped IF/DO/." at the prompt is a reachable case here
     INCLUDE "core/interp.asm"
 DICT_CHAIN_POINT DEFL H_SEMICOLON
     INCLUDE "core/control.asm"
@@ -586,15 +359,9 @@ DICT_CHAIN_POINT DEFL H_J
 DICT_CHAIN_POINT DEFL H_ATXY
     INCLUDE "core/hires.asm"
 DICT_CHAIN_POINT DEFL H_NORMAL
-; ---- RECT/POLYGON/POLYGON-FILL/SPRITE-* reach their EXROM-resident code through
-; kernel/bank/bank.asm. In the -DCARTRIDGE build that code travels in the cartridge
-; as DOCK chunk 5 and the paging is one OUT to port $F4 (step R1, docs/V2/
-; CARTRIDGE_EXROM_SPEC.md); before R1 these words were left out of that build
-; because the home paging sequence wrote port $FF bit 7 and swapped the
-; running cartridge out (docs/lros_cartridge.md has the history). ----
     INCLUDE "core/rectfill.asm"
 DICT_CHAIN_POINT DEFL H_RECT
-    INCLUDE "core/shapes.asm"           ; CIRCLE (step O15): a stub into the EXROM
+    INCLUDE "core/shapes.asm"           ; CIRCLE: a stub into the EXROM
 DICT_CHAIN_POINT DEFL H_CIRCLE
     INCLUDE "core/polygon.asm"
 DICT_CHAIN_POINT DEFL H_POLYGONFILL
@@ -654,18 +421,14 @@ DICT_CHAIN_POINT DEFL H_OUT
 DICT_CHAIN_POINT DEFL H_FORGET
     INCLUDE "core/udg.asm"
 DICT_CHAIN_POINT DEFL H_UDG
-    DEFINE TRACK_STORE_END       ; opt in to core/loadtext.asm's
-                                 ; STORE_END tracking -- see that
-                                 ; file's own W_LOADTEXT comment on why
-                                 ; this must be a per-ROM opt-in, not
-                                 ; unconditional
+    DEFINE TRACK_STORE_END       ; core/loadtext.asm tracks STORE_END
     INCLUDE "core/loadtext.asm"
 DICT_CHAIN_POINT DEFL H_LOADTEXT
     INCLUDE "core/edit.asm"
 DICT_CHAIN_POINT DEFL H_EDIT
     INCLUDE "core/recall.asm"
-DICT_LATEST_COLD EQU DICT_LATEST_INIT_LISTDEFS ; LATEST of an empty user dictionary: cold start,
-                                              ; and core/storage.asm's LOAD-LIB after a failure
+DICT_LATEST_COLD EQU DICT_LATEST_INIT_LISTDEFS ; LATEST of an empty user dictionary (cold start;
+                                              ;   core/storage.asm's LOAD-LIB after a failure)
 DICT_CHAIN_POINT DEFL H_LISTDEFS
     INCLUDE "core/editor.asm"
 

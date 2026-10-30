@@ -1,11 +1,10 @@
 ; ============================================================================
 ; kernel/storage/tapeblock.asm -- tape block I/O: send one cassette block, receive or verify one
 ;
-; Clean-room code from 2068-Leap-C (MIT, same author; its src/runtime/tapeblock.asm at d31d785,
-; Phase 11 M11-tape), written from a specification of the tape signal alone (Leap-C
-; docs/TAPE_SIGNAL_SPEC.md, docs/TAPE_CLEANROOM.md): no part of it comes from the stock Spectrum or
-; TS2068 ROM. Leap-C's record of how it was written has not been re-checked here. It replaced
-; Forth's port of the stock ROM's SA-BYTES / LD-BYTES (audit step S, docs/V2/STORAGE_SPEC.md D1).
+; Clean-room code from 2068-Leap-C (MIT, same author; its src/runtime/tapeblock.asm at d31d785),
+; written from a specification of the tape signal alone (Leap-C docs/TAPE_SIGNAL_SPEC.md,
+; docs/TAPE_CLEANROOM.md): no part of it comes from the stock Spectrum or TS2068 ROM. Leap-C's record
+; of how it was written has not been re-checked here.
 ;
 ; Everything below this header is Leap-C's unchanged, comments included (its references to
 ; spec.md and lcharness are Leap-C's). kernel/storage/UPSTREAM.md records the code's hash, which
