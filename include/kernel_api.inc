@@ -101,6 +101,7 @@
                                  ; — sets/toggles the pixel AND colors
                                  ; its covering 8x8 attribute cell
     EXTERN GFX_READ_PIXEL       ; B = x, C = y -> A = 1 if set, 0 if not
+                                 ; (kernel/graphics/readpixel.asm, test ROMs only)
     EXTERN GFX_LINE             ; no register args — reads GFX_LINE_X0/
                                  ; Y0/X1/Y1/ATTR/OVER (sysvars.inc),
                                  ; caller fills these in first — draws
@@ -110,13 +111,6 @@
                                  ; (sysvars.inc; caller normalizes
                                  ; corner order first) — fills a
                                  ; rectangle
-    EXTERN GFX_FILL             ; no register args — reads GFX_FILL_X/
-                                 ; Y/ATTR (sysvars.inc) — 4-connected
-                                 ; flood fill from that seed point,
-                                 ; using an explicit bounded stack
-                                 ; (GFX_FILL_STACK, 2048 entries — see
-                                 ; that sysvar's own comment for why
-                                 ; that size and how it was measured)
     EXTERN GFX_SET_MODE         ; A = mode (0 = Normal, 1 = High
                                  ; Resolution Graphics) — MODE's
                                  ; mechanism; real port $FF write via

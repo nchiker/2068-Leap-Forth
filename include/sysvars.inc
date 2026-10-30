@@ -1356,91 +1356,29 @@ PORT_FF_SHADOW:      DEFS 1          ; 1 byte
 ; set it, since no statement existed to. BASIC_COMPUTE_PRINT_ATTR now
 ; reads this the same way it already reads CURRENT_FLASH.
 
-; GFX_FILL_* — FILL's own state, incl. its bounded flood-fill stack.
-; Deliberately NOT recursive and NOT unbounded — real hardware has no
-; call-stack depth to spare, and even an iterative approach needs an
-; explicit limit since a large enough enclosed region could otherwise
-; grow the stack without bound. If GFX_FILL_STACK does fill up, further
-; expansion from that point silently stops — spans already queued
-; still get processed and colored correctly, but a genuinely
-; pathological fill may not reach its full extent. No crash, no memory
-; corruption — a documented, deliberate limitation, same as every
-; earlier version of this stack.
-;
-; SCANLINE (SPAN) FILL, replacing the old per-PIXEL algorithm (Phase
-; 44's 1664-entry, 3328-byte stack): the stack now holds one (x,y)
-; SEED per contiguous horizontal RUN still to expand, not one entry
-; per pixel — GFX_FILL fills a whole row-span in one pass per pop,
-; then scans the row above/below (across exactly that span's own
-; width, not one column wider — an earlier draft of this Python
-; verification over-scanned by 1 and leaked across diagonal-only
-; "connections" that fail a real 4-connected reachability check
-; against it) for new unclaimed runs, pushing one seed per run found.
-; Algorithm and stack sizing re-verified in Python against a reference
-; BFS flood fill before any Z80 was written (same standard the
-; original per-pixel version's own header already held itself to):
-; a solid box, a blank enclosed square, a full-screen fill in both
-; directions, a hollow ring, an irregular random blob, and (the
-; specific case this project's own prior stack-sizing comment quoted
-; a ~2069-entry peak for) a SOLID DISC OF RADIUS 50 RECOLORED a new
-; attribute all matched the reference exactly, peaking at just 2
-; stack entries for that same disc — the reason this algorithm needs
-; so much less stack than the old one. Two genuinely adversarial
-; synthetic shapes were also tried specifically to find where this
-; approach still degrades: a fine alternating "comb" pattern (many
-; short spans forced open simultaneously) peaked at 5986 entries, far
-; beyond anything a real PLOT/LINE-bounded paint-bucket region would
-; produce; a tight logarithmic spiral (deliberately built to force
-; many disjoint same-row spans reached from different directions, the
-; case GFX_FILL_VISITED's per-pixel dedup exists to handle correctly)
-; peaked at 452. 512 entries were kept for GFX_FILL_STACK — comfortable
-; headroom over every realistic shape actually tested, while still
-; leaving the comb-pattern class of pathological input to gracefully
-; degrade exactly like every earlier version of this stack already
-; documented, not a new category of risk.
-;
-; GFX_FILL_VISITED (see its own header just above) is UNCHANGED and
-; still required: recoloring an already-solid region (GFX_FILL_TARGET
-; == 1) means a freshly-filled pixel reads back as 1 == target again,
-; so the pixel's own bitmap state alone still can't distinguish
-; "already handled this fill" from "still needs handling" — exactly
-; the trap this project's own header already documented once for the
-; per-pixel version, and just as real for spans.
-GFX_FILL_STACK       EQU $7300         ; 1024 bytes (512 x/y entries)
-GFX_FILL_STACK_END     EQU GFX_FILL_STACK + 1024
-GFX_FILL_SP:         DEFS 2           ; 2 bytes — pointer into GFX_FILL_
-                                   ; STACK; == GFX_FILL_STACK means
-                                   ; empty, == GFX_FILL_STACK_END means
-                                   ; full
-GFX_FILL_TARGET:     DEFS 1           ; 1 byte — the pixel value (0 or 1)
-                                   ; being replaced, read from the seed
-GFX_FILL_ATTR:       DEFS 1           ; 1 byte — fill color
-GFX_FILL_X:          DEFS 1           ; 1 byte — the seed (x,y) most
-                                   ; recently popped off the stack,
-                                   ; i.e. some point within the row-
-                                   ; span currently being expanded —
-                                   ; NOT reused as scratch by GFX_FILL_
-                                   ; PUSH/POP/GFX_FILL_VISITED_CHECK(_
-                                   ; SET), which work entirely through
-                                   ; B/C, so this survives unclobbered
-                                   ; while the left/right span scan
-                                   ; below runs
-GFX_FILL_Y:          DEFS 1           ; 1 byte
-GFX_FILL_LX:         DEFS 1           ; 1 byte — left edge of the span
-                                   ; currently being expanded (0-255)
-GFX_FILL_RX:         DEFS 1           ; 1 byte — right edge, inclusive
-GFX_FILL_SCAN_X:     DEFS 1           ; 1 byte — loop cursor shared by
-                                   ; the span fill-loop and the row-
-                                   ; above/below scan (never both live
-                                   ; at once, so one cell covers both)
-GFX_FILL_SCAN_Y:     DEFS 1           ; 1 byte — the row (y-1 or y+1)
-                                   ; GFX_FILL_SCAN_ROW the routine is
-                                   ; currently scanning
-GFX_FILL_SCAN_END:   DEFS 1           ; 1 byte — inclusive right bound
-                                   ; of the current row-above/below
-                                   ; scan (always == GFX_FILL_RX — see
-                                   ; that routine's own header for why
-                                   ; the scan is NOT widened by 1)
+; GFX_FILL_* — FILL's own state (step O15 item 5, docs/V2/FILL_CIRCLE_SPEC.md
+; section 4). The Home word core/shapes.asm stages the seed (signed 16-bit x
+; and y) and the attribute here; FILL_IMPL in rom/graphics_exrom.asm (chunk 5)
+; reads them and reuses the cells for its own state. The block is exactly the
+; 11 bytes the old GFX_FILL_* cells took, so no later sysvar moves (asserted
+; after the block). The seed stack and the shadow plane are not here: they are
+; in the idle video pool (GFX_FILL_STACK, GFX_FILL_SHADOW below).
+GFX_FILL_SP:         DEFS 2           ; seed stack pointer (next free entry)
+GFX_FILL_ATTR:       DEFS 1           ; fill attribute (in)
+GFX_FILL_X:          DEFS 2           ; seed x (in); then the span's left
+                                      ; byte pointer
+GFX_FILL_Y:          DEFS 2           ; seed y (in); then lo = the span's row,
+                                      ; hi = the span's bytes - 1
+GFX_FILL_OVF:        DEFS 1           ; nonzero: a seed was dropped (stack full)
+GFX_FILL_AOFF:       DEFS 1           ; work plane offset: 0 = screen (seed 0),
+                                      ; $1B = shadow plane (seed 1), in pages
+GFX_FILL_EL:         DEFS 1           ; span's left edge mask (first byte)
+GFX_FILL_ER:         DEFS 1           ; span's right edge mask (last byte)
+GFX_FILL_LPTR        EQU GFX_FILL_X
+GFX_FILL_SY          EQU GFX_FILL_Y
+GFX_FILL_SN          EQU GFX_FILL_Y + 1
+    ASSERT GFX_FILL_ER + 1 - GFX_FILL_SP == 11
+    ASSERT RECT_X0 == $81D3              ; nothing after the block moved
 
 ; ---- RECT's own state (rom/graphics_exrom.asm, chunk 5 EXROM) ----
 ; Staged by core/rectfill.asm's Home-resident RECT word before paging
@@ -2022,57 +1960,24 @@ SPRITE_CELL_COL:     DEFS 1           ; 1 byte — same, column
 ; destroys BC/DE/HL. Shared between GRAB and SHOW (never both live at
 ; once — one statement's parse completes before the next begins).
 
-; GFX_FILL's per-pixel visited-tracker — see GFX_FILL's own header
-; (kernel/graphics/graphics.asm) for why this has to be a separate
-; buffer rather than folded into the bitmap write. Plain linear
-; row*32+col layout (NOT the real screen's interleaved-thirds
-; addressing — this buffer has no display hardware to match), cleared
-; at the start of every FILL call.
-;
-; RELOCATED for 2068-Forth specifically (2068-Forth Phase 44 — see
-; docs/PROJECT_PLAN.md): this file is 2068-Forth's own independent
-; copy of the sibling 2068-Leap project's sysvars.inc, not a shared or
-; symlinked file, so this divergence is safe and doesn't touch that
-; project. The original placement ($C000-$E7FF) sat directly between
-; 2068-Forth's own dictionary (`HERE`, growing upward from
-; `FORTH_DICT_RAM`) and ~6K of otherwise-reclaimable dead RAM above it
-; (confirmed via core/free.asm's own Phase 43/44 audit) — the
-; sibling project's own EXROM-transient reasoning for that address
-; ("no EXROM call occurs while the bitmap is live") doesn't even apply
-; to 2068-Forth, which has no EXROM banking at all (forth_boot.asm
-; never includes kernel/bank).
-;
-; Moved instead into the idle "second display file" video-RAM pool
-; ($5B00-$7FFF, 9472 bytes — see docs/memory_map.md's own writeup on
-; why this range sits unused in Standard video mode). GFX_FILL_STACK
-; below no longer needs to fit this pool exactly (it was SHRUNK to
-; 1664, then to 512, entries specifically because the scanline/span
-; rewrite needs far less stack — see its own header) — $7700-$7FFF
-; (2304 bytes) sits genuinely free within this pool now, not reclaimed
-; for anything else yet.
-;
-; HAZARD THIS CREATES, and how it's handled: $6000-$77FF of this same
-; idle pool is where the Second Display File lives (hardware-fixed, not
-; relocatable — see docs/memory_map.md) — used by High Resolution
-; Graphics mode (core/hires.asm's HIRES, GFX_MODE=1; real per-scanline
-; attribute data, kernel/graphics's GFX_SET_ATTR_EXT; the removed
-; 64-column mode, step M6, used it as a second bitmap plane).
-; FILL and the video mode can only run one at a time (single-
-; threaded, no interrupt-driven redraw), so the real hazard is FILL
-; corrupting a currently-ACTIVE HIRES screen (or vice versa) if
-; called while that mode's data is live — core/moregfx.asm's own FILL
-; wrapper checks GFX_MODE and refuses to run whenever it's nonzero (HIRES
-; is the only non-Normal mode), rather than relying on the caller to know
-; not to mix them (see that file's own header).
-GFX_FILL_VISITED     EQU $5B00         ; 6144 bytes, through $72FF
+; FILL's two planes and seed stack live in the idle video pool $5B00-$7FFF
+; (see docs/memory_map.md on why it is idle in Normal mode). GFX_FILL_SHADOW is
+; a 6,144-byte plane in the screen's own layout (address = screen address +
+; $1B00): a copy of the screen (seed pixel 0) or the screen inverted (seed
+; pixel 1), written once per FILL. GFX_FILL_STACK is the seed
+; stack, $7300-$7FFF, 1,664 entries of (x, y). Both overlap the Second
+; Display File ($6000-$77FF), so FILL does nothing in HIRES (FILL_IMPL checks
+; GFX_MODE). Relocated here in Phase 44 (see docs/PROJECT_PLAN.md); the shadow
+; was a per-pixel visited bitmap until step O15.
+GFX_FILL_STACK       EQU $7300         ; 3,328 bytes (1,664 x/y entries)
+GFX_FILL_STACK_END   EQU $8000
+GFX_FILL_SHADOW      EQU $5B00         ; 6144 bytes, through $72FF
 
-    ASSERT GFX_FILL_VISITED + 6144 == GFX_FILL_STACK
-    ASSERT GFX_FILL_STACK_END <= $8000  ; must stay inside the idle
-                                         ; video-RAM pool, but no longer
-                                         ; needs to fill it exactly —
-                                         ; see this block's own header
-    ASSERT GFX_FILL_VISITED >= $5B00    ; never touch the live screen/
-                                         ; attribute file below it
+    ASSERT GFX_FILL_SHADOW + 6144 == GFX_FILL_STACK
+    ASSERT GFX_FILL_SHADOW == $4000 + $1B00   ; screen address + $1B00
+    ASSERT GFX_FILL_STACK_END <= $8000  ; inside the idle video-RAM pool
+    ASSERT GFX_FILL_SHADOW >= $5B00     ; never touch the live screen/
+                                        ; attribute file below it
 
 ; Calculator engine (RST $28) working storage — RPN stack, calculator
 ; "memory" cells, and recursive-entry counter, matching the real
@@ -2808,7 +2713,7 @@ PROG_AREA_START:   ; Current value $84B4. No longer a hand-tracked hex EQU
                                 ; UNIMPLEMENTED_LITERAL_FLAG) above.
                                 ; Before that: moved from $99FD to
                                 ; $B1FD (6144 bytes), for
-                                ; GFX_FILL_VISITED above.
+                                ; GFX_FILL_SHADOW above.
                                 ; Before that: moved from $99F8 to
                                 ; $99FD (5 bytes), for the
                                 ; SPRITE_ARG_* parse scratch above.

@@ -90,7 +90,7 @@ PORT_PRINTER        EQU $FB
 ; file. Real convention: CHARS = (glyph table base for code 32) - 256 —
 ; core/printer.asm's LPRINT_SEND_LINE sets this to FONT_TABLE-256, since
 ; FONT_TABLE's own first entry is the space (code 32) glyph. This address
-; lands inside GFX_FILL_VISITED ($5B00-$72FF, include/sysvars.inc) — safe
+; lands inside GFX_FILL_SHADOW ($5B00-$72FF, include/sysvars.inc) — safe
 ; because that buffer is fully cleared at the start of every GFX_FILL
 ; call and never read between calls, so writing CHARS here between
 ; prints does not corrupt any FILL state, and LPRINT_SEND_LINE re-sets it

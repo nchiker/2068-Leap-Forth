@@ -566,12 +566,10 @@ RUNTIME_ERROR_TABLE:
     ; MACHINE_ID_TIMEX_TS2068). Any instruction of this ROM starting there would trigger it, e.g. during LOAD-TEXT, and
     ; the keys arrive at the console as a line `""` (found by make tapetest in step F). The font is data, never
     ; executed: placed here it covers $11F8 whatever the code around it does.
-    ; Step O15 item 4: the graphics kernel got smaller, so the font moved below $11F8; bank.asm and dict.asm (small,
-    ; order-independent) now come first to push it back over.
+    ; Step O15 items 4-5: the graphics kernel got smaller, so the font moved below $11F8; bank.asm, dict.asm,
+    ; interp.asm and control.asm (order-independent in memory) now come first to push it back over.
     INCLUDE "kernel/bank/bank.asm"
     INCLUDE "core/dict.asm"
-    INCLUDE "kernel/graphics/font.asm"
-    ASSERT FONT_TABLE <= $11F8 && FONT_TABLE_END > $11F8   ; move the font if this fails (data must cover $11F8)
     DEFINE DECIMAL_NUMBER_ENABLED
     DEFINE RUNTIME_ERROR_CHECK_ENABLED
     DEFINE THROW_CATCH_ENABLED
@@ -586,6 +584,8 @@ RUNTIME_ERROR_TABLE:
     INCLUDE "core/interp.asm"
 DICT_CHAIN_POINT DEFL H_SEMICOLON
     INCLUDE "core/control.asm"
+    INCLUDE "kernel/graphics/font.asm"
+    ASSERT FONT_TABLE <= $11F8 && FONT_TABLE_END > $11F8   ; move the font if this fails (data must cover $11F8)
     INCLUDE "core/ts2068.asm"
 DICT_CHAIN_POINT DEFL H_CLS
     INCLUDE "core/storage.asm"

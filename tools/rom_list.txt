@@ -71,7 +71,6 @@ forth_smoke_p40            smoke    none  4
 forth_smoke_p41            smoke    none  4     
 forth_smoke_p42            smoke    none  4     
 forth_smoke_p43            smoke    none  4     
-forth_smoke_p44            smoke    none  4     
 forth_smoke_p45            smoke    none  4     
 forth_smoke_p46            smoke    none  4     
 forth_smoke_p47            smoke    none  4     
@@ -87,7 +86,6 @@ forth_smoke_p61            smoke    none  4
 forth_smoke_p62            smoke    none  4     
 forth_smoke_p63            smoke    none  4     
 forth_smoke_p64            smoke    none  4     
-forth_smoke_p65            smoke    none  4     
 forth_smoke_p48            smoke    none  6     visual test: hangs with border yellow(6) after ULAPLUS/PALETTE; no border-4 verdict
 forth_smoke_p53_realtape   smoke    none  skip  real .TAP: its Blackjack load runs headless as make tapetest case 2 (ZEsarUX); this ROM itself is Fuse-only (tools/run_realtape_test.sh)
 

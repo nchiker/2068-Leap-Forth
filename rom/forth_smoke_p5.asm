@@ -197,6 +197,7 @@ TEST_SRC_BEEP_LEN EQU $ - TEST_SRC_BEEP
 ; the self-test code above, not before ORG $0000 ----
     INCLUDE "kernel/math/math.asm"
     INCLUDE "kernel/graphics/graphics.asm"
+    INCLUDE "kernel/graphics/readpixel.asm"   ; GFX_READ_PIXEL (step O15: test ROMs only)
     INCLUDE "kernel/sound/sound.asm"
     INCLUDE "core/dict.asm"
     INCLUDE "core/interp.asm"

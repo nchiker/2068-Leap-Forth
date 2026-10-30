@@ -240,6 +240,7 @@ SRC_COMBO_LEN   EQU $ - SRC_COMBO
     INCLUDE "kernel/io/io.asm"
     INCLUDE "kernel/interrupt/interrupt.asm"
     INCLUDE "kernel/graphics/graphics.asm"
+    INCLUDE "kernel/graphics/readpixel.asm"   ; GFX_READ_PIXEL (step O15: test ROMs only)
     INCLUDE "kernel/sound/sound.asm"
     INCLUDE "kernel/storage/storage.asm"
     INCLUDE "core/dict.asm"

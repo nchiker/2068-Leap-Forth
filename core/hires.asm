@@ -42,7 +42,7 @@
 ;      attribute data instead of 64-column's second bitmap plane) and
 ;      was NOT guarded against. Widened that check from `cp 2` to
 ;      `or a` (any nonzero mode) — see that file's own header and
-;      include/sysvars.inc's GFX_FILL_VISITED comment.
+;      include/sysvars.inc's GFX_FILL_SHADOW comment.
 ;
 ;   2. core/ts2068.asm's CLS (`W_CLS`) repaints the NORMAL attribute
 ;      area (GFX_PAINT_ATTR) but never touched the Second Display File.

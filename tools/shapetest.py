@@ -466,12 +466,26 @@ def draw_disc(cx, cy, r):
     return f
 
 
-def draw_noise(bmp):
+def draw_noise(bmp, n=6000):
     # READING: 6000 random dots written straight into the bitmap (RNG seed 15), not typed: ~6000 typed PLOTs would take
     # an hour of key presses.  Dots land anywhere, a dot may repeat (about 5,500 distinct pixels).
     rng = random.Random(15)
-    for _ in range(6000):
+    for _ in range(n):
         setpix(bmp, rng.randrange(256), rng.randrange(192))
+
+
+def draw_noise_inverted(bmp):
+    """A solid screen with 4,500 random holes (RNG seed 15): a recolour (seed pixel 1) whose seeds overflow the
+    1,664-entry stack (checked: with FILL_SWEEP disabled this case fails; at 6,000 or 9,000 holes it happens not to)."""
+    draw_noise(bmp, 4500)
+    for i in range(len(bmp)):
+        bmp[i] ^= 0xFF
+
+
+def noise_seed_set(bmp):
+    """A set pixel nearest the centre of the screen (the inverted noise screen's seed)."""
+    best = min(((x - 128) ** 2 + (y - 96) ** 2, x, y) for y in range(86, 107) for x in range(118, 139) if getpix(bmp, x, y))
+    return [("FILL", [best[1], best[2]])]
 
 
 def noise_seed(bmp):
@@ -541,6 +555,8 @@ def old_checks():
 def new_checks():
     L = []
     L.append(case("fill_noise_overflow", "new", ["CLS"], noise_seed, draw=draw_noise, weight=6))
+    L.append(case("fill_noise_recolour_overflow", "new", ["CLS", "5 INK"], noise_seed_set, draw=draw_noise_inverted,
+                  weight=6))
     L.append(case("fill_seed_offscreen", "new", ["CLS"] + box(40, 40, 200, 150),
                   [fill(-1, 50), fill(300, 50), fill(50, 192), fill(50, -5)], ymin=40, weight=2))
     L.append(case("circle_negative_centre", "new", ["CLS"], [circle(-10, 50, 30)]))

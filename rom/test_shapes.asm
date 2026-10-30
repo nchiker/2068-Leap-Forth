@@ -1,10 +1,10 @@
 ; ============================================================================
-; rom/test_shapes.asm — test ROM for CIRCLE (EXROM-resident, step O15 item 4)
+; rom/test_shapes.asm — test ROM for CIRCLE and FILL (EXROM-resident, step O15)
 ;
 ; Mirrors rom/forth_boot.asm's own GRAPHICS_HOME_TABLE placement at $0100
 ; exactly (see rom/test_rect.asm's header): rom/graphics_exrom.asm calls
 ; through those fixed addresses (CIRCLE uses slot 0, GFX_WRITE_PIXEL, in
-; HIRES only). Run with build/graphics_exrom.bin as ROM 1.
+; HIRES only; FILL uses none). Run with build/graphics_exrom.bin as ROM 1.
 ;
 ; FOUR CHECKPOINTS, numbered 1, 2, 3 and 5 because border 4 means PASS (the
 ; CIRCLE checks that used to live in rom/forth_smoke_p5.asm and rom/
@@ -14,8 +14,7 @@
 ;   2. `50 50 20 CIRCLE 4 INK 50 50 FILL` -- the centre (50,50) is SET (an
 ;      outline alone does not fill its interior), the cell over it has
 ;      ink 4 (FILL picked up CURRENT_ATTR), (0,0) is CLEAR (the fill stayed
-;      inside). Was p17 checkpoint 1. FILL is still the Home word in this
-;      item, hence the include of core/moregfx.asm.
+;      inside). Was p17 checkpoint 1; FILL is now FILL_IMPL, slot 7.
 ;   3. `-10 50 30 CIRCLE` -- a circle cut by the left edge: (20,50) SET,
 ;      (246,50) CLEAR (no wrap-around to the other edge).
 ;   5. After CLS, `100 150 0 CIRCLE` draws the centre point only and
@@ -61,7 +60,7 @@ COLD_START:
     ld   sp, $FF00
     ld   ix, DSTACK_TOP
 
-    ld   hl, DICT_LATEST_INIT_MOREGFX
+    ld   hl, DICT_LATEST_INIT_SHAPES
     ld   (LATEST), hl
     ld   hl, FORTH_DICT_RAM
     ld   (HERE), hl
@@ -219,6 +218,7 @@ SRC_CP4_LEN EQU $ - SRC_CP4
 ; self-test code above, not before ORG $0000 ----
     INCLUDE "kernel/math/math.asm"
     INCLUDE "kernel/graphics/graphics.asm"
+    INCLUDE "kernel/graphics/readpixel.asm"   ; GFX_READ_PIXEL (step O15: test ROMs only)
     INCLUDE "kernel/sound/sound.asm"
     INCLUDE "kernel/bank/bank.asm"
     INCLUDE "core/dict.asm"
@@ -235,7 +235,6 @@ DICT_CHAIN_POINT DEFL H_FLASH
 DICT_CHAIN_POINT DEFL H_RECT
     INCLUDE "core/shapes.asm"
 DICT_CHAIN_POINT DEFL H_CIRCLE
-    INCLUDE "core/moregfx.asm"
 
     DS   $4000 - $, $FF
 

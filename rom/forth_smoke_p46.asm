@@ -402,6 +402,7 @@ SRC_TICK_BAD_LEN EQU $ - SRC_TICK_BAD
 ; self-test code above, not before ORG $0000 ----
     INCLUDE "kernel/math/math.asm"
     INCLUDE "kernel/graphics/graphics.asm"
+    INCLUDE "kernel/graphics/readpixel.asm"   ; GFX_READ_PIXEL (step O15: test ROMs only)
     INCLUDE "kernel/sound/sound.asm"
     INCLUDE "core/dict.asm"
     DEFINE THROW_CATCH_ENABLED

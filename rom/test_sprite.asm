@@ -187,6 +187,7 @@ SRC_CP4_LEN EQU $ - SRC_CP4
 ; self-test code above, not before ORG $0000 ----
     INCLUDE "kernel/math/math.asm"
     INCLUDE "kernel/graphics/graphics.asm"
+    INCLUDE "kernel/graphics/readpixel.asm"   ; GFX_READ_PIXEL (step O15: test ROMs only)
     INCLUDE "kernel/sound/sound.asm"
     INCLUDE "kernel/bank/bank.asm"
     INCLUDE "core/dict.asm"

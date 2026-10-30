@@ -24,37 +24,37 @@ pad = 0xFF
 [[image]]
 file   = "forth_boot_rom0.bin"
 title  = "HOME ROM (Forth)"
-floor  = 1220
+floor  = 1722
 target = 200
 
 [[image]]
 file   = "forth_boot_cart.bin"
 title  = "HOME, DOCK cartridge build (Forth)"
-floor  = 1220
+floor  = 1722
 target = 200
 
 [[image]]
 file   = "forth_demo_blackjack_rom0.bin"
 title  = "HOME ROM (Blackjack demo)"
-floor  = 1313
+floor  = 1842
 target = 200
 
 [[image]]
 file   = "forth_demo_blackjack_cart.bin"
 title  = "HOME, DOCK cartridge build (Blackjack demo)"
-floor  = 1313
+floor  = 1842
 target = 200
 
 [[image]]
 file   = "forth_demo_gallery_rom0.bin"
 title  = "HOME ROM (Shooting Gallery demo)"
-floor  = 1209
+floor  = 1711
 target = 200
 
 [[image]]
 file   = "graphics_exrom.bin"
 title  = "Graphics EXROM (chunk 5)"
-floor  = 3984
+floor  = 3296
 target = 150
 
 # Every floor change after the first commit of this file, newest last:
@@ -109,3 +109,5 @@ target = 150
 #     (+437 B, raised: it loses CIRCLE, O15-9), forth_demo_gallery_rom0.bin: 805 -> 1209 (+404 B, raised),
 #     graphics_exrom.bin: 4223 -> 3984 (-239 B), step O15 item 4: CIRCLE rebuilt in the EXROM (slot 8, 16-bit and
 #     clipped, direct plot), GFX_CIRCLE* and GFX_PLOT_CLIPPED out of HOME; the audit's section 9 row "O15 item 4".
+#   HOME and cartridge 1220 -> 1722, Blackjack 1313 -> 1842, Gallery 1209 -> 1711 (raised), graphics_exrom.bin 3984 ->
+#     3296 (-688 B): step O15 item 5, FILL rebuilt in the EXROM; the audit's section 9 row "O15 item 5".

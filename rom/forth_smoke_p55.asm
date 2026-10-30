@@ -2,7 +2,7 @@
 ; rom/forth_smoke_p55.asm — Phase 55 smoke ROM: HIRES and NORMAL (High
 ; Resolution Graphics mode, core/hires.asm)
 ;
-; FIVE CHECKPOINTS:
+; FOUR CHECKPOINTS (FILL's HIRES refusal is checked in the shapes harness, tools/shapetest.py):
 ;   1. HIRES clears the Second Display File to ATTR_DEFAULT ($44) —
 ;      peeked directly, before any pixel is plotted.
 ;   2. Two PLOTs with two different INK colors, same 8x8 character cell
@@ -11,20 +11,15 @@
 ;      attribute bytes in the Second Display File shows each keeps its
 ;      OWN ink color, no clash (Normal mode would force both onto one
 ;      shared 8x8-cell attribute byte instead).
-;   3. FILL, called while HIRES is still active, must do nothing —
-;      re-peeking the exact same two bytes from checkpoint 2 proves
-;      FILL's widened GFX_MODE guard (core/moregfx.asm, this phase)
-;      actually stopped it from clobbering the Second Display File with
-;      its own relocated scratch (same RAM, see that file's header).
-;   4. CLS, called while HIRES is still active, resets the Second
+;   3. CLS, called while HIRES is still active, resets the Second
 ;      Display File to CURRENT_ATTR — proves core/ts2068.asm's W_CLS
 ;      fix (this phase) actually runs, not just GFX_SET_MODE's own
 ;      one-time mode-entry clear from checkpoint 1.
-;   5. NORMAL switches back — a PLOT afterward lands in the ordinary
+;   4. NORMAL switches back — a PLOT afterward lands in the ordinary
 ;      8x8-cell attribute area (GFX_CELL_ATTR_ADDR) with the right ink,
 ;      proving the mode switch is real, not just cosmetic.
 ;
-; Border goes GREEN (4) if all five pass; otherwise it shows the
+; Border goes GREEN (4) if all four pass; otherwise it shows the
 ; failing checkpoint's number.
 ; ============================================================================
 
@@ -97,32 +92,11 @@ COLD_START:
     cp   6                        ; ink 6, set right before the second PLOT
     jp   nz, FAIL_TEST
 
-; ---- checkpoint 3: FILL while HIRES is active must be a no-op ----
+; ---- checkpoint 3: CLS while HIRES is active resets to CURRENT_ATTR ----
     ld   a, 3
     ld   (CHECKPOINT_NUM), a
     ld   hl, SRC_CP3
     ld   de, SRC_CP3_LEN
-    call INTERPRET_RUN
-    ld   b, 20
-    ld   c, 1
-    call HIRES_ATTR_ADDR
-    ld   a, (hl)
-    and  $07
-    cp   1                        ; unchanged from checkpoint 2
-    jp   nz, FAIL_TEST
-    ld   b, 21
-    ld   c, 1
-    call HIRES_ATTR_ADDR
-    ld   a, (hl)
-    and  $07
-    cp   6                        ; unchanged from checkpoint 2
-    jp   nz, FAIL_TEST
-
-; ---- checkpoint 4: CLS while HIRES is active resets to CURRENT_ATTR ----
-    ld   a, 4
-    ld   (CHECKPOINT_NUM), a
-    ld   hl, SRC_CP4
-    ld   de, SRC_CP4_LEN
     call INTERPRET_RUN
     ld   b, 20
     ld   c, 1
@@ -135,11 +109,11 @@ COLD_START:
     cp   b
     jp   nz, FAIL_TEST
 
-; ---- checkpoint 5: NORMAL switches back to ordinary attribute cells ----
-    ld   a, 5
+; ---- checkpoint 4: NORMAL switches back to ordinary attribute cells ----
+    ld   a, 4
     ld   (CHECKPOINT_NUM), a
-    ld   hl, SRC_CP5
-    ld   de, SRC_CP5_LEN
+    ld   hl, SRC_CP4
+    ld   de, SRC_CP4_LEN
     call INTERPRET_RUN
     ld   a, (GFX_MODE)
     or   a
@@ -176,7 +150,7 @@ HIRES_ATTR_ADDR:
     ret
 
 PASS_TEST:
-    ld   a, 4                    ; green: all five checkpoints passed
+    ld   a, 4                    ; green: all four checkpoints passed
     out  (PORT_ULA), a
     jr   PASS_TEST
 
@@ -200,14 +174,11 @@ SRC_CP1_LEN EQU $ - SRC_CP1
 SRC_CP2: DB "1 INK 10 20 PLOT 6 INK 10 21 PLOT "
 SRC_CP2_LEN EQU $ - SRC_CP2
 
-SRC_CP3: DB "10 20 FILL "
+SRC_CP3: DB "2 INK CLS "
 SRC_CP3_LEN EQU $ - SRC_CP3
 
-SRC_CP4: DB "2 INK CLS "
+SRC_CP4: DB "NORMAL 3 INK 5 5 PLOT "
 SRC_CP4_LEN EQU $ - SRC_CP4
-
-SRC_CP5: DB "NORMAL 3 INK 5 5 PLOT "
-SRC_CP5_LEN EQU $ - SRC_CP5
 
 ; ---- dictionary: included here, after the vector table and the
 ; self-test code above, not before ORG $0000 ----
