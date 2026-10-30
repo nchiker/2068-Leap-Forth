@@ -330,7 +330,8 @@ class Fw:
         if text is not None:
             m.write(TEXT, bytes([len(text)]) + text.encode("latin-1"))
         if catch:
-            m.write(m.sym("CATCH_DEPTH"), bytes([1]) + struct.pack("<HHH", THROW_SLOT, ix0, iy0))
+            m.write(m.sym("CATCH_DEPTH"), bytes([1]))
+            m.write(m.sym("CATCH_STACK"), struct.pack("<HHH", THROW_SLOT, ix0, iy0))   # frame 0 (not next to the depth)
             m.write(THROW_SLOT, struct.pack("<H", STOP_ADDR))
         m.write(STOP_ADDR, b"\x18\xFE")
         m.write(RET_SLOT, struct.pack("<H", STOP_ADDR))
