@@ -1,36 +1,26 @@
 ; ============================================================================
-; core/shapes.asm -- FILL and CIRCLE, backed by the graphics EXROM (step O15)
+; core/shapes.asm -- FILL and CIRCLE, backed by the graphics EXROM
 ;
-; Builds on core/dict.asm, core/interp.asm, core/ts2068.asm (needs
-; CURRENT_ATTR) and core/rectfill.asm (needs EXROM_CALL_SLOT); all must be
-; INCLUDEd first. Chains through DICT_CHAIN_POINT like every core file.
+; Needs core/dict.asm, core/interp.asm, core/ts2068.asm (CURRENT_ATTR) and core/rectfill.asm
+; (EXROM_CALL_SLOT) INCLUDEd first. The including ROM sets DICT_CHAIN_POINT (DEFL).
+; Dictionary words destroy every register except IX/IY/SP.
 ;
-;   FILL ( x y -- )   flood-fills the region 4-connected to (x, y) through
-;           pixels of the seed pixel's value, with the current colour. x and
-;           y are signed cells; a seed outside 0-255 / 0-191 does nothing, and
-;           so does FILL in HIRES. The work is FILL_IMPL, slot 7 of rom/
-;           graphics_exrom.asm (docs/V2/FILL_CIRCLE_SPEC.md section 4).
-;   CIRCLE ( xc yc r -- )   the outline of the circle of radius r about
-;           (xc, yc) in the current colour. Centre and radius are signed
-;           16-bit cells: a circle partly or wholly off the screen is
-;           clipped point by point; r < 0 draws nothing; r = 0 draws the
-;           centre point. The work is CIRCLE_IMPL, slot 8 of rom/
-;           graphics_exrom.asm (docs/V2/FILL_CIRCLE_SPEC.md sections 5-6).
-;
-; The words are stubs: each stages its arguments in the GFX_FILL_* /
-; GFX_CIRCLE_* cells (include/sysvars.inc) and tail-jumps to EXROM_CALL_SLOT,
-; whose RET returns to the inner interpreter. Without the EXROM (the HOME ROM
-; fitted alone, or a cartridge without chunk 5) EXROM_CALL_SLOT's magic/ABI
-; check fails and they do nothing, as RECT does. A ROM that does not include
-; core/rectfill.asm has neither word (decision O15-9).
+; Each word stages its arguments in the GFX_FILL_* / GFX_CIRCLE_* cells (include/sysvars.inc)
+; and tail-jumps to EXROM_CALL_SLOT, whose RET returns to the inner interpreter. Without the
+; EXROM, its magic/ABI check fails and they do nothing, as RECT does. A ROM that does not
+; include core/rectfill.asm has neither word.
 ; ============================================================================
 
     IFNDEF CORE_SHAPES_ASM
     DEFINE CORE_SHAPES_ASM
 
+; ============================================================================
+; FILL ( x y -- ) -- flood-fill the region 4-connected to (x, y) through pixels of the seed
+; pixel's value, with the current colour. x and y are signed cells; a seed outside 0-255 /
+; 0-191 does nothing, and so does FILL in HIRES (EXROM slot 7, FILL_IMPL)
+; ============================================================================
 H_FILL:
-    DW   DICT_CHAIN_POINT   ; the including ROM sets this (DEFL) to the
-                            ; chain this file extends
+    DW   DICT_CHAIN_POINT
     DB   4, "F", "I", "L", "L"
 W_FILL:
     rst RST_DPOP            ; hl = y
@@ -42,6 +32,11 @@ W_FILL:
     ld   hl, GRAPHICS_EXROM_BASE + (7 * 3)   ; slot 7 = FILL_IMPL
     jp   EXROM_CALL_SLOT       ; tail jump: its RET returns to our caller
 
+; ============================================================================
+; CIRCLE ( xc yc r -- ) -- draw the outline of the circle of radius r about (xc, yc) in the
+; current colour. Signed 16-bit cells; off-screen points are clipped, r < 0 draws nothing,
+; r = 0 draws the centre point (EXROM slot 8, CIRCLE_IMPL)
+; ============================================================================
 H_CIRCLE:
     DW   H_FILL
     DB   6, "C", "I", "R", "C", "L", "E"
@@ -57,7 +52,6 @@ W_CIRCLE:
     ld   hl, GRAPHICS_EXROM_BASE + (8 * 3)   ; slot 8 = CIRCLE_IMPL
     jp   EXROM_CALL_SLOT       ; tail jump: its RET returns to our caller
 
-DICT_LATEST_INIT_SHAPES EQU H_CIRCLE   ; head of the dictionary once this
-                                       ; file's words are included
+DICT_LATEST_INIT_SHAPES EQU H_CIRCLE   ; the chain head once this file is included
 
     ENDIF

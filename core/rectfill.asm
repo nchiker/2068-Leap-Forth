@@ -1,76 +1,32 @@
 ; ============================================================================
-; core/rectfill.asm — RECT, a fast rectangle fill backed by EXROM
+; core/rectfill.asm -- RECT, a rectangle fill backed by the EXROM, and EXROM_CALL_SLOT
 ;
-; Builds on core/dict.asm, core/interp.asm, core/ts2068.asm (needs
-; CURRENT_ATTR), and kernel/bank/bank.asm (needs BANK_PAGE_EXROM_IN/
-; OUT) — all must be INCLUDEd first. This file's own first header
-; chains through DICT_CHAIN_POINT, same convention as every phase
-; since core/control.asm.
+; Needs core/dict.asm, core/interp.asm, core/ts2068.asm (CURRENT_ATTR) and kernel/bank/bank.asm
+; INCLUDEd first. The including ROM sets DICT_CHAIN_POINT (DEFL) to the chain this file extends.
+; Dictionary words destroy every register except IX/IY/SP.
 ;
-; WHAT THIS ADDS:
-;   RECT ( x0 y0 x1 y1 -- )   fills the rectangle spanned by the two
-;             given corners (any order — the EXROM side sorts them),
-;             corners inclusive, with the current color (CURRENT_ATTR,
-;             same state INK/PAPER set), via rom/graphics_exrom.asm's
-;             own RECT_FILL_IMPL
+; RECT is EXROM-resident (rom/graphics_exrom.asm, RECT_FILL_IMPL) because the Home ROM has too
+; little room for the graphics words.
 ;
-; WHY THIS IS EXROM-RESIDENT rather than a plain Home word like FILL:
-; the Home ROM had 444 bytes free at the time this was scoped — not
-; enough headroom for this AND the two other new graphics words this
-; project has planned (Polygon draw/fill, Sprites), so all three are
-; going into the one physical EXROM socket this hardware has, not
-; competing for Home's own shrinking budget. See docs/PROJECT_PLAN.md's
-; chunk-by-chunk audit for why chunk 5 specifically, and kernel/bank/
-; bank.asm's own header for the paging mechanics.
-;
-; MAGIC+ABI CHECK, not blind trust: EXROM_CALL_SLOT below (shared by
-; every word this project backs with rom/graphics_exrom.asm — see its
-; own header) verifies that file's own magic byte ($F0) and ABI
-; version (1) immediately after paging chunk 5 in, before calling
-; anything in its service table. A real cartridge socket can hold
-; something else entirely, or nothing — this project's own EXROM
-; placeholder history (tools/make_exrom_placeholder.sh) already
-; established that an empty/wrong image is a real, reachable case, not
-; a hypothetical one. A mismatch pages back out and returns with carry
-; SET; RECT then silently does nothing, matching this project's own
-; established "silently do nothing on unavailable/out-of-range"
-; convention (SOUND, STICK, FILL's own HIRES guard) rather than a
-; new error path.
+; EXROM_CALL_SLOT is shared by every word the EXROM backs (RECT, POLYGON, the SPRITE-* words).
+; It checks the image's magic byte and ABI version right after paging chunk 5 in, because a
+; cartridge socket can hold something else or nothing. On a mismatch it pages out and returns
+; with carry set, and the word silently does nothing (as SOUND, STICK and FILL's HIRES guard do).
 ; ============================================================================
 
     IFNDEF CORE_RECTFILL_ASM
     DEFINE CORE_RECTFILL_ASM
 
 ; ============================================================================
-; EXROM_CALL_SLOT (internal — not in kernel_api.inc)
-; Pages chunk 5 to EXROM, verifies rom/graphics_exrom.asm's own magic+
-; ABI byte pair, calls the given service-table slot if and only if
-; that check passes, then always pages back out (even on a mismatch)
-; before returning. Shared by every word backed by rom/graphics_
-; exrom.asm — RECT, POLYGON, and all three SPRITE-* words each used to
-; carry their own copy of this exact sequence (core/polygon.asm's own
-; EXROM_CALL_POLY_DRAW, core/sprite.asm's own EXROM_CALL_SPRITE);
-; consolidated here once real duplication was confirmed across all
-; three (same shape, differing only in which slot address gets
-; called) — 95 bytes of near-identical Home ROM code down to one
-; ~30-byte routine plus a handful of 5-byte call sites, found and
-; fixed the same session the Home ROM budget got tight enough (49
-; bytes free) that it actually mattered.
-; In:  HL = absolute address of the service-table slot to call
-;      ($A000 + slot*3); whatever RECT_*/POLY_*/SPRITE_OP_* state the
-;      caller has already staged
-; Out: carry SET if the paged image didn't match (nothing ran); carry
-;      CLEAR if the slot actually ran
+; EXROM_CALL_SLOT -- page the EXROM in, verify its magic+ABI pair, call a service-table slot
+; In:  HL = absolute address of the slot ($A000 + slot*3); the RECT_*/POLY_*/SPRITE_OP_* state
+;      the caller has staged
+; Out: carry set if the image did not match (nothing ran); carry clear if the slot ran. The
+;      EXROM is paged out again either way
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 EXROM_CALL_SLOT:
-    push hl                          ; the slot address survives the
-                                     ; page-in call (BANK_PAGE_EXROM_IN
-                                     ; only destroys AF per its own
-                                     ; contract, but stack is simplest
-                                     ; and matches this project's own
-                                     ; "don't trust a register to
-                                     ; survive a call" convention)
+    push hl                          ; the slot address survives the page-in call
     call BANK_PAGE_EXROM_IN
     pop  hl
 
@@ -81,11 +37,7 @@ EXROM_CALL_SLOT:
     cp   GRAPHICS_EXROM_ABI
     jr   nz, .mismatch
 
-    call CALL_HL                     ; see CALL_HL's own header —
-                                     ; a genuine nested CALL (not a
-                                     ; tail JUMP), so control returns
-                                     ; here afterward and BANK_PAGE_
-                                     ; EXROM_OUT below still runs
+    call CALL_HL                     ; a nested call: control returns here to page out
     call BANK_PAGE_EXROM_OUT
     or   a                           ; carry clear: ran successfully
     ret
@@ -96,39 +48,26 @@ EXROM_CALL_SLOT:
     ret
 
 ; ============================================================================
-; CALL_HL (internal — not in kernel_api.inc)
-; `call (hl)` isn't a real Z80 instruction — this is the standard
-; workaround (push the target, then RET jumps to it). Genuinely a
-; nested call, not a tail jump: EXROM_CALL_SLOT's own `call CALL_HL`
-; already pushed a return address before this runs, and `push hl` here
-; pushes the slot address ON TOP of that — so THIS routine's own `ret`
-; consumes the slot address (jumping there), and the slot's own
-; eventual `ret` is what actually consumes EXROM_CALL_SLOT's original
-; return address, landing control back there once the slot is done.
+; CALL_HL -- call the code at HL (there is no `call (hl)`)
 ; In:  HL = address to call
 ; Out: whatever the called code returns
 ; Destroys: whatever the called code destroys
+; The caller's `call CALL_HL` already pushed its return address; the push here goes on top of
+; it, so this RET jumps to HL and the callee's own RET returns to the caller.
 ; ============================================================================
 CALL_HL:
     push hl
     ret
 
-; GRAPHICS_EXROM_MAGIC/ABI/MAGIC_ADDR all come from include/graphics_
-; exrom_abi.inc now -- the ONE shared copy rom/graphics_exrom.asm's own
-; table-sizing depends on too. Used to be two independent hand-typed
-; copies of the same numbers (a real, confirmed drift risk found during
-; an audit pass — the exact class of bug that already shipped twice as
-; a service-table offset mismatch); see that file's own header.
     INCLUDE "include/graphics_exrom_abi.inc"
 
 ; ============================================================================
-; RECT ( x0 y0 x1 y1 -- )
+; RECT ( x0 y0 x1 y1 -- ) -- fill the rectangle between two corners (any order, inclusive)
+; with the current colour (CURRENT_ATTR), via the EXROM's RECT_FILL_IMPL; out-of-range or no
+; EXROM: nothing is drawn
 ; ============================================================================
 H_RECT:
-    DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL,
-                            ; not EQU) to whatever word chain this
-                            ; file should extend, immediately before
-                            ; INCLUDEing this file
+    DW   DICT_CHAIN_POINT
     DB   4, "R", "E", "C", "T"
 W_RECT:
     rst RST_DPOP           ; hl = y1
@@ -149,8 +88,6 @@ W_RECT:
     call EXROM_CALL_SLOT
     ret
 
-DICT_LATEST_INIT_RECTFILL EQU H_RECT   ; head of the dictionary once
-                                       ; this file's own words are
-                                       ; both included
+DICT_LATEST_INIT_RECTFILL EQU H_RECT   ; the chain head once this file is included
 
     ENDIF
