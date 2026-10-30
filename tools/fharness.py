@@ -27,9 +27,10 @@ The API (a library; `python3 -I tools/fharness.py --selftest` is its self-test):
 `build` is a directory that holds forth_boot_rom0.bin (DIR or DIR/build, as tools/tapetol.py), so the images of an
 older build in a git worktree work.  Symbols come from forth_boot.sym and, when the build has it, graphics_exrom.sym.
 
-Ports: base 10900, allowed 10900-10919 and 10840-10859 (PORT_RANGES; the second is tools/floattest.py's; worker k uses
-base + k, all of a pool's ports in one range); other harnesses own 10760-10839, 10860-10899 and 10930-10999.  A
-port outside the ranges, or one that something already listens on, is refused.  Needs ts2068-debug ($TS2068_DEBUG_DIR,
+Ports: base 10900, allowed 10900-10919, 10840-10859 and 10860-10879 (PORT_RANGES; the second is tools/floattest.py's, the
+third tools/shapetest.py's; worker k uses base + k, all of a pool's ports in one range); other harnesses own 10760-10839,
+10880-10899 and 10930-10999.
+A port outside the ranges, or one that something already listens on, is refused.  Needs ts2068-debug ($TS2068_DEBUG_DIR,
 default ~/ts2068-debug; the ZRCP client and the process control), ZEsarUX 13.0 ($TS2068_DEBUG_ZESARUX_DIR, default
 ~/Applications/ZEsarUX-13.0) and sjasmplus (the glyph program).  ts2068-debug now acknowledges every segment at once
 and starts ZEsarUX with --emulatorspeed 1000 --frameskip 49 itself; this file does both too (so an older ts2068-debug
@@ -75,7 +76,8 @@ from ts2068_debug.process import ZEsarUXProcess as _ZProcess, terminate_emulator
 FAST_ARGS = [] if os.environ.get("FORTH_REALTIME") else ["--emulatorspeed", "1000", "--frameskip", "49"]
 PORT_LO, PORT_HI = 10900, 10919     # this harness's ports (make test 10760 up, bench 10780, poweron 10820-10839,
                                     # ay_audio 10880-10899, cart_diff 10930-10949, tapetest 10960-10979, tapetol 10980-10999)
-PORT_RANGES = ((10900, 10919), (10840, 10859))  # every range a Machine / run_pool accepts (the second: tools/floattest.py)
+PORT_RANGES = ((10900, 10919), (10840, 10859), (10860, 10879))  # every range a Machine / run_pool accepts (tools/floattest.py: the second;
+                                    # tools/shapetest.py: the third)
 RET_SLOT = 0xFF00                   # return address slot for routine calls (unused by the ROM: the header)
 STOP_ADDR = 0xFF02                  # `jr $` written here; routine calls return to it
 GLYPH_PROG = 0xFF10                 # the glyph rendering program and its code list

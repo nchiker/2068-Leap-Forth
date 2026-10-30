@@ -43,7 +43,7 @@ BANK_EXROM_DEPTH (max value stored): 1 means page-ins never nested.
 
 RUN:  python3 cart_diff.py --home-dir TREE --cart-dir TREE [--cart-dck FILE] [--emulators zesarux,tsrun]
         [--cases a,b] [--port 10930] [--jobs 4] [--json] [--selftest] [--dump DIR]      (TREE/build/ holds the build
-      products; the cart .dck defaults to CART_DIR/build/forth_boot.dck; all 13 cases take about 75 s with --jobs 4 and
+      products; the cart .dck defaults to CART_DIR/build/forth_boot.dck; all 18 cases take about 2 min with --jobs 4 and
       ZEsarUX, ~35 s with TSRun only)
 
 NESTED PAGE-IN (BANK_EXROM_DEPTH): BANK_PAGE_EXROM_IN has exactly one caller (EXROM_CALL_SLOT), which only the
@@ -113,6 +113,17 @@ CASES = [
                       ": S1 0 2 2 SPRITE-DEFINE 0 12 K @ SPRITE-SHOW 0 SPRITE-HIDE ;",
                       ": ALL 30 0 DO I K ! K @ 7 AND INK R1 P1 P2 S1 LOOP ;", "ALL"]),
     ("compiled_rect_twice", [": SQ 2DUP 40 + SWAP 40 + SWAP RECT ;", "20 20 SQ", "3 INK 1 PAPER 100 80 SQ"]),
+    # FILL and CIRCLE (step O15, docs/V2/FILL_CIRCLE_SPEC.md section 9): a fill inside a LINE outline, a recolour of a
+    # solid area (seed pixel 1), circles cut by the screen edges, and both words looped with RECT
+    ("fill_box", ["4 INK 40 30 200 30 LINE 200 30 200 150 LINE 200 150 40 150 LINE 40 150 40 30 LINE",
+                  "2 INK 6 PAPER 100 100 FILL"]),
+    ("fill_recolour", ["2 INK 30 40 90 100 RECT", "5 INK 50 60 FILL"]),
+    ("circle_clip", ["3 INK -10 50 30 CIRCLE", "250 180 40 CIRCLE", "128 96 0 CIRCLE 128 96 300 CIRCLE"]),
+    ("loop_shapes", ["VARIABLE K",
+                     ": C1 K @ 7 * 20 + 96 K @ 3 + CIRCLE ;",
+                     ": F1 K @ 7 * 20 + 96 FILL ;",
+                     ": R1 K @ 7 * 18 + 150 K @ 7 * 22 + 160 RECT ;",
+                     ": ALL 30 0 DO I K ! K @ 7 AND INK C1 F1 R1 LOOP ;", "ALL"]),
 ]
 SELFTEST_CASE = ("selftest", [": SQ 2DUP 40 + SWAP 40 + SWAP RECT ;", "1 2 3", "20 20 SQ", "5 S>F",
                               "4 INK 0 5 5 SPRITE-DEFINE"])

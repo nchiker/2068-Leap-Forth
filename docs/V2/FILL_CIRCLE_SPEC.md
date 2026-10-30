@@ -107,8 +107,9 @@ stack fills during a sweep, stop the sweep (`FILL_OVF` set again), drain, and sw
 and `FILL_OVF` is clear. Correct because a fillable pixel left unpainted next to a painted one can only be vertical
 (a span is always extended to its ends), and terminates because every sweep that seeds paints at least one span.
 **Python model [M]** (`docs/V2/evidence/o15_fill_model.py`, written in the oracle commit): against a breadth-first
-fill on blank, box, solid disc recoloured, comb, lattice and two noise screens, the region is exact with stack sizes
-512, 64 and 8 (a 6,000-dot noise screen: 2 sweeps at 512, 173 sweeps at 8).
+fill on blank, box, solid disc recoloured, serpentine (24,704 one-pixel vertical runs), lattice and noise screens of
+6,000 and 14,000 dots, the region is exact with stack sizes 512, 64 and 8 (6,000 dots: 2 sweeps at 512, 173 at 8;
+14,000 dots: 3 and 203).
 
 ### 4.6 Speed [E]
 
@@ -233,9 +234,28 @@ booted snapshot, draws a set-up with words that do not change in this step (`CLS
 |---|---|
 | **old** (kept behaviour; must pass on the old build) | FILL inside a box outline, a circle outline (seed 0), a recolour of a solid `RECT` (seed 1), an L-shaped and a spiral region, a whole blank screen, a seed on a lone pixel; FILL in HIRES does nothing; CIRCLE r = 0, 1, 2, 5, 20, 90 at the centre, circles cut by the right and bottom edges, x = y diagonal points, CIRCLE with INK/PAPER; CIRCLE in HIRES (per-scanline attribute) |
 | **new** (the spec; fail on the old build) | FILL on a noise screen that overflows 512 seeds (complete); FILL seeds off-screen (`-1 50`, `300 50`, `50 192`, `50 -5`: nothing changes); CIRCLE with negative centre, centre beyond 255/191, radius > 255 (clipped, exact); CIRCLE r < 0 (O15-5) |
-| **speed** (gated: new <= old) | FILL: box 160 × 120, full blank screen, solid disc r 50 recolour, circle interior r 40, a 3-pixel pocket; CIRCLE r 5, 40, 90, 200 (mostly off-screen) |
+| **speed** (gated: new <= old) | FILL: box 160 × 120, full blank screen, solid disc r 50 recolour, a 3-pixel pocket, the serpentine (24,704 one-pixel runs, the span fill's worst case); CIRCLE r 5, 40, 90, 150 (mostly off-screen) |
 
-Run on the old build first; that run with this spec is the oracle commit (`docs/V2/evidence/t14_old_build.txt`).
+Run on the old build first; that run with this spec is the oracle commit (`docs/V2/evidence/t14_old_build.txt`, `.json`
+for `--compare`). **Result [M]** (`df391e6`, 28 s on 7 workers): `shapetest: 27/33 checks pass (old 17/17, new 0/6,
+speed 10/10)`. The new group fails as designed: the noise screen leaves 10,758 pixels unfilled (dropped seeds); `-1 50
+FILL` takes x = 255 and fills the whole screen including the editor rows; the circles take low bytes (`128 96 -250`
+draws radius 6). Old speed (T, deterministic: the 160 × 120 box twice gives the same count): FILL box 160 × 120
+67,492,107, full screen 176,969,016 (about 50 s at 3.5 MHz), disc r 50 recolour 31,091,868, 3-pixel pocket 180,607,
+serpentine 128,467,393; CIRCLE r 5 35,868, r 40 280,624, r 90 624,952, r 150 387,725. The tool's own readings are
+marked `READING:` in `tools/shapetest.py` (set-up drawings kept above y 160, where the editor does not redraw; large
+pictures written into screen RAM after a typed `CLS`; HIRES attributes compared as the ROM lays them out, section 9.1).
+### 9.1 Found while writing the oracle: HIRES attributes are laid out linearly
+
+`GFX_SET_ATTR_EXT` (HOME, used by `GFX_WRITE_PIXEL` in HIRES: PLOT, LINE, CIRCLE) stores a scanline's attribute at
+`$6000 + y * 32 + col`. In the TS2068's 8 × 1 colour mode the attribute of a pixel byte is at that byte's own address
++ `$2000`, the bitmap's interleaved layout: ZEsarUX `src/cores/core_spectrum.c` fetches it at
+`screen_addr_table[scanline * 32]` when `timex_si_modo_8x1()` [S]. Only the first scanline of each third (y = 0, 64,
+128) lands where the display reads it; every other scanline's colour lands on another scanline. No test sees it: every
+check reads RAM, and ZEsarUX's headless `save-screen` draws only the standard screen. A latent defect outside O15; the
+oracle compares HIRES attributes as the ROM writes them today (`circle_hires`), and the owner decides whether the
+fix (the address from `GFX_PIXEL_ADDR_SETUP` + `$2000`, a few bytes smaller) goes into this step.
+
 **cartdiff** (`tools/cart_diff.py`, both emulators, HOME vs cartridge byte for byte): new cases `fill_box`,
 `fill_recolour`, `circle_clip` (negative centre and big radius), and `loop_all_six` extended to loop FILL and CIRCLE
 with the other EXROM words; the EXROM-side state range grows to the new cells. Smoke ROMs that check FILL/CIRCLE

@@ -88,7 +88,7 @@ ALL_IMAGES := build/forth_rom0.bin $(SMOKE_BINS) $(VISUAL_BINS) $(TEST_BINS) \
               build/forth_demo_gallery_rom0.bin build/graphics_exrom.bin \
               build/forth_boot.dck build/forth_demo_blackjack.dck
 
-.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron audio cartdiff tapetest tapetol tapetol-fuse fusesave fusesave-cross harness edtest floattest \
+.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron audio cartdiff tapetest tapetol tapetol-fuse fusesave fusesave-cross harness edtest floattest shapetest \
         bench-roms $(ALIASES)
 
 all: $(ALL_IMAGES)
@@ -315,6 +315,16 @@ edtest: build/forth_boot_rom0.bin build/graphics_exrom.bin
 # fails (that run is the oracle's baseline). About 1 minute on 7 workers; not part of `make test`.
 floattest: build/forth_boot_rom0.bin build/graphics_exrom.bin
 	python3 -I tools/floattest.py --build $(or $(FLOATTEST_BUILD),build) --group $(or $(FLOATTEST_GROUP),all)
+
+# FILL and CIRCLE oracle (audit T14, docs/V2/FILL_CIRCLE_SPEC.md section 9, tools/shapetest.py's header): the words FILL and
+# CIRCLE checked against a Python model (screen, attributes, RAM outside the screen, return), and the speed table (T-states).
+# Parallel emulators, ports 10860-10879. Written to build/shapetest.json. SHAPETEST_ARGS are extra arguments, e.g.
+# "--group old", "--build <dir>" (another build in a git worktree) or "--compare <old build's shapetest.json>" (every speed case
+# must be no slower). On the old build the old group passes and the new group fails (that run is the oracle's baseline).
+# Not part of `make test`.
+SHAPETEST_ARGS ?=
+shapetest: build/forth_boot_rom0.bin build/graphics_exrom.bin
+	python3 -I tools/shapetest.py --build build $(SHAPETEST_ARGS)
 
 repro:
 	tools/check_repro.sh
