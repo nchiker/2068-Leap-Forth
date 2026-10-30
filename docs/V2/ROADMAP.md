@@ -6,7 +6,7 @@ the best solution for the language and its users; fix a problem in the session i
 reason not to (the reason is written here); **follow Leap-C's conventions** (`~/2068-Leap-C` `CONTRIBUTING.md` and
 `project_plan.md` section 1) for testing, paperwork, code style and RAM layout.
 
-Last updated 2026-10-29. Free bytes: HOME 1,220, EXROM 3,984.
+Last updated 2026-10-30. Free bytes: HOME 1,758, EXROM 3,296.
 
 ## Done
 
@@ -23,17 +23,10 @@ Last updated 2026-10-29. Free bytes: HOME 1,220, EXROM 3,984.
 | 64-column mode removed | 64COL and its code paths gone (HIRES colour mode kept) |
 | Floats | 5-byte floats, 22 new float words, error messages, faster `*` `/` `MOD`, new RND |
 
-## Now: FILL and CIRCLE to the EXROM (`FILL_CIRCLE_SPEC.md`)
+## Now: FILL and CIRCLE to the EXROM — done (`docs/V2/milestones/O15.md`)
 
-| Part | State |
-|---|---|
-| Spec and owner decisions | done |
-| Oracle (`make shapetest`) and cartdiff cases, run on the old build | done |
-| EXROM service table 8 → 16 slots | done |
-| CIRCLE rebuilt in the EXROM (16-bit, clipped, about 2.6× faster; HOME +404 B) | done |
-| FILL rebuilt in the EXROM (byte-level, always complete, tens of times faster) | in progress |
-| Defects found during this step, fixed in it (below) | after FILL |
-| Docs | last |
+FILL and CIRCLE rebuilt in the EXROM (CIRCLE about 2.6× faster, FILL 38-66× on large areas and always complete), the
+EXROM table at 16 slots, `make shapetest`, and the four defects found during the step fixed. HOME 816 → 1,758 B free.
 
 ## Next, in order
 
@@ -57,7 +50,8 @@ Last updated 2026-10-29. Free bytes: HOME 1,220, EXROM 3,984.
    Candidates to measure: float printing and the transcendentals, tape words, word listings, sound, ULAplus, the
    printer. Limits: an EXROM call costs about 400 T; EXROM code cannot read the dictionary at `$A000-$BFFF`.
 3. **Words and keys**: `[']`, `[CHAR]`, `\`, `[ ]`; the shared key lookup; the `1`/`l` glyphs; faster text drawing.
-4. **Display speed.**
+4. **Display speed**, and LINE on 16-bit coordinates with clipping (today it takes bytes: `-10 50 100 50 LINE`
+   starts at x 246); it rebuilds `GFX_LINE`, whose cells POLYGON also uses through the EXROM.
 5. **BREAK and timing**: BREAK in the interrupt routine, so long words can be stopped.
 6. **Blackjack** rebuilt from its saved source as a program for the finished ROM.
 
@@ -65,12 +59,12 @@ Last updated 2026-10-29. Free bytes: HOME 1,220, EXROM 3,984.
 
 | Defect | Found | Fixed in |
 |---|---|---|
-| HIRES colours land on the wrong scanlines: attributes written linearly, the SCLD reads them in the bitmap's interleaved layout (`FILL_CIRCLE_SPEC.md` 9.1) | O15 oracle | now (FILL and CIRCLE step) |
-| PLOT and LINE do not clip: y 192-255 indexes past the row table | Leap-C comparison | now (FILL and CIRCLE step) |
-| The 8th nested CATCH overwrites SPACES' count and the printer line buffer (`CATCH_STACK` reaches `$8945`) | Floats | now (FILL and CIRCLE step) |
-| A data stack about 1,020 cells deep overwrites LATEST and HERE before the stack check sees it | Floats | now (FILL and CIRCLE step) |
-| FILL can leave holes (seed stack overflow); off-screen FILL seeds fill the screen; CIRCLE takes byte arguments | O15 spec | now (the rebuild) |
+| LINE takes its coordinates as bytes (no 16-bit clipping) | O15 | Display speed (the `GFX_LINE` rebuild) |
 | cartdiff fails about 3% of runs (harness timing, both builds) | cartdiff speed-up | goes with the cartridge build (Simplify) |
 | Integer literals parse 2.5× slower since floats (shared 32-bit digit loop; a 16-bit fast path costs about 40 B) | Floats | Space (it needs the bytes) |
 | The editor's ENTER at the bottom of the view takes 421k T (the store is scanned from the start per key) | Editor | Display speed |
 | `INT_GET_FRAMES` (4 B) may be unreachable | Recover | Space (dead code) |
+
+Fixed in O15: FILL's holes and off-screen seeds, CIRCLE's byte arguments, HIRES colours on the wrong scanlines, PLOT
+and LINE below the screen (a RAM write after O15's layout), the 8th nested CATCH overlapping SPACES, LATEST/HERE
+inside the data stack.

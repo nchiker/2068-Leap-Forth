@@ -2846,10 +2846,10 @@ beyond what each word's own arguments say.
 
 | Word       | Stack effect                   | What it does                                                                                                                             |
 | ---------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `PLOT`     | `( x y -- )`                   | Set the pixel at `(x, y)`                                                                                                                |
+| `PLOT`     | `( x y -- )`                   | Set the pixel at `(x, y)`; a point off the screen (x outside 0-255, y outside 0-191) draws nothing                                       |
 | `LINE`     | `( x1 y1 x2 y2 -- )`           | Draw a line from `(x1, y1)` to `(x2, y2)`                                                                                                |
-| `CIRCLE`   | `( xc yc r -- )`               | Draw a circle outline centered at `(xc, yc)` with radius `r`                                                                             |
-| `FILL`     | `( x y -- )`                   | Flood-fill the enclosed area touching `(x, y)` with the current color                                                                    |
+| `CIRCLE`   | `( xc yc r -- )`               | Draw a circle outline centered at `(xc, yc)` with radius `r`; any centre and radius, the part off the screen is left out; `r` < 0 draws nothing (second ROM) |
+| `FILL`     | `( x y -- )`                   | Flood-fill the enclosed area touching `(x, y)` with the current color; a seed off the screen does nothing (second ROM)                  |
 | `CLS`      | `( -- )`                       | Clear the whole screen                                                                                                                   |
 | `BORDER`   | `( color -- )`                 | Set the screen border to `color` (0-7, same numbering as BASIC's `BORDER`)                                                               |
 | `INK`      | `( color -- )`                 | Set the foreground color `PLOT`/`LINE`/`CIRCLE`/`FILL` draw with, and printed text (`EMIT`/`.`/`."`/`TYPE`) prints in, from now on (0-7) |
@@ -2994,14 +2994,13 @@ DOTS
 
 ### `RECT`, `POLYGON`, and `POLYGON-FILL`: More Shapes, From a Second ROM
 
-`PLOT`/`LINE`/`CIRCLE`/`FILL` above all live in the same 16K Home ROM as
-everything else in this tutorial. Three more shape words — `RECT`,
-`POLYGON`, and `POLYGON-FILL` — exist too, but they're dispatched
-through a SECOND, separate 8K ROM plugged into the TS2068's own EXROM
-socket, not the Home ROM.
+`PLOT` and `LINE` live in the 16K Home ROM with everything else in this
+tutorial. `CIRCLE` and `FILL` above, and three more shape words — `RECT`,
+`POLYGON`, and `POLYGON-FILL` — are dispatched through a SECOND, separate
+8K ROM plugged into the TS2068's own EXROM socket, not the Home ROM.
 
 - **This Matters Practically:** The placeholder EXROM most setups boot
-  with has no real code in it, so these three words will each just
+  with has no real code in it, so these five words will each just
   silently do nothing (the same "refuse quietly rather than crash"
   behavior every word in this project already uses when something's
   missing) unless you've built and loaded the real `graphics_exrom.bin`
