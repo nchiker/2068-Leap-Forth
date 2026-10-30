@@ -3,7 +3,7 @@
 
 A case is a Forth file.  Each line is typed at the console and ENTER pressed; what the line printed (the rows from
 where the line was typed to the cursor, trailing blanks stripped, joined with "|", the interpreter's final " OK"
-dropped) must be what the line expects:
+dropped) must be what the line expects (the text after `expect: `, leading blanks kept):
 
     LINE                      typed; it must print nothing (only OK)
     LINE  \\ expect: TEXT      typed (the part before the backslash); it must print TEXT
@@ -15,9 +15,14 @@ dropped) must be what the line expects:
     \\ keys: TEXT             the next typed line reads keys (KEY, ACCEPT, INPUT): TEXT is given one key at a time
                               whenever it waits outside the editor; \\r is ENTER, \\b DELETE, \\xNN any code
 
+{NAME} in a typed line is replaced by the decimal value of the ROM symbol NAME (build/forth_boot.sym, then
+graphics_exrom.sym), so a test reads a ROM cell by name: `{CATCH_DEPTH} C@ .`.  Screen and attribute addresses are
+hardware and are written as numbers.
+
 An error prints the word and " ?" (`FOO ?`) and no OK.  A line's output must fit on the screen (23 rows).  A case stops at its first difference.  Every case starts from
 the booted machine (fharness's snapshot at the first key wait)."""
 import glob
+import re
 import os
 import sys
 
@@ -52,10 +57,10 @@ def parse(path):
         exp = None
         if EXPECT_END in raw:
             raw, e = raw.split(EXPECT_END, 1)
-            exp = ("end", e.strip())
+            exp = ("end", e[1:].rstrip() if e.startswith(" ") else e.rstrip())
         elif EXPECT in raw:
             raw, exp = raw.split(EXPECT, 1)
-            exp = exp.strip()
+            exp = exp[1:].rstrip() if exp.startswith(" ") else exp.rstrip()
         elif raw.rstrip().endswith("\\ draws"):
             raw, exp = raw.rstrip()[:-len("\\ draws")], DRAWS
         lines.append((n, raw.rstrip(), exp, bench, keys))
@@ -77,6 +82,7 @@ def cases(area=None, only=None):
 def typed(m, c, text, timed=False, keys=""):
     """Type one line and ENTER; what it printed (see the header) and the T-states when timed."""
     S = m.sym
+    text = re.sub(r"\{([A-Za-z_][A-Za-z0-9_.]*)\}", lambda mm: str(m.sym(mm.group(1))), text)
     before = m.screen_rows()
     r0 = m.read(S("PRINT_ROW"), 1)[0]
     for ch in text:
@@ -107,10 +113,8 @@ def typed(m, c, text, timed=False, keys=""):
     while rows and not rows[-1]:
         rows.pop()
     out = "|".join(rows)
-    if out == "OK":
-        out = ""
-    elif out.endswith((" OK", "|OK")):
-        out = out[:-3]
+    if out.endswith("OK"):                  # the console's OK follows the output directly
+        out = out[:-2].rstrip(" |")
     return out, t
 
 
