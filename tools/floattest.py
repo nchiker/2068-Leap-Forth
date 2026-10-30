@@ -78,7 +78,7 @@ TEXT = 0xFF50                           # counted strings (NUMBER); up to 31 cha
 MEMA = 0xFFA0                           # the cell F@ and F! use; $FF9C-$FFA8 guard bytes
 GUARD = 0xA5
 BANNER = "2068-FORTH"
-FSTACK_TOP, DSTACK_TOP, LATEST = 0x9000, 0x9800, 0x9002
+FSTACK_TOP, DSTACK_TOP, LATEST = 0x9000, 0x9800, 0x8608
 FSTACK_CELLS = 204
 BEEP_PLAY_SYM = "BEEP_PLAY"
 
@@ -296,7 +296,7 @@ class Fw:
         self.syms = m.S
         self.cell = 5                                        # bytes per float cell (3 only for the old build's speed operands)
         self.words = {}
-        a, n = m.w16(LATEST), 0
+        a, n = m.w16(m.S.get("LATEST", LATEST)), 0
         while a and n < 4000:
             b = m.read(a, 36)
             ln = b[2] & 0x1F
@@ -1095,6 +1095,12 @@ def new_checks(count, seed, int_n):
         L.append(Check("literals: %s" % mode, "new", [task("lit", dict(mode=mode, tokens=c), 3 * len(c)) for c in chunks(toks_m, 24)]))
 
     # ---- errors
+    # Defects fixed in step O15 (ROADMAP.md): the 8th nested CATCH frame overlapped SPACES' count (a THROW to it then
+    # restored a wrong SP), and a data stack deeper than about 1,020 cells overwrote LATEST and HERE
+    L.append(console_check("8 nested CATCH frames, SPACES in the innermost", "new", [
+        ([': C0 3 SPACES 99 THROW ;', "' C0 CONSTANT K0", ': C1 K0 CATCH ;', "' C1 CONSTANT K1", ': C2 K1 CATCH ;', "' C2 CONSTANT K2", ': C3 K2 CATCH ;', "' C3 CONSTANT K3", ': C4 K3 CATCH ;', "' C4 CONSTANT K4", ': C5 K4 CATCH ;', "' C5 CONSTANT K5", ': C6 K5 CATCH ;', "' C6 CONSTANT K6", ': C7 K6 CATCH ;', "' C7 CONSTANT K7"], "K7 CATCH . . . . . . . .", "0 0 0 0 0 0 0 99")]))
+    L.append(console_check("a 1,100-cell data stack leaves the dictionary intact", "new", [
+        ([": DEEP 1100 0 DO I LOOP 1100 0 DO DROP LOOP ;", "DEEP"], ": SQ DUP * ; 7 SQ .", "49")]))
     L.append(console_check("errors under CATCH (-42 -43 -46)", "new", [
         ([], "1.0 0.0 ' F/ CATCH .", "-42"),
         ([], "1E38 1E38 ' F* CATCH .", "-43"),
