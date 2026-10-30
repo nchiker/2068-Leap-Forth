@@ -1038,3 +1038,19 @@ this is the condensed one-paragraph-per-phase version.
   has `FILL` or `CIRCLE`. HOME free space 816 bytes before the step,
   1,758 after; EXROM 4,247 before, 3,296 after. Emulators only; no
   hardware.
+- V2 step Simplify (`docs/V2/milestones/Simplify.md`): the project now
+  follows 2068-Leap-C's conventions. `make` builds two images (the HOME
+  ROM and the graphics EXROM), the two as one file for ZEsarUX, and the
+  EXROM as a `.dck`; the cartridge build, the demo ROMs (their Forth
+  sources are in `demos/`) and the 73 smoke, test and bench ROMs are
+  gone. `make test` runs every suite on the production images; the smoke
+  ROMs' checks are Forth source files in `tests/`, typed at the prompt.
+  RAM is defined in one file (`include/forth_layout.inc`), checked by
+  `make check`; the sources are trimmed to Leap-C's style; `budget.toml`
+  budgets every component. Fixed on the way: `CLS` now moves the print
+  position to the top left; `CATCH` after a `THROW` no longer leaves an
+  extra cell; `VAL` of an empty string; `SOUND` with a register number
+  of 256 or more; `LEFT`/`RIGHT` with a count of 256 or more; a name of
+  32 or more characters (31 are kept); `LIST-DEFS` with a `;` inside a
+  string. HOME free space 1,758 bytes before, 1,732 after; EXROM 3,296.
+  Emulators only; no hardware.
