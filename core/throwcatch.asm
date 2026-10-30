@@ -99,23 +99,7 @@
 
 CATCH_MAX_DEPTH EQU 8            ; matches core/doloop.asm's own
                                   ; LEAVE_HEAD_TABLE bound
-CATCH_TMP_SP    EQU $890F        ; 2 bytes: fixed staging cell (see
-                                  ; this file's own header for why a
-                                  ; computed frame address can't be
-                                  ; used directly with SP/IX/IY)
-CATCH_TMP_IX    EQU $8911        ; 2 bytes
-CATCH_TMP_IY    EQU $8913        ; 2 bytes
-CATCH_DEPTH     EQU $8915        ; 1 byte: 0 = no active CATCH. MUST be
-                                  ; zeroed once by every including ROM's
-                                  ; own COLD_START, same requirement
-                                  ; core/doloop.asm's LEAVE_DEPTH states
-CATCH_STACK     EQU $85D8        ; CATCH_MAX_DEPTH x 6 bytes (SP,IX,IY per frame) = 48 bytes,
-                                  ; $85D8-$8607 (it was $8916, whose 8th frame overlapped SPACES_COUNT)
-THROW_CODE      EQU $85D6        ; 2 bytes: the code of an uncaught THROW, for
-                                  ; RUNTIME_ERROR_HOOK's message (FLOAT_SPEC 8.4);
-                                  ; the hook zeroes it, so STACK_CHECK's violation
-                                  ; (which leaves it alone) reads 0: STACK?. In the
-                                  ; free gap $85D6-$879F (FLOAT_SPEC section 9)
+    ASSERT CATCH_MAX_DEPTH * 6 == 48    ; CATCH_STACK's size in include/forth_layout.inc
 
 ; ============================================================================
 ; JUMP_HL — NOT a dictionary word, shared plumbing local to this file

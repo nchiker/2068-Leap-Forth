@@ -61,22 +61,7 @@
 ; unused by anything in kernel/'s public API, so claiming it here
 ; creates no conflict with kernel calls a later phase's words might
 ; wrap (kernel/graphics, kernel/io, etc. all use HL/DE/BC/AF).
-;
-; DSTACK_TOP/DSTACK_LIMIT are PROVISIONAL addresses, exactly like
-; rom/main.asm's own placeholder SP value — this project hasn't done
-; its Phase 0 memory-map audit yet (docs/PROJECT_PLAN.md), so these
-; will move once that exists. They're chosen here only to be clearly
-; out of the way of anything else: this file has zero INCLUDEs, so
-; nothing else can claim these addresses out from under it *within
-; this smoke ROM*, but a later phase that also pulls in kernel/io or
-; kernel/graphics (and therefore include/sysvars.inc) MUST re-check
-; these against that file's own address allocation before reuse — see
-; docs/PROJECT_PLAN.md Phase 0, item 2.
 ; ============================================================================
-DSTACK_TOP   EQU $9800   ; empty-stack value for IX; first push lands at $97FE
-DSTACK_LIMIT EQU $9000   ; lowest legal stack address — 1024 bytes of stack
-                         ; (512 cells); no overflow check yet (Phase 2 has
-                         ; no recursion or user input that could exhaust it)
 
 ; ============================================================================
 ; LATEST / HERE — dictionary growth pointers
@@ -97,29 +82,7 @@ DSTACK_LIMIT EQU $9000   ; lowest legal stack address — 1024 bytes of stack
 ; computed as "wherever the ROM assembly left off," only ever as
 ; FORTH_DICT_RAM the first time and self-updating from there.
 ; ============================================================================
-LATEST       EQU $8608   ; 2 bytes: the head-of-dictionary address (outside the data stack's
-HERE         EQU $860A   ; 2 bytes: the next free dictionary byte    range: they were $9002/$9004)
     ASSERT LATEST + 4 <= DSTACK_LIMIT || LATEST >= DSTACK_TOP
-DICT_RAM_CEILING EQU $D000   ; step E2a: lowered from $F000 so the line store ($D000-$EFFF,
-                             ; core/loadtext.asm) sits above the dictionary. Phase 44: raised from $C000 once FILL's
-                             ; own scratch was relocated out of the way
-                             ; (include/sysvars.inc) — sits with margin
-                             ; below GFX_LINE_X0-Y1 ($F3C4), the one
-                             ; remaining live cell found in this range;
-                             ; see core/free.asm's header for the full
-                             ; writeup
-FORTH_DICT_RAM EQU $9800 ; first free byte of the RAM dictionary area Phase 3's
-                         ; CREATE will compile into. Was $A000 until Phase 43's
-                         ; own FREE audit (see core/free.asm's header) found
-                         ; $9800-$9FFF sitting completely idle: DSTACK_TOP is
-                         ; only a sentinel value for empty IX, not a byte the
-                         ; stack ever occupies (real cells live BELOW it, down
-                         ; to DSTACK_LIMIT) -- confirmed via the real build's
-                         ; own .sym table (no other symbol lands in that
-                         ; range) before reclaiming it, not guessed. Moving
-                         ; this down 2048 bytes recovers that gap for FREE
-                         ; with zero risk (nothing else ever referenced the
-                         ; literal $A000).
 
 ; ============================================================================
 ; DROP ( n -- )

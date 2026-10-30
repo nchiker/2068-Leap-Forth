@@ -25,6 +25,7 @@
     IFNDEF INCLUDE_GRAPHICS_EXROM_ABI_INC
     DEFINE INCLUDE_GRAPHICS_EXROM_ABI_INC
 
+GRAPHICS_EXROM_BASE      EQU $A000   ; where the EXROM image sits while paged in (chunk 5)
 GRAPHICS_EXROM_MAGIC     EQU $F0
 GRAPHICS_EXROM_ABI       EQU 2
 GRAPHICS_EXROM_MAX_SLOTS EQU 16
@@ -36,6 +37,6 @@ GRAPHICS_EXROM_MAX_SLOTS EQU 16
 ; RET byte forgotten (a real off-by-one, caught by re-running the
 ; RECT/POLYGON smoke ROMs under real ZEsarUX after the table was
 ; fixed-sized, not by re-deriving the number by eye a second time).
-GRAPHICS_EXROM_MAGIC_ADDR EQU $A000 + (GRAPHICS_EXROM_MAX_SLOTS * 3) + 1
+GRAPHICS_EXROM_MAGIC_ADDR EQU GRAPHICS_EXROM_BASE + (GRAPHICS_EXROM_MAX_SLOTS * 3) + 1
 
     ENDIF

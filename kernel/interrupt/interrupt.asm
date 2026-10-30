@@ -80,7 +80,6 @@
 ; ============================================================================
 
     INCLUDE "include/hardware.inc"
-    INCLUDE "include/sysvars.inc"
     INCLUDE "include/keys.inc"
 
 KBD_DEBOUNCE_TICKS   EQU 2    ; ticks a newly-seen key must hold before

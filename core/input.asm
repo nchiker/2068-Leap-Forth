@@ -51,25 +51,6 @@
     IFNDEF CORE_INPUT_ASM
     DEFINE CORE_INPUT_ASM
 
-ACCEPT_DEST EQU $87F2   ; 2 bytes: ACCEPT's own scratch -- the
-                        ; destination buffer's address
-ACCEPT_MAX  EQU $87F4   ; 1 byte: ACCEPT's own scratch -- the maximum
-                        ; character count
-ACCEPT_LEN  EQU $87F5   ; 1 byte: ACCEPT's own scratch -- the running
-                        ; (and, at the end, final) character count
-ACCEPT_CHAR EQU $87F6   ; 1 byte: ACCEPT's own scratch -- the character
-                        ; just read, held across the length check
-FINPUT_BUF  EQU $87F7   ; 8 bytes: INPUT's own fixed internal buffer --
-                        ; named FINPUT_BUF, not INPUT_BUF, because
-                        ; include/sysvars.inc already has its own
-                        ; unrelated INPUT_BUF (a real, caught duplicate-
-                        ; label assembly error, not a style choice) --
-                        ; ends at $87FF, the last free byte before
-                        ; $8800 (informally reserved across this
-                        ; project's own smoke ROMs for their own
-                        ; CHECKPOINT_NUM scratch -- see e.g.
-                        ; rom/forth_smoke_p27.asm)
-
 ; ============================================================================
 ; ACCEPT ( dest maxlen -- len )
 ; ============================================================================

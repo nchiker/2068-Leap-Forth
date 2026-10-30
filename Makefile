@@ -47,6 +47,8 @@ check: all
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm
 	python3 tools/check_z80_opcodes.py core/*.asm kernel/*/*.asm rom/*.asm
 	cd tools/z80sim && python3 -m unittest test_flags test_snapshot
+	python3 -I tools/check_ram_layout.py
+	python3 -I tools/check_ram_layout.py --negative
 	python3 -I tools/budget.py
 	python3 -I tools/provenance.py; r=$$?; [ $$r -eq 0 ] || [ $$r -eq 2 ]
 	python3 -I tools/check_upstream.py

@@ -18,20 +18,8 @@
     IFNDEF CORE_RECALL_ASM
     DEFINE CORE_RECALL_ASM
 
-; ---- DEF_COUNT/DEF_TABLE: same confirmed-idle gap as STORE_END
-; (core/loadtext.asm), continuing right after it ($8A74-$8A75). ----
-STORE_LAST_LINE EQU $8BFE  ; 2 bytes: STORE_APPEND's last append (0: none), for STORE_TRIM;
-                           ; the top of the free $8ABD-$8BFF (the view's RAM starts at $8AC0)
 DEF_TABLE_MAX  EQU 16
-DEF_COUNT      EQU $8A76   ; 1 byte: how many spans SCAN_DEFS found
-                           ; (0-DEF_TABLE_MAX)
-DEF_TABLE      EQU $8A77   ; DEF_TABLE_MAX*4 bytes: per entry, 2-byte
-                           ; start offset from STORE_START + 2-byte
-                           ; length. Ends $8AB7, still well before
-                           ; core/float.asm's own FSTACK_LIMIT ($8C00).
-
-RECALL_SCAN_PTR   EQU $8AB7   ; 2 bytes: SCAN_DEFS's own scratch
-RECALL_SPAN_START EQU $8AB9   ; 2 bytes: SCAN_DEFS's own scratch
+    ASSERT DEF_TABLE_MAX * 4 == 64      ; DEF_TABLE's size in include/forth_layout.inc
 
 ; ============================================================================
 ; STORE_APPEND ( HL = addr, B = len -- )
@@ -293,14 +281,6 @@ W_LISTDEFS:
     inc  a
     ld   (RECALL_LIST_IDX), a
     jr   .loop
-
-RECALL_LIST_IDX EQU RECALL_SPAN_START + 2   ; 1 byte: reuses SCAN_DEFS's
-                                             ; own idle scratch -- LIST-DEFS
-                                             ; never runs concurrently with
-                                             ; SCAN_DEFS itself (it CALLS
-                                             ; it first, then this loop
-                                             ; runs after SCAN_DEFS has
-                                             ; already returned).
 
 DICT_LATEST_INIT_LISTDEFS EQU H_LISTDEFS   ; head of the dictionary once
                                            ; this file is the last one INCLUDEd

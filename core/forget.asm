@@ -76,9 +76,6 @@
     IFNDEF CORE_FORGET_ASM
     DEFINE CORE_FORGET_ASM
 
-FORGET_TARGET_ADDR EQU $8A60   ; 2 bytes: this file's own scratch, see
-                                ; header above for why this address
-
 ; ============================================================================
 ; FORGET_PRINT_MSG ( HL = null-terminated message address -- )  NOT a
 ; dictionary word. Same per-character W_EMIT idiom rom/forth_boot.asm's

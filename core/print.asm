@@ -46,11 +46,6 @@
     IFNDEF CORE_PRINT_ASM
     DEFINE CORE_PRINT_ASM
 
-PRINT_ROW     EQU $87C8   ; 1 byte: next EMIT's row (0-22)
-PRINT_COL     EQU $87C9   ; 1 byte: next EMIT's column (0-31)
-EMIT_CHAR_TMP EQU $87CA   ; 1 byte: EMIT's own scratch (the character,
-                          ; held across loading row/col into B/C)
-
 ; ============================================================================
 ; UDIV10 (internal, not a dictionary word) — HL = value (0-65535) ->
 ; HL = value/10, A = value MOD 10 (0-9). Classic 16-iteration

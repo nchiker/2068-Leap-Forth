@@ -38,7 +38,7 @@ fill logic of provenance.py is ported from it.
 
 Source comments cite, without reproducing them: the "Timex Sinclair 2068 ROM Disassembly" (David Anderson,
 2023) and the stock ROM's routine names. The files whose comments mention the disassembly are: core/printer.asm,
-core/sound.asm, core/stick.asm, include/hardware.inc, include/sysvars.inc, kernel/graphics/graphics.asm,
+core/sound.asm, core/stick.asm, include/hardware.inc, kernel/graphics/graphics.asm,
 kernel/interrupt/interrupt.asm, kernel/io/io.asm and kernel/sound/sound.asm (grep, updated in step S:
 core/beep.asm no longer mentions it since step A, kernel/storage/storage.asm since step S; kernel/mode64/mode64.asm
 was on this list until step M6 removed it, 2026-10-29). A comment that cites the

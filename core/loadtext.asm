@@ -20,21 +20,8 @@
 
     INCLUDE "core/tapeword.asm"
 
-; ---- The line store (audit step E, docs/V2/EDITOR_SPEC.md section 3): $D000-$EFFF, plain text, every line
-; ended by CR. STORE_END is the Phase 64 workspace-end cell under its new name (same address); it is in the
-; $8426-$8FFF gap below core/float.asm's FSTACK_LIMIT ($8C00). ----
-STORE_END EQU $8A74         ; 2 bytes: one past the last valid byte in the store, the append cursor of
-                            ; core/recall.asm's STORE_APPEND. Set by LOAD-TEXT; SAVE-TEXT and VERIFY-TEXT
-                            ; leave it alone
-
-LOADTEXT_MAX_LEN EQU 8192
-LOADTEXT_BUF     EQU $D000                             ; defined on its own (step E2a): it is also DICT_RAM_CEILING
-    ASSERT LOADTEXT_BUF == DICT_RAM_CEILING                ; the dictionary ends where the store begins
-STORE_START      EQU LOADTEXT_BUF
-STORE_LIMIT      EQU STORE_START + LOADTEXT_MAX_LEN        ; $F000: the store never writes at or above it
-    ASSERT STORE_LIMIT <= UDG_TABLE   ; the store region ends below every other thing at $F000 and up (LABEL_TABLE_TOP, UDG_TABLE ...)
-    ; NOT clear: the sprite slot buffers, SPRITE_SLOT_IMG_BUF/_BG_BUF ($E800-$E91F, include/sysvars.inc, used by the
-    ; graphics EXROM's SPRITE words), lie inside $D000-$EFFF. Reported to the owner at step E item 4.
+; ---- The line store (audit step E, docs/V2/EDITOR_SPEC.md section 3): plain text, every line ended by CR. ----
+LOADTEXT_MAX_LEN EQU STORE_LIMIT - STORE_START
     ASSERT (STORE_LIMIT & $FF) == 0   ; LOAD-TEXT's room test below looks at the high byte only
 
 ; ============================================================================

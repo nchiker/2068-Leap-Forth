@@ -38,7 +38,7 @@ behaves the same) and FORTH_REALTIME=1 runs at real speed.  Neither changes the 
 frame, interrupts), so every T-state figure is unchanged.
 
 Memory the harness uses: $FF00 RET_SLOT, $FF02 STOP_ADDR, $FF10 GLYPH_PROG.  Forth's machine stack starts at
-SP = $FF00 and grows down (rom/forth_boot.asm COLD_START `ld sp,$FF00`; include/sysvars.inc asserts that
+SP = $FF00 and grows down (rom/forth_boot.asm COLD_START `ld sp,$FF00`; include/forth_layout.inc asserts that
 everything else it places ends at or below $FF00), so $FF00-$FFFF is not used by the ROM.  The restore puts them
 back to the snapshot's contents.
 
@@ -84,7 +84,7 @@ GLYPH_PROG = 0xFF10                 # the glyph rendering program and its code l
 UNKNOWN = "░"                  # screen_rows: a cell that is no glyph
 INVERSE_MARK = "\u2022"             # screen_rows: the next character is drawn inverse (every pixel flipped)
 UDG_BASE = 0xE000                   # screen_rows: UDG code 144 + i reads as chr(UDG_BASE + i) (private use area)
-UDG_CODE_BASE, UDG_COUNT = 144, 21  # kernel/graphics UDG_CODE_BASE; include/sysvars.inc UDG_COUNT
+UDG_CODE_BASE, UDG_COUNT = 144, 21  # kernel/graphics UDG_CODE_BASE; include/forth_layout.inc UDG_COUNT
 Z_CAPS, Z_SYM, Z_SPACE, Z_ENTER = 135, 138, 128, 129    # ZEsarUX send-keys-event codes (letters and digits: their ASCII)
 KEY_ENTER = 13                      # include/keys.inc
 # Control codes that IO_DECODE_KEY makes from CAPS SHIFT + a key by code, not through a table (kernel/io/io.asm;

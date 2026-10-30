@@ -41,7 +41,6 @@
 ; ============================================================================
 
     INCLUDE "include/hardware.inc"
-    INCLUDE "include/sysvars.inc"
 
 ; ---- character grid ----
 GFX_ROWS   EQU 24

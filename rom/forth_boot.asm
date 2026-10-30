@@ -87,6 +87,8 @@
     DEVICE NOSLOT64K
     ORG $0000
 
+    INCLUDE "include/forth_layout.inc"
+
 ; ---- RST 00: cold start ----
 RST_00:
     di
@@ -144,7 +146,7 @@ GRAPHICS_HOME_TABLE:
 ; COLD_START
 ; ============================================================================
 COLD_START:
-    ld   sp, $FF00
+    ld   sp, MACHINE_STACK_TOP
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
@@ -178,10 +180,9 @@ COLD_START:
     ; (audit O1). Extending the one fill costs no bytes; a second
     ; MEM_FILL_ZERO call for the table would cost 9. The $F000-$F17F
     ; between them is unused by Forth, so clearing it is harmless.
-COLD_CLEAR_END EQU UDG_TABLE + UDG_COUNT * 8
     ASSERT COLD_CLEAR_END > DICT_RAM_CEILING
-    ld   hl, $8000
-    ld   bc, COLD_CLEAR_END - $8000
+    ld   hl, RAM_CELLS_BASE
+    ld   bc, COLD_CLEAR_END - RAM_CELLS_BASE
     call MEM_FILL_ZERO
 
     ld   hl, DICT_LATEST_COLD          ; the full chain's own head —
@@ -667,6 +668,10 @@ DICT_LATEST_COLD EQU DICT_LATEST_INIT_LISTDEFS ; LATEST of an empty user diction
                                               ; and core/storage.asm's LOAD-LIB after a failure
 DICT_CHAIN_POINT DEFL H_LISTDEFS
     INCLUDE "core/editor.asm"
+
+    IFDEF LAYOUT_NEGCTL                 ; the RAM layout guard's negative controls (nothing is saved)
+    INCLUDE "tests/layout_negctl.asm"
+    ENDIF
 
     DS   $4000 - $, $FF
 

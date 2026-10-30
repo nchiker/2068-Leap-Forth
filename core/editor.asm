@@ -79,116 +79,13 @@ EDIT_COL_START EQU 0
 EDIT_MAX_LEN   EQU 128     ; physical buffer capacity — matches the
                            ; sibling ts2068rom project's own reference
                            ; buffer size for a wrapped input line
+    ASSERT EDIT_LEN == EDIT_BUF + EDIT_MAX_LEN   ; EDIT_BUF's size in include/forth_layout.inc
 FWRAP_MAX_ROWS  EQU 4       ; hard cap on rows a single input line may
                            ; use — chosen so the input can never grow
                            ; tall enough to push its own TOP row above
                            ; screen row 20, leaving row 0 (the boot
                            ; banner) and everything above row 20
                            ; comfortably alone even in the worst case
-
-; ---- Phase 6 RAM state, RELOCATED for this rewrite. The original
-; 32-byte EDIT_BUF at $8550 could not simply grow in place — it sits
-; directly against core/storage.asm's own SAVE_NAME_PTR at $8580 (that
-; file's own header: "placed after core/editor.asm's own cells (ending
-; at $8574)"), so a 128-byte buffer starting at $8550 would have run
-; straight into storage.asm's own scratch. Verified by grepping every
-; "EQU $8..." across core/, kernel/, include/, and rom/ first (the same
-; method every phase since Phase 5 has used): $8860-$88F4 is free —
-; comfortably past every existing core/ file's own scratch (the
-; highest before this was core/beep.asm's own BEEP_PITCH_PARAM, ending
-; $8860) and comfortably below core/float.asm's own FSTACK_LIMIT
-; ($8C00). rom/forth_smoke_p3.asm/p4.asm/p5.asm/p6.asm's own
-; CHECKPOINT_NUM cells (still at $8542/$8574, described in their own
-; comments as sitting "right after core/editor.asm's own cells") are
-; now stale in that ONE respect — those addresses are still genuinely
-; free and still work, just no longer literally adjacent to this file's
-; own (now relocated) scratch. ----
-EDIT_BUF           EQU $8860   ; 128 bytes: the line being edited, not
-                               ; null-terminated (EDIT_LEN is authoritative)
-EDIT_LEN           EQU $88E0   ; 1 byte: current number of characters in EDIT_BUF
-EDIT_CURSOR        EQU $88E1   ; 1 byte: cursor position within EDIT_BUF, 0..EDIT_LEN
-SHIFT_COUNT        EQU $88E2   ; 1 byte: INSERT_CHAR/DELETE_CHAR_BEFORE_CURSOR's
-                               ; own scratch (bytes remaining to shift)
-INS_CHAR_TMP       EQU $88E3   ; 1 byte: INSERT_CHAR's own scratch (the char
-                               ; being inserted, held across the shift loop)
-FWRAP_COUNT    EQU $88E4   ; 1 byte: how many rows the CURRENT line
-                               ; wraps across (1-FWRAP_MAX_ROWS), set
-                               ; fresh by WRAP_CALC every redraw
-FWRAP_START    EQU $88E5   ; 4 bytes: FWRAP_START+i = the
-                               ; EDIT_BUF offset where wrapped row i's
-                               ; own visible content starts
-FWRAP_LEN      EQU $88E9   ; 4 bytes: FWRAP_LEN+i = how many
-                               ; characters of visible content wrapped
-                               ; row i shows (0-32)
-FWRAP_SCAN_PTR EQU $88ED   ; 2 bytes: WRAP_CALC's own scratch (a
-                               ; pointer to the row currently being
-                               ; computed's own start in EDIT_BUF)
-FWRAP_REMAIN   EQU $88EF   ; 1 byte: WRAP_CALC's own scratch
-                               ; (characters not yet assigned to a row)
-FWRAP_ROW_IDX  EQU $88F0   ; 1 byte: shared loop-index scratch —
-                               ; WRAP_CALC's own "row being computed"
-                               ; and (at a different time, never
-                               ; concurrently) EDIT_CURSOR_TO_ROWCOL's
-                               ; own "row being tested"
-FWRAP_LAST_SPACE EQU $88F1 ; 1 byte: WRAP_CALC's own scratch — the
-                               ; highest relative position (1-31) of a
-                               ; space found in the current row's own
-                               ; 32-column scan window, or $FF if none
-FWRAP_TMP_LEN    EQU $88F2 ; 1 byte: WRAP_STORE_ROW's own scratch
-FWRAP_TMP_OFFSET EQU $88F3 ; 1 byte: WRAP_STORE_ROW's own scratch
-FWRAP_OLD_COUNT  EQU $88F4 ; 1 byte: FWRAP_COUNT's own value as
-                               ; of the LAST redraw — compared against
-                               ; the freshly-recomputed count every
-                               ; redraw to decide whether the input
-                               ; area just grew (scroll to make room)
-                               ; or shrank (clear the rows it no longer
-                               ; needs). MUST be initialized to 1 by
-                               ; whatever ROM uses this file, once, at
-                               ; cold start (`xor a` / `inc a` / `ld
-                               ; (FWRAP_OLD_COUNT),a`, or just `ld
-                               ; a,1`) — EDITOR_LOOP_LIVE deliberately
-                               ; does NOT reset it on every fresh line
-                               ; (see that routine's own header for
-                               ; why), so its value is only ever correct
-                               ; from the second line onward unless the
-                               ; very first redraw is seeded explicitly,
-                               ; the same "no assumed default" rule
-                               ; core/print.asm's own PRINT_ROW/
-                               ; PRINT_COL already follow.
-FWRAP_OVERFLOW   EQU $88F5 ; 1 byte: set by WRAP_CALC — 0 normally, 1
-                           ; if the CURRENT EDIT_BUF/EDIT_LEN genuinely
-                           ; needs more than FWRAP_MAX_ROWS rows to show
-                           ; it all. See WRAP_CALC's own header for why
-                           ; this can't just be read off FWRAP_COUNT
-                           ; (which never exceeds FWRAP_MAX_ROWS by
-                           ; construction, cap or no cap) — a real bug
-                           ; caught designing this file's own smoke ROM
-                           ; test cases in Python first, not in Z80:
-                           ; the original design checked FWRAP_COUNT
-                           ; alone in EDITOR_PROCESS_KEY's own room
-                           ; check, which could never actually fire,
-                           ; silently accepting characters into EDIT_BUF
-                           ; that would never appear in any row's own
-                           ; wrap-table entry at all. Ends at $88F6.
-
-FWRAP_WIDTH_MINUS1 EQU $88F7  ; 1 byte: the wrap width minus one
-                           ; (32-1=31) -- set by WRAP_CALC_AT, read by
-                           ; the drawing and the cursor. $88F6 is free
-                           ; (Phase 64's RECALL_PENDING, retired at step
-                           ; E item 7).
-
-; Step E item 5 (the merged redraw, E3): $88F8-$88FE, free before it
-; (CHECKPOINT_NUM at $8900 is the smoke ROMs' own).
-FWRAP_TOP          EQU $88F8  ; 1 byte: screen row of the wrapped line's
-                           ; first row (EDITOR_REDRAW: 24 - FWRAP_COUNT;
-                           ; the full-screen view sets its own)
-FWRAP_CURSOR_AT_END EQU $88F9 ; 1 byte: WRAP_CALC's own scratch -- 0 when
-                           ; the cursor is at the end of the text (E10)
-FWRAP_BASE         EQU $88FA  ; 2 bytes: the text the wrap table describes
-                           ; (EDIT_BUF, or a line of the store)
-ED_ROW_JP          EQU $88FC  ; 3 bytes: JP ED_ROW32, written by
-                           ; WRAP_CALC -- the row drawer (ED_DRAW_ROWS'
-                           ; header; the full-screen view calls it)
 
 ; ============================================================================
 ; INSERT_CHAR ( A = character )

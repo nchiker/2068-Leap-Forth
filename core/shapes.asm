@@ -39,7 +39,7 @@ W_FILL:
     ld   (GFX_FILL_X), hl
     ld   a, (CURRENT_ATTR)
     ld   (GFX_FILL_ATTR), a
-    ld   hl, $A000 + (7 * 3)   ; slot 7 = FILL_IMPL
+    ld   hl, GRAPHICS_EXROM_BASE + (7 * 3)   ; slot 7 = FILL_IMPL
     jp   EXROM_CALL_SLOT       ; tail jump: its RET returns to our caller
 
 H_CIRCLE:
@@ -54,7 +54,7 @@ W_CIRCLE:
     ld   (GFX_CIRCLE_XC), hl
     ld   a, (CURRENT_ATTR)
     ld   (GFX_CIRCLE_ATTR), a
-    ld   hl, $A000 + (8 * 3)   ; slot 8 = CIRCLE_IMPL
+    ld   hl, GRAPHICS_EXROM_BASE + (8 * 3)   ; slot 8 = CIRCLE_IMPL
     jp   EXROM_CALL_SLOT       ; tail jump: its RET returns to our caller
 
 DICT_LATEST_INIT_SHAPES EQU H_CIRCLE   ; head of the dictionary once this

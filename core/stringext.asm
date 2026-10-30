@@ -92,19 +92,6 @@
     IFNDEF CORE_STRINGEXT_ASM
     DEFINE CORE_STRINGEXT_ASM
 
-; ---- Phase 40 RAM state — verified free by the same whole-tree
-; "grep every EQU" pass Phase 39's own consolidation fix used, not
-; assumed. Placed at $8900, comfortably past core/editor.asm's own
-; tail ($88F5) and below core/float.asm's own FSTACK_LIMIT ($8C00). ----
-CHR_BUF      EQU $8900   ; 1 byte: CHR's own one-character result
-STR_BUF      EQU $8901   ; 6 bytes: STR's own result ("-32768" longest)
-SRCH_ADDR1   EQU $8907   ; 2 bytes: SEARCH's own scratch (haystack addr)
-SRCH_LEN1    EQU $8909   ; 1 byte:  haystack length
-SRCH_ADDR2   EQU $890A   ; 2 bytes: needle addr
-SRCH_LEN2    EQU $890C   ; 1 byte:  needle length
-SRCH_POS     EQU $890D   ; 1 byte:  current starting offset being tried
-SRCH_MAXPOS  EQU $890E   ; 1 byte:  last valid starting offset (len1-len2)
-
 ; ============================================================================
 ; CHR ( code -- addr len )
 ; ============================================================================
