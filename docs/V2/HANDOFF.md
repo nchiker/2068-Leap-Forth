@@ -1,25 +1,22 @@
-# Leap-Forth V2 — session handoff (2026-10-29: step F done on `v2/step-f-float`; PR #7 waits for approval)
+# Leap-Forth V2 — session handoff (2026-10-29: step F done, PR #8 open; PR #7 merged)
 
 Read this first in a new session. **Step F (the 5-byte float rebuild, O10, T13) is complete** on `v2/step-f-float`
-(not pushed). **Next:** the owner's approval of PR #7 (Claude merges it), then the owner asks for step F's PR, then
-**O15** (section "Next work"). Specs: `docs/V2/FLOAT_SPEC.md` (step F as built, decisions F1-F10 in section 15),
+(pushed; **PR #8** open, waiting for the owner's review; Claude merges it with a merge commit when approved).
+**Next: O15** (section "Next work") on its own branch from master once #8 merges (or from `v2/step-f-float`). Specs: `docs/V2/FLOAT_SPEC.md` (step F as built, decisions F1-F10 in section 15),
 `docs/V2/EDITOR_SPEC.md`, `docs/V2/MODE6_REMOVAL_SPEC.md`, `docs/V2/LEAPC_COMPARISON_AUDIT.md`,
 `docs/V2/FORTH_V2_REUSE_AUDIT.md` (section 8 sequence, section 9 ledger, section 10 owner decisions).
 
 ## Where things stand
 
-- **master** is `0e8476b`: PR #5 (M6) and PR #6 (L) merged with merge commits on 2026-10-29.
-- **PR #7** `v2/t-cartdiff-speed` (cartdiff 16 min → 75 s; pushed, trial merge onto master clean): **waiting for the
-  owner's approval; Claude merges it with a merge commit once approved.**
-- **`v2/step-f-float`** (from PR #7's tip `b4a05b0`; not pushed; open its PR to master after #7 merges, when the owner
-  asks): `63cfdc4`/`4371d18` spec, `9310c87` T13 oracle, `31260a1` O10 + RND, `91b05ce` ledger, `38e318b` the engine and
+- **master** is `1ba4881`: PRs #5 (M6), #6 (L) and #7 (cartdiff speed-up) merged with merge commits on 2026-10-29.
+- **PR #8** `v2/step-f-float` (pushed; a trial merge onto master is clean): `63cfdc4`/`4371d18` spec, `9310c87` T13 oracle, `31260a1` O10 + RND, `91b05ce` ledger, `38e318b` the engine and
   today's 14 words, `7dd20d8` the font over `$11F8` (ZEsarUX autoload) and O10's seed in the tape tests, `470f8f4` item
   5 (22 words, PLACES, FS., TAN, FLOOR, the THROW messages), then the docs/NOTICE/HANDOFF commit.
 
   | Branch | State |
   |---|---|
-  | `v2/step-f-float` | step F complete; PR after #7 merges |
-  | `v2/t-cartdiff-speed` | PR #7 open |
+  | `v2/step-f-float` | PR #8 open |
+  | `v2/t-cartdiff-speed` | merged (PR #7) |
   | `v2/f-step5-wip` | work branch, its commit cherry-picked as `470f8f4`; can be deleted |
   | `v2/step-m6-mode6-removal`, `v2/step-l-leapc-audit`, `v2/step-e-console-editor` | merged |
   | `v2/t-cartdiff-wip`, `v2/m6-*-wip`, `v2/e-*-wip`, `v2/step-o13-rst-stack` | merged work branches; can be deleted |
@@ -65,7 +62,7 @@ Read this first in a new session. **Step F (the 5-byte float rebuild, O10, T13) 
 
 ## Next work, in order
 
-1. **Owner:** approve PR #7 (Claude merges it); ask for step F's PR (Claude opens it, merges on approval).
+1. **Owner:** review PR #8 (step F); Claude merges it with a merge commit, then runs the full `make test` on master.
 2. **O15:** FILL and CIRCLE kernels to the EXROM (about −820 B HOME; the EXROM has 4,247 B free). Now worth more:
    HOME has 816 B free.
 3. **K** (with O16, O17; the text-drawing speed-up), **D** (O18), **B**.
