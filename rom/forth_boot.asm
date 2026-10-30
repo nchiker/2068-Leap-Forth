@@ -88,12 +88,9 @@
     ORG $0000
 
 ; ---- RST 00: cold start ----
-ROM_ID_SKIP_RESET:                  ; to ROM_ID_SKIP_RESET_END: the two builds' bytes differ here,
-ROM_ID_SKIP_RESET_END EQU $0005     ; so tools/rom_identity.py leaves them out (STORAGE_SPEC.md D3)
 RST_00:
     di
     jp   COLD_START
-    ASSERT $ <= ROM_ID_SKIP_RESET_END
 
     INCLUDE "include/rst_vectors.inc"
 ; ---- RST 38 / IM 1 maskable interrupt entry point — real wiring,
@@ -107,10 +104,7 @@ RST_38:
     DS   $0066 - $, $FF
 NMI_ENTRY:
     retn
-ROM_ID_SKIP_CART:                   ; to ROM_ID_SKIP_CART_END: CART_START, or $FF fill (D3)
-ROM_ID_SKIP_CART_END EQU ROM_ID_SKIP_CART + 4
 
-    ASSERT $ <= ROM_ID_SKIP_CART_END
 
     DS   $0100 - $, $FF
 
