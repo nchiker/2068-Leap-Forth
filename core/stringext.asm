@@ -145,13 +145,16 @@ W_LOWER:
     ret
 
 ; ============================================================================
-; LEFT ( addr len n -- addr len' ) -- the first n characters (the whole string if n >= len)
+; LEFT ( addr len n -- addr len' ) -- the first n characters (the whole string if n >= len, or n < 0)
 ; ============================================================================
 H_LEFT:
     DW   H_LOWER
     DB   4, "L", "E", "F", "T"
 W_LEFT:
     rst RST_DPOP               ; hl = n
+    inc  h
+    dec  h
+    ret  nz                     ; n >= 256 (or negative): the whole string
     ld   a, l
     ld   d, (ix+0)               ; d = current len (low byte)
     cp   d
@@ -162,13 +165,16 @@ W_LEFT:
     ret
 
 ; ============================================================================
-; RIGHT ( addr len n -- addr' len' ) -- the last n characters (the whole string if n >= len)
+; RIGHT ( addr len n -- addr' len' ) -- the last n characters (the whole string if n >= len, or n < 0)
 ; ============================================================================
 H_RIGHT:
     DW   H_LEFT
     DB   5, "R", "I", "G", "H", "T"
 W_RIGHT:
     rst RST_DPOP                ; hl = n
+    inc  h
+    dec  h
+    ret  nz                      ; n >= 256 (or negative): the whole string
     ld   a, l
     ld   c, (ix+0)                ; c = current len (low byte)
     cp   c

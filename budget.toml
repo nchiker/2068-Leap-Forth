@@ -133,3 +133,15 @@ ranges = [["FILL_IMPL", "CIRCLE_MASK_TABLE"]]
 #   component = "float"     # a component id, or "reserve_floor"
 #   delta = 40              # bytes added to (or, negative, taken from) the budget
 #   reason = "what and why, with the measurement"
+
+[[ledger]]
+image = "home"
+component = "sound"
+delta = 2
+reason = "SOUND ignores a register number of 256 and up (it wrote register n AND 255): +3 B for the high-byte test, -1 B for a tail jump; from the reserve (1,753 B free)"
+
+[[ledger]]
+image = "home"
+component = "text"
+delta = 4
+reason = "LEFT and RIGHT keep the whole string for a count of 256 and up (they used its low byte: 256 LEFT gave an empty string): +6 B; 2 B shrunk in the same component (TYPE and STRING's name copy each had a spare load); from the reserve"

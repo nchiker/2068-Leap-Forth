@@ -114,9 +114,8 @@ H_TYPE:
 W_TYPE:
     rst RST_DPOP             ; hl = len
     ld   a, l
-    ld   b, a                  ; b = len
     rst RST_DPOP               ; hl = addr
-    ld   a, b
+    ld   b, a                  ; b = len
     or   a
     ret  z                       ; empty string -- nothing to print
 .loop:
@@ -164,7 +163,6 @@ W_STRING:
     inc  de
     inc  hl                       ; hl -> first name char
     ld   b, a
-    ld   a, b
     or   a
     jr   z, .namedone
 .namecopy:
@@ -277,10 +275,10 @@ H_VAL:
 W_VAL:
     rst RST_DPOP             ; hl = len
     ld   a, l
+    rst RST_DPOP                 ; hl = addr (popped before any exit)
     or   a
     jr   z, .fail               ; empty string -- 0
     ld   (VAL_COUNT), a
-    rst RST_DPOP                 ; hl = addr
     ld   (VAL_PTR), hl
     xor  a
     ld   (VAL_NEG), a

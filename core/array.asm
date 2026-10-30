@@ -48,7 +48,6 @@ W_ARRAY:
     inc  de
     inc  hl                       ; hl -> first name char
     ld   b, a
-    ld   a, b
     or   a
     jr   z, .namedone
 .namecopy:

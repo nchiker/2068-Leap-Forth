@@ -37,7 +37,7 @@ SOUND_WRITE:
     ret
 
 ; ============================================================================
-; SOUND ( register data -- ) -- write data to AY register 0-16 (only the low byte of register is used)
+; SOUND ( register data -- ) -- write data to AY register 0-16; any other register number is ignored
 ; ============================================================================
 H_SOUND:
     DW   DICT_CHAIN_POINT
@@ -46,9 +46,11 @@ W_SOUND:
     rst RST_DPOP          ; hl = data
     ld   c, l
     rst RST_DPOP          ; hl = register
+    ld   a, h
+    or   a
+    ret  nz               ; 256 and up: ignored
     ld   b, l
-    call SOUND_WRITE
-    ret
+    jp   SOUND_WRITE
 
 DICT_LATEST_INIT_SOUND EQU H_SOUND
 

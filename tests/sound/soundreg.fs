@@ -3,3 +3,4 @@
 0 90 SOUND 0 245 OUT 246 IN .          \ expect: 90
 1 7 SOUND 1 245 OUT 246 IN .           \ expect: 7
 4242 17 200 SOUND . 0 245 OUT 246 IN . \ expect: 4242 90
+256 33 SOUND 0 245 OUT 246 IN .        \ expect: 90

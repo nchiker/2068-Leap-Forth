@@ -16,6 +16,7 @@ HW 5 LEFT TYPE SPACE                   \ expect: HELLO
 HW 20 LEFT . DROP                      \ expect: 11
 HW 5 RIGHT TYPE SPACE                  \ expect: WORLD
 HW 20 RIGHT . A1 - .                   \ expect: 11 0
+HW 256 LEFT . DROP HW 256 RIGHT . A1 - .   \ expect: 11 11 0
 \ SEARCH ( addr1 len1 addr2 len2 -- addr3 len3 flag ): found, not found, needle longer than the haystack
 HW WD SEARCH . . A1 - .                \ expect: -1 5 6
 HW DROP 5 XY SEARCH . . A1 - .         \ expect: 0 5 0
