@@ -1,24 +1,14 @@
 # Build the ROMs and the downloadable bundle on every push.
 #
 # What it does, in order:
-#   1. Builds SjASMPlus 1.23.1 from source (cached, so it's ~2s after
-#      the first run) -- there's no Linux binary on the sjasmplus
-#      release page, and the Ubuntu package is too old.
-#   2. `make check` and `make all`: every smoke ROM has to assemble
-#      cleanly before anything ships. (These don't *run* the smoke ROMs
-#      -- that still needs Fuse and eyes -- they're a build gate.)
-#   3. `make dist`: the two product ROMs, their DOCK-cartridge (LROS)
-#      builds, the graphics EXROM and its EightyOne/TS-Pico .dck
-#      wrapping, the experimental LROS boot stub, and docs as
-#      Markdown/PDF/DOCX, zipped into dist/2068-Forth-<version>.zip.
-#   4. Publishes it:
-#        - every run:            as a workflow artifact (Actions tab).
-#        - every push to master: as the rolling "latest" pre-release, so
-#                                there's a permanent download link:
-#           https://github.com/nchiker/2068-Leap-Forth/releases/download/latest/2068-Forth-latest.zip
-#        - every tag vX.Y[.Z]:   as a proper versioned release with
-#                                auto-generated notes. To cut one:
-#                                  git tag v1.0 && git push origin v1.0
+#   1. Builds SjASMPlus 1.23.1 from source (cached).
+#   2. `make check` (it builds the images first) and `make repro` (two clean builds, identical hashes).
+#      The emulator suites (`make test`) run locally.
+#   3. `make dist`: the HOME ROM, the graphics EXROM, the two as one 24 KB file, the EXROM .dck, the docs as
+#      Markdown/PDF/DOCX and the demo sources, zipped into dist/2068-Forth-<version>.zip.
+#   4. Publishes it: as a workflow artifact on every run; as the rolling "latest" pre-release on every push to master
+#      (https://github.com/nchiker/2068-Leap-Forth/releases/download/latest/2068-Forth-latest.zip); as a versioned
+#      release on every tag vX.Y[.Z].
 #
 # It can also be run by hand from the Actions tab ("Run workflow").
 name: Build ROMs
@@ -94,8 +84,8 @@ jobs:
       - name: Static checks (make check)
         run: make check
 
-      - name: Assemble every ROM (make all)
-        run: make all
+      - name: Reproducible build (make repro)
+        run: make repro
 
       - name: Work out the version string
         id: version
@@ -142,7 +132,7 @@ jobs:
           title="Latest build ($VERSION)"
           notes=$(printf '%s\n\n%s' \
             "Automatic build of \`master\` at ${GITHUB_SHA} — a moving target, rebuilt on every push." \
-            "Download **2068-Forth-latest.zip** below: both ROM images, an EXROM placeholder, and the docs as Markdown/PDF/DOCX. See README-FIRST.txt inside. For a fixed, numbered release see the [releases page](https://github.com/${GITHUB_REPOSITORY}/releases).")
+            "Download **2068-Forth-latest.zip** below: the HOME ROM, the graphics EXROM and the docs as Markdown/PDF/DOCX. See README-FIRST.txt inside. For a fixed, numbered release see the [releases page](https://github.com/${GITHUB_REPOSITORY}/releases).")
 
           if gh release view latest >/dev/null 2>&1; then
             # Replace the old assets rather than piling up one per push.
@@ -163,7 +153,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          notes="2068-Forth $VERSION — download **2068-Forth-$VERSION.zip** below: both ROM images, an EXROM placeholder, and the docs as Markdown/PDF/DOCX. See README-FIRST.txt inside."
+          notes="2068-Forth $VERSION — download **2068-Forth-$VERSION.zip** below: the HOME ROM, the graphics EXROM and the docs as Markdown/PDF/DOCX. See README-FIRST.txt inside."
           if gh release view "$VERSION" >/dev/null 2>&1; then
             gh release upload "$VERSION" dist/2068-Forth-"$VERSION".zip dist/2068-Forth-"$VERSION".zip.sha256 --clobber
           else

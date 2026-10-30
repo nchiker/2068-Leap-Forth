@@ -145,7 +145,7 @@ W_RECT:
     ld   (RECT_X0), a
     ld   a, (CURRENT_ATTR)
     ld   (RECT_ATTR), a
-    ld   hl, $A000 + (0 * 3)   ; slot 0 = RECT_FILL_IMPL
+    ld   hl, GRAPHICS_EXROM_BASE + (0 * 3)   ; slot 0 = RECT_FILL_IMPL
     call EXROM_CALL_SLOT
     ret
 

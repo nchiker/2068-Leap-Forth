@@ -52,7 +52,6 @@
     IFNDEF MATH_ASM
     DEFINE MATH_ASM
 
-    INCLUDE "include/sysvars.inc"
 
 ; ============================================================================
 ; MATH_MULTIPLY16

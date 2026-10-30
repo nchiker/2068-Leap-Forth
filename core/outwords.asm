@@ -31,8 +31,6 @@
     IFNDEF CORE_OUTWORDS_ASM
     DEFINE CORE_OUTWORDS_ASM
 
-SPACES_COUNT EQU $8940   ; 2 bytes: SPACES' own remaining-count scratch
-
 ; ============================================================================
 ; CR ( -- )
 ; ============================================================================

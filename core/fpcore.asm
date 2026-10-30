@@ -28,25 +28,6 @@
     IFNDEF CORE_FPCORE_ASM
     DEFINE CORE_FPCORE_ASM
 
-FSTACK_TOP   EQU $9000   ; empty-stack value of IY; the first push lands at $8FFB
-FSTACK_LIMIT EQU $8C04   ; lowest legal IY: 204 cells ($9000 - 204 * 5) in $8C00-$8FFF
-
-; ---- RAM (docs/V2/FLOAT_SPEC.md section 9): $8594-$85D5, inside the cold start's zero fill ----
-FP_RAM   EQU $8594
-FX       EQU FP_RAM          ; 7 B unpacked: [sign $80/0][exponent][m0 m1 m2 m3][guard]
-FY       EQU FP_RAM + 7      ; 7 B
-FQ       EQU FP_RAM + 14     ; 5 B: a product or quotient being built (big-endian); N in ATOF; scratch elsewhere
-FDEXP    EQU FP_RAM + 19     ; 2 B: ATOF's decimal exponent ...
-FFLAGS   EQU FP_RAM + 21     ; 1 B: ... bit 0 a digit seen, bit 1 after the point, bit 2 a float
-FMT      EQU FP_RAM + 20     ; 24 B: F.'s 128.64 fixed point, 16 integer bytes then 8 fraction bytes, big-endian
-                             ; (overlaps FDEXP's second byte and FFLAGS: ATOF and F. are never live together)
-FDIG     EQU FP_RAM + 44     ; 9 B: F.'s decimals, one digit per byte
-FSQ_N    EQU FP_RAM + 53     ; 5 B: FSQRT's argument; SIN/COS keep k * pi's k and then r here
-FTRIG_R2 EQU FP_RAM + 58     ; 5 B: r squared in the series
-FTRIG_K  EQU FP_RAM + 63     ; 2 B: [k's low byte, its parity is the sign][1 for COS]
-F_PLACES EQU FP_RAM + 65     ; 1 B: decimals F. prints (0-9; the cold start sets 4)
-    ASSERT F_PLACES == $85D5 && FMT + 24 == FDIG && FDIG + 9 == FSQ_N && FQ + 8 == FFLAGS + 1   ; (FQ, FDEXP, FFLAGS: 8 bytes in a row)
-
 U_S EQU 0                    ; offsets in an unpacked float
 U_E EQU 1
 U_M EQU 2                    ; m0, the most significant

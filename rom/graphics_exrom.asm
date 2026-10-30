@@ -55,9 +55,8 @@
     DEVICE NOSLOT64K
     ORG $A000
 
-    INCLUDE "include/sysvars.inc"
+    INCLUDE "include/forth_layout.inc"
     INCLUDE "include/graphics_exrom_abi.inc"
-    INCLUDE "include/exrom_home_ram.inc"
 
 ; ---- Home-side stable call targets (rom/forth_boot.asm, $0100) ----
 ; Generated, not hand-typed — see this file's own header above.
@@ -1391,42 +1390,9 @@ POLY_FILL_IMPL:
 ; header does not list as Out; none touches IX or IY.
 ; ============================================================================
 
-; ---- the view's RAM, $8AC0 up (free: $8ABD-$8BFF; VIEW_RESULT at $8AC0 is
-; in include/exrom_home_ram.inc) ----
-VIEW_CUR           EQU $8AC1    ; 2: the cursor line (its text is in EDIT_BUF)
-VIEW_TOP           EQU $8AC3    ; 2: the first line on screen
-VIEW_COUNT         EQU $8AC5    ; 2: lines in the store
-VIEW_OLDCUR        EQU $8AC7    ; 2: VIEW_CUR / VIEW_TOP / VIEW_CROW before the key
-VIEW_OLDTOP        EQU $8AC9    ; 2
-VIEW_PTR           EQU $8ACB    ; 2: a line's address, walking the store
-VIEW_IDX           EQU $8ACD    ; 2: its index
-VIEW_CELL          EQU $8ACF    ; 2: the cursor cell last drawn: column, row
-VIEW_MSG           EQU $8AD1    ; 1: STORE FULL is on the status row
-VIEW_OLDMSG        EQU $8AD2    ; 1: VIEW_MSG before the key
-VIEW_CROW          EQU $8AD3    ; 1: screen row of the cursor line's first row
-VIEW_CROWS         EQU $8AD4    ; 1: its rows (the wrap table's count)
-VIEW_OLDROW        EQU $8AD5    ; 1
-VIEW_ROW           EQU $8AD6    ; 1: the screen row a walk has reached
-VIEW_LEVEL         EQU $8AD7    ; 1: what the key changed: 0 nothing, 1 the
-                                ;    cursor, 2 the cursor line's text, 3 lines
-VIEW_COL           EQU $8AD8    ; 1: the column UP/DOWN carries to a line
-VIEW_KEYCODE       EQU $8AD9    ; 1
-VIEW_EXTRA         EQU $8ADA    ; 1: bytes a caller adds right after VIEW_LEAVE
-VIEW_FOUND         EQU $8ADB    ; 2: 1 + the last line the name matched, or 0
-VIEW_T1            EQU $8ADD    ; 2: scratch
-VIEW_T2            EQU $8ADF    ; 2: scratch
-VIEW_FLAG          EQU $8AE1    ; 1: scratch
-VIEW_TEXT          EQU $8AE2    ; 14: the status row's text
-                                ; $8AF1-$8AF2: EDIT_LINE_NO (core/edit.asm)
-VIEW_SH            EQU $8AF3    ; 69: the row shadow, 23 records (rows 0-22) of 3 bytes: the
-                                ;    line index shown there (2; $FFFF a blank row, $FFFE
-                                ;    unknown) and the row within that line (1)
-VIEW_SH_END        EQU $8B38
-VIEW_STOP          EQU $8B38    ; 2: VIEW_RENDER may stop after this line once the shadow agrees
-    ASSERT (VIEW_TEXT & $FF) + 14 < $100
-    ASSERT VIEW_TEXT + 14 <= $8AF1
-    ASSERT VIEW_SH_END == VIEW_SH + 69
-    ASSERT VIEW_STOP + 2 <= $8C00
+; HOME's values of these two, which tools/check_ram_layout.py compares with HOME's symbols.
+EDIT_MAX_LEN       EQU 128      ; core/editor.asm: the edit line's capacity
+ATTR_DEFAULT       EQU $44      ; kernel/graphics/graphics.asm
 
 ; ============================================================================
 ; STORE_NEXT -- the line at HL.
@@ -3264,7 +3230,7 @@ FILL_IMPL:
     ld   d, high CIRCLE_MASK_TABLE
     ld   a, (de)
     and  (hl)                        ; nonzero: the seed pixel is set
-    ld   hl, $4000
+    ld   hl, SCREEN_ADDR
     ld   de, GFX_FILL_SHADOW
     jr   nz, .set
     xor  a

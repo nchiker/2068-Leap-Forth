@@ -249,27 +249,6 @@ PATCH_LEAVE_CHAIN:
 ; ambiguous case by the same standard, not a defect here (matching
 ; DO's own already-documented start-equals-limit gotcha).
 ; ============================================================================
-; NOT placed right after core/decimal.asm's own DIVISOR10 ($87BD,
-; ending at $87BF) -- that range is NOT actually free: core/print.asm's
-; PRINT_ROW/PRINT_COL/EMIT_CHAR_TMP occupy $87C8-$87CA, and a real
-; +LOOP body almost always prints on every pass (as this project's own
-; smoke test does), so its scratch is LIVE at the same time as
-; PRINT_ROW/PRINT_COL, unlike the float scratch blocks earlier
-; in this same $87xx range, which safely overlap each other only
-; because those features never run interleaved with one another. This
-; block instead starts right after core/ts2068.asm's own CURRENT_ATTR
-; ($87CB, 1 byte) -- the last claimed byte in the whole $87xx range as
-; of this writing (verified directly, not assumed, by grepping every
-; existing "EQU $87.." across core/, kernel/, and include/ before
-; picking this address -- the earlier, wrong assumption cost a real,
-; reproduced bug: see this file's own PROJECT_PLAN.md entry).
-PL_TARGET EQU $87CC   ; 2 bytes: pointer to +LOOP's inline branch target
-PL_INDEX  EQU $87CE   ; 2 bytes: the loop's index before this step
-PL_LIMIT  EQU $87D0   ; 2 bytes: the loop's limit
-PL_NEWIDX EQU $87D2   ; 2 bytes: index after adding the step
-PL_DOLD   EQU $87D4   ; 2 bytes: (index - limit) before stepping
-PL_DNEW   EQU $87D6   ; 2 bytes: (new index - limit) after stepping --
-                       ; ends at $87D8
 PLUSLOOP_RT:
     pop  hl
     ld   (PL_TARGET), hl
@@ -323,14 +302,6 @@ PLUSLOOP_RT:
 ; ============================================================================
 ; DO ( limit start -- )  IMMEDIATE
 ; ============================================================================
-LEAVE_DEPTH      EQU $87D8   ; 1 byte: current DO nesting depth (0 =
-                              ; no loop open). MUST be zeroed once by
-                              ; every including ROM's own COLD_START --
-                              ; see this file's own header.
-LEAVE_HEAD_TABLE EQU $87D9   ; 8 slots x 2 bytes = 16 bytes: this
-                              ; nesting level's own pending-LEAVE chain
-                              ; head, indexed by LEAVE_DEPTH-1 -- ends
-                              ; at $87E9
 
 ; ============================================================================
 ; LEAVE_SLOT_ADDR_CALC — NOT a dictionary word. Returns in HL the

@@ -17,38 +17,13 @@
 #     regressions now and tightens toward the target. `target` is reporting only.
 #
 # Free space is measured from the image in build/: size minus the trailing run of `pad` bytes.
-# The cartridge images differ from the Home images (their own layout) and are floored separately.
 
 pad = 0xFF
 
 [[image]]
 file   = "forth_boot_rom0.bin"
 title  = "HOME ROM (Forth)"
-floor  = 1758
-target = 200
-
-[[image]]
-file   = "forth_boot_cart.bin"
-title  = "HOME, DOCK cartridge build (Forth)"
-floor  = 1758
-target = 200
-
-[[image]]
-file   = "forth_demo_blackjack_rom0.bin"
-title  = "HOME ROM (Blackjack demo)"
-floor  = 1878
-target = 200
-
-[[image]]
-file   = "forth_demo_blackjack_cart.bin"
-title  = "HOME, DOCK cartridge build (Blackjack demo)"
-floor  = 1878
-target = 200
-
-[[image]]
-file   = "forth_demo_gallery_rom0.bin"
-title  = "HOME ROM (Shooting Gallery demo)"
-floor  = 1747
+floor  = 1760
 target = 200
 
 [[image]]
@@ -113,3 +88,5 @@ target = 150
 #     3296 (-688 B): step O15 item 5, FILL rebuilt in the EXROM; the audit's section 9 row "O15 item 5".
 #   HOME and cartridge 1722 -> 1758, Blackjack 1842 -> 1878, Gallery 1711 -> 1747 (raised, +36 B): O15's defect fixes
 #     (the HIRES attribute at the bitmap byte + $2000 replaces GFX_SET_ATTR_EXT); docs/V2/milestones/O15.md.
+#   forth_boot_rom0.bin 1758 -> 1760 (+2 B, raised): Simplify, the cartridge build's paging variant gone (page-out
+#     writes A = 0 straight from the depth count).

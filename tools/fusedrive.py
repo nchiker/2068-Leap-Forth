@@ -147,18 +147,6 @@ def fuse_syms():
     return ",".join("%s=%s" % (n, out[n]) for n in SHIM_SYMS)
 
 
-def stock_roms():
-    """(rom0, rom1) of the genuine TS2068 ROMs, for the cartridge runs: $FORTH_STOCK_ROMS (a directory holding
-    tc2068-0.rom and tc2068-1.rom), else ~/fuse-build/roms (where tools/cart_diff.py looks), else Fuse's own
-    data directories."""
-    dirs = [os.environ.get("FORTH_STOCK_ROMS"), os.path.expanduser("~/fuse-build/roms"),
-            "/usr/local/share/fuse/roms", "/usr/share/spectrum-roms", "/usr/share/fuse/roms"]
-    for d in dirs:
-        if d and all(os.path.isfile(os.path.join(d, n)) for n in ("tc2068-0.rom", "tc2068-1.rom")):
-            return os.path.join(d, "tc2068-0.rom"), os.path.join(d, "tc2068-1.rom")
-    raise RuntimeError("no stock tc2068-0.rom + tc2068-1.rom in %s (set FORTH_STOCK_ROMS)" % [d for d in dirs if d])
-
-
 def fuse_version():
     r = subprocess.run([FUSE, "--version"], capture_output=True, text=True)
     m = re.search(r"version (\S+)\.", r.stdout + r.stderr)
@@ -168,17 +156,13 @@ def fuse_version():
 class Fuse:
     """One headless Fuse running the Forth images in `build`, its files in `wdir`."""
 
-    def __init__(self, build, wdir, speed=20000, extra=None, dck=None):
-        """dck: a DOCK cartridge file (build/forth_boot.dck, or a patched copy): the machine then keeps the STOCK
-        TS2068 ROMs (stock_roms()) and boots into the cartridge, whose labels are build/forth_boot_cart.sym and
-        whose image (for the key tables) is build/forth_boot_cart.bin.  None: the Home build, as always."""
+    def __init__(self, build, wdir, speed=20000, extra=None):
         self.build = os.path.abspath(build)
         self.wdir = os.path.abspath(wdir)
         self.speed = speed
         self.extra = extra or []
-        self.dck = os.path.abspath(dck) if dck else None
-        self.S = load_syms(os.path.join(self.build, "forth_boot_cart.sym" if dck else "forth_boot.sym"))
-        self.rom = open(os.path.join(self.build, "forth_boot_cart.bin" if dck else "forth_boot_rom0.bin"), "rb").read()
+        self.S = load_syms(os.path.join(self.build, "forth_boot.sym"))
+        self.rom = open(os.path.join(self.build, "forth_boot_rom0.bin"), "rb").read()
         self.chords_for = chord_map(self.rom, self.S)
         self.glyph = glyph_map(self.rom, self.S)
         self.proc = self.sock = None
@@ -199,12 +183,8 @@ class Fuse:
                    S["IO_LATCH_AND_CLEAR"], ACC, ACC, S["IO_READ_KEY"]))
         env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy", LD_PRELOAD=build_shim(),
                    LEAPC_FUSE_SOCK="@" + self.sock_path[1:], LEAPC_FUSE_SYMS=fuse_syms(), HOME=home, XDG_CONFIG_HOME=home)
-        if self.dck:
-            rom0, rom1 = stock_roms()
-            roms = ["--rom-ts2068-0", rom0, "--rom-ts2068-1", rom1, "--dock", self.dck]
-        else:
-            roms = ["--rom-ts2068-0", os.path.join(self.build, "forth_boot_rom0.bin"),
-                    "--rom-ts2068-1", os.path.join(self.build, "graphics_exrom.bin")]
+        roms = ["--rom-ts2068-0", os.path.join(self.build, "forth_boot_rom0.bin"),
+                "--rom-ts2068-1", os.path.join(self.build, "graphics_exrom.bin")]
         args = [FUSE, "--machine", "ts2068"] + roms + ["--no-sound", "--speed", str(self.speed),
                 "--no-auto-load", "--no-traps", "--no-confirm-actions", "--no-autosave-settings",
                 "--debugger-command", dbg] + self.extra

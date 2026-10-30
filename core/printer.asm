@@ -127,38 +127,6 @@
     IFNDEF CORE_PRINTER_ASM
     DEFINE CORE_PRINTER_ASM
 
-PRINT_LINE_BUF   EQU $8942   ; 256 bytes: 8 raster rows x 32 columns,
-                             ; one printed line's worth of dot data
-PRINT_COL_IDX    EQU $8A42   ; 1 byte: LPRINT_RENDER_LINE's own column
-                             ; counter (0-31)
-PRINT_SRC_ADDR   EQU $8A43   ; 2 bytes: source string for the CURRENT
-                             ; printed line
-PRINT_SRC_LEN    EQU $8A45   ; 1 byte: how many of this line's 32
-                             ; columns are real characters (0-32); the
-                             ; rest are space-padded
-PRINT_GLYPH_PTR  EQU $8A46   ; 2 bytes: LPRINT_RENDER_LINE's own
-                             ; source-glyph-byte pointer
-PRINT_DEST_PTR   EQU $8A48   ; 2 bytes: LPRINT_RENDER_LINE's own
-                             ; destination pointer into PRINT_LINE_BUF
-PRINT_ROW_IDX    EQU $8A4A   ; 1 byte: LPRINT_SEND_LINE's own raster
-                             ; row counter (0-7)
-PRINT_REMAINING  EQU $8A4B   ; 2 bytes: W_LPRINT's own remaining
-                             ; character count across multiple lines
-PRINT_CUR_ADDR   EQU $8A4D   ; 2 bytes: W_LPRINT's own current source
-                             ; pointer across multiple lines
-PRINT_LLIST_HDR  EQU $8A4F   ; 2 bytes: W_LLIST's own current header
-                             ; pointer while walking the chain
-                             ;
-                             ; ALL of the above are kept in NAMED
-                             ; MEMORY, not registers, on purpose:
-                             ; GFX_CHAR_TO_FONT_OFFSET destroys
-                             ; AF/BC/DE/HL (this project's own fix to
-                             ; that routine's header — found while
-                             ; writing this very file), and nothing
-                             ; but memory reliably survives repeated
-                             ; calls into it, the same lesson Phase
-                             ; 46's own SPACES bug already taught.
-
 BLANK_GLYPH: DB 0, 0, 0, 0, 0, 0, 0, 0   ; used when a character has
                                           ; no glyph at all (GFX_CHAR_
                                           ; TO_FONT_OFFSET's own carry
@@ -327,7 +295,7 @@ LPRINT_RENDER_LINE:
 ; ============================================================================
 LPRINT_SEND_LINE:
     ld   hl, FONT_TABLE - 256
-    ld   (ZX_SYSVAR_CHARS), hl   ; see hardware.inc's own header on this
+    ld   (ZX_SYSVAR_CHARS), hl   ; see include/forth_layout.inc
                                   ; constant -- needed for Fuse's printer
                                   ; text-OCR to recognize anything at all;
                                   ; re-set every line, safe re: GFX_FILL

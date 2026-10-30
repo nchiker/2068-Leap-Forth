@@ -104,30 +104,6 @@
     IFNDEF CORE_STRING_ASM
     DEFINE CORE_STRING_ASM
 
-; Placed starting right at $87E9, the next free byte after
-; core/doloop.asm's own LEAVE_HEAD_TABLE ($87D9, 16 bytes, ending at
-; $87E9) -- verified free by grepping every existing "EQU $8.." across
-; core/, kernel/, and include/ first, not assumed (core/doloop.asm's
-; own +LOOP scratch collided with core/print.asm's PRINT_ROW/PRINT_COL
-; by skipping exactly this check — see docs/PROJECT_PLAN.md's Phase 25
-; section).
-VAL_PTR   EQU $87E9   ; 2 bytes: VAL's own scratch, mirroring
-                       ; core/interp.asm's NUM_PTR -- next unread
-                       ; character while parsing
-VAL_COUNT EQU $87EB   ; 1 byte: VAL's own scratch, mirroring NUM_COUNT
-VAL_NEG   EQU $87EC   ; 1 byte: VAL's own scratch, mirroring NUM_NEG
-DOSSTR_ADDR EQU $87ED ; 2 bytes: DOSSTR's own scratch (the string's
-                       ; address, held across computing the
-                       ; continuation address -- see DOSSTR's own
-                       ; header)
-DOSSTR_LEN  EQU $87EF ; 1 byte: DOSSTR's own scratch (the string's
-                       ; length, held the same way)
-SQUOTE_CODE_ADDR EQU $87F0 ; 2 bytes: W_SQUOTE's own scratch -- HERE's
-                       ; own value from right before it starts
-                       ; compiling, remembered so it can roll HERE back
-                       ; to reclaim the compiled bytes when interpreting
-                       ; (see W_SQUOTE's own header) -- ends at $87F2
-
 ; ============================================================================
 ; DOSSTR — NOT a dictionary word. Runtime half of a compiled S"
 ; string: reads a length byte and that many characters off its own

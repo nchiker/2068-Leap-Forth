@@ -57,7 +57,7 @@ W_SPRITEDEFINE:
     rst RST_DPOP             ; hl = slot
     ld   a, l
     ld   (SPRITE_OP_SLOT), a
-    ld   hl, $A000 + (2 * 3)   ; slot 2 = SPRITE_DEFINE_IMPL
+    ld   hl, GRAPHICS_EXROM_BASE + (2 * 3)   ; slot 2 = SPRITE_DEFINE_IMPL
     call EXROM_CALL_SLOT
     ret
 
@@ -77,7 +77,7 @@ W_SPRITESHOW:
     rst RST_DPOP             ; hl = slot
     ld   a, l
     ld   (SPRITE_OP_SLOT), a
-    ld   hl, $A000 + (3 * 3)   ; slot 3 = SPRITE_SHOW_IMPL
+    ld   hl, GRAPHICS_EXROM_BASE + (3 * 3)   ; slot 3 = SPRITE_SHOW_IMPL
     call EXROM_CALL_SLOT
     ret
 
@@ -91,7 +91,7 @@ W_SPRITEHIDE:
     rst RST_DPOP             ; hl = slot
     ld   a, l
     ld   (SPRITE_OP_SLOT), a
-    ld   hl, $A000 + (4 * 3)   ; slot 4 = SPRITE_HIDE_IMPL
+    ld   hl, GRAPHICS_EXROM_BASE + (4 * 3)   ; slot 4 = SPRITE_HIDE_IMPL
     call EXROM_CALL_SLOT
     ret
 

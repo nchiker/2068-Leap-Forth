@@ -146,7 +146,7 @@ just a blank acknowledgement either way.
    trying variations of the same breakpoint. Fall back to a temporary
    in-ROM debug log instead: pick a few bytes of genuinely idle RAM
    (a sysvar/buffer confirmed unused by whatever you're testing —
-   check `include/sysvars.inc` for a comment saying so), write the
+   check `include/forth_layout.inc` for a `; free` line), write the
    values you want to inspect there at the point of interest, then
    read them back with `read-memory` after the run completes. Revert
    the instrumentation once the real bug is found and fixed — it's

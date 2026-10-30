@@ -87,36 +87,12 @@
     DEVICE NOSLOT64K
     ORG $0000
 
+    INCLUDE "include/forth_layout.inc"
+
 ; ---- RST 00: cold start ----
-ROM_ID_SKIP_RESET:                  ; to ROM_ID_SKIP_RESET_END: the two builds' bytes differ here,
-ROM_ID_SKIP_RESET_END EQU $0005     ; so tools/rom_identity.py leaves them out (STORAGE_SPEC.md D3)
-    IFDEF CARTRIDGE
-; The LROS chunk byte, and the port $F4 value the stock ROM's handoff leaves
-; behind (its complement: bit N of $F4 = 1 means chunk N comes from the DOCK).
-; kernel/bank/bank.asm builds its two $F4 writes from CART_HSR.
-CART_CHUNK_SPEC EQU %11111100
-CART_HSR        EQU (~CART_CHUNK_SPEC) & $FF
-; ---- DOCK cartridge build (make forth-boot-cart): the 5-byte LROS header
-; the stock ROM's initialization looks for at DOCK $0000 (TS2068
-; Technical Manual §5.1.1). The OS copies it into SYSCON, enables the
-; chunks named here, and jumps to the start address -- so the reset
-; stub below is never executed in this build and its bytes become the
-; header. Nothing else in the image changes; RST/NMI vectors and
-; COLD_START are at the same addresses in both builds. ----
-    DB   $00                        ; not used
-    DB   $01                        ; cartridge type 1 = LROS
-    DW   CART_START                 ; start address, JP byte order
-    DB   CART_CHUNK_SPEC            ; chunk spec, LOW-active: chunks 0-1
-                                    ; in use ($0000-$3FFF), 2-7 stay
-                                    ; Home. Bit 3 must be 1 so the OS's
-                                    ; GOTO_BANK (in Home chunk 3) can
-                                    ; finish the handoff.
-    ELSE
 RST_00:
     di
     jp   COLD_START
-    ENDIF
-    ASSERT $ <= ROM_ID_SKIP_RESET_END
 
     INCLUDE "include/rst_vectors.inc"
 ; ---- RST 38 / IM 1 maskable interrupt entry point — real wiring,
@@ -130,23 +106,7 @@ RST_38:
     DS   $0066 - $, $FF
 NMI_ENTRY:
     retn
-ROM_ID_SKIP_CART:                   ; to ROM_ID_SKIP_CART_END: CART_START, or $FF fill (D3)
-ROM_ID_SKIP_CART_END EQU ROM_ID_SKIP_CART + 4
 
-    IFDEF CARTRIDGE
-; ---- LROS entry point (DOCK cartridge build only). The stock ROM
-; hands over with IM 1 set and interrupts ENABLED, so RST_38 above
-; could fire before KBD_ISR_INIT has run; a cold home-ROM boot never
-; has this problem because the Z80 resets with interrupts off. The
-; DECR (port $FF) baseline -- bit 7 = 0, keeping DOCK selected, the
-; one thing that must never change while this ROM runs from it -- is
-; now established in COLD_START itself, not here, so both builds get
-; it uniformly. ----
-CART_START:
-    di
-    jp   COLD_START
-    ENDIF
-    ASSERT $ <= ROM_ID_SKIP_CART_END
 
     DS   $0100 - $, $FF
 
@@ -186,7 +146,7 @@ GRAPHICS_HOME_TABLE:
 ; COLD_START
 ; ============================================================================
 COLD_START:
-    ld   sp, $FF00
+    ld   sp, MACHINE_STACK_TOP
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
@@ -220,10 +180,9 @@ COLD_START:
     ; (audit O1). Extending the one fill costs no bytes; a second
     ; MEM_FILL_ZERO call for the table would cost 9. The $F000-$F17F
     ; between them is unused by Forth, so clearing it is harmless.
-COLD_CLEAR_END EQU UDG_TABLE + UDG_COUNT * 8
     ASSERT COLD_CLEAR_END > DICT_RAM_CEILING
-    ld   hl, $8000
-    ld   bc, COLD_CLEAR_END - $8000
+    ld   hl, RAM_CELLS_BASE
+    ld   bc, COLD_CLEAR_END - RAM_CELLS_BASE
     call MEM_FILL_ZERO
 
     ld   hl, DICT_LATEST_COLD          ; the full chain's own head —
@@ -710,10 +669,10 @@ DICT_LATEST_COLD EQU DICT_LATEST_INIT_LISTDEFS ; LATEST of an empty user diction
 DICT_CHAIN_POINT DEFL H_LISTDEFS
     INCLUDE "core/editor.asm"
 
+    IFDEF LAYOUT_NEGCTL                 ; the RAM layout guard's negative controls (nothing is saved)
+    INCLUDE "tests/layout_negctl.asm"
+    ENDIF
+
     DS   $4000 - $, $FF
 
-    IFDEF CARTRIDGE
-    SAVEBIN "forth_boot_cart.bin", $0000, $4000   ; raw LROS image; tools/make_dck.py wraps it as .dck
-    ELSE
     SAVEBIN "forth_boot_rom0.bin", $0000, $4000
-    ENDIF

@@ -93,7 +93,6 @@
 ; ============================================================================
 
     INCLUDE "include/hardware.inc"
-    INCLUDE "include/sysvars.inc"
     INCLUDE "include/keys.inc"
 
 ; ---- keyboard matrix layout (standard Spectrum-family 8x5 matrix) ----

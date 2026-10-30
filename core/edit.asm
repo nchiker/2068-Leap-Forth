@@ -19,11 +19,6 @@
     IFNDEF CORE_EDIT_ASM
     DEFINE CORE_EDIT_ASM
 
-VIEW_RESULT EQU $8AC0       ; 1 byte; the EXROM's copy is include/exrom_home_ram.inc
-EDIT_LINE_NO EQU $8AF1      ; 2 bytes: the number of the line the commit loop is running
-                            ; (0: none); EDIT_ERR_PREFIX reports it. After the EXROM's
-                            ; view cells $8AC1-$8AF0 (rom/graphics_exrom.asm; its row shadow follows at $8AF3)
-
 H_EDIT:
     DW   DICT_CHAIN_POINT   ; the including ROM sets this (DEFL)
     DB   4, "E","D","I","T"
@@ -34,7 +29,7 @@ W_EDIT:
                                     ; retires its append position before the session moves lines
     xor  a
     ld   (VIEW_RESULT), a           ; no view, until the EXROM says otherwise
-    ld   hl, $A000 + (6 * 3)        ; slot 6 = VIEW_SESSION
+    ld   hl, GRAPHICS_EXROM_BASE + (6 * 3)        ; slot 6 = VIEW_SESSION
     call EXROM_CALL_SLOT
     jr   c, .noexrom
     ld   a, (VIEW_RESULT)

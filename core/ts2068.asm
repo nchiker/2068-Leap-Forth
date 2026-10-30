@@ -68,8 +68,6 @@
 DEFAULT_ATTR EQU $38   ; paper 7 (white), ink 0 (black), no bright/flash —
                        ; the classic Spectrum-family power-on default;
                        ; the value CURRENT_ATTR must be initialized to
-CURRENT_ATTR EQU $87CB ; 1 byte: the attribute PLOT/LINE/CIRCLE draw
-                       ; with — see this file's own header
 
 ; ============================================================================
 ; PLOT ( x y -- )

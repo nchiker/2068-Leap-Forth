@@ -43,15 +43,16 @@ rom/graphics_exrom.asm include/, step G, 2026-10-28):
   * the machine stack below the live SP ($F600..SP-1): a stack is written before it is read, and what is
     left below SP is the leftover of the boot's calls and PUSHes, including pushes of the (scrambled)
     registers.  The live stack (SP..$FEFF) is DEFINED.  $F600 is EXTENSION_MODULE_LIMIT, "genuine stack
-    headroom starts at $F600" (include/sysvars.inc);
-  * $FF00-$FFFF: above the initial SP, nothing allocates there (sysvars.inc ASSERTs keep cells < $FF00);
+    headroom starts at $F600" (the old include/sysvars.inc; the layout's lowest stack byte is MACHINE_STACK_LIMIT,
+    $F3C8, in include/forth_layout.inc);
+  * $FF00-$FFFF: above the initial SP, nothing allocates there (include/forth_layout.inc: MACHINE_STACK_TOP is $FF00);
   * $5B00-$7FFF: GFX_FILL_SHADOW / GFX_FILL_STACK (FILL_IMPL fills the first from the screen and sets its stack
     pointer on entry, rom/graphics_exrom.asm), display file 2 at $6000 (displayed only in HIRES, which
     clears it on entry: kernel/graphics .clear_highres) and ZX_SYSVAR_CHARS $5C36 (only
     written, core/printer.asm);
   * $F000-$F17F: no Forth symbol ($F000-$F0FF) and LABEL_TABLE ($F100-$F17F, BASIC labels): no reader;
   * $F228-$F3C3 and $F400-$F5FF: EDIT_LINE_BUF, DETOK_BUF, STR_FUNC_POOL, DEF_FN / extension state and the
-    extension module window: named only in include/sysvars.inc, no reader in the Forth sources;
+    extension module window: free in include/forth_layout.inc (the old names are gone), no reader in the Forth sources;
   * $F3C4-$F3FF: GFX_LINE_X0..Y1 / ATTR / OVER, which the LINE word (core/ts2068.asm) and the EXROM's
     sprite code (rom/graphics_exrom.asm) set before every GFX_LINE call.
 NOT in the table, so they must come out identical to the zero boot: the bitmap and attributes
@@ -85,7 +86,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 BUILD = os.path.join(ROOT, "build")
 ROM0 = os.path.join(BUILD, "forth_boot_rom0.bin")
-EXROM = os.path.join(BUILD, "stock_shaped_exrom.bin")  # rom_list.txt: forth_boot's EXROM is 'none'
+EXROM = os.path.join(BUILD, "graphics_exrom.bin")
 SYM = os.path.join(BUILD, "forth_boot.sym")
 TARGET = "EDITOR_LOOP_LIVE.keyloop"
 
@@ -104,18 +105,18 @@ UNDEFINED_REGIONS = [
     ("stack below live SP", 0xF600, "SP",
      "machine stack: written (CALL/PUSH) before read; leftovers of the boot's calls and pushes"),
     ("above initial SP", 0xFF00, 0x10000,
-     "above COLD_START's SP=$FF00; nothing allocates here (sysvars.inc ASSERTs <= $FF00)"),
+     "above COLD_START's SP=$FF00; nothing allocates here (include/forth_layout.inc: MACHINE_STACK_TOP is $FF00)"),
     ("GFX_FILL scratch, display file 2, ZX sysvar", 0x5B00, 0x8000,
      "FILL clears its visited map and resets its stack on entry; HIRES clears display file 2 on "
      "entry; $5C36 is write-only"),
     ("unreferenced / BASIC label table", 0xF000, 0xF180,
      "no Forth symbol at $F000-$F0FF; LABEL_TABLE has no reader in the Forth sources"),
     ("Leap leftovers (edit/detok/string/ext cells)", 0xF228, 0xF3C4,
-     "named only in include/sysvars.inc; no reader in core/ kernel/ rom/"),
+     "free in include/forth_layout.inc; no reader in core/ kernel/ rom/"),
     ("GFX_LINE cells", 0xF3C4, 0xF400,
      "set by LINE (core/ts2068.asm) and the EXROM's sprite code before every GFX_LINE call"),
     ("extension module window", 0xF400, 0xF600,
-     "named only in include/sysvars.inc; no reader in core/ kernel/ rom/"),
+     "free in include/forth_layout.inc; no reader in core/ kernel/ rom/"),
 ]
 
 
@@ -404,7 +405,7 @@ def main():
         smap = SymMap(rows)
         with open(ROM0, "rb") as f:
             rom0 = f.read()
-        exrom = open(EXROM, "rb").read() if os.path.isfile(EXROM) else bytes(8192)   # make_exrom_placeholder.sh: 8 K of $00
+        exrom = open(EXROM, "rb").read()
         if len(rom0) != 0x4000 or len(exrom) != 0x2000:
             raise HarnessError("ROM0 must be 16384 bytes and the EXROM 8192")
 

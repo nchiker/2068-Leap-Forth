@@ -16,10 +16,7 @@
 ;   $0030  RST_30              ret (unused)
 ;   $0038  RST_38 follows, defined by the including ROM
 ;
-; EVERY ROM's page zero must INCLUDE this file at $0008 (straight after
-; the RST_00 stub), because the core/, kernel/ and rom/ sources use the
-; rst. The HOME product and the cartridge build share rom/forth_boot.asm,
-; so their page-zero bytes are identical (tools/rom_identity.py --shared).
+; rom/forth_boot.asm INCLUDEs this file at $0008, straight after the RST_00 stub.
 ; ============================================================================
 
 RST_DPOP    EQU $08

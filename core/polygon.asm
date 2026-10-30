@@ -110,7 +110,7 @@ W_POLYGON:
 
     ld   a, (CURRENT_ATTR)
     ld   (POLY_ATTR), a
-    ld   hl, $A000 + (1 * 3)   ; slot 1 = POLY_DRAW_IMPL
+    ld   hl, GRAPHICS_EXROM_BASE + (1 * 3)   ; slot 1 = POLY_DRAW_IMPL
     call EXROM_CALL_SLOT
     ret
 
@@ -126,7 +126,7 @@ W_POLYGONFILL:
 
     ld   a, (CURRENT_ATTR)
     ld   (POLY_ATTR), a
-    ld   hl, $A000 + (5 * 3)   ; slot 5 = POLY_FILL_IMPL
+    ld   hl, GRAPHICS_EXROM_BASE + (5 * 3)   ; slot 5 = POLY_FILL_IMPL
     call EXROM_CALL_SLOT
     ret
 
