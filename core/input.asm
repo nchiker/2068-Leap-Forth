@@ -1,76 +1,36 @@
 ; ============================================================================
-; core/input.asm — Phase 28: ACCEPT and INPUT (line input)
+; core/input.asm -- ACCEPT and INPUT, line input
 ;
-; Builds on core/dict.asm, core/interp.asm, core/print.asm (needs
-; W_EMIT), core/string.asm (INPUT needs VAL), and kernel/io/io.asm
-; (needs IO_READ_KEY and, via its own INCLUDE, include/keys.inc's
-; KEY_ENTER/KEY_DELETE) — core/key.asm already depends on all of this,
-; so any ROM with `KEY` already has everything this file needs too.
-; Chains its own dictionary entries via DICT_CHAIN_POINT, same
-; convention as every other core/ file.
+; Needs core/dict.asm, core/interp.asm, core/print.asm (W_EMIT), core/string.asm (W_VAL) and
+; kernel/io/io.asm (IO_READ_KEY; KEY_ENTER and KEY_DELETE from include/keys.inc). Link fields: a
+; word's DW is DICT_CHAIN_POINT, which the including ROM sets (DEFL) to the chain the word
+; extends. Every word here may destroy all registers except IX, IY and SP.
 ;
-; WHAT THIS ADDS — the last of the six real gaps found by a direct
-; audit of 2068-Leap's own BASIC ROM (`~/ts2068rom`) against this
-; project's dictionary: `KEY` (Phase 20) reads a single raw keypress,
-; but there was no way to read a whole LINE of typed text, the way
-; BASIC's own INPUT statement does.
-;
-;   ACCEPT ( dest maxlen -- len )   reads characters from the keyboard
-;             (via KEY's own IO_READ_KEY, blocking) into `dest`,
-;             echoing each one as it's typed, until ENTER — returning
-;             the actual number of characters typed (which may be less
-;             than maxlen). DELETE removes the last character typed
-;             (both from the buffer and visually from the screen).
-;             Typing past maxlen is silently ignored (the key is
-;             consumed, matching every other "no error signal, safe
-;             default" convention in this project — kernel/math's
-;             divide-by-zero, ARRAY's own lack of bounds checking) —
-;             ENTER and DELETE still work normally once at the limit.
-;             This is the standard ANS Forth word of the same name and
-;             stack effect, not a name invented for this project.
-;   INPUT  ( -- n )   BASIC-style convenience: reads a line via ACCEPT
-;             into a small fixed internal buffer, then parses it with
-;             core/string.asm's own VAL, returning the integer
-;             directly — the exact shape of BASIC's own
-;             `INPUT A` for a numeric variable. Lines longer than the
-;             internal buffer (8 characters — enough for any signed
-;             16-bit integer, "-32768", with a little room to spare)
-;             are truncated at ACCEPT's own level, same as any other
-;             ACCEPT caller with a small buffer.
-;
-; ACCEPT'S OWN VISUAL DELETE IS SCOPED, NOT FULLY GENERAL: it moves the
-; print cursor back one column, blanks it, and moves back again —
-; correct within a single row of typing, but not tracked across a row
-; wrap (if the typed line is long enough to wrap past column 31,
-; DELETE's own column arithmetic doesn't know to also move up a row).
-; core/editor.asm's own EDITOR_PROCESS_KEY has the same class of
-; limitation already, documented there — this isn't a new gap, just a
-; new place it shows up.
+; ACCEPT's DELETE moves the print cursor back one column, blanks it and moves back again. It is
+; not row-aware: at column 0 it does nothing on screen, so a line that wrapped cannot be deleted
+; back across the wrap visually (core/editor.asm's EDITOR_PROCESS_KEY has the same limit).
 ; ============================================================================
 
     IFNDEF CORE_INPUT_ASM
     DEFINE CORE_INPUT_ASM
 
 ; ============================================================================
-; ACCEPT ( dest maxlen -- len )
+; ACCEPT ( dest maxlen -- len ) -- read a line from the keyboard into dest, echoing, until ENTER;
+; len is the number of characters typed. DELETE removes the last one; a key past maxlen is ignored
 ; ============================================================================
 H_ACCEPT:
-    DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL,
-                            ; not EQU) to whatever word chain this
-                            ; file should extend, immediately before
-                            ; INCLUDEing this file
+    DW   DICT_CHAIN_POINT
     DB   6, "A", "C", "C", "E", "P", "T"
 W_ACCEPT:
-    rst RST_DPOP            ; hl = maxlen
+    rst RST_DPOP                  ; HL = maxlen
     ld   a, l
     ld   (ACCEPT_MAX), a
-    rst RST_DPOP             ; hl = dest
+    rst RST_DPOP                  ; HL = dest
     ld   (ACCEPT_DEST), hl
     xor  a
     ld   (ACCEPT_LEN), a
 .loop:
-    call IO_READ_KEY           ; a = the next key (blocks until one
-                                ; arrives)
+    call IO_READ_KEY              ; A = the next key (blocks)
     cp   KEY_ENTER
     jr   z, .done
     cp   KEY_DELETE
@@ -81,8 +41,7 @@ W_ACCEPT:
     ld   b, a
     ld   a, (ACCEPT_MAX)
     cp   b
-    jr   z, .loop              ; already at the limit -- silently
-                                ; ignore this character, keep waiting
+    jr   z, .loop                 ; at the limit: the key is ignored
 
     ld   hl, (ACCEPT_DEST)
     ld   a, (ACCEPT_LEN)
@@ -90,12 +49,12 @@ W_ACCEPT:
     ld   d, 0
     add  hl, de
     ld   a, (ACCEPT_CHAR)
-    ld   (hl), a                ; store the character
+    ld   (hl), a
 
     ld   l, a
     ld   h, 0
     rst RST_DPUSH
-    call W_EMIT                  ; echo it
+    call W_EMIT                   ; echo it
 
     ld   a, (ACCEPT_LEN)
     inc  a
@@ -105,24 +64,18 @@ W_ACCEPT:
 .del:
     ld   a, (ACCEPT_LEN)
     or   a
-    jr   z, .loop               ; nothing typed yet -- nothing to
-                                 ; delete
+    jr   z, .loop                 ; nothing typed
     dec  a
     ld   (ACCEPT_LEN), a
 
     ld   a, (PRINT_COL)
     or   a
-    jr   z, .loop                ; already at column 0 -- see this
-                                  ; file's own header on ACCEPT's
-                                  ; scoped (not row-aware) visual delete
+    jr   z, .loop                 ; column 0: not row-aware (file header)
     dec  a
     ld   (PRINT_COL), a
     ld   hl, ' '
     rst RST_DPUSH
-    call W_EMIT                   ; blank the character on screen --
-                                   ; W_EMIT's own advance leaves
-                                   ; PRINT_COL one past where it should
-                                   ; end up, corrected below
+    call W_EMIT                   ; blank it; W_EMIT leaves PRINT_COL one past, corrected below
     ld   a, (PRINT_COL)
     dec  a
     ld   (PRINT_COL), a
@@ -136,34 +89,26 @@ W_ACCEPT:
     ret
 
 ; ============================================================================
-; INPUT ( -- n )
+; INPUT ( -- n ) -- read a line of up to 8 characters through ACCEPT and return its VAL
 ; ============================================================================
 H_INPUT:
     DW   H_ACCEPT
     DB   5, "I", "N", "P", "U", "T"
 W_INPUT:
     ld   hl, FINPUT_BUF
-    rst RST_DPUSH             ; push dest
+    rst RST_DPUSH
     ld   hl, 8
-    rst RST_DPUSH              ; push maxlen
+    rst RST_DPUSH
     call W_ACCEPT                 ; ( -- len )
-    rst RST_DPOP                   ; hl = len
-    push hl                           ; stashed briefly on the Z80
-                                       ; hardware stack -- safe:
-                                       ; symmetric push/pop within this
-                                       ; one routine's own body, same
-                                       ; technique core/array.asm's own
-                                       ; W_ARRAY uses
+    rst RST_DPOP
+    push hl                       ; len, while the address goes under it
     ld   hl, FINPUT_BUF
-    rst RST_DPUSH                      ; push addr
-    pop  hl                               ; hl = len, restored
-    rst RST_DPUSH                          ; push len -- stack is now
-                                             ; (addr len), VAL's own
-                                             ; expected order
+    rst RST_DPUSH
+    pop  hl
+    rst RST_DPUSH                 ; ( addr len ), as W_VAL expects
     call W_VAL
     ret
 
-DICT_LATEST_INIT_INPUT EQU H_INPUT   ; head of the dictionary once this
-                                      ; file's own words are included
+DICT_LATEST_INIT_INPUT EQU H_INPUT     ; the chain head when this is the last file included
 
     ENDIF

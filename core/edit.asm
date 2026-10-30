@@ -1,6 +1,5 @@
 ; ============================================================================
-; core/edit.asm -- EDIT ( "name" -- ): the full-screen view (audit step E item
-; 6, docs/V2/EDITOR_SPEC.md sections 5 and 5.1)
+; core/edit.asm -- EDIT, the full-screen view (docs/V2/EDITOR_SPEC.md sections 5 and 5.1)
 ;
 ; The view itself lives in the graphics EXROM (rom/graphics_exrom.asm,
 ; VIEW_SESSION, service slot 6). EDIT parses the name after it into WORD_BUF
@@ -8,7 +7,8 @@
 ; the session ran, clears the screen and interprets the lines the session
 ; changed. Needs core/interp.asm (W_WORD, INTERPRET_NESTED), core/rectfill.asm
 ; (EXROM_CALL_SLOT), core/forget.asm (FORGET_PRINT_MSG), core/loadtext.asm
-; (STORE_START, STORE_END) and core/print.asm first.
+; (STORE_START, STORE_END) and core/print.asm. The link field of H_EDIT is DICT_CHAIN_POINT, which
+; the including ROM sets (DEFL). EDIT may destroy all registers except IX, IY and SP.
 ;
 ; The session's answer is VIEW_RESULT: Home sets it to 0 before the call, the
 ; EXROM to 1 (name not found), 2 (refused; it printed the message) or 3 (the
@@ -19,16 +19,20 @@
     IFNDEF CORE_EDIT_ASM
     DEFINE CORE_EDIT_ASM
 
+; ============================================================================
+; EDIT ( "name" -- ) -- open the full-screen view on a name (or the whole store: bare EDIT), then
+; interpret the lines it changed; "NO EXROM" if the EXROM has no view
+; ============================================================================
 H_EDIT:
-    DW   DICT_CHAIN_POINT   ; the including ROM sets this (DEFL)
+    DW   DICT_CHAIN_POINT
     DB   4, "E","D","I","T"
 W_EDIT:
     call W_WORD
     rst  RST_DPOP                   ; the name is in WORD_BUF
-    call STORE_TRIM                 ; the EDIT line is not source (core/recall.asm); also
-                                    ; retires its append position before the session moves lines
+    call STORE_TRIM                 ; the EDIT line is not source; also retires its append
+                                    ; position before the session moves lines
     xor  a
-    ld   (VIEW_RESULT), a           ; no view, until the EXROM says otherwise
+    ld   (VIEW_RESULT), a           ; 0: no view, until the EXROM says otherwise
     ld   hl, GRAPHICS_EXROM_BASE + (6 * 3)        ; slot 6 = VIEW_SESSION
     call EXROM_CALL_SLOT
     jr   c, .noexrom
@@ -48,8 +52,8 @@ W_EDIT:
     ld   hl, (SRC_PTR)
     push hl
 .next:
-    call EDIT_NEXT_MARK             ; the first changed line, its mark cleared (the
-    jr   z, .end                    ; search starts afresh: a run line may change the store)
+    call EDIT_NEXT_MARK             ; the search starts afresh each time: a run line may
+    jr   z, .end                    ; change the store
     ld   (EDIT_LINE_NO), bc
     call INTERPRET_NESTED
     jr   .next
@@ -68,8 +72,8 @@ W_EDIT:
     DB   "NO EXROM", 13, 0
 
 ; ============================================================================
-; EDIT_NEXT_MARK -- the first changed line in the store: its mark ($8D) back to
-; $0D. Shared by EDIT's commit loop and EDIT_CLEAR_MARKS.
+; EDIT_NEXT_MARK -- the first changed line in the store, its mark ($8D) put back to $0D.
+; Shared by EDIT's commit loop and EDIT_CLEAR_MARKS.
 ; Out: NZ, HL = the line's text, DE = its length, BC = its number (from 1);
 ;      Z if no line is marked
 ; Destroys: AF
@@ -108,11 +112,10 @@ EDIT_NEXT_MARK:
     ret
 
 ; ============================================================================
-; EDIT_CLEAR_MARKS -- every changed-line mark ($8D) in the store back to $0D;
-; EDITOR_LOOP_LIVE calls it when EDIT was the last thing to run (VIEW_RESULT
-; not 0): the commit loop above clears a line's mark just before it runs, so
-; marks are left only when a line raised an error (or ABORT/QUIT) and the
-; whole run unwound to the console, and they must not outlive the session.
+; EDIT_CLEAR_MARKS -- every changed-line mark ($8D) in the store back to $0D
+; EDITOR_LOOP_LIVE calls it when EDIT was the last thing to run (VIEW_RESULT not 0). The commit
+; loop clears a line's mark just before it runs, so marks remain only when a line raised an
+; error (or ABORT/QUIT) and the run unwound to the console; they must not outlive the session.
 ; Out: VIEW_RESULT = 0, EDIT_LINE_NO = 0
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
@@ -121,17 +124,17 @@ EDIT_CLEAR_MARKS:
     ld   (VIEW_RESULT), a
     ld   h, a
     ld   l, a
-    ld   (EDIT_LINE_NO), hl         ; the run unwound past the commit loop's own reset
+    ld   (EDIT_LINE_NO), hl         ; the run unwound past the commit loop's reset
 .next:
     call EDIT_NEXT_MARK
     jr   nz, .next
     ret
 
 ; ============================================================================
-; EDIT_ERR_PREFIX -- `LINE n ` before an error's message while the commit loop
-; runs line n (EDITOR_SPEC.md section 5, Leaving). Called by rom/forth_boot.asm's
-; INTERPRET_UNKNOWN_WORD and RUNTIME_ERROR_HOOK (an uncaught THROW goes there
-; too), with the data stack already reset. The marks after line n are cleared
+; EDIT_ERR_PREFIX -- print `LINE n ` before an error's message while the commit loop runs line n
+; (EDITOR_SPEC.md section 5, Leaving); nothing when EDIT_LINE_NO is 0
+; Called by rom/forth_boot.asm's INTERPRET_UNKNOWN_WORD and RUNTIME_ERROR_HOOK (an uncaught
+; THROW goes there too), with the data stack already reset. The marks after line n are cleared
 ; when the unwound console line ends (EDIT_CLEAR_MARKS).
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
@@ -147,6 +150,6 @@ EDIT_ERR_PREFIX:
 .msg:
     DB   "LINE ", 0
 
-DICT_LATEST_INIT_EDIT EQU H_EDIT    ; head of the dictionary once this file is the last one INCLUDEd
+DICT_LATEST_INIT_EDIT EQU H_EDIT    ; the chain head when this is the last file included
 
     ENDIF
