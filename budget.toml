@@ -145,3 +145,15 @@ image = "home"
 component = "text"
 delta = 4
 reason = "LEFT and RIGHT keep the whole string for a count of 256 and up (they used its low byte: 256 LEFT gave an empty string): +6 B; 2 B shrunk in the same component (TYPE and STRING's name copy each had a spare load); from the reserve"
+
+[[ledger]]
+image = "home"
+component = "interp"
+delta = 2
+reason = "WORD keeps 31 characters and skips the rest of a longer token (it kept 32, which a header's 5-bit length field stored as 0, so the word could not be found, and left the rest as the next token); from the reserve"
+
+[[ledger]]
+image = "home"
+component = "console"
+delta = 14
+reason = "LIST-DEFS ends a definition at the word ; only (it ended at any ; byte, so : CC .\" A;B\" ; was cut short): whitespace tested on both sides; from the reserve"

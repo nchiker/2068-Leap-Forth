@@ -16,3 +16,6 @@ ARR3 NUMS
 : BAR FOO ;
 .                                      \ expect: 42
 7 BAR .                                \ expect: 7
+\ a name longer than 31 characters keeps its first 31 (a header's length field holds 0-31); the rest of the token is skipped
+: ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456 5 ;
+ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456 .     \ expect: 5

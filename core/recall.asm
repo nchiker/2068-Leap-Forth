@@ -87,7 +87,7 @@ AT_END:
 
 ; ============================================================================
 ; SCAN_DEFS -- walk STORE_START..STORE_END for top-level ":" ... ";" spans and fill DEF_TABLE and
-; DEF_COUNT, oldest first (a ":" starts a span, the next ";" ends it: colon definitions do not
+; DEF_COUNT, oldest first (a ":" starts a span, the next word ";" ends it: colon definitions do not
 ; nest). A word is delimited by any byte up to a space, as WORD does. Stops at DEF_TABLE_MAX.
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
@@ -119,6 +119,16 @@ SCAN_DEFS:
     ld   a, (hl)
     cp   ";"
     jr   nz, .find_semi
+    dec  hl                       ; only the word ";" ends a span: whitespace on both sides (the
+    ld   a, (hl)                  ; store's last line ends with CR, so the byte after is in the store)
+    inc  hl
+    cp   " " + 1
+    jr   nc, .find_semi
+    inc  hl
+    ld   a, (hl)
+    dec  hl
+    cp   " " + 1
+    jr   nc, .find_semi
     ld   a, (DEF_COUNT)
     cp   DEF_TABLE_MAX
     jr   nc, .stop                ; table full

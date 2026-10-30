@@ -24,7 +24,8 @@
 ; ============================================================================
 ; W_WORD ( -- addr ) -- parse the next token from SRC_PTR into WORD_BUF as a counted string, folding
 ; a-z to upper case; advance SRC_PTR past it and the delimiter. A count of 0 means SRC_PTR had
-; reached SRC_END: the input is exhausted. At most 32 characters; more are left for the next token.
+; reached SRC_END: the input is exhausted. At most 31 characters are kept (a header's length field
+; holds 0-31); the rest of a longer token is skipped.
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 W_WORD:
@@ -69,14 +70,16 @@ W_WORD:
     jr   nc, .not_lower
     sub  "a" - "A"
 .not_lower:
-    ld   (de), a
-    inc  de
     inc  hl
     ld   (SRC_PTR), hl
-    inc  b
+    ld   c, a
     ld   a, b
-    cp   32
-    jr   nc, .donecopy       ; at most 32 characters
+    cp   31
+    jr   nc, .copyloop       ; past 31 characters (a header's length field): skipped
+    ld   a, c
+    ld   (de), a
+    inc  de
+    inc  b
     jr   .copyloop
 .donecopy_consume:
     inc  hl
