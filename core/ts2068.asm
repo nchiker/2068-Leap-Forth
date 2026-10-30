@@ -80,7 +80,10 @@ H_PLOT:
 W_PLOT:
     rst RST_DPOP          ; hl = y
     ld   c, l
-    rst RST_DPOP          ; hl = x
+    ld   a, h
+    rst RST_DPOP          ; hl = x (A kept)
+    or   h
+    ret  nz               ; x or y outside 0-255: nothing (y 192-255: GFX_WRITE_PIXEL)
     ld   b, l
     ld   a, (CURRENT_ATTR)
     ld   d, 0              ; OVER=0: set the pixel, don't XOR-toggle it

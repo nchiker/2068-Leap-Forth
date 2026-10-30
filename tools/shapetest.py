@@ -76,11 +76,11 @@ BITMAP, ATTRS, SCREEN_END = 0x4000, 0x5800, 0x5B00
 HI_ATTRS, HI_SIZE = 0x6000, 0x1800      # include/hardware.inc SECOND_DISPLAY_ADDR; one attribute byte per scanline and column
 POOL_LO, POOL_HI = 0x5B00, 0x7FFF       # the shadow plane and the seed stack (FILL_CIRCLE_SPEC section 7)
 RAM_LO, RAM_HI = 0x5B00, 0xFDFF         # RAM compared outside the screen; $FE00-$FFFF: machine stack, harness slots
-LATEST_DEFAULT, DSTACK_DEFAULT = 0x9002, 0x9800
-BUDGET = dict(FILL=800_000_000, CIRCLE=100_000_000)     # instructions; today's FILL can need ~10^8 T-states
+LATEST_DEFAULT, DSTACK_DEFAULT = 0x8608, 0x9800
+BUDGET = dict(FILL=800_000_000, CIRCLE=100_000_000, PLOT=1_000_000, LINE=10_000_000)     # instructions; today's FILL can need ~10^8 T-states
 TYPE_MAXI = 1_000_000                   # instructions a typed key may take before the console counts as stuck
 LINE_MAX = 100                          # characters per typed line (EDIT_MAX_LEN is 128)
-ALLOWED_PREFIX = ("GFX_FILL_", "GFX_CIRCLE_", "GFX_CLIP_", "GFX_PIXEL_", "FILL_", "CIRCLE_", "KBD_")
+ALLOWED_PREFIX = ("GFX_FILL_", "GFX_CIRCLE_", "GFX_CLIP_", "GFX_PIXEL_", "GFX_LINE_", "FILL_", "CIRCLE_", "KBD_")
 ALLOWED_NAMES = ("PORT_FF_SHADOW", "BANK_EXROM_DEPTH", "FRAMES")
 
 
@@ -191,11 +191,35 @@ def model_circle(bmp, attr, hi, xc, yc, r, cur, mode):
         if 0 <= x <= 255 and 0 <= y <= 191:
             setpix(bmp, x, y)
             if mode:
-                hi[y * 32 + (x >> 3)] = cur
+                hi[saddr(x, y)] = cur           # the SCLD's 8x1 attribute: the bitmap byte + $2000
             else:
                 attr[attr_off(x, y)] = cur
             n += 1
     return bmp, attr, hi, n
+
+
+def model_plot_points(bmp, attr, hi, pts, cur, mode):
+    """Each point on the screen (0-255, 0-191) set, its cell (HIRES: its 8x1 attribute) coloured."""
+    bmp, attr, hi = bytearray(bmp), bytearray(attr), bytearray(hi) if hi is not None else None
+    n = 0
+    for x, y in pts:
+        if 0 <= x <= 255 and 0 <= y <= 191:
+            setpix(bmp, x, y)
+            if mode:
+                hi[saddr(x, y)] = cur
+            else:
+                attr[attr_off(x, y)] = cur
+            n += 1
+    return bmp, attr, hi, n
+
+
+def line_points(x0, y0, x1, y1):
+    """LINE takes its coordinates as bytes (0-255); only vertical lines are modelled (a READING: their pixels are the
+    same for any line algorithm), the y range is clipped to the screen by the model's caller."""
+    x0, y0, x1, y1 = x0 & 0xFF, y0 & 0xFF, x1 & 0xFF, y1 & 0xFF
+    if x0 != x1:
+        raise SetupError("only vertical LINEs are modelled")
+    return [(x0, y) for y in range(min(y0, y1), max(y0, y1) + 1)]
 
 
 # ---------------------------------------------------------------------------------------------------- the machine side
@@ -386,6 +410,11 @@ def run_case(m, cs):
         tsum += t
         if word == "FILL":
             want = model_fill(pre["bmp"], pre["attr"], pre["hi"], args[0], args[1], pre["cur"], pre["mode"])
+        elif word == "PLOT":
+            want = model_plot_points(pre["bmp"], pre["attr"], pre["hi"], [(s16(args[0]), s16(args[1]))], pre["cur"],
+                                     pre["mode"])
+        elif word == "LINE":
+            want = model_plot_points(pre["bmp"], pre["attr"], pre["hi"], line_points(*args), pre["cur"], pre["mode"])
         else:
             want = model_circle(pre["bmp"], pre["attr"], pre["hi"], args[0], args[1], args[2], pre["cur"], pre["mode"])
         bad = []
@@ -407,7 +436,7 @@ def run_case(m, cs):
             msgs.append("%s: %s" % (label, "; ".join(bad)))
             failed = True
             break                                # (the state is no longer the model's: later calls would only repeat it)
-        msgs.append("%s: %s, %d T" % (label, ("%d pixels" if word == "FILL" else "%d points") % want[3] if want[3] else "no change" if word == "FILL" else "no point on screen", t))
+        msgs.append("%s: %s, %d T" % (label, ("%d pixels" if word == "FILL" else "%d points") % want[3] if want[3] else "no change" if word != "CIRCLE" else "no point on screen", t))
         pre = post
     good = not failed
     return dict(ok=good, detail="; ".join(msgs), data=dict(name=cs["name"], tstates=tsum if good else None))
@@ -548,7 +577,11 @@ def old_checks():
         L.append(case("circle_r%d" % r, "old", ["CLS"], [circle(128, 96, r)]))
     L.append(case("circle_clip_right_bottom", "old", ["CLS"], [circle(240, 180, 30)]))
     L.append(case("circle_ink_paper", "old", ["CLS", "3 INK", "6 PAPER"], [circle(100, 80, 25)]))
-    L.append(case("circle_hires", "old", ["CLS", "3 INK", "HIRES"], [circle(128, 96, 40)]))
+    L.append(case("circle_hires", "new", ["CLS", "3 INK", "HIRES"], [circle(128, 96, 40)]))   # the SCLD's 8x1 layout
+    L.append(case("plot_offscreen", "new", ["CLS", "2 INK"], [("PLOT", [300, 50]), ("PLOT", [-1, 50]), ("PLOT", [50, 192]),
+                                                             ("PLOT", [50, 255]), ("PLOT", [50, -3]), ("PLOT", [255, 191])]))
+    L.append(case("line_below_screen", "new", ["CLS", "4 INK"], [("LINE", [60, 180, 60, 250]), ("LINE", [70, 255, 70, 200])]))
+    L.append(case("plot_hires", "new", ["CLS", "5 INK", "HIRES"], [("PLOT", [10, 9]), ("PLOT", [200, 77])]))
     return L
 
 
@@ -705,7 +738,7 @@ def selftest():
     expect("circle r 300 at the centre: nothing on screen", n, 0)
     hi = bytearray([0x44]) * HI_SIZE
     b, a, h, n = model_circle(blank, attr, hi, 128, 96, 0, 0x47, 1)
-    expect("hires attr", (a == attr, h[96 * 32 + 16]), (True, 0x47))
+    expect("hires attr", (a == attr, h[saddr(128, 96)]), (True, 0x47))
     # fill: a blank screen is one region; a box splits it; a serpentine is 24,704 pixels from (0, 0)
     expect("blank region", len(fill_region(blank, 0, 0)), 49152)
     bx = bytearray(0x1800)

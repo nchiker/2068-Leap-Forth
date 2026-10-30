@@ -129,24 +129,26 @@ COLD_START:
     jp   PASS_TEST
 
 ; ---- test-harness-only helper: NOT a dictionary word ----
-; HIRES_ATTR_ADDR: B = real scanline y (0-191), C = char column (0-31)
-; -> HL = the Second Display File address covering that pixel, same
-; row*32+col formula kernel/graphics's own GFX_SET_ATTR_EXT uses
-; internally (its own header has the from-scratch derivation and
-; verification; not re-derived here, just reused for peeking).
+; HIRES_ATTR_ADDR: B = scanline y (0-191), C = column (0-31) -> HL = the 8x1 attribute byte the SCLD reads for that
+; pixel byte: the bitmap byte's address + $2000. Destroys A.
 HIRES_ATTR_ADDR:
-    ld   h, 0
-    ld   l, b
-    add  hl, hl
-    add  hl, hl
-    add  hl, hl
-    add  hl, hl
-    add  hl, hl                  ; y*32
-    ld   de, SECOND_DISPLAY_ADDR
-    add  hl, de
-    ld   d, 0
-    ld   e, c
-    add  hl, de
+    ld   a, b
+    and  7
+    ld   h, a
+    ld   a, b
+    rra
+    rra
+    rra
+    and  $18
+    or   h
+    or   $60
+    ld   h, a                    ; $60 | (y >> 3) & $18 | y & 7
+    ld   a, b
+    add  a, a
+    add  a, a
+    and  $E0
+    or   c
+    ld   l, a                    ; (y << 2) & $E0 | col
     ret
 
 PASS_TEST:

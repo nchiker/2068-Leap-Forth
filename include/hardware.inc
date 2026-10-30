@@ -57,17 +57,8 @@ PORT_SCLD           EQU $FF
 ; ---- Screen geometry ----
 SCREEN_ADDR         EQU $4000
 ATTR_ADDR           EQU $5800
-SECOND_DISPLAY_ADDR EQU $6000     ; The Second Display File, confirmed
-                                 ; against the manual before any Z80
-                                 ; touched it: in High Resolution
-                                 ; Graphics mode (GFX_SET_ATTR_EXT)
-                                 ; this is 6144 flat ATTRIBUTE bytes,
-                                 ; 8x1 resolution (one byte per
-                                 ; scanline row per character column,
-                                 ; not per 8x8 cell). (64-Column mode,
-                                 ; which used this same region as a
-                                 ; second BITMAP, was removed at step
-                                 ; M6.)
+SECOND_DISPLAY_ADDR EQU $6000     ; the second display file: in HIRES (8x1 colour) the attribute of the bitmap byte
+                                 ; at $4000+n is at $6000+n, in the bitmap's interleaved layout (the SCLD reads it so)
 SCREEN_WIDTH_CHARS  EQU 32
 SCREEN_HEIGHT_CHARS EQU 24
 

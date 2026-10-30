@@ -835,64 +835,6 @@ GFX_SET_ATTR:
     ret
 
 ; ============================================================================
-; GFX_SET_ATTR_EXT
-; High Resolution Graphics mode's attribute setter — same row*32+col
-; formula GFX_SET_ATTR already uses, just with SECOND_DISPLAY_ADDR as
-; the base instead of ATTR_ADDR, and B holding a real scanline row
-; (0-191, one attribute byte per scanline) instead of a character row
-; (0-23, one attribute byte per 8 scanlines). Deliberately its own
-; small routine rather than a parameterized version of GFX_SET_ATTR —
-; that routine is already tested and hardware-confirmed with a fixed
-; base address; changing its calling contract to accept a base
-; address risks every existing call site for a small amount of
-; arithmetic duplication, which is the worse trade (same reasoning
-; kernel/math's MATH_NEGATE16 comment already gives for a near-
-; identical situation). Addressing formula verified in Python against
-; the manual's own 6144-byte/8x1-resolution figures before any Z80 was
-; written — all 6144 (y,col) pairs land on unique addresses inside
-; $6000-$77FF, zero collisions, zero out-of-range.
-; In:  B = y (0-191, a real scanline row, NOT a character row), C =
-;      col (0-31), A = attribute byte
-; Out: none
-; Destroys: AF, DE, HL
-; ============================================================================
-GFX_SET_ATTR_EXT:
-    ld   d, a                    ; stash the attribute byte before
-                                 ; using A as bounds-check scratch —
-                                 ; same fix, same reasoning, as GFX_
-                                 ; SET_ATTR just above (that routine's
-                                 ; own header has the full story: this
-                                 ; project's real, reproducible bug,
-                                 ; not a hypothetical one)
-    ld   a, b
-    cp   192                     ; B here is a real scanline row
-                                 ; (0-191), not a character row —
-                                 ; different bound than GFX_SET_ATTR's
-                                 ; own row check
-    ret  nc
-    ld   a, c
-    cp   32
-    ret  nc
-    ld   a, d                    ; restore the attribute byte
-
-    push af
-    ld   h, 0
-    ld   l, b
-    add  hl, hl
-    add  hl, hl
-    add  hl, hl
-    add  hl, hl
-    add  hl, hl                  ; y*32
-    ld   de, SECOND_DISPLAY_ADDR
-    add  hl, de
-    ld   d, 0
-    ld   e, c
-    add  hl, de                   ; HL = SECOND_DISPLAY_ADDR + y*32 + col
-    pop  af
-    ld   (hl), a
-    ret
-
-; ============================================================================
 ; GFX_SET_MODE
 ; Switches between Normal and High Resolution Graphics video modes —
 ; MODE's mechanism. Real port $FF write, done safely: $FF is a shared,
@@ -1110,21 +1052,19 @@ GFX_PIXEL_ADDR_SETUP:
     ret
 
 ; ============================================================================
-; GFX_WRITE_PIXEL
-; Sets or XOR-toggles one pixel, then colors its covering 8x8 attribute
-; cell to match — PLOT's actual mechanism.
-; In:  B = x (0-255), C = y (0-191, caller clamps), A = attribute byte
-;      (same bit layout GFX_SET_ATTR/ATTR_DEFAULT already use), D = OVER
-;      flag (0 = set the pixel outright (OR), nonzero = XOR-toggle it —
-;      real Sinclair BASIC's own OVER semantics, applied to graphics the
-;      same way this project's OVER already applies to text)
+; GFX_WRITE_PIXEL -- set (OVER 0) or XOR (OVER 1) one pixel and colour it: Normal mode its 8x8 cell, HIRES
+; (8x1 colour) its own attribute byte at the bitmap byte + $2000, where the SCLD reads it. y >= 192 draws nothing.
+; In:  B = x (0-255), C = y, A = attribute byte, D = OVER flag
 ; Out: none
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 GFX_WRITE_PIXEL:
-    ld   (GFX_PIXEL_ATTR), a       ; stash attribute + OVER flag before
-    ld   a, d                     ; GFX_PIXEL_ADDR_SETUP destroys AF —
-    ld   (GFX_PIXEL_OVER), a       ; same PRINT_ATTR_SCRATCH reasoning
+    ld   (GFX_PIXEL_ATTR), a
+    ld   a, c
+    cp   192
+    ret  nc                        ; below the screen: nothing
+    ld   a, d
+    ld   (GFX_PIXEL_OVER), a
 
     call GFX_PIXEL_ADDR_SETUP      ; HL = bitmap byte address, A = mask;
                                    ; GFX_PIXEL_ROW/COL also now set
@@ -1142,14 +1082,7 @@ GFX_WRITE_PIXEL:
 .plot_write:
     ld   (hl), a
 
-    ; Color the covering attribute — which formula depends on the
-    ; active video mode. Normal mode reuses the already-tested GFX_
-    ; SET_ATTR rather than re-deriving its addressing formula here;
-    ; High Resolution Graphics mode needs a real scanline row (0-191),
-    ; not a character row, reconstructed from GFX_PIXEL_ROW/SCANLINE
-    ; (both already set by GFX_PIXEL_ADDR_SETUP above) rather than
-    ; re-deriving it from the original x/y, which are no longer live
-    ; in any register by this point.
+    ; colour it: Normal mode its 8x8 cell, HIRES its own 8x1 attribute byte
     ld   a, (GFX_MODE)
     or   a
     jr   nz, .ext_attr
@@ -1162,23 +1095,12 @@ GFX_WRITE_PIXEL:
     jp GFX_SET_ATTR
 
 .ext_attr:
-    ld   a, (GFX_PIXEL_ROW)
-    add  a, a
-    add  a, a
-    add  a, a                      ; row*8 (fits easily — row maxes at
-                                   ; 23, so row*8 maxes at 184)
-    ld   b, a
-    ld   a, (GFX_PIXEL_SCANLINE)
-    add  a, b
-    ld   b, a                      ; B = real y (row*8 + scanline —
-                                   ; exactly reconstructs the original
-                                   ; y by construction, verified in
-                                   ; Python for all 192 values before
-                                   ; this was written)
-    ld   a, (GFX_PIXEL_COL)
-    ld   c, a
+    ld   a, h
+    add  a, $20
+    ld   h, a                      ; HL = the bitmap byte + $2000: its 8x1 attribute
     ld   a, (GFX_PIXEL_ATTR)
-    jp GFX_SET_ATTR_EXT
+    ld   (hl), a
+    ret
 
 ; ============================================================================
 ; GFX_LINE
