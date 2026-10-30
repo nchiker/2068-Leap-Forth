@@ -1,0 +1,167 @@
+cartdiff speed-up: new typing (keys in emulated time on the real matrix, cases in parallel), step 3 of docs/V2/CARTDIFF_SPEED_SPEC.md section 5
+date: 2026-10-29
+command: time python3 tools/cart_diff.py --home-dir . --cart-dir . --dump <DIR>   (default --jobs 4, ports 10930-10933)
+result: 26 case/emulator pair(s), 0 FAIL
+wall time: 1m14.718s (old typing, serial: 16m37.248s; see cartdiff_dumps_old.txt)
+selftest: python3 tools/cart_diff.py --home-dir . --cart-dir . --selftest: 7/7 checks behaved as expected, exit 1 (= success for selftest); make check: exit 0
+KEY_UP_FRAMES = 2 (READING in tools/cart_diff.py: 0 frames loses repeated keys, 1 passed a short test, 2 = one full ISR after the release)
+
+dump comparison: python3 tools/cart_diff_dumpcmp.py --home-dir . --cart-dir . <OLD> <NEW>   (exit 0)
+52 run(s) compared, 0 with a compared-region difference or missing
+TSRun runs (26): identical in every byte of RAM (0 other differing bytes). ZEsarUX runs (26): every compared region identical;
+the other differing bytes, by range (runs it appears in):
+   82EB-82EC  FRAMES                  26 runs  (frame counter: emulated time elapsed differs)
+   82A1       KBD_REPEAT              26 runs  (ISR auto-repeat countdown: phase of the last tick)
+   FED8-FEFD  stack residue below SP  26 runs (SP is $FEFE at idle; ISR frames pushed by the last interrupt: return address in IO_READ_KEY.wait_hit and saved AF/BC/DE/HL; FEFC-FEFD = where the idle loop was interrupted)
+full comparison output:
+SAME  compiled_rect_twice.tsrun.cart               regions=9 compared-bytes=7438 other-differing-bytes=0 attempts old/new 1/1
+SAME  compiled_rect_twice.tsrun.home               regions=9 compared-bytes=7438 other-differing-bytes=0 attempts old/new 1/1
+SAME  compiled_rect_twice.zesarux.cart             regions=9 compared-bytes=7438 other-differing-bytes=14 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEE2-FEEB (10)  EXTENSION_MODULE_LIMIT+2274 .. EXTENSION_MODULE_LIMIT+2283
+      other  FEFC-FEFC (1)  EXTENSION_MODULE_LIMIT+2300 .. EXTENSION_MODULE_LIMIT+2300
+SAME  compiled_rect_twice.zesarux.home             regions=9 compared-bytes=7438 other-differing-bytes=13 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEE2-FEEB (10)  EXTENSION_MODULE_LIMIT+2274 .. EXTENSION_MODULE_LIMIT+2283
+SAME  loop_all_six.tsrun.cart                      regions=9 compared-bytes=7775 other-differing-bytes=0 attempts old/new 1/1
+SAME  loop_all_six.tsrun.home                      regions=9 compared-bytes=7775 other-differing-bytes=0 attempts old/new 1/1
+SAME  loop_all_six.zesarux.cart                    regions=9 compared-bytes=7775 other-differing-bytes=16 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FED8-FEEB (13)  EXTENSION_MODULE_LIMIT+2264 .. EXTENSION_MODULE_LIMIT+2283
+SAME  loop_all_six.zesarux.home                    regions=9 compared-bytes=7775 other-differing-bytes=11 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FED8-FED9 (2)  EXTENSION_MODULE_LIMIT+2264 .. EXTENSION_MODULE_LIMIT+2265
+      other  FEE6-FEEB (5)  EXTENSION_MODULE_LIMIT+2278 .. EXTENSION_MODULE_LIMIT+2283
+      other  FEFC-FEFC (1)  EXTENSION_MODULE_LIMIT+2300 .. EXTENSION_MODULE_LIMIT+2300
+SAME  loop_rect.tsrun.cart                         regions=9 compared-bytes=7507 other-differing-bytes=0 attempts old/new 1/1
+SAME  loop_rect.tsrun.home                         regions=9 compared-bytes=7507 other-differing-bytes=0 attempts old/new 1/1
+SAME  loop_rect.zesarux.cart                       regions=9 compared-bytes=7507 other-differing-bytes=15 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEE0-FEEB (12)  EXTENSION_MODULE_LIMIT+2272 .. EXTENSION_MODULE_LIMIT+2283
+SAME  loop_rect.zesarux.home                       regions=9 compared-bytes=7507 other-differing-bytes=15 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEE0-FEEB (12)  EXTENSION_MODULE_LIMIT+2272 .. EXTENSION_MODULE_LIMIT+2283
+SAME  nested_big_polygon.tsrun.cart                regions=9 compared-bytes=7404 other-differing-bytes=0 attempts old/new 1/1
+SAME  nested_big_polygon.tsrun.home                regions=9 compared-bytes=7404 other-differing-bytes=0 attempts old/new 1/1
+SAME  nested_big_polygon.zesarux.cart              regions=9 compared-bytes=7404 other-differing-bytes=13 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEE2-FEEB (10)  EXTENSION_MODULE_LIMIT+2274 .. EXTENSION_MODULE_LIMIT+2283
+SAME  nested_big_polygon.zesarux.home              regions=9 compared-bytes=7404 other-differing-bytes=13 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEE2-FEEB (10)  EXTENSION_MODULE_LIMIT+2274 .. EXTENSION_MODULE_LIMIT+2283
+SAME  polygon.tsrun.cart                           regions=9 compared-bytes=7404 other-differing-bytes=0 attempts old/new 1/1
+SAME  polygon.tsrun.home                           regions=9 compared-bytes=7404 other-differing-bytes=0 attempts old/new 1/1
+SAME  polygon.zesarux.cart                         regions=9 compared-bytes=7404 other-differing-bytes=17 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEDE-FEEB (14)  EXTENSION_MODULE_LIMIT+2270 .. EXTENSION_MODULE_LIMIT+2283
+SAME  polygon.zesarux.home                         regions=9 compared-bytes=7404 other-differing-bytes=17 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEDE-FEEB (14)  EXTENSION_MODULE_LIMIT+2270 .. EXTENSION_MODULE_LIMIT+2283
+SAME  polygon_fill.tsrun.cart                      regions=9 compared-bytes=7404 other-differing-bytes=0 attempts old/new 1/1
+SAME  polygon_fill.tsrun.home                      regions=9 compared-bytes=7404 other-differing-bytes=0 attempts old/new 1/1
+SAME  polygon_fill.zesarux.cart                    regions=9 compared-bytes=7404 other-differing-bytes=20 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEDC-FEEB (16)  EXTENSION_MODULE_LIMIT+2268 .. EXTENSION_MODULE_LIMIT+2283
+      other  FEFC-FEFC (1)  EXTENSION_MODULE_LIMIT+2300 .. EXTENSION_MODULE_LIMIT+2300
+SAME  polygon_fill.zesarux.home                    regions=9 compared-bytes=7404 other-differing-bytes=20 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEDC-FEEB (16)  EXTENSION_MODULE_LIMIT+2268 .. EXTENSION_MODULE_LIMIT+2283
+      other  FEFC-FEFC (1)  EXTENSION_MODULE_LIMIT+2300 .. EXTENSION_MODULE_LIMIT+2300
+SAME  rect_basic.tsrun.cart                        regions=9 compared-bytes=7404 other-differing-bytes=0 attempts old/new 1/1
+SAME  rect_basic.tsrun.home                        regions=9 compared-bytes=7404 other-differing-bytes=0 attempts old/new 1/1
+SAME  rect_basic.zesarux.cart                      regions=9 compared-bytes=7404 other-differing-bytes=17 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEDE-FEEB (14)  EXTENSION_MODULE_LIMIT+2270 .. EXTENSION_MODULE_LIMIT+2283
+SAME  rect_basic.zesarux.home                      regions=9 compared-bytes=7404 other-differing-bytes=18 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEDE-FEEB (14)  EXTENSION_MODULE_LIMIT+2270 .. EXTENSION_MODULE_LIMIT+2283
+      other  FEFC-FEFC (1)  EXTENSION_MODULE_LIMIT+2300 .. EXTENSION_MODULE_LIMIT+2300
+SAME  rect_reversed_colour.tsrun.cart              regions=9 compared-bytes=7404 other-differing-bytes=0 attempts old/new 1/1
+SAME  rect_reversed_colour.tsrun.home              regions=9 compared-bytes=7404 other-differing-bytes=0 attempts old/new 1/1
+SAME  rect_reversed_colour.zesarux.cart            regions=9 compared-bytes=7404 other-differing-bytes=18 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEDE-FEEB (14)  EXTENSION_MODULE_LIMIT+2270 .. EXTENSION_MODULE_LIMIT+2283
+      other  FEFC-FEFC (1)  EXTENSION_MODULE_LIMIT+2300 .. EXTENSION_MODULE_LIMIT+2300
+SAME  rect_reversed_colour.zesarux.home            regions=9 compared-bytes=7404 other-differing-bytes=18 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEDE-FEEB (14)  EXTENSION_MODULE_LIMIT+2270 .. EXTENSION_MODULE_LIMIT+2283
+      other  FEFC-FEFC (1)  EXTENSION_MODULE_LIMIT+2300 .. EXTENSION_MODULE_LIMIT+2300
+SAME  rect_span_cells.tsrun.cart                   regions=9 compared-bytes=7404 other-differing-bytes=0 attempts old/new 1/1
+SAME  rect_span_cells.tsrun.home                   regions=9 compared-bytes=7404 other-differing-bytes=0 attempts old/new 1/1
+SAME  rect_span_cells.zesarux.cart                 regions=9 compared-bytes=7404 other-differing-bytes=18 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEDE-FEEB (14)  EXTENSION_MODULE_LIMIT+2270 .. EXTENSION_MODULE_LIMIT+2283
+      other  FEFC-FEFC (1)  EXTENSION_MODULE_LIMIT+2300 .. EXTENSION_MODULE_LIMIT+2300
+SAME  rect_span_cells.zesarux.home                 regions=9 compared-bytes=7404 other-differing-bytes=18 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEDE-FEEB (14)  EXTENSION_MODULE_LIMIT+2270 .. EXTENSION_MODULE_LIMIT+2283
+      other  FEFC-FEFC (1)  EXTENSION_MODULE_LIMIT+2300 .. EXTENSION_MODULE_LIMIT+2300
+SAME  sprite_define.tsrun.cart                     regions=9 compared-bytes=7404 other-differing-bytes=0 attempts old/new 1/1
+SAME  sprite_define.tsrun.home                     regions=9 compared-bytes=7404 other-differing-bytes=0 attempts old/new 1/1
+SAME  sprite_define.zesarux.cart                   regions=9 compared-bytes=7404 other-differing-bytes=19 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEDC-FEEB (16)  EXTENSION_MODULE_LIMIT+2268 .. EXTENSION_MODULE_LIMIT+2283
+SAME  sprite_define.zesarux.home                   regions=9 compared-bytes=7404 other-differing-bytes=20 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEDC-FEEB (16)  EXTENSION_MODULE_LIMIT+2268 .. EXTENSION_MODULE_LIMIT+2283
+      other  FEFC-FEFC (1)  EXTENSION_MODULE_LIMIT+2300 .. EXTENSION_MODULE_LIMIT+2300
+SAME  sprite_hide.tsrun.cart                       regions=9 compared-bytes=7404 other-differing-bytes=0 attempts old/new 1/1
+SAME  sprite_hide.tsrun.home                       regions=9 compared-bytes=7404 other-differing-bytes=0 attempts old/new 1/1
+SAME  sprite_hide.zesarux.cart                     regions=9 compared-bytes=7404 other-differing-bytes=36 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEDC-FEFD (33)  EXTENSION_MODULE_LIMIT+2268 .. EXTENSION_MODULE_LIMIT+2301
+SAME  sprite_hide.zesarux.home                     regions=9 compared-bytes=7404 other-differing-bytes=19 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEDC-FEEB (16)  EXTENSION_MODULE_LIMIT+2268 .. EXTENSION_MODULE_LIMIT+2283
+SAME  sprite_show.tsrun.cart                       regions=9 compared-bytes=7404 other-differing-bytes=0 attempts old/new 1/1
+SAME  sprite_show.tsrun.home                       regions=9 compared-bytes=7404 other-differing-bytes=0 attempts old/new 1/1
+SAME  sprite_show.zesarux.cart                     regions=9 compared-bytes=7404 other-differing-bytes=19 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEDC-FEEB (16)  EXTENSION_MODULE_LIMIT+2268 .. EXTENSION_MODULE_LIMIT+2283
+SAME  sprite_show.zesarux.home                     regions=9 compared-bytes=7404 other-differing-bytes=19 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEDC-FEEB (16)  EXTENSION_MODULE_LIMIT+2268 .. EXTENSION_MODULE_LIMIT+2283
+SAME  stack_kept.tsrun.cart                        regions=9 compared-bytes=7413 other-differing-bytes=0 attempts old/new 1/1
+SAME  stack_kept.tsrun.home                        regions=9 compared-bytes=7413 other-differing-bytes=0 attempts old/new 1/1
+SAME  stack_kept.zesarux.cart                      regions=9 compared-bytes=7413 other-differing-bytes=18 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEDE-FEEB (14)  EXTENSION_MODULE_LIMIT+2270 .. EXTENSION_MODULE_LIMIT+2283
+      other  FEFC-FEFC (1)  EXTENSION_MODULE_LIMIT+2300 .. EXTENSION_MODULE_LIMIT+2300
+SAME  stack_kept.zesarux.home                      regions=9 compared-bytes=7413 other-differing-bytes=17 attempts old/new 1/1
+      other  82A1-82A1 (1)  KBD_REPEAT .. KBD_REPEAT
+      other  82EB-82EC (2)  FRAMES .. FRAMES+1
+      other  FEDE-FEEB (14)  EXTENSION_MODULE_LIMIT+2270 .. EXTENSION_MODULE_LIMIT+2283
+
+52 run(s) compared, 0 with a compared-region difference or missing
+other differing ranges, by the symbol they start in (kind, symbol): number of runs
+   cart  EXTENSION_MODULE_LIMIT       18
+   cart  FRAMES                       13
+   cart  KBD_REPEAT                   13
+   home  EXTENSION_MODULE_LIMIT       20
+   home  FRAMES                       13
+   home  KBD_REPEAT                   13

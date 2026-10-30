@@ -1,6 +1,6 @@
-# Leap-Forth V2 — session handoff (2026-10-29, step M6 complete: Mode 6 removed)
+# Leap-Forth V2 — session handoff (2026-10-29: E merged, M6 and L in review, cartdiff fast; next is step F)
 
-Read this first in a new session. Then `docs/V2/EDITOR_SPEC.md` (step E: decisions, line store contract in section 3,
+Read this first in a new session. **Next step: F, the float rebuild** (section "Step F: where to start" below). Then `docs/V2/EDITOR_SPEC.md` (step E: decisions, line store contract in section 3,
 view behaviour, sections 4 and 5.1-5.5 as built, oracle table), `docs/V2/MODE6_REMOVAL_SPEC.md` (step M6, section 7 as
 built),
 `docs/V2/LEAPC_COMPARISON_AUDIT.md` (on branch `v2/step-l-leapc-audit`) and `docs/V2/FORTH_V2_REUSE_AUDIT.md`
@@ -8,25 +8,23 @@ built),
 
 ## Where things stand
 
-- **master** is `af61e35`: PR #2 (T → G → R0 → A → R1 → S, `0d45a2f`) and PR #3 (a three-line edit of this file).
-- **PR #4** (`v2/step-e-console-editor` → master, step E with the follow-up, tip `832ac09`) is **open**. When it merges,
-  this file conflicts with PR #3's version: keep the E branch's (or this branch's, once M6 merges).
-- **Step M6 is done** on `v2/step-m6-mode6-removal`, branched from the E branch's tip `832ac09` (PR #4 was still open):
-  `aa113bf` oracle, `b531f70` code with ledger row and floors, then the docs commit. Not pushed; no PR yet. Its PR
-  targets master after PR #4 merges (or the E branch, if the owner wants it reviewed first).
+- **master** is `1d84127`: PR #4 (step E with the follow-up) merged with a merge commit on 2026-10-29.
+- **Open PRs, waiting for the owner's review; Claude merges them (owner: "you do the merges"), with merge commits:**
+  - **PR #5** `v2/step-m6-mode6-removal` (step M6: `aa113bf` oracle, `b531f70` code, `50b4b2a` docs).
+  - **PR #6** `v2/step-l-leapc-audit` (step L, docs only; master merged in as `0f2675f`, the ledger rows in step order).
+  - A trial merge of #5 and #6 is clean in either order.
+- **`v2/t-cartdiff-speed`** (from M6's tip, not pushed, no PR yet): `make cartdiff` 16 min → 1 min 13 s (spec
+  `docs/V2/CARTDIFF_SPEED_SPEC.md`; `bc16b55` spec, `056aab9` oracle, `f7c1ad8` change, then the ledger/HANDOFF
+  commit). Open its PR to master after #5 merges (so it shows only its own commits). This file is newest there.
 
   | Branch | State |
   |---|---|
-  | `v2/step-m6-mode6-removal` | **Step M6 complete**. Ready for a PR once PR #4 merges |
-  | `v2/step-e-console-editor` | step E complete, PR #4 open |
-  | `v2/m6-oracle-wip`, `v2/m6-code-wip`, `v2/m6-docs-wip` | M6 work branches (scratch worktrees), merged; can be deleted |
-  | `v2/e-item6-wip`, `v2/e-shadow-wip`, `v2/e-savetext-wip` | E work branches, merged into the E branch; can be deleted |
-  | `v2/step-o13-rst-stack` | O13, already merged into the E branch (`9a1d570`) |
-  | `v2/step-l-leapc-audit` | step L, docs only (`9391422`, decisions `f5a36c5`), from master |
+  | `v2/t-cartdiff-speed` | cartdiff speed-up done; PR after #5 merges |
+  | `v2/step-m6-mode6-removal` | PR #5 open |
+  | `v2/step-l-leapc-audit` | PR #6 open |
+  | `v2/step-e-console-editor` | merged (PR #4) |
+  | `v2/t-cartdiff-wip`, `v2/m6-*-wip`, `v2/e-*-wip`, `v2/step-o13-rst-stack` | merged work branches; can be deleted |
 
-  Merging L, E and M6 into master: all append rows to the audit's section 9 ledger (and L adds section 5 rows O13-O19
-  and section 10 decisions 7-9), so the merges after the first conflict there; keep every side's rows, in step order
-  (L's rows, then E's, then M6).
 - **Free space [M]:** HOME 1,629 B, DOCK cartridge 1,629, Blackjack 1,096/1,096, Gallery 1,021, EXROM 4,247. The floors
   in `tools/budget.toml` equal these.
 - **Step M6 in bytes [M]:** HOME +587 (kernel/mode64 394, the four words 60, the editor's branches 63, `EMIT`'s 70),
@@ -34,7 +32,9 @@ built),
 - **Last full run [M]** (M6's code commit): `make edtest` **30/30** (N11 retired); `make test` 66 PASS, 0 FAIL, 1 SKIP,
   POWERON 7/7; `make tapetest` 16/16; `make harness` 0 failed; `make cartdiff` 26/26; `make fusesave` 41 checks,
   0 failed (no Fuse abort this time, so no retry and one check fewer than step E's 42); `make bench` within 1% (sieve
-  −1.6%, string −1.2%, the rest faster); `make repro` 251 files identical; `make check` passes.
+  −1.6%, string −1.2%, the rest faster); `make repro` 251 files identical; `make check` passes. On the cartdiff branch
+  (tools only, ROM images unchanged): `make cartdiff` 26/26 in 1 min 13 s, `--selftest` 7/7, `make test` 66/0/1,
+  `make check` passes.
 
 ## Owner decisions (2026-10-29)
 
@@ -66,12 +66,31 @@ built),
 
 ## Next work, in order
 
-1. **Owner:** review step E (PR #4) and step M6, and ask for M6's PR; decide on L's PR.
-2. **O15:** FILL and CIRCLE kernels to the EXROM (about −820 B HOME; the EXROM has 4,247 B free).
-3. **Step F: float rebuild** (audit section 4.2) with O10 and T13.
+1. **Owner:** review PRs #5 (M6) and #6 (L); Claude merges them, then opens the cartdiff PR and merges it on approval.
+2. **Step F: float rebuild** (audit section 4.2) with O10 and T13, on its own branch from master once #5 and the
+   cartdiff branch are merged (or from `v2/t-cartdiff-speed` if they are still open). See "Step F: where to start".
+3. **O15:** FILL and CIRCLE kernels to the EXROM (about −820 B HOME; the EXROM has 4,247 B free). Less urgent now:
+   HOME has 1,629 B free against the 200 B target.
 4. **K** (with O16, O17; also the text-drawing speed-up the owner may approve: an ASCII-indexed font, about
    byte-neutral against K's planned +80 B, and a row text primitive, about 2x on every redraw), **D** (O18), **B**.
 5. **Step Z** (audit section 4.4) with O14, O19, and `W_EMIT` through `rst $28`.
+
+## Step F: where to start
+
+- **Decided (owner, decision 3, 2026-10-28):** 5-byte Sinclair floats through Leap-C's `fpcore`, with its bit-exact
+  `tools/fpmodel.py` oracle. Conditions: the owner's OK is needed to re-baseline `bench_float` if it gets slower; the
+  transcendentals go to the EXROM if HOME is short; the provenance scan runs on `fpcore` in step F (decision 4: Leap
+  V2's MIT position goes in NOTICE only if the 12-byte scan is clean).
+- **The plan** is the audit's section 4.2 (items 1-6, budget about 2,260 B against 2,129 today, risks: float-stack
+  depth ~341 → ~204 cells, smoke ROMs p8, p18, p19, p22, p23, p29, p30, p34, p35, p42 hard-code 3-byte floats,
+  `fpcore`'s RAM cells must fit Forth's `$8xxx` gaps). O10 (Leap-C `RT_UMUL`/`RT_UDIV`/`RT_DIVS`/`RT_MODS`/`RT_MUL`
+  replacing `kernel/math/math.asm`'s multiply/divide, 412 B) is item 6; sieve and string are its bench gates. T13 is
+  the float oracle (audit section 6.3: Leap-C `tools/fpmodel.py`, `tools/floattest.py`).
+- **Study before designing** (the rule from step E): Leap-C `fpcore` and its tools, Leap V2's SQR (`54cd877`) and
+  SIN/COS/TAN, and today's `core/float.asm` and `core/floatmul.asm`/`floatdiv.asm` (the chain point before
+  `floatmul.asm` is `H_FMINUS` since M6). Write `docs/V2/FLOAT_SPEC.md` (decisions the owner must take marked as
+  such), then T13 and the oracle on the old build, then the code, each with a measured ledger row.
+- **Free space to work with:** HOME 1,629 B, EXROM 4,247 B.
 
 ## Open points (not blocking)
 
@@ -96,9 +115,13 @@ built),
 ## Facts that cost time to find (steps M6, E and O13; the older ones follow)
 
 - **Step M6.**
-  - **Suite times:** `make cartdiff` takes about 16 minutes on its own and `make tapetest` about 5; give an agent that runs
-    them a timeout of 20 minutes or more each. With edtest, test and bench running at the same time, tapetest case 3
-    once dropped two typed characters ("typing slip", a harness error, not a ROM failure); it passed run alone.
+  - **Suite times:** `make cartdiff` about 75 s since the speed-up (it was 16 min); `make tapetest` about 5 min, `make
+    test` about 4, `make edtest` about 2. With edtest, test and bench running at the same time, tapetest case 3 once
+    dropped two typed characters ("typing slip", a harness error, not a ROM failure); run tapetest alone.
+  - **cartdiff types in emulated time** (`tools/cart_diff.py`): keys held on the matrix with `send-keys-event` while the
+    paused machine is stepped; accepted when `EDIT_LEN` grows (ENTER: the ISR latch, `KBD_CUR_ROW` tracked and
+    `KBD_DEBOUNCE` 0), 2 frames key-up. No PC breakpoints on HOME routines: in the cartridge build the stock ROM shares
+    those addresses. `--dump DIR` and `tools/cart_diff_dumpcmp.py` compare runs byte for byte.
   - **fusesave's count** is 41 checks when Fuse records the first cross tape, 42 when Fuse aborts in `tape_write` and
     the retry repeats the boot check.
   - **What is gone:** `GFX_MODE` 2, port `$FF` bits 3-5 (never written now), `fharness` check `i` and its 64-column

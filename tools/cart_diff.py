@@ -9,6 +9,13 @@ CART build: stock TS2068 ROMs (~/fuse-build/roms/tc2068-0.rom + tc2068-1.rom) pl
 Each case = a list of Forth lines typed through the keyboard on a FRESH boot of each build, on each
 emulator (ZEsarUX through ts2068_debug/ZRCP; TSRun headless under node through its keyMatrix).  A final
 control line `1 2 + .` is always typed.  When the prompt is idle again the machine state is read and compared.
+ZEsarUX typing is in EMULATED time on the real keyboard matrix: the machine stays paused and is stepped in instruction
+chunks; for each character the ROM's own key tables (fharness.key_map, read from the running build) give the key events,
+held with send-keys-event until the key is accepted (EDIT_LEN grew by one; for ENTER the interrupt routine's own
+debounce state, because EDIT_LEN only goes to 0 once the line has RUN), released, and the machine stepped on for
+KEY_UP_FRAMES frames (FRAMES counted) so the interrupt routine has seen the matrix empty and a repeated character is a
+new key.  No host-time sleeps and no send-keys-string.  The ZEsarUX runs (one per case and build) are spread over
+--jobs worker processes, each with its own emulator, port (--port + k) and state directory; output is in case order.
 
 WHAT IS COMPARED (HOME vs CART, per emulator; any difference is a FAIL, nothing is tolerated silently)
  1. screen $4000-$5AFF (bitmap + attributes): byte-identical.  The control line's `3 OK` is part of it, and
@@ -35,8 +42,9 @@ Informational: HOME screen bytes from ZEsarUX vs HOME screen bytes from TSRun.  
 BANK_EXROM_DEPTH (max value stored): 1 means page-ins never nested.
 
 RUN:  python3 cart_diff.py --home-dir TREE --cart-dir TREE [--cart-dck FILE] [--emulators zesarux,tsrun]
-        [--cases a,b] [--port 10930] [--json] [--selftest]      (TREE/build/ holds the build products; the cart
-      .dck defaults to CART_DIR/build/forth_boot.dck; ~13 cases take ~12 min with ZEsarUX, ~35 s with TSRun only)
+        [--cases a,b] [--port 10930] [--jobs 4] [--json] [--selftest] [--dump DIR]      (TREE/build/ holds the build
+      products; the cart .dck defaults to CART_DIR/build/forth_boot.dck; all 13 cases take about 75 s with --jobs 4 and
+      ZEsarUX, ~35 s with TSRun only)
 
 NESTED PAGE-IN (BANK_EXROM_DEPTH): BANK_PAGE_EXROM_IN has exactly one caller (EXROM_CALL_SLOT), which only the
 Forth words RECT/POLYGON/POLYGON-FILL/SPRITE-* call; the HOME routines the EXROM code calls back through the
@@ -55,10 +63,11 @@ EMULATOR LIMITS (no hardware exists here; nothing below proves real cartridge be
 frames and, through ts2068_debug, with --emulatorspeed 1000 (host timing only); TSRun runs 60 Hz frames and its
 DOCK/EXROM model is a re-implementation (insertDock: DOCK chunk N is what port $F4 bit N selects when port $FF
 bit 7 is clear; with bit 7 set the stock EXROM answers instead).  Both agreeing is two emulators agreeing.
-Ports: only --port (default 10930, must be within 10930-10949).  Each ZEsarUX run has a private
-TS2068_DEBUG_STATE_DIR (mktemp) and is always terminated at the end (also on exceptions).
+Ports: --port (default 10930, must be within 10930-10949) is the first port; worker k of --jobs uses --port + k, all
+within 10930-10949.  Each ZEsarUX run has a private TS2068_DEBUG_STATE_DIR (mktemp, set in its worker process) and is
+always terminated at the end (also on exceptions, and when the harness is interrupted).
 """
-import argparse, base64, bisect, copy, json, os, re, shutil, subprocess, sys, tempfile, time
+import argparse, base64, bisect, copy, json, os, re, shutil, signal, subprocess, sys, tempfile
 
 sys.dont_write_bytecode = True
 HOME = os.path.expanduser("~")
@@ -157,6 +166,7 @@ class Build:
         self.dstack_top, self.fstack_top = s["DSTACK_TOP"], s["FSTACK_TOP"]
         self.dict0, self.here, self.latest = s["FORTH_DICT_RAM"], s["HERE"], s["LATEST"]
         self.depth_addr, self.edit_len, self.edit_buf = s["BANK_EXROM_DEPTH"], s["EDIT_LEN"], s["EDIT_BUF"]
+        self.frames, self.kbd_cur_row, self.kbd_debounce = s["FRAMES"], s["KBD_CUR_ROW"], s["KBD_DEBOUNCE"]
         # raw-compared EXROM-side state.  Left out on purpose: PORT_FF_SHADOW (bit 7 = HOME pages the EXROM,
         # CART pages DOCK chunk 5: differs by design) and the keyboard/ISR/FRAMES cells ($829C-$82EC, host-timing).
         self.regions = [("gfx-fill/rect/poly cells", s["GFX_FILL_SP"], s["POLY_FILL_ERR_ADDR"] + 2),
@@ -299,9 +309,43 @@ def run_tsrun(b, lines, tsdir, tmp):
 
 
 # ----------------------------------------------------------------------------------------------- ZEsarUX
+# Typing in EMULATED time on the real keyboard matrix (no host-time sleeps, no send-keys-string): the paused machine is
+# stepped (`run N` instruction chunks) while the key events of the ROM's own key tables (fharness.key_map) are held with
+# send-keys-event; the key is released as soon as it is accepted, and the machine is stepped on until the interrupt
+# routine has certainly seen the matrix empty, so that a repeated character (ALL, ADD, 30 30) is a new key.
+# Key-up: KBD_ISR_TICK runs once per frame and increments FRAMES first thing, then scans the matrix.  After the release
+# (the machine is paused, so every later scan sees the keys up) FRAMES+1 is the first ISR that started after the release
+# and FRAMES+2 starting means that ISR has run to its end, scan included.  So KEY_UP_FRAMES = 2 is sufficient by
+# construction.  READING (measured on the home build, `AAA ADD 30 30 + .` and a 22-digit line): 0 frames after the
+# release loses repeated keys (`1 2 + .` typed as `1 2 ~ ~`, ENTER never seen as new: no idle prompt); 1 frame typed
+# the three test lines correctly; 2 is the proven bound (one full ISR after the release) and is what is used.  A held
+# key auto-repeats only after KBD_REPDEL = 35 ticks (kernel/interrupt/interrupt.asm) and the debounce is
+# KBD_DEBOUNCE_TICKS = 2 ticks, so releasing within one polling chunk of the acceptance (2000 instructions, under a
+# frame of ~69,888 T) never repeats.
+KEY_UP_FRAMES = 2
+PRESS_CHUNK = 2000          # instructions per step while a key is held (a frame is ~70,000 T = several thousand instructions)
+UP_CHUNK = 4000             # instructions per step while waiting for the frames after the release
+PRESS_BUDGET = 600_000      # instructions before a key that is not accepted is given up (~80 frames; repeat starts at 35)
+UP_BUDGET = 5_000_000       # instructions to wait for the key-up frames (a line may run with interrupts off for a while)
+
+
+def zesarux_keymap(b, rd):
+    """Forth's keyboard {code: [ZEsarUX key events]} from THIS build's own key tables, read from the running machine
+    (at idle the Forth ROM is the one paged at $0000: the Home ROM, or the DOCK's LROS in the cartridge build)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    try:
+        import fharness
+    except ImportError as e:
+        raise HarnessError("fharness not importable: %s" % e)
+    rom = bytearray(0x4000)
+    for n in ("KEY_ASCII_TABLE", "KEY_ASCII_TABLE_UPPER", "KEY_ASCII_TABLE_SYMBOL"):
+        rom[b.syms[n]:b.syms[n] + 40] = rd(b.syms[n], 40)
+    return fharness.key_map(rom, b.syms)
+
+
 def run_zesarux(b, lines, port, tmp):
     state = tempfile.mkdtemp(prefix="state.", dir=tmp)          # private TS2068_DEBUG_STATE_DIR per run
-    os.environ["TS2068_DEBUG_STATE_DIR"] = state
+    os.environ["TS2068_DEBUG_STATE_DIR"] = state                # (per process: the worker pool uses processes)
     try:
         import ts2068_debug.process as proc
         from ts2068_debug.controller import Ts2068Debug
@@ -320,6 +364,7 @@ def run_zesarux(b, lines, port, tmp):
             z.command("hard-reset-cpu")
         r = Result(b, "zesarux")
         rd = lambda a, n: dbg.read_memory(a, n)
+        rd1 = lambda a: dbg.read_memory(a, 1)[0]
 
         def wait_idle(budget=40_000_000):
             dbg.pause()
@@ -336,21 +381,55 @@ def run_zesarux(b, lines, port, tmp):
                 chunk = min(chunk * 2, 500_000)
             return False
 
+        def isr_accepted():
+            """KBD_ISR_TICK has accepted (debounced and latched) the key it tracks: a key is tracked and its debounce
+            counter is at 0 (kernel/interrupt/interrupt.asm).  Read from RAM; no breakpoint."""
+            return rd1(b.kbd_cur_row) != 0xFF and rd1(b.kbd_debounce) == 0
+
+        def press(events, accepted):
+            """Hold `events` while stepping until accepted() (False: given up after PRESS_BUDGET instructions), release
+            them, then step until KEY_UP_FRAMES frames have been counted."""
+            for e in events:
+                z.command("send-keys-event %d 1" % e)
+            ok, used = False, 0
+            try:
+                while not ok and used < PRESS_BUDGET:
+                    dbg.run(max_instructions=PRESS_CHUNK)
+                    used += PRESS_CHUNK
+                    ok = accepted()
+            finally:
+                for e in reversed(events):
+                    z.command("send-keys-event %d 0" % e)
+            f0, used = rdw(b.frames), 0
+            while (rdw(b.frames) - f0) & 0xFFFF < KEY_UP_FRAMES:
+                if used >= UP_BUDGET:
+                    raise HarnessError("FRAMES did not advance after a key release (interrupts off?)")
+                dbg.run(max_instructions=UP_CHUNK)
+                used += UP_CHUNK
+            return ok
+
+        rdw = lambda a: int.from_bytes(rd(a, 2), "little")
+
         r.alive = wait_idle()
         if not r.alive:
             r.notes.append("boot never reached the idle prompt")
+        keys = zesarux_keymap(b, rd) if r.alive else {}
         for line in (lines if r.alive else []):
-            dbg.resume()
-            z.command("send-keys-string 80 " + line, timeout=15 + 0.2 * len(line))   # blocks for len*80 ms
-            time.sleep(0.08 * len(line) + 0.4)
-            dbg.pause()
-            n = rd(b.edit_len, 1)[0]
+            for ch in line:
+                if ord(ch) not in keys:
+                    raise HarnessError("Forth cannot type %r on its keyboard (key tables of the %s build)" % (ch, b.kind))
+            for ch in line:
+                n0 = rd1(b.edit_len)
+                if not press(keys[ord(ch)], lambda: rd1(b.edit_len) == n0 + 1):
+                    break                                           # not accepted: the read-back below reports it
+            n = rd1(b.edit_len)
             r.typed.append((line, rd(b.edit_buf, n).decode("latin-1")))
             if r.typed[-1][1] != line:                              # harness typing error: stop, caller retries
                 break
-            dbg.resume()
-            dbg.press_key("ENTER")
-            time.sleep(0.4)
+            # ENTER: the ISR's acceptance is the test (EDIT_LEN only goes to 0 after the line has RUN, so a long
+            # program would keep the key down past KBD_REPDEL and auto-repeat a second ENTER)
+            if not press(keys[13], isr_accepted):
+                raise HarnessError("ENTER not accepted after %d instructions on %s (line %r)" % (PRESS_BUDGET, b.kind, line[:50]))
             if not wait_idle():
                 r.alive = False
                 r.notes.append("no idle prompt after: " + line[:50])
@@ -505,24 +584,104 @@ def fmt(m):
 
 
 # ----------------------------------------------------------------------------------------------- driver
-def run_pair(emu, case, lines, hb, cb, tmp, tsdir, port):
-    """Run one case on one emulator for both builds (fresh boot each), retrying keystroke errors."""
-    out = []
-    for b in (hb, cb):
-        for attempt in range(1, 5):
-            r = run_tsrun(b, lines + [CONTROL], tsdir, tmp) if emu == "tsrun" else run_zesarux(b, lines + [CONTROL], port, tmp)
-            r.attempts = attempt
-            bad = [(w, g) for w, g in r.typed if w != g]
-            if not bad:
-                break
-            print("  (typing error on %s/%s/%s attempt %d: wanted %r got %r)" % (emu, b.kind, case, attempt, *bad[0]),
-                  file=sys.stderr)
-        else:
-            raise HarnessError("keystrokes still wrong after 4 attempts on %s/%s/%s: %r" % (emu, b.kind, case, bad[0]))
-        if b.kind == "home" and not r.alive:
-            raise HarnessError("HOME build unresponsive on %s/%s: %s" % (emu, case, "; ".join(r.notes)))
-        out.append(r)
-    return out
+def dump_result(dump, case, r):
+    """--dump DIR: the RAM the comparison reads ($4000-$FFFF) and the registers/typing it used, one pair of files per
+    run, named CASE.EMU.KIND.bin / .json so the dumps of two versions of this tool pair up (tools/cart_diff_dumpcmp.py)."""
+    os.makedirs(dump, exist_ok=True)
+    base = "%s/%s.%s.%s" % (dump, case, r.emu, r.build.kind)
+    with open(base + ".bin", "wb") as f:
+        f.write(r.ram)
+    with open(base + ".json", "w") as f:
+        json.dump(dict(case=case, emu=r.emu, kind=r.build.kind, ix=r.ix, iy=r.iy, alive=r.alive, page5_out=r.page5_out,
+                       attempts=r.attempts, typed=r.typed, notes=r.notes), f, indent=1)
+
+
+def run_unit(emu, case, lines, b, tmp, tsdir, port, dump=None):
+    """One case on one emulator for ONE build (fresh boot), retrying keystroke errors up to 4 attempts."""
+    for attempt in range(1, 5):
+        r = run_tsrun(b, lines + [CONTROL], tsdir, tmp) if emu == "tsrun" else run_zesarux(b, lines + [CONTROL], port, tmp)
+        r.attempts = attempt
+        bad = [(w, g) for w, g in r.typed if w != g]
+        if not bad:
+            break
+        print("  (typing error on %s/%s/%s attempt %d: wanted %r got %r)" % (emu, b.kind, case, attempt, *bad[0]),
+              file=sys.stderr)
+    else:
+        raise HarnessError("keystrokes still wrong after 4 attempts on %s/%s/%s: %r" % (emu, b.kind, case, bad[0]))
+    if b.kind == "home" and not r.alive:
+        raise HarnessError("HOME build unresponsive on %s/%s: %s" % (emu, case, "; ".join(r.notes)))
+    if dump:
+        dump_result(dump, case, r)
+    return r
+
+
+def run_pair(emu, case, lines, hb, cb, tmp, tsdir, port, dump=None):
+    """Run one case on one emulator for both builds (fresh boot each)."""
+    return [run_unit(emu, case, lines, b, tmp, tsdir, port, dump) for b in (hb, cb)]
+
+
+# ----------------------------------------------------------------------------------------------- worker pool
+class ZPool:
+    """ZEsarUX runs of (case, build) units in worker PROCESSES (run_zesarux sets TS2068_DEBUG_STATE_DIR in os.environ, so
+    not threads), one emulator at a time per worker, worker k on port port0 + k.  Units are queued longest case first;
+    result(i) blocks for unit i, so the caller prints in case order whatever the completion order."""
+
+    def __init__(self, units, builds, tmp, port0, jobs, dump):
+        import multiprocessing as mp
+        self.n = min(jobs, len(units)) if units else 0
+        ctx = mp.get_context("fork")
+        self.tq, self.rq = ctx.Queue(), ctx.Queue()
+        self.done, self.procs = {}, []
+        order = sorted(range(len(units)), key=lambda i: -sum(len(x) for x in units[i][2]))
+        for i in order:
+            self.tq.put(i)
+        for _ in range(self.n):
+            self.tq.put(None)
+        for k in range(self.n):
+            p = ctx.Process(target=self._worker, args=(units, builds, tmp, port0 + k, dump), daemon=True)
+            p.start()
+            self.procs.append(p)
+
+    def _worker(self, units, builds, tmp, port, dump):
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(1))      # run_zesarux's finally then stops its emulator
+        while True:
+            i = self.tq.get()
+            if i is None:
+                return
+            case, kind, lines = units[i]
+            try:
+                r = run_unit("zesarux", case, lines, builds[kind], tmp, None, port, dump)
+                self.rq.put((i, "ok", dict(ram=r.ram, ix=r.ix, iy=r.iy, alive=r.alive, page5_out=r.page5_out,
+                                           attempts=r.attempts, typed=r.typed, notes=r.notes)))
+            except HarnessError as e:
+                self.rq.put((i, "harness", str(e)))
+            except Exception as e:                                  # ZRCP/transport/other tool failures
+                self.rq.put((i, "other", "%s: %s" % (type(e).__name__, e)))
+
+    def result(self, i, build):
+        import queue
+        while i not in self.done:
+            try:
+                j, kind, v = self.rq.get(timeout=5)
+            except queue.Empty:
+                if not any(p.is_alive() for p in self.procs):
+                    raise HarnessError("every ZEsarUX worker has exited")
+                continue
+            if kind == "harness":
+                raise HarnessError(v)
+            if kind == "other":
+                raise RuntimeError(v)
+            self.done[j] = v
+        r = Result(build, "zesarux")
+        r.__dict__.update(self.done.pop(i))
+        return r
+
+    def close(self):
+        for p in self.procs:
+            if p.is_alive():
+                p.terminate()
+        for p in self.procs:
+            p.join(timeout=15)
 
 
 def selftest(hb, cb, tmp, tsdir):
@@ -577,12 +736,19 @@ def main():
     ap.add_argument("--cart-dck", help="default: CART_DIR/build/forth_boot.dck")
     ap.add_argument("--emulators", default="zesarux,tsrun")
     ap.add_argument("--cases", help="comma list (default all): " + ",".join(c[0] for c in CASES))
-    ap.add_argument("--port", type=int, default=10930, help="ZRCP port (10930-10949)")
+    ap.add_argument("--port", type=int, default=10930, help="first ZRCP port (10930-10949); worker k uses port + k")
+    ap.add_argument("--jobs", type=int, default=4, help="ZEsarUX worker processes (default 4; at most the ports left "
+                    "up to 10949 and the number of ZEsarUX runs)")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--selftest", action="store_true")
+    ap.add_argument("--dump", metavar="DIR", help="write every run's RAM ($4000-$FFFF) and IX/IY/typed lines to DIR "
+                    "(CASE.EMU.KIND.bin/.json); compare two dumps with tools/cart_diff_dumpcmp.py")
     args = ap.parse_args()
     if not 10930 <= args.port <= 10949:
         print("port must be within 10930-10949", file=sys.stderr)
+        return 2
+    if args.jobs < 1:
+        print("--jobs must be at least 1", file=sys.stderr)
         return 2
     emus = [e for e in args.emulators.split(",") if e]
     if not set(emus) <= {"zesarux", "tsrun"}:
@@ -595,7 +761,9 @@ def main():
         if len(cases) != len(want):
             print("unknown case in --cases", file=sys.stderr)
             return 2
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))     # the finally below then stops every emulator
     tmp = tempfile.mkdtemp(prefix="cart_diff.")
+    pool = None
     try:
         hb, cb = Build("home", args.home_dir), Build("cart", args.cart_dir, args.cart_dck)
         glyphs = font_glyphs(hb)
@@ -603,10 +771,16 @@ def main():
         if args.selftest:
             return selftest(hb, cb, tmp, tsdir)
         results, infos, fails = [], [], 0
-        for name, lines, *opt in cases:
+        pool, units = None, [(c[0], k, c[1]) for c in cases for k in ("home", "cart")] if "zesarux" in emus else []
+        if units:
+            pool = ZPool(units, {"home": hb, "cart": cb}, tmp, args.port, min(args.jobs, 10949 - args.port + 1), args.dump)
+        for ci, (name, lines, *opt) in enumerate(cases):
             home_scr = {}
             for emu in emus:
-                H, C = run_pair(emu, name, lines, hb, cb, tmp, tsdir, args.port)
+                if emu == "zesarux":
+                    H, C = pool.result(2 * ci, hb), pool.result(2 * ci + 1, cb)
+                else:
+                    H, C = run_pair(emu, name, lines, hb, cb, tmp, tsdir, args.port, args.dump)
                 m = compare(name, H, C, glyphs, opt[0] if opt else None)
                 m["attempts"] = (H.attempts, C.attempts)
                 m["tsrun_max_depth"] = (H.depth_max, C.depth_max) if emu == "tsrun" else None
@@ -634,6 +808,8 @@ def main():
         print("HARNESS ERROR: %s: %s" % (type(e).__name__, e), file=sys.stderr)
         return 2
     finally:
+        if pool:
+            pool.close()
         shutil.rmtree(tmp, ignore_errors=True)
 
 
