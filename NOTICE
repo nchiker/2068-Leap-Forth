@@ -51,6 +51,17 @@ kernel/storage/UPSTREAM.md, which tools/check_upstream.py enforces in make check
 core/beep.asm (since step A) takes its period table and shift-and-round scheme from 2068-Leap's rom/v2_ay_beep.asm
 (MIT, same copyright holder), rebuilt against docs/V2/AY_BEEP_SPEC.md.
 
+The floating point (since step F, docs/V2/FLOAT_SPEC.md): core/fpcore.asm, core/fpparse.asm, core/fpprint.asm and
+core/fpconv.asm are rebuilt from 2068-Leap-C's src/runtime/fpcore.asm (its number format, unpacked form and
+algorithms; MIT, same copyright holder), with their own multiply and divide kernels and decimal output; the
+SQR method and the sine series and its coefficients in core/fpmath.asm come from 2068-Leap's rom/exrom_v2_vm_core.asm
+(54cd877) and rom/exrom_v2_float_fn.asm (MIT, same copyright holder). tools/fpmodel.py is 2068-Leap-C's
+tools/fpmodel.py, vendored unchanged (its sha256 is recorded in tools/fpforth.py). kernel/math/math.asm's multiply,
+divide and random-number routines (since step F, O10) are rebuilt from 2068-Leap-C's src/runtime/helpers.asm and
+src/runtime/library.asm (MIT, same copyright holder). Leap-C's fpcore describes itself as the re-engineered
+calculator of 2068-Leap's V2, whose calculator had been partly ported from the Spectrum ROM; section 4 records the
+owner's position on it.
+
 
 3. Byte comparison with the stock ROMs (tools/provenance.py, run by make check)
 -------------------------------------------------------------------------------
@@ -93,7 +104,7 @@ kernel/sound or core/stick.asm, nor did one fall in kernel/mode64 before step M6
 does not detect code that was rewritten from the disassembly with different bytes, and it does not
 examine runs shorter than 12 bytes.
 
-The font (kernel/graphics/graphics.asm, FONT_TABLE) has no 12-byte run in common with these ROMs. That is all
+The font (kernel/graphics/font.asm since step F, FONT_TABLE) has no 12-byte run in common with these ROMs. That is all
 this file claims about it; the glyph-by-glyph comparison Leap-C's NOTICE makes has not been done here.
 
 
@@ -104,9 +115,9 @@ Both positions are conditional on the scan and are recorded here as conditions, 
 
 - Decision 4 (floating-point core, "fpcore"): the owner accepted, for this NOTICE, the position Leap V2
   takes for its own fpcore (passes the 12-byte scan; MIT), CONDITIONAL on the scan coming back clean on the
-  Forth tree. The Forth tree has no fpcore yet (it is rebuild step F). Since step S the scan on the tree
-  reports no run except the fill (c) above. Whether the condition is met, now or for
-  the float code when it exists, is for the owner; this file does not decide it.
+  Forth tree. Step F rebuilt fpcore here (section 2). Measured at step F's engine commit (38e318b) and at
+  7dd20d8: the scan of all six images reports no run of 12 bytes or more except the fill (c) above, so the
+  condition decision 4 states holds at those commits; make check re-runs the scan at every commit.
 
 - Decision 5 (files written while reading the disassembly: core/printer.asm, kernel/sound, kernel/mode64,
   core/stick.asm; step M6 has since removed kernel/mode64): the owner accepted them as they are for now,

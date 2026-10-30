@@ -547,7 +547,18 @@ This is the first thing to check whenever a `?` appears unexpectedly: read the e
 
 When a line runs successfully, **`OK`** prints on its own line, ensuring that every entered line receives visible confirmation rather than silence.
 
-A second kind of mistake—such as popping from an empty stack or pushing past its reserved space (like executing `DROP` on an empty stack)—prints **`STACK?`** and resets both stacks to empty rather than leaving them in a corrupted state. Like the unrecognized-word prompt, this is a blunt, whole-line reset. *(See 
+A second kind of mistake—such as popping from an empty stack or pushing past its reserved space (like executing `DROP` on an empty stack)—prints **`STACK?`** and resets both stacks to empty rather than leaving them in a corrupted state. Like the unrecognized-word prompt, this is a blunt, whole-line reset.
+
+A third kind is a word that checks its own input and refuses it, such as dividing a decimal number by zero or typing a whole number too big to hold. These print a message that says what went wrong, in the same place, and reset both stacks in the same way:
+
+```forth
+1.0 0.0 F/
+DIVISION BY ZERO
+100000
+OUT OF RANGE
+```
+
+The full list of messages is in [section 13](#13-error-handling-throw-and-catch). *(See 
 [Error handling: THROW and CATCH](#13-error-handling-throw-and-catch)
 for a way to intercept an error like this yourself, from inside your
 own program, instead of always falling back to this default reset.
@@ -703,7 +714,7 @@ and changes nothing:
 
 - **Editing Model:** Editing happens before reading; no matter how much you move the cursor around, Forth only sees the finished line upon pressing Enter.
 
-- **Feedback Signals:** Lines provide visible feedback—`OK` on success, an unrecognized word followed by `?` on typos, and `STACK?` on stack underflow/overflow resets.
+- **Feedback Signals:** Lines provide visible feedback—`OK` on success, an unrecognized word followed by `?` on typos, `STACK?` on stack underflow/overflow resets, and a short message such as `OUT OF RANGE` when a word refuses its input.
 
 - **Dictionary Inspection & Recovery:** Use `VLIST` to inspect available words, `LIST-DEFS` to review past definitions, and `EDIT` to open them in a full-screen view and fix them without retyping them from scratch.
 
@@ -748,6 +759,18 @@ arithmetic, bitwise logic, and randomness — built on top of them.
 Whole numbers — `5`, `-12`, `0` — behave exactly as expected, negatives
 included, via a leading `-`.
 
+A whole number is held in 16 bits, and the system accepts any whole
+number you type from `-32768` up to `65535`. Above `32767` the same 16
+bits are read as a signed number, so `40000 .` prints `-25536` (more on
+that in the exercises below); the extra range exists so that memory
+addresses, which run up to 65535, can be typed as they are. A whole
+number outside the range is not quietly wrapped round — it is refused:
+
+```forth
+100000
+OUT OF RANGE
+```
+
 #### Decimal Numbers
 
 2068-Leap-Forth also supports **decimal numbers**, written with a `.`:
@@ -763,6 +786,32 @@ included, via a leading `-`.
   `5 3 + .` from section 1 — ingredients first, action last, then a
   word to print the result. Only the spellings changed.
 
+A decimal number can be written in several ways. All of these are
+decimal numbers, because each has either a `.` or an exponent:
+
+```forth
+3.5 F.              \ prints 3.5000
+-0.25 F.            \ prints -0.2500
+.5 F.               \ prints 0.5000 -- no digit needed before the point
+3. F.               \ prints 3.0000 -- or after it
+1E3 F.              \ prints 1000.0000 -- 1 times ten to the 3rd power
+-1.5E+3 F.          \ prints -1500.0000 -- the E may be lower case, and
+                    \ the exponent may carry a + or a -
+```
+
+- **The Exponent Form:** `1E3` means 1 × 10³ and `2.5e-4` means
+  2.5 × 10⁻⁴. A number written this way is always a decimal number,
+  even with no `.` in it — `1E3` is not the whole number 1000. A `+`
+  in front of the whole number (`+5`) is not accepted; only the
+  exponent may have one.
+
+- **How Big, How Precise:** A decimal number keeps about 9 to 10
+  significant digits, and can be as large as about 1.7 × 10³⁸ or as
+  small as about 2.9 × 10⁻³⁹, positive or negative. Every result is
+  rounded to the nearest value that fits. A literal that is too big
+  (`1E39`) is refused with `OUT OF RANGE`; one that is too small (`1E-45`)
+  becomes `0`.
+
 ### Two Stacks, and Why
 
 A number with a `.` in it does **not** go on the stack used so far. It
@@ -770,7 +819,7 @@ goes on a second, entirely separate stack of its own.
 
 - **Separate Storage:** A decimal number and a whole number can never
   sit on top of "the stack" at the same time, because they aren't on
-  the same stack.
+  the same stack. The decimal stack has room for 204 numbers.
 
 - **Dedicated Words:** This is why decimal arithmetic needs its own
   words — `F+ F- F* F/`, where the `F` prefix is the standard Forth
@@ -812,12 +861,6 @@ when both the ingredients and the answer are whole numbers; reach for
 `F*`/`F/` only once a `.` (decimal point) is actually involved
 somewhere in the calculation.
 
-- **`F.` Precision:** `F.` prints a decimal result with exactly 4
-  digits after the point (`6.0` prints as `"6.0000"`, not `"6"`), and
-  rounds toward zero rather than to the nearest digit — small
-  differences near the 4th digit can differ slightly from what a
-  calculator would show for the same expression.
-
 Decimal literals work inside colon definitions too, compiled in
 exactly the way a whole-number literal would be:
 
@@ -831,45 +874,236 @@ and standard Forth design — not a limitation particular to this
 implementation. [`numeric_model.md`](numeric_model.md) has the fuller
 reasoning.
 
+#### Printing Decimals: `F.`, `PLACES` and `FS.`
+
+`F.` prints a decimal number with a fixed number of digits after the
+point, then a space. Until you say otherwise that number is 4, so `6.0`
+prints as `6.0000`, not `6`. **`PLACES ( n -- )`** changes it, to any
+number from 0 to 9, for both `F.` and `FS.` below:
+
+```forth
+PI F.               \ prints 3.1416
+2 PLACES            \ from now on, 2 digits after the point
+PI F.               \ prints 3.14
+0 PLACES            \ none at all -- and no point either
+PI F.               \ prints 3
+9 PLACES
+PI F.               \ prints 3.141592653
+4 PLACES            \ back to the usual
+```
+
+- **Rounded, Not Cut Off:** `F.` rounds to the nearest digit, and a
+  value exactly halfway goes up (away from zero, for a negative
+  number). `0 PLACES 2.5 F.` prints `3`, and `4 PLACES 0.03125 F.`
+  prints `0.0313`. It rounds the number the machine actually holds,
+  which for a number like `2.675` is a hair below what you typed
+  (decimals such as `2.675` have no exact form in binary), so
+  `2 PLACES 2.675 F.` prints `2.67`.
+
+- **No Minus Sign on a Zero:** A tiny negative number prints as plain
+  zero, not `-0.0000`: `-0.00001 F.` prints `0.0000`.
+
+- **How Many Digits Are Real:** A decimal number holds about 9 to 10
+  significant digits, so asking `F.` for more places than that
+  prints digits that are no longer meaningful. Even `PI` shows it:
+  the true value of π is 3.14159265358979…, and with `9 PLACES` the
+  last digit of `PI F.` is already a 3 where rounding the true π gives
+  a 4.
+
+- **Wrong `PLACES`:** `10 PLACES` or `-1 PLACES` is refused with
+  `OUT OF RANGE`, and the setting stays as it was.
+
+Very large and very small numbers are awkward in this style — `1E10 F.`
+prints `10000000000.0000` and `1E-6 F.` prints `0.0000`. For those,
+**`FS.`** prints in *scientific notation*: one digit, the point,
+`PLACES` more digits, then `E` and the power of ten:
+
+```forth
+12345.678 FS.       \ prints 1.2346E4 -- 1.2346 times ten to the 4th
+-12345.678 FS.      \ prints -1.2346E4
+1E-6 FS.            \ prints 1.0000E-6
+2.5e-4 FS.          \ prints 2.5000E-4
+1E38 FS.            \ prints 1.0000E38
+0.0 FS.             \ prints 0.0000E0
+```
+
+The exponent is written in ordinary decimal, with a `-` when it is
+negative and no `+` when it is not. `FS.` is the way to read a very
+large number or to see what size a very small result really is.
+
+#### When a Calculation Goes Wrong
+
+Decimal arithmetic checks its own results. Three mistakes are errors
+rather than wrong answers, and each prints a message:
+
+```forth
+1.0 0.0 F/
+DIVISION BY ZERO
+1E38 10.0 F*
+OUT OF RANGE
+-1.0 FSQRT
+INVALID ARGUMENT
+```
+
+- **Division by Zero:** `F/` by zero. (`TAN` of an angle whose cosine
+  is zero gives this too.)
+
+- **Out of Range:** A result too big to hold (about 1.7 × 10³⁸ is the
+  limit), and also the cases covered elsewhere in this section: a
+  literal that is too big, `F>S` of a number that won't fit, `PLACES`
+  outside 0 to 9, and a very large angle given to `SIN`, `COS` or
+  `TAN`. A result that is merely too *small* is not an error; it
+  becomes `0`.
+
+- **Invalid Argument:** `FSQRT` of a negative number.
+
+These are ordinary `THROW`s (error codes `-42`, `-43` and `-46`), so a
+program can intercept them with `CATCH` — [section 13](#13-error-handling-throw-and-catch)
+shows how. The decimal stack is put back as it was when the `CATCH`
+began:
+
+```forth
+: TRY-DIVIDE  1.0 0.0 F/ ;
+' TRY-DIVIDE CATCH .       \ prints -42
+```
+
+#### Moving Decimals Around, and Comparing Them
+
+Whole-number stack words (`DUP`, `SWAP`, `DROP`, `OVER`) work on the
+whole-number stack only. Decimals have their own set, named with an `F`
+in front:
+
+| Word      | Whole-number stack | Decimal stack       | What it does                           |
+| --------- | ------------------ | ------------------- | -------------------------------------- |
+| `FDUP`    | —                  | `( f -- f f )`      | Copy the top decimal                   |
+| `FDROP`   | —                  | `( f -- )`          | Throw the top decimal away             |
+| `FSWAP`   | —                  | `( f1 f2 -- f2 f1 )` | Swap the top two                      |
+| `FOVER`   | —                  | `( f1 f2 -- f1 f2 f1 )` | Copy the second one to the top     |
+| `FDEPTH`  | `( -- n )`         | —                   | How many decimals are on the stack     |
+| `FNEGATE` | —                  | `( f -- -f )`       | Change the sign                        |
+| `FABS`    | —                  | `( f -- \|f\| )`    | Absolute value                         |
+| `FMIN`    | —                  | `( f1 f2 -- f3 )`   | The smaller of the two                 |
+| `FMAX`    | —                  | `( f1 f2 -- f3 )`   | The larger of the two                  |
+
+```forth
+1.5 FDUP F* F.      \ prints 2.2500 -- 1.5 squared
+1.5 2.5 FSWAP F. F. \ prints 1.5000 2.5000 -- after the swap, 1.5 is on top
+-1.5 FABS F.        \ prints 1.5000
+1.5 FNEGATE F.      \ prints -1.5000
+1.5 2.5 FMAX F.     \ prints 2.5000
+1.5 2.5 FMIN F.     \ prints 1.5000
+```
+
+Comparing two decimals gives an ordinary yes/no flag **on the
+whole-number stack**, where `IF` and `UNTIL` expect to find it — `-1`
+for true and `0` for false, exactly as for `<` in section 6:
+
+| Word   | Whole-number stack | Decimal stack     | True when                  |
+| ------ | ------------------ | ----------------- | -------------------------- |
+| `F<`   | `( -- flag )`      | `( f1 f2 -- )`    | `f1` is less than `f2`     |
+| `F>`   | `( -- flag )`      | `( f1 f2 -- )`    | `f1` is greater than `f2`  |
+| `F=`   | `( -- flag )`      | `( f1 f2 -- )`    | the two are exactly equal  |
+| `F0<`  | `( -- flag )`      | `( f -- )`        | `f` is negative            |
+| `F0=`  | `( -- flag )`      | `( f -- )`        | `f` is zero                |
+
+```forth
+1.5 2.5 F< .        \ prints -1 -- true
+2.5 1.5 F< .        \ prints 0 -- false
+2.5 1.5 F> .        \ prints -1
+-3.0 F0< .          \ prints -1
+0.0 F0= .           \ prints -1
+```
+
+- **A Warning About `F=`:** `F=` asks whether two numbers are *exactly*
+  the same, and a calculation can end a hair away from the number you
+  expected. Every result is rounded to the nearest value that fits, so
+  most such differences vanish — `2.0 FSQRT FDUP F* 2.0 F= .` happens
+  to print `-1` — but it is not something to rely on. When in doubt,
+  ask whether the *difference* is small instead: `FDUP`, `F-`, `FABS`
+  and `F<` against a small number do exactly that.
+
+#### Keeping a Decimal: `FVARIABLE` and `FCONSTANT`
+
+A decimal can be kept under a name, just as a whole number can be kept
+with `VARIABLE` and `CONSTANT` (section 5). **`FVARIABLE name`** makes a
+five-byte home for one decimal and, like `VARIABLE`, leaves its address
+on the whole-number stack. **`F!`** and **`F@`** store a decimal into
+that address and fetch it back:
+
+| Word        | Whole-number stack | Decimal stack  | What it does                              |
+| ----------- | ------------------ | -------------- | ----------------------------------------- |
+| `FVARIABLE` | —                  | —              | `FVARIABLE name` creates the variable     |
+| `F!`        | `( addr -- )`      | `( f -- )`     | Store a decimal at the address            |
+| `F@`        | `( addr -- )`      | `( -- f )`     | Fetch the decimal stored there            |
+| `FCONSTANT` | —                  | `( f -- )`     | `f FCONSTANT name` makes a decimal constant |
+
+```forth
+FVARIABLE TOTAL
+0.0 TOTAL F!
+: ADD-TO-TOTAL  TOTAL F@ F+ TOTAL F! ;
+1.5 ADD-TO-TOTAL
+2.25 ADD-TO-TOTAL
+TOTAL F@ F.         \ prints 3.7500
+
+PI 2.0 F* FCONSTANT TAU
+TAU F.              \ prints 6.2832
+```
+
+A decimal constant puts its value on the **decimal** stack when it is
+named, as a plain `CONSTANT` puts its value on the ordinary one.
+
 #### Square Roots and Trigonometry
 
 `FSQRT` is the decimal counterpart to whole-number `SQRT` (below):
 
 ```forth
 9.0 FSQRT F.        \ prints 3.0000
-2.0 FSQRT F.        \ prints 1.4141 -- an approximation, the standard
+2.0 FSQRT F.        \ prints 1.4142 -- an approximation, the standard
                     \ result for the square root of a number that
                     \ isn't a perfect square
+9 PLACES 2.0 FSQRT F.   \ prints 1.414213562
 ```
 
-Trigonometry follows the same pattern. `PI` pushes a decimal
-approximation of π, and `SIN`/`COS` take an angle in radians:
+The square root of a negative number has no answer; `FSQRT` refuses it
+with `INVALID ARGUMENT`, as shown above.
+
+Trigonometry follows the same pattern. `PI` pushes the decimal
+approximation of π, and `SIN`, `COS` and `TAN` take an angle in
+radians:
 
 ```forth
 PI F.               \ prints 3.1416
-1.0 SIN F.          \ prints 0.8408
-2.0 COS F.          \ prints -0.4156
+1.0 SIN F.          \ prints 0.8415
+2.0 COS F.          \ prints -0.4161
+1.0 TAN F.          \ prints 1.5574
+PI 4.0 F/ TAN F.    \ prints 1.0000 -- the tangent of 45 degrees
 ```
 
-- **Accuracy:** `SIN` and `COS` are computed from a lookup table with
-  linear interpolation between entries, giving about 3-4 decimal
-  digits of accuracy — matching the precision `F.` itself displays.
+- **Accuracy:** `SIN` and `COS` are accurate to about nine decimal
+  places — far past what `F.` shows with its usual 4. The answer is
+  as good as the angle you gave: `PI` itself is only a 9-to-10-digit
+  approximation of π, which is why `PI SIN FS.` prints `1.2154E-10`
+  (a very small number, not exactly the `0` that the true sine of π
+  would be).
 
-- **Valid Range:** Large angles are not reliable: beyond roughly ±1570
-  radians (a couple hundred full turns), the internal range-reduction
-  step no longer guarantees a correct result. Ordinary trigonometric
-  usage stays comfortably inside that range.
+- **Valid Range:** Large angles are not reliable, and are refused
+  rather than guessed at: beyond about ±102,940 radians (some 16,000
+  full turns), `SIN`, `COS` and `TAN` give `OUT OF RANGE`. Ordinary
+  trigonometric usage stays far inside that range.
+
+- **`TAN` at 90 degrees:** The tangent is `SIN` divided by `COS`, and
+  `PI 2.0 F/ TAN` is the case where the cosine comes out as exactly
+  zero, so it is a `DIVISION BY ZERO`.
 
 Two more words convert between the two common angle units: `RAD` and
 `DEG`, for situations where degrees are the more natural unit — a
 compass heading, say:
 
 ```forth
-90.0 RAD F.       \ prints 1.5707 -- 90 degrees in radians
-PI 2.0 F/ DEG F.  \ prints 89.9960 -- half of PI back to degrees
-                  \ (not exactly 90.0 -- the same small
-                  \ approximation error every decimal calculation
-                  \ here carries)
+90.0 RAD F.       \ prints 1.5708 -- 90 degrees in radians
+PI 2.0 F/ DEG F.  \ prints 90.0000 -- half of PI back to degrees
+45.0 RAD SIN F.   \ prints 0.7071
+60.0 RAD COS F.   \ prints 0.5000
 ```
 
 ### Crossing Between the Two Stacks
@@ -889,6 +1123,7 @@ decimal one:
 | `S>F`    | `( n -- )`         | `( -- f )`    | Whole number to decimal (exact)          |
 | `F>S`    | `( -- n )`         | `( f -- )`    | Decimal to whole number (see below)      |
 | `FROUND` | —                  | `( f -- f' )` | Round to the nearest whole decimal value |
+| `FLOOR`  | —                  | `( f -- f' )` | Round down to a whole decimal value      |
 
 - **Reading `S>F`:** Takes a value off the whole-number stack, leaves
   one on the decimal stack. The name states the same thing — `S` for
@@ -897,33 +1132,49 @@ decimal one:
 
 - **Reading `F>S`:** Runs the other direction.
 
-- **`FROUND`:** Never leaves the decimal stack at all, which is why it
-  has an ordinary single-group stack effect.
+- **`FROUND` and `FLOOR`:** Never leave the decimal stack at all, which
+  is why they have an ordinary single-group stack effect.
 
 ```forth
 42 S>F F.          \ prints 42.0000
-3.7 F>S .          \ prints 3 -- truncated toward negative infinity,
-                   \ not rounded and not toward zero: plain F>S on
-                   \ -0.5 gives -1, not 0
--0.5 FROUND F>S .  \ prints 0 -- FROUND rounds -0.5 to the nearest
-                   \ whole value FIRST (half rounds up, so -0.5
-                   \ becomes 0, not -1), and only THEN does F>S
-                   \ convert it — the order matters
+3.7 F>S .          \ prints 3 -- the fractional part is dropped, not
+                   \ rounded
+-3.7 F>S .         \ prints -3 -- dropped toward zero, so a negative
+                   \ number goes UP to the whole number beside it
+-0.5 F>S .         \ prints 0
+3.7 FROUND F>S .   \ prints 4 -- FROUND rounds FIRST (3.7 is nearest
+                   \ to 4), and only THEN does F>S convert it -- the
+                   \ order matters
+-2.5 FROUND F>S .  \ prints -3 -- exactly halfway rounds away from
+                   \ zero, to the bigger size
+2.5 FROUND F>S .   \ prints 3
+3.7 FLOOR F.       \ prints 3.0000
+-3.7 FLOOR F.      \ prints -4.0000 -- the whole number BELOW -3.7
 ```
 
-- **`F>S` Rounds Downward, Not Toward Zero:** `F>S` might be expected
-  to simply discard the fractional part and hand back the whole-number
-  part — that is what "convert to an integer" usually means elsewhere.
-  It does not. It always rounds *downward*, toward negative infinity.
-  For positive values those are the same operation, so `3.7 F>S` gives
-  `3` either way. For negative values they diverge: `-0.5 F>S` gives
-  `-1`, not `0`, because `-1` is the whole number below `-0.5`.
+- **`F>S` Drops the Fraction:** `F>S` discards the fractional part
+  and hands back the whole-number part, which is what "convert to an
+  integer" usually means elsewhere: `3.7` gives `3` and `-3.7` gives
+  `-3`. In other words it moves toward zero, never rounds.
 
 - **Getting Ordinary Rounding:** If ordinary rounding is what's wanted,
-  `FROUND` first and `F>S` second achieves it, as the third line above
+  `FROUND` first and `F>S` second achieves it, as the `3.7` line above
   shows. The order matters, because the two words perform different
-  jobs: `FROUND` decides which whole value is *nearest*, and `F>S`
-  merely moves the result to the other stack.
+  jobs: `FROUND` decides which whole value is *nearest* (a tie goes to
+  the number farther from zero), and `F>S` merely moves the result to
+  the other stack.
+
+- **`FLOOR` Is the Other Direction:** `FLOOR` gives the nearest whole
+  value *below*, so for a negative number it differs from `F>S`:
+  `-3.7 FLOOR` is `-4.0000` where `-3.7 F>S` is `-3`. For a positive
+  number the two agree.
+
+- **Whole Numbers Have Limits:** The whole-number side holds 16 bits,
+  so `F>S` accepts a decimal whose whole part is from `-32768` to `65535` — the
+  same range as a typed whole number, with the same reading of anything
+  above `32767` as a negative number (`40000.0 F>S .` prints `-25536`).
+  A bigger value is `OUT OF RANGE`: `70000.0 F>S` is refused.
+  `S>F` always works, and is exact.
 
 ### A Few More Useful Numeric Words
 
@@ -1047,6 +1298,15 @@ pseudo-random whole number:
   the "n possible results" convention many BASICs use for their own
   `RND(n)`.
 
+- **Fair Results:** Every number from `0` to `n-1` is equally likely
+  (to within a hair), whatever `n` is, and one result tells you nothing
+  useful about the next. A `RND` of `0` or of a negative number gives
+  `0`.
+
+- **Same Seed, Same Sequence:** After `12345 RANDOMIZE`, the sequence of
+  results that follows is always the same, on any machine and any run,
+  which is what makes a game or a test reproducible.
+
 ### Bitwise and Logical Operators
 
 These act on all 16 bits of a value at once — real bit manipulation,
@@ -1084,11 +1344,16 @@ not the boolean `=`/`<`/`>` results covered in
 ### Summary
 
 - **Core Concepts:** Whole numbers and decimal numbers, and the two
-  separate stacks they live on. Signed 16-bit arithmetic. Bitwise
-  operations on all 16 bits at once.
+  separate stacks they live on. Signed 16-bit arithmetic. Decimal
+  numbers with about 9 to 10 digits, printed with `F.` (as many places
+  as `PLACES` says) or `FS.`, and errors for a result that can't be
+  held. Bitwise operations on all 16 bits at once.
 
-- **Forth Words:** `F+`, `F-`, `F*`, `F/`, `F.`, `FSQRT`, `PI`, `SIN`,
-  `COS`, `RAD`, `DEG`, `S>F`, `F>S`, `FROUND`, `1+`, `1-`, `NEGATE`,
+- **Forth Words:** `F+`, `F-`, `F*`, `F/`, `F.`, `FS.`, `PLACES`,
+  `FSQRT`, `PI`, `SIN`, `COS`, `TAN`, `RAD`, `DEG`, `S>F`, `F>S`,
+  `FROUND`, `FLOOR`, `FDUP`, `FDROP`, `FSWAP`, `FOVER`, `FDEPTH`,
+  `FNEGATE`, `FABS`, `FMIN`, `FMAX`, `F<`, `F>`, `F=`, `F0<`, `F0=`,
+  `F@`, `F!`, `FVARIABLE`, `FCONSTANT`, `1+`, `1-`, `NEGATE`,
   `*`, `/`, `ABS`, `SGN`, `MOD`, `SQRT`, `MAX`, `MIN`, `RND`,
   `RANDOMIZE`, `AND`, `OR`, `XOR`, `INVERT`.
 
@@ -1106,8 +1371,11 @@ not the boolean `=`/`<`/`>` results covered in
    
    You get `-32768`. Counting up past the largest positive value wraps
    straight round to the most negative one, exactly as a car odometer
-   rolls over. Try `32768 .` as well, and see what a number that can't
-   fit in the range does when you merely type it.
+   rolls over. Try `32768 .` as well: you can *type* numbers up to
+   `65535`, and anything above `32767` is read as the negative number
+   with the same 16 bits (`32768` is `-32768`, `65535` is `-1`). Then try
+   `65536 .`, which does not fit in 16 bits at all, and see that typing
+   it is refused with `OUT OF RANGE` instead of wrapping.
 
 2. The same ceiling causes most trouble with `*`, because it is easy to
    multiply two perfectly reasonable numbers and get a product that
@@ -1138,14 +1406,39 @@ not the boolean `=`/`<`/`>` results covered in
 
 5. `F-` is the one decimal operator without a worked example above.
    Work out what `5.5 2.25 F- F.` should print — remembering both the
-   operand-order rule from section 1 and that `F.` always shows exactly
-   four digits after the point — then run it.
+   operand-order rule from section 1 and that `F.` shows four digits
+   after the point unless `PLACES` says otherwise — then run it. Then
+   run `1.0 3.0 F/ F.` with `2 PLACES`, with `9 PLACES`, and with
+   `0 PLACES`, and compare what you get with the true 0.3333…
+
+   Now try `1.0 3.0 F/ 3.0 F* F.` and `100 S>F 3.0 F/ F>S .`, and say
+   in your own words why the second prints `33` and not `33.3333`.
 
 6. Try `3.5 2.5 +` and then `.` on the next line. Neither decimal ever
    reaches the whole-number stack, so `+` reaches for two values that
    were never put there. This is the wrong-stack mistake described
    above, and it is worth causing on purpose once so you recognise the
    symptom.
+
+7. Make each of the three decimal errors happen on purpose, and read
+   the message: `1.0 0.0 F/`, `1E38 10.0 F*`, `-4.0 FSQRT`. Then catch
+   one with `CATCH`, as the `TRY-DIVIDE` example above does, and print
+   the code it hands back.
+
+8. Type `-3.7 F>S .`, `-3.7 FLOOR F>S .` and `-3.7 FROUND F>S .` and
+   predict all three before you press Enter. Each of the three words
+   answers a different question about the number.
+
+9. Use `FVARIABLE` to keep a running total. Define `FVARIABLE SUM`, set
+   it to `0.0`, then write a word `ADD ( f -- )` that adds the decimal on
+   top of the decimal stack into `SUM`. Add `0.1` ten times in a `DO`
+   loop and print `SUM F@ F.` with `9 PLACES`. Is it exactly `1.0`?
+   Compare it with `1.0 F=`.
+
+10. `FS.` is the way to read numbers that `F.` can't show. Try
+    `1E10 F.` and `1E10 FS.`, then `1E-6 F.` and `1E-6 FS.`. Then
+    compute the area of a circle of radius 5 (`5.0 FDUP F* PI F*`) and
+    print it with `F.` and again with `FS.`.
 
 ---
 
@@ -3646,9 +3939,10 @@ and recover with `CATCH` (see
 | `-8`  | `SAVE-LIB` only: the image doesn't fit (the dictionary has reached its ceiling) |
 
 Left alone, an error just reaches the same fallback section 13
-describes for any uncaught `THROW`. (Before the tape storage rebuild,
-a failed `LOAD-LIB` or `LOAD-TEXT` said nothing at all; it now always
-reports.) To get the code instead, run the word under `CATCH`. The
+describes for any uncaught `THROW`, which prints `BREAK` for `-28`,
+`TAPE ERROR` for `-37` and `DICTIONARY FULL` for `-8`. (Before the tape
+storage rebuild, a failed `LOAD-LIB` or `LOAD-TEXT` said nothing at
+all; it now always reports.) To get the code instead, run the word under `CATCH`. The
 tape name is read from the line *after* `CATCH`, because that's where
 the word runs, so type the name there:
 
@@ -3741,7 +4035,8 @@ SAVE-LIB MYPROG
 
 [Section 3](#3-understanding-system-feedback--errors) covered the
 defaults when something goes wrong: `?` for an unrecognized word,
-`STACK?` for a stack mistake, both
+`STACK?` for a stack mistake, and a message such as `OUT OF RANGE` for
+a word that refused its input, all
 abandoning the rest of the current line and dropping you at a fresh
 prompt. That's the right behavior while you're typing interactively.
 A real *program*, though, often wants to notice a problem itself and
@@ -3833,13 +4128,36 @@ that doesn't have it built in, without touching `SQRT` itself:
 
 - **What Happens With No `CATCH` to Reach:** `THROW`ing with no
   `CATCH` anywhere to reach falls back to the reset this document
-  already described: both stacks emptied, `STACK?` printed, and you're
-  back at a fresh prompt, exactly as with an actual stack mistake.
+  already described: both stacks emptied, a message printed, and you're
+  back at a fresh prompt, exactly as with an actual stack mistake. The
+  message depends on the code, as the table below shows.
   `CATCH` doesn't replace that default; it gives a program the option
   to intercept an error *before* it reaches that point, for whichever
   specific problems the program knows how to recover from. Anything it
   doesn't catch still falls through to the usual reset, same as
   always.
+
+#### The Messages of an Uncaught Error
+
+The words of the system `THROW` these codes themselves (the first four
+come from the dictionary, `'` and the tape words; the last three from
+decimal arithmetic, section 4). With nothing to `CATCH` them, each
+prints its message:
+
+| Code  | Message            | Raised by                                                       |
+| ----- | ------------------ | --------------------------------------------------------------- |
+| `-8`  | `DICTIONARY FULL`  | A definition, `ALLOT`, `,` or `SAVE-LIB` that doesn't fit       |
+| `-13` | `UNDEFINED WORD`   | `'` given a name that isn't in the dictionary                   |
+| `-28` | `BREAK`            | A tape word stopped with SPACE                                  |
+| `-37` | `TAPE ERROR`       | Any other tape failure                                          |
+| `-42` | `DIVISION BY ZERO` | `F/` by zero; `TAN` where the cosine is zero                    |
+| `-43` | `OUT OF RANGE`     | A decimal result, literal or `PLACES` outside its range; a whole-number literal outside `-32768` to `65535`; `F>S` of a number that won't fit |
+| `-46` | `INVALID ARGUMENT` | `FSQRT` of a negative number                                    |
+
+Any other code prints `ERROR` and the number: your own `5 THROW` prints
+`ERROR 5`, and `1 THROW` prints `ERROR 1`. A stack underflow or
+overflow found after a word has run is not a `THROW`; it keeps printing
+`STACK?`.
 
 ### Giving Up on Purpose: `ABORT` and `QUIT`
 
@@ -3923,7 +4241,9 @@ you come straight back out to the prompt:
 1. Confirm both halves of `THROW`'s description at the prompt. `0
    THROW` on its own should do nothing whatsoever and leave you with
    the usual `OK`. `1 THROW`, with no `CATCH` anywhere to reach, should
-   give you the same reset an actual stack mistake does.
+   give you the same reset an actual stack mistake does, with the
+   message `ERROR 1`. Try `5 THROW` as well, and then `-43 THROW`,
+   which prints the message for a code the system uses itself.
 
 2. Show the difference between `ABORT` and `QUIT` for yourself. Push
    two or three numbers, then run each in turn, and afterwards try to
@@ -4640,22 +4960,41 @@ the same convention applied to the full ANS Forth standard.
 
 **Decimal (floating-point) arithmetic** — own stack, see section 4
 
-| Word     | Stack effect             |
-| -------- | ------------------------ |
-| `F+`     | `( f1 f2 -- f1+f2 )`     |
-| `F-`     | `( f1 f2 -- f1-f2 )`     |
-| `F*`     | `( f1 f2 -- f1*f2 )`     |
-| `F/`     | `( f1 f2 -- f1/f2 )`     |
-| `FSQRT`  | `( f -- sqrt(f) )`       |
-| `FROUND` | `( f -- f' )`            |
-| `PI`     | `( -- f )`               |
-| `SIN`    | `( f -- sin(f) )`        |
-| `COS`    | `( f -- cos(f) )`        |
-| `RAD`    | `( degrees -- radians )` |
-| `DEG`    | `( radians -- degrees )` |
-| `S>F`    | `( n -- )` `( -- f )`    |
-| `F>S`    | `( f -- )` `( -- n )`    |
-| `F.`     | `( f -- )`               |
+| Word        | Stack effect                                                |
+| ----------- | ----------------------------------------------------------- |
+| `F+`        | `( f1 f2 -- f1+f2 )`                                        |
+| `F-`        | `( f1 f2 -- f1-f2 )`                                        |
+| `F*`        | `( f1 f2 -- f1*f2 )`                                        |
+| `F/`        | `( f1 f2 -- f1/f2 )`                                        |
+| `FSQRT`     | `( f -- sqrt(f) )`                                          |
+| `FROUND`    | `( f -- f' )` nearest whole value, a tie away from zero     |
+| `FLOOR`     | `( f -- f' )` nearest whole value below                     |
+| `PI`        | `( -- f )`                                                  |
+| `SIN`       | `( f -- sin(f) )` radians                                   |
+| `COS`       | `( f -- cos(f) )` radians                                   |
+| `TAN`       | `( f -- tan(f) )` radians                                   |
+| `RAD`       | `( degrees -- radians )`                                    |
+| `DEG`       | `( radians -- degrees )`                                    |
+| `S>F`       | `( n -- )` `( -- f )`                                       |
+| `F>S`       | `( f -- )` `( -- n )` toward zero, `-32768` to `65535`      |
+| `F.`        | `( f -- )` with `PLACES` decimals                           |
+| `FS.`       | `( f -- )` scientific, `d.ddddEn`                           |
+| `PLACES`    | `( n -- )` decimals for `F.` and `FS.`, 0 to 9 (4 at start) |
+| `FDUP`      | `( f -- f f )`                                              |
+| `FDROP`     | `( f -- )`                                                  |
+| `FSWAP`     | `( f1 f2 -- f2 f1 )`                                        |
+| `FOVER`     | `( f1 f2 -- f1 f2 f1 )`                                     |
+| `FDEPTH`    | `( -- n )` whole-number stack: how many decimals            |
+| `FNEGATE`   | `( f -- -f )`                                               |
+| `FABS`      | `( f -- \|f\| )`                                            |
+| `FMIN`      | `( f1 f2 -- f3 )`                                           |
+| `FMAX`      | `( f1 f2 -- f3 )`                                           |
+| `F<` `F>` `F=` | `( f1 f2 -- )` `( -- flag )`                             |
+| `F0<` `F0=` | `( f -- )` `( -- flag )`                                    |
+| `F@`        | `( addr -- )` `( -- f )`                                    |
+| `F!`        | `( addr -- )` `( f -- )`                                    |
+| `FVARIABLE` | `FVARIABLE name` — `( -- addr )` when named                 |
+| `FCONSTANT` | `f FCONSTANT name` — `( -- f )` when named                  |
 
 **Memory**
 

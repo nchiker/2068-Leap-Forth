@@ -28,9 +28,16 @@ Highlights:
   left/right cursor movement on a single-line input buffer, backed by a
   genuine hardware interrupt (not a polling loop), not a canned
   scripted input.
-- **Floating point**, native to the dictionary: `F+ F- F* F/ FSQRT
-  FROUND S>F F>S`, plus `PI SIN COS` and a real `F.` printer — enough
-  for actual numeric work, not just integer Forth.
+- **Floating point**, native to the dictionary: 5-byte Sinclair floats
+  (about 9.6 digits, up to about ±1.7e38, rounded to nearest) with
+  `F+ F- F* F/ FSQRT FROUND FLOOR S>F F>S`, `PI SIN COS TAN RAD DEG`,
+  float stack words (`FDUP FDROP FSWAP FOVER FDEPTH FNEGATE FABS FMIN
+  FMAX`), comparisons (`F< F> F= F0< F0=`), `F@ F! FVARIABLE FCONSTANT`,
+  literals such as `3.5`, `.5` and `1E3`, and printing with `F.` (`n
+  PLACES` sets the decimals), or `FS.` in scientific notation. Overflow,
+  division by zero and an invalid argument are errors with a message, not
+  a wrong answer — enough for actual numeric work, not just integer
+  Forth.
 - **A graphics and sound vocabulary** built on the TS2068's own
   hardware: `PLOT LINE CIRCLE FILL AT-XY`, `BEEP` (real semitone/second
   units, not raw hardware ticks) and `SOUND`, `INK`/`PAPER` color
@@ -42,9 +49,10 @@ Highlights:
   second, real 8K ROM bank, so the core dictionary doesn't pay for
   functionality a given build doesn't need.
 - **Real error handling**, not silent failure or a crash: `THROW`/
-  `CATCH`, runtime stack-underflow/overflow detection, and a `?`
-  printed on an unrecognized word with a prompt that recovers cleanly
-  instead of hanging.
+  `CATCH`, runtime stack-underflow/overflow detection, a message
+  (`OUT OF RANGE`, `DIVISION BY ZERO`, `TAPE ERROR`, …) for an uncaught
+  error, and a `?` printed on an unrecognized word with a prompt that
+  recovers cleanly instead of hanging.
 - **Tape storage**, Jupiter-Ace-style: `SAVE-LIB`/`LOAD-LIB` round-trip
   a whole dictionary image (CRC-checked, tied to the exact ROM release
   that saved it; its HOME-ROM and DOCK-cartridge editions share tapes), `SAVE-TEXT`/`LOAD-TEXT` the portable source text, and
@@ -102,7 +110,9 @@ pseudo-random number in `[0, 100)`, `5 ARRAY NUMS 99 3 CELLS NUMS + !
 3 CELLS NUMS + @ .` to see a real array round-trip a value, or
 `S" HELLO WORLD" TYPE` to print a string literal directly, or
 `INPUT .` to type a number and have it printed back, or
-`9.0 FSQRT F.` to see a float square root print `3.0000`.
+`2.0 FSQRT F.` to see a float square root print `1.4142`, `9 PLACES PI F.`
+to see `3.141592653`, `1E-6 FS.` to see `1.0000E-6`, or `1.0 0.0 F/` to see
+the error `DIVISION BY ZERO`.
 
 ### Or leave the stock ROM in place and run it as a cartridge
 
@@ -348,6 +358,7 @@ make build-test-sprite          # Phase 65 smoke ROM: SPRITE-DEFINE/SHOW/HIDE
 make build-test-poly-fill       # Phase 65 smoke ROM: POLYGON-FILL
 make check            # static asm checks over core/, kernel/, and rom/
 make test             # headless: every smoke/test ROM under ZEsarUX via ts2068-debug, border 4 = pass
+make floattest        # the float words, literals, F./FS., errors and RND checked against tools/fpforth.py (emulator)
 make repro            # builds twice in separate trees; every file in build/ must hash the same
 make bench            # T-states per benchmark -> build/bench.json, compared with tools/bench_baseline.json
 make product          # just the two ROMs people run: forth-boot + forth-demo-blackjack
@@ -377,7 +388,14 @@ core/       language-layer code, not hardware-facing:
               tapeword.asm (audit step S — what the six tape words share:
                           name parsing, THROW on failure)
               loadtext.asm (Phase 52 — SAVE-TEXT/VERIFY-TEXT/LOAD-TEXT)
-              float.asm   (Phase 8 stretch — F+/F-)
+              fpcore.asm  (step F — the 5-byte float engine, F+ F- F* F/ and
+                          the float stack's core; rebuilt from 2068-Leap-C's)
+              fpparse.asm (step F — one parser for integer and float literals)
+              fpprint.asm (step F — F., FS., PLACES)
+              fpconv.asm  (step F — S>F/F>S/FROUND/FLOOR)
+              fpmath.asm  (step F — FSQRT/PI/SIN/COS/TAN/RAD/DEG)
+              fpstack.asm (step F — FDUP/FSWAP/…, F< F> F=, F@ F!,
+                          FVARIABLE/FCONSTANT)
               print.asm   (Phase 10 — EMIT/.)
               compare.asm (Phase 11 — =/</>)
               variable.asm (Phase 12 — VARIABLE/CONSTANT)
@@ -386,17 +404,11 @@ core/       language-layer code, not hardware-facing:
               color.asm   (Phase 15 — INK/PAPER)
               doloop.asm  (Phase 16 — DO/LOOP/I; Phase 24 — LEAVE/+LOOP)
               moregfx.asm (Phase 17 — FILL/AT-XY)
-              floatmul.asm (Phase 18 — F*)
-              floatdiv.asm (Phase 19 — F/)
               key.asm     (Phase 20 — KEY)
-              floatprint.asm (Phase 22 — F.)
-              decimal.asm (Phase 23 — decimal literals)
               mathfn.asm  (Phase 25 — ABS/SGN/MOD/SQRT/RND/RANDOMIZE)
               array.asm   (Phase 26 — ARRAY/CELLS)
               string.asm  (Phase 27 — S"/TYPE/STRING/PLACE/COUNT/LEN/VAL)
               input.asm   (Phase 28 — ACCEPT/INPUT)
-              floatsqrt.asm (Phase 29 — FSQRT)
-              floattrig.asm (Phase 30 — PI/SIN/COS)
               rawbeep.asm (Phase 5's original raw-units loudspeaker BEEP, an
                           optional package: not in the product ROMs, kept
                           for rom/forth_smoke_p5.asm)
@@ -409,6 +421,10 @@ core/       language-layer code, not hardware-facing:
               sprite.asm  (Phase 65 — SPRITE-DEFINE/SHOW/HIDE, EXROM chunk 5)
 kernel/     hardware-facing modules: inherited from 2068-Leap (memory,
             io, graphics, interrupt, math, sound, storage, bank).
+            graphics/font.asm (the character set, split out of
+            graphics.asm in step F) is placed in the boot ROM over
+            $11F8 on purpose, so ZEsarUX's tape autoload cannot fire
+            inside the ROM.
             bank/bank.asm is 2068-Leap's own EXROM paging trampoline,
             retargeted from its original chunk 6 to chunk 5 in Phase 65
             — see that file's own header for the chunk-by-chunk audit
@@ -475,13 +491,18 @@ rom/        ROM image assembly:
               test_sprite.asm     Phase 65 smoke ROM (SPRITE-DEFINE/SHOW/HIDE)
               test_poly_fill.asm  Phase 65 smoke ROM (POLYGON-FILL)
 tools/      build wrapper (sjasmplus_strict.sh) and static/simulated
-            Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/)
+            Z80 checks (check_asm.py, check_z80_opcodes.py, z80sim/);
+            the float oracle: fpmodel.py (2068-Leap-C's bit-exact model
+            of the 5-byte float core), fpforth.py (Forth's float words
+            built on it) and floattest.py, which checks the ROM against
+            them in an emulator (`make floattest`)
 docs/       PROJECT_PLAN.md (full design rationale, project/build-
             facing — read this first for "why"), CHANGELOG.md (condensed
             phase-by-phase summary), forth_tutorial.md (learn the Forth
             language itself, user-facing — no assembly or build content;
             forth_tutorial.docx is the same content as a Word doc),
-            numeric_model.md (integer-core decision), hardware_notes.md
+            numeric_model.md (integer core, and the float
+            word set beside it), hardware_notes.md
             (confirmed hardware facts, inherited from 2068-Leap),
             zesarux_setup.md / eightyone_setup.md / ts_pico_setup.md
             (per-emulator/hardware setup, see "Running it" above),
