@@ -1,10 +1,10 @@
 ; ============================================================================
 ; rom/forth_smoke_p5.asm — Phase 5 smoke ROM: TS2068 vocabulary (PLOT,
-; LINE, CIRCLE, BEEP, BORDER)
+; LINE, BEEP, BORDER)
 ;
-; Proves these five words correctly wire data-stack values into the
-; kernel/graphics and kernel/sound calls they wrap. FOUR of them
-; (PLOT/LINE/CIRCLE/BORDER) still live in core/ts2068.asm as originally
+; Proves these four words correctly wire data-stack values into the
+; kernel/graphics and kernel/sound calls they wrap. THREE of them
+; (PLOT/LINE/BORDER) still live in core/ts2068.asm as originally
 ; written; BEEP was later extracted into its own file, core/rawbeep.asm
 ; (byte-for-byte the same code, still tested here unchanged) once a
 ; real, semitone/seconds BEEP (core/beep.asm) took over the name
@@ -21,7 +21,11 @@
 ; core/ modules are INCLUDEd AFTER DEVICE/ORG $0000 and the fixed RST
 ; vector table, never before.
 ;
-; VERIFICATION STRATEGY: PLOT/LINE/CIRCLE don't leave anything on the
+; (CIRCLE was checkpoint 3 here until step O15 item 4 moved it to the EXROM;
+; its checks are in rom/test_shapes.asm; the numbers 1-3 and 5 are kept
+; because border 4 means PASS.)
+;
+; VERIFICATION STRATEGY: PLOT/LINE don't leave anything on the
 ; data stack to check (their whole job is a side effect on the screen
 ; bitmap), so this smoke ROM verifies them a different way: it calls
 ; kernel/graphics's own GFX_READ_PIXEL directly (not through a Forth
@@ -43,8 +47,8 @@
 ; instead: a sentinel value is pushed before BEEP consumes its two
 ; arguments, and confirmed still correctly in place afterward.
 ;
-; Five checkpoints; border goes GREEN (4) if all pass, otherwise shows
-; the failing checkpoint's number (1-5), matching every earlier smoke
+; Four checkpoints; border goes GREEN (4) if all pass, otherwise shows
+; the failing checkpoint's number (1-3, 5), matching every earlier smoke
 ; ROM's convention.
 ;
 ; Build:
@@ -126,35 +130,8 @@ COLD_START:
     or   a
     jp   z, FAIL_TEST             ; the line's end point must be set
 
-; ---- checkpoint 3: CIRCLE ----
+; ---- checkpoint 3: BORDER ----
     ld   a, 3
-    ld   (CHECKPOINT_NUM), a
-    ld   hl, TEST_SRC_CIRCLE
-    ld   de, TEST_SRC_CIRCLE_LEN
-    call INTERPRET_RUN
-    ld   b, 150
-    ld   c, 80
-    call GFX_READ_PIXEL           ; top
-    or   a
-    jp   z, FAIL_TEST
-    ld   b, 150
-    ld   c, 120
-    call GFX_READ_PIXEL           ; bottom
-    or   a
-    jp   z, FAIL_TEST
-    ld   b, 130
-    ld   c, 100
-    call GFX_READ_PIXEL           ; left
-    or   a
-    jp   z, FAIL_TEST
-    ld   b, 170
-    ld   c, 100
-    call GFX_READ_PIXEL           ; right
-    or   a
-    jp   z, FAIL_TEST
-
-; ---- checkpoint 4: BORDER ----
-    ld   a, 4
     ld   (CHECKPOINT_NUM), a
     ld   hl, TEST_SRC_BORDER
     ld   de, TEST_SRC_BORDER_LEN
@@ -165,7 +142,7 @@ COLD_START:
     jp   nz, FAIL_TEST
 
 ; ---- checkpoint 5: BEEP (stack hygiene only -- see file header) ----
-    ld   a, 5
+    ld   a, 5                     ; (4 is skipped: border 4 is PASS)
     ld   (CHECKPOINT_NUM), a
     ld   hl, 4242
     rst RST_DPUSH
@@ -188,11 +165,11 @@ CHECK_TOP:                       ; DE = expected top-of-stack value
     ret
 
 PASS_TEST:
-    ld   a, 4                    ; green: all five checkpoints passed
+    ld   a, 4                    ; green: all four checkpoints passed
     out  (PORT_ULA), a
     jr   PASS_TEST
 
-FAIL_TEST:                       ; border shows which checkpoint (1-5) failed
+FAIL_TEST:                       ; border shows which checkpoint (1-3, 5) failed
     ld   a, (CHECKPOINT_NUM)
     out  (PORT_ULA), a
     jr   FAIL_TEST
@@ -211,8 +188,6 @@ TEST_SRC_PLOT:    DB "10 20 PLOT "
 TEST_SRC_PLOT_LEN EQU $ - TEST_SRC_PLOT
 TEST_SRC_LINE:    DB "60 5 100 45 LINE "
 TEST_SRC_LINE_LEN EQU $ - TEST_SRC_LINE
-TEST_SRC_CIRCLE:    DB "150 100 20 CIRCLE "
-TEST_SRC_CIRCLE_LEN EQU $ - TEST_SRC_CIRCLE
 TEST_SRC_BORDER:    DB "5 BORDER "
 TEST_SRC_BORDER_LEN EQU $ - TEST_SRC_BORDER
 TEST_SRC_BEEP:    DB "100 5 BEEP "
@@ -222,6 +197,7 @@ TEST_SRC_BEEP_LEN EQU $ - TEST_SRC_BEEP
 ; the self-test code above, not before ORG $0000 ----
     INCLUDE "kernel/math/math.asm"
     INCLUDE "kernel/graphics/graphics.asm"
+    INCLUDE "kernel/graphics/readpixel.asm"   ; GFX_READ_PIXEL (step O15: test ROMs only)
     INCLUDE "kernel/sound/sound.asm"
     INCLUDE "core/dict.asm"
     INCLUDE "core/interp.asm"

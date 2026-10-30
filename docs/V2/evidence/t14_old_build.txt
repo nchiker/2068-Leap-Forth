@@ -1,0 +1,44 @@
+PASS old   fill_box                   120 90 FILL: 18921 pixels, 68493147 T  [9.0 s]
+PASS old   fill_circle_inside         110 100 FILL: 5481 pixels, 20043815 T  [5.0 s]
+PASS old   fill_recolour              50 60 FILL: 3721 pixels, 14839356 T  [2.3 s]
+PASS old   fill_L_shape               50 100 FILL: 10376 pixels, 37688572 T  [6.3 s]
+PASS old   fill_spiral                100 52 FILL: 23266 pixels, 84206586 T  [11.3 s]
+PASS old   fill_blank_screen          128 96 FILL: 49152 pixels, 176969016 T  [20.5 s]
+PASS old   fill_lone_pixel            150 120 FILL: 1 pixels, 177119 T  [0.3 s]
+PASS old   fill_hires_noop            120 90 FILL: no change, 220 T  [1.6 s]
+PASS old   circle_r0                  128 96 0 CIRCLE: 8 points, 1353 T  [0.2 s]
+PASS old   circle_r1                  128 96 1 CIRCLE: 8 points, 5228 T  [0.2 s]
+PASS old   circle_r2                  128 96 2 CIRCLE: 16 points, 14744 T  [0.2 s]
+PASS old   circle_r5                  128 96 5 CIRCLE: 32 points, 35868 T  [0.2 s]
+PASS old   circle_r20                 128 96 20 CIRCLE: 120 points, 138357 T  [0.2 s]
+PASS old   circle_r90                 128 96 90 CIRCLE: 512 points, 624952 T  [0.3 s]
+PASS old   circle_clip_right_bottom   240 180 30 CIRCLE: 72 points, 124213 T  [0.2 s]
+PASS old   circle_ink_paper           100 80 25 CIRCLE: 144 points, 171567 T  [0.4 s]
+PASS old   circle_hires               128 96 40 CIRCLE: 232 points, 282473 T  [0.4 s]
+FAIL new   fill_noise_overflow        128 96 FILL: bitmap: 10758 pixels differ; first at x 11 y 0 (got 0, model 1)  [13.7 s]
+FAIL new   fill_seed_offscreen        -1 50 FILL: bitmap: 31281 pixels differ; first at x 0 y 0 (got 1, model 0); attributes: 1 cells differ; first at row 23 col 0 (got 44, model E0)  [12.9 s]
+FAIL new   circle_negative_centre     -10 50 30 CIRCLE: bitmap: 168 pixels differ; first at x 241 y 20 (got 1, model 0)  [0.3 s]
+FAIL new   circle_big_centre          300 100 60 CIRCLE: bitmap: 340 pixels differ; first at x 37 y 40 (got 1, model 0)  [0.3 s]
+FAIL new   circle_big_radius          128 96 300 CIRCLE: bitmap: 248 pixels differ; first at x 122 y 52 (got 1, model 0)  [0.3 s]
+FAIL new   circle_negative_radius     128 96 -5 CIRCLE: no point on screen, 537311 T; 128 96 -250 CIRCLE: bitmap: 32 pixels differ; first at x 126 y 90 (got 1, model 0)  [0.4 s]
+PASS speed fill_speed_box160x120      128 96 FILL: 18644 pixels, 67492107 T  [8.3 s]
+PASS speed fill_speed_full            128 96 FILL: 49152 pixels, 176969016 T  [20.4 s]
+PASS speed fill_speed_disc_recolour   128 96 FILL: 7845 pixels, 31091868 T  [4.0 s]
+PASS speed fill_speed_pocket          101 100 FILL: 3 pixels, 180607 T  [0.1 s]
+PASS speed circle_speed_r5            128 96 5 CIRCLE: 32 points, 35868 T  [0.2 s]
+PASS speed circle_speed_r40           128 96 40 CIRCLE: 232 points, 280624 T  [0.3 s]
+PASS speed circle_speed_r90           128 96 90 CIRCLE: 512 points, 624952 T  [0.3 s]
+PASS speed circle_speed_r150          128 96 150 CIRCLE: 70 points, 387725 T  [0.3 s]
+PASS speed fill_speed_serpentine      0 0 FILL: 24704 pixels, 128467393 T  [13.8 s]
+PASS speed speed_repeat               fill_speed_box160x120: 67492107 T and 67492107 T (equal)  [17.0 s]
+speed, T-states per case (recorded; gated only with --compare):
+  fill_speed_box160x120              67492107
+  fill_speed_full                   176969016
+  fill_speed_disc_recolour           31091868
+  fill_speed_pocket                    180607
+  circle_speed_r5                       35868
+  circle_speed_r40                     280624
+  circle_speed_r90                     624952
+  circle_speed_r150                    387725
+  fill_speed_serpentine             128467393
+shapetest: 27/33 checks pass (old 17/17, new 0/6, speed 10/10); wall 28.4 s

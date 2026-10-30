@@ -18,9 +18,8 @@
 ; already implements real TS2068 High Resolution Graphics mode
 ; (inherited from 2068-Leap, unused by this project until now) — same
 ; 256x192 pixel bitmap as Normal mode, but color resolution of one
-; attribute byte per SCANLINE per column (GFX_SET_ATTR_EXT, backed by
-; the Second Display File at SECOND_DISPLAY_ADDR) instead of one per
-; 8x8 character cell. GFX_WRITE_PIXEL/GFX_READ_PIXEL already branch on
+; attribute byte per 8-pixel byte (at the bitmap byte + $2000, in the
+; Second Display File) instead of one per 8x8 character cell. GFX_WRITE_PIXEL/GFX_READ_PIXEL already branch on
 ; GFX_MODE internally, so PLOT/LINE/CIRCLE (core/ts2068.asm) all become
 ; mode-aware for free — nothing in this file touches them.
 ;
@@ -42,7 +41,7 @@
 ;      attribute data instead of 64-column's second bitmap plane) and
 ;      was NOT guarded against. Widened that check from `cp 2` to
 ;      `or a` (any nonzero mode) — see that file's own header and
-;      include/sysvars.inc's GFX_FILL_VISITED comment.
+;      include/sysvars.inc's GFX_FILL_SHADOW comment.
 ;
 ;   2. core/ts2068.asm's CLS (`W_CLS`) repaints the NORMAL attribute
 ;      area (GFX_PAINT_ATTR) but never touched the Second Display File.

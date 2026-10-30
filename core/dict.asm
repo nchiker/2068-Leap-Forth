@@ -97,8 +97,9 @@ DSTACK_LIMIT EQU $9000   ; lowest legal stack address — 1024 bytes of stack
 ; computed as "wherever the ROM assembly left off," only ever as
 ; FORTH_DICT_RAM the first time and self-updating from there.
 ; ============================================================================
-LATEST       EQU $9002   ; 2 bytes: RAM cell holding the head-of-dictionary address
-HERE         EQU $9004   ; 2 bytes: RAM cell holding the next free RAM-dictionary byte
+LATEST       EQU $8608   ; 2 bytes: the head-of-dictionary address (outside the data stack's
+HERE         EQU $860A   ; 2 bytes: the next free dictionary byte    range: they were $9002/$9004)
+    ASSERT LATEST + 4 <= DSTACK_LIMIT || LATEST >= DSTACK_TOP
 DICT_RAM_CEILING EQU $D000   ; step E2a: lowered from $F000 so the line store ($D000-$EFFF,
                              ; core/loadtext.asm) sits above the dictionary. Phase 44: raised from $C000 once FILL's
                              ; own scratch was relocated out of the way

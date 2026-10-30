@@ -1,0 +1,293 @@
+{
+ "build": "/home/charlie.day/2068-forth/build",
+ "group": "all",
+ "compare": null,
+ "passed": 27,
+ "total": 33,
+ "groups": {
+  "old": {
+   "passed": 17,
+   "total": 17
+  },
+  "new": {
+   "passed": 0,
+   "total": 6
+  },
+  "speed": {
+   "passed": 10,
+   "total": 10
+  }
+ },
+ "checks": [
+  {
+   "check": "fill_box",
+   "group": "old",
+   "ok": true,
+   "detail": "120 90 FILL: 18921 pixels, 68493147 T",
+   "wall": 8.96
+  },
+  {
+   "check": "fill_circle_inside",
+   "group": "old",
+   "ok": true,
+   "detail": "110 100 FILL: 5481 pixels, 20043815 T",
+   "wall": 5.03
+  },
+  {
+   "check": "fill_recolour",
+   "group": "old",
+   "ok": true,
+   "detail": "50 60 FILL: 3721 pixels, 14839356 T",
+   "wall": 2.32
+  },
+  {
+   "check": "fill_L_shape",
+   "group": "old",
+   "ok": true,
+   "detail": "50 100 FILL: 10376 pixels, 37688572 T",
+   "wall": 6.31
+  },
+  {
+   "check": "fill_spiral",
+   "group": "old",
+   "ok": true,
+   "detail": "100 52 FILL: 23266 pixels, 84206586 T",
+   "wall": 11.31
+  },
+  {
+   "check": "fill_blank_screen",
+   "group": "old",
+   "ok": true,
+   "detail": "128 96 FILL: 49152 pixels, 176969016 T",
+   "wall": 20.46
+  },
+  {
+   "check": "fill_lone_pixel",
+   "group": "old",
+   "ok": true,
+   "detail": "150 120 FILL: 1 pixels, 177119 T",
+   "wall": 0.33
+  },
+  {
+   "check": "fill_hires_noop",
+   "group": "old",
+   "ok": true,
+   "detail": "120 90 FILL: no change, 220 T",
+   "wall": 1.59
+  },
+  {
+   "check": "circle_r0",
+   "group": "old",
+   "ok": true,
+   "detail": "128 96 0 CIRCLE: 8 points, 1353 T",
+   "wall": 0.21
+  },
+  {
+   "check": "circle_r1",
+   "group": "old",
+   "ok": true,
+   "detail": "128 96 1 CIRCLE: 8 points, 5228 T",
+   "wall": 0.21
+  },
+  {
+   "check": "circle_r2",
+   "group": "old",
+   "ok": true,
+   "detail": "128 96 2 CIRCLE: 16 points, 14744 T",
+   "wall": 0.21
+  },
+  {
+   "check": "circle_r5",
+   "group": "old",
+   "ok": true,
+   "detail": "128 96 5 CIRCLE: 32 points, 35868 T",
+   "wall": 0.24
+  },
+  {
+   "check": "circle_r20",
+   "group": "old",
+   "ok": true,
+   "detail": "128 96 20 CIRCLE: 120 points, 138357 T",
+   "wall": 0.22
+  },
+  {
+   "check": "circle_r90",
+   "group": "old",
+   "ok": true,
+   "detail": "128 96 90 CIRCLE: 512 points, 624952 T",
+   "wall": 0.31
+  },
+  {
+   "check": "circle_clip_right_bottom",
+   "group": "old",
+   "ok": true,
+   "detail": "240 180 30 CIRCLE: 72 points, 124213 T",
+   "wall": 0.25
+  },
+  {
+   "check": "circle_ink_paper",
+   "group": "old",
+   "ok": true,
+   "detail": "100 80 25 CIRCLE: 144 points, 171567 T",
+   "wall": 0.39
+  },
+  {
+   "check": "circle_hires",
+   "group": "old",
+   "ok": true,
+   "detail": "128 96 40 CIRCLE: 232 points, 282473 T",
+   "wall": 0.4
+  },
+  {
+   "check": "fill_noise_overflow",
+   "group": "new",
+   "ok": false,
+   "detail": "128 96 FILL: bitmap: 10758 pixels differ; first at x 11 y 0 (got 0, model 1)",
+   "wall": 13.67
+  },
+  {
+   "check": "fill_seed_offscreen",
+   "group": "new",
+   "ok": false,
+   "detail": "-1 50 FILL: bitmap: 31281 pixels differ; first at x 0 y 0 (got 1, model 0); attributes: 1 cells differ; first at row 23 col 0 (got 44, model E0)",
+   "wall": 12.94
+  },
+  {
+   "check": "circle_negative_centre",
+   "group": "new",
+   "ok": false,
+   "detail": "-10 50 30 CIRCLE: bitmap: 168 pixels differ; first at x 241 y 20 (got 1, model 0)",
+   "wall": 0.26
+  },
+  {
+   "check": "circle_big_centre",
+   "group": "new",
+   "ok": false,
+   "detail": "300 100 60 CIRCLE: bitmap: 340 pixels differ; first at x 37 y 40 (got 1, model 0)",
+   "wall": 0.29
+  },
+  {
+   "check": "circle_big_radius",
+   "group": "new",
+   "ok": false,
+   "detail": "128 96 300 CIRCLE: bitmap: 248 pixels differ; first at x 122 y 52 (got 1, model 0)",
+   "wall": 0.28
+  },
+  {
+   "check": "circle_negative_radius",
+   "group": "new",
+   "ok": false,
+   "detail": "128 96 -5 CIRCLE: no point on screen, 537311 T; 128 96 -250 CIRCLE: bitmap: 32 pixels differ; first at x 126 y 90 (got 1, model 0)",
+   "wall": 0.42
+  },
+  {
+   "check": "fill_speed_box160x120",
+   "group": "speed",
+   "ok": true,
+   "detail": "128 96 FILL: 18644 pixels, 67492107 T",
+   "wall": 8.26
+  },
+  {
+   "check": "fill_speed_full",
+   "group": "speed",
+   "ok": true,
+   "detail": "128 96 FILL: 49152 pixels, 176969016 T",
+   "wall": 20.38
+  },
+  {
+   "check": "fill_speed_disc_recolour",
+   "group": "speed",
+   "ok": true,
+   "detail": "128 96 FILL: 7845 pixels, 31091868 T",
+   "wall": 4.04
+  },
+  {
+   "check": "fill_speed_pocket",
+   "group": "speed",
+   "ok": true,
+   "detail": "101 100 FILL: 3 pixels, 180607 T",
+   "wall": 0.14
+  },
+  {
+   "check": "circle_speed_r5",
+   "group": "speed",
+   "ok": true,
+   "detail": "128 96 5 CIRCLE: 32 points, 35868 T",
+   "wall": 0.24
+  },
+  {
+   "check": "circle_speed_r40",
+   "group": "speed",
+   "ok": true,
+   "detail": "128 96 40 CIRCLE: 232 points, 280624 T",
+   "wall": 0.26
+  },
+  {
+   "check": "circle_speed_r90",
+   "group": "speed",
+   "ok": true,
+   "detail": "128 96 90 CIRCLE: 512 points, 624952 T",
+   "wall": 0.31
+  },
+  {
+   "check": "circle_speed_r150",
+   "group": "speed",
+   "ok": true,
+   "detail": "128 96 150 CIRCLE: 70 points, 387725 T",
+   "wall": 0.26
+  },
+  {
+   "check": "fill_speed_serpentine",
+   "group": "speed",
+   "ok": true,
+   "detail": "0 0 FILL: 24704 pixels, 128467393 T",
+   "wall": 13.83
+  },
+  {
+   "check": "speed_repeat",
+   "group": "speed",
+   "ok": true,
+   "detail": "fill_speed_box160x120: 67492107 T and 67492107 T (equal)",
+   "wall": 16.98
+  }
+ ],
+ "speed": {
+  "fill_speed_box160x120": {
+   "name": "fill_speed_box160x120",
+   "tstates": 67492107
+  },
+  "fill_speed_full": {
+   "name": "fill_speed_full",
+   "tstates": 176969016
+  },
+  "fill_speed_disc_recolour": {
+   "name": "fill_speed_disc_recolour",
+   "tstates": 31091868
+  },
+  "fill_speed_pocket": {
+   "name": "fill_speed_pocket",
+   "tstates": 180607
+  },
+  "circle_speed_r5": {
+   "name": "circle_speed_r5",
+   "tstates": 35868
+  },
+  "circle_speed_r40": {
+   "name": "circle_speed_r40",
+   "tstates": 280624
+  },
+  "circle_speed_r90": {
+   "name": "circle_speed_r90",
+   "tstates": 624952
+  },
+  "circle_speed_r150": {
+   "name": "circle_speed_r150",
+   "tstates": 387725
+  },
+  "fill_speed_serpentine": {
+   "name": "fill_speed_serpentine",
+   "tstates": 128467393
+  }
+ },
+ "wall": 28.44
+}

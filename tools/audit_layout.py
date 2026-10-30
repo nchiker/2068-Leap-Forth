@@ -78,6 +78,7 @@ HOME_TABLE_ROMS = [
     'rom/test_polygon.asm',
     'rom/test_sprite.asm',
     'rom/test_poly_fill.asm',
+    'rom/test_shapes.asm',
 ]
 
 LABEL_RE = re.compile(r'^([A-Za-z_][A-Za-z0-9_]*):')

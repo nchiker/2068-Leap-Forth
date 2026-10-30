@@ -1,87 +1,33 @@
 ; ============================================================================
-; core/moregfx.asm — Phase 17: FILL and AT-XY
+; core/moregfx.asm — Phase 17: AT-XY (FILL moved to core/shapes.asm, step O15)
 ;
-; Builds on core/dict.asm, core/interp.asm, core/ts2068.asm (needs
-; CURRENT_ATTR, Phase 15), and core/print.asm (needs PRINT_ROW/
-; PRINT_COL, Phase 10) — all must be INCLUDEd first. This file's own
-; first header chains through DICT_CHAIN_POINT, same convention as
-; every phase since core/control.asm.
+; Builds on core/dict.asm, core/interp.asm and core/print.asm (needs
+; PRINT_ROW/PRINT_COL, Phase 10) — all must be INCLUDEd first. This file's own
+; first header chains through DICT_CHAIN_POINT, same convention as every phase
+; since core/control.asm.
 ;
-; WHAT THIS ADDS — the rest of docs/forth_tutorial.md's "More graphics"
-; gap (hi-res mode itself came later, Phase 55's core/hires.asm — see
-; FILL's own guard below, which this file had to extend for it):
-;   FILL   ( x y -- )   flood-fills the enclosed region containing
-;             (x, y) with the current color (CURRENT_ATTR, same state
-;             INK/PAPER set — Phase 15), using kernel/graphics's own
-;             proven GFX_FILL
 ;   AT-XY  ( col row -- )   moves EMIT/./."'s own print position
 ;             (PRINT_COL/PRINT_ROW, core/print.asm) directly, so the
 ;             next character printed lands at (col, row) instead of
 ;             wherever printing last left off
 ;
-; FILL sets only GFX_FILL_X/GFX_FILL_Y/GFX_FILL_ATTR before calling
-; GFX_FILL — that routine reads the seed pixel's own current state
-; itself (GFX_FILL_TARGET) rather than needing it supplied. No range
-; checking on AT-XY's col/row (0-31/0-22) — matching every earlier
-; phase's own "no error recovery yet" scope note; writing an
-; out-of-range position just means the next EMIT/./."-drawn character
-; lands somewhere unintended, not a crash.
-;
-; FILL REFUSES TO RUN IN HIRES MODE (added Phase 44 — see
-; include/sysvars.inc's own GFX_FILL_VISITED header for the full
-; writeup): to raise the dictionary's own ceiling (core/free.asm),
-; GFX_FILL's scratch buffers were relocated into the idle video-RAM
-; pool at $5B00-$7FFF — the same physical range HIRES's attribute
-; file lives in ($6000-$77FF, hardware-fixed). Running
-; FILL while HIRES is active would corrupt whichever one runs
-; second. Checked via GFX_MODE (1 = HIRES, set by core/hires.asm's
-; HIRES, the only non-Normal mode) before calling GFX_FILL; if active,
-; FILL still consumes its (x y) arguments (this project's established
-; convention — SOUND/STICK do the same for out-of-range input) but
-; silently does nothing instead of running.
+; No range checking on AT-XY's col/row (0-31/0-22) — matching every earlier
+; phase's own "no error recovery yet" scope note; writing an out-of-range
+; position just means the next EMIT/./."-drawn character lands somewhere
+; unintended, not a crash.
 ; ============================================================================
 
     IFNDEF CORE_MOREGFX_ASM
     DEFINE CORE_MOREGFX_ASM
 
 ; ============================================================================
-; FILL ( x y -- )
+; AT-XY ( col row -- )
 ; ============================================================================
-H_FILL:
+H_ATXY:
     DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL,
                             ; not EQU) to whatever word chain this
                             ; file should extend, immediately before
                             ; INCLUDEing this file
-    DB   4, "F", "I", "L", "L"
-W_FILL:
-    rst RST_DPOP          ; hl = y
-    ld   a, l
-    ld   (GFX_FILL_Y), a
-    rst RST_DPOP          ; hl = x
-    ld   a, l
-    ld   (GFX_FILL_X), a
-    ld   a, (GFX_MODE)
-    or   a                  ; nonzero = HIRES (1, core/hires.asm, Phase
-                             ; 55), the only non-Normal video mode --
-                             ; FILL's own relocated scratch
-                             ; (GFX_FILL_VISITED/GFX_FILL_STACK,
-                             ; $5B00-$7FFF) overlaps SECOND_DISPLAY_ADDR
-                             ; ($6000-$77FF), which HIRES uses for real,
-                             ; live screen data -- see this file's own
-                             ; header.
-    ret  nz                 ; arguments already consumed above; silently
-                             ; do nothing, matching this project's own
-                             ; established out-of-range convention
-    ld   a, (CURRENT_ATTR)
-    ld   (GFX_FILL_ATTR), a
-    call GFX_FILL
-    ret
-
-; ============================================================================
-; AT-XY ( col row -- )
-; ============================================================================
-H_ATXY:
-    DW   H_FILL
     DB   5, "A", "T", "-", "X", "Y"
 W_ATXY:
     rst RST_DPOP          ; hl = row

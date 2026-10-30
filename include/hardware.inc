@@ -57,17 +57,8 @@ PORT_SCLD           EQU $FF
 ; ---- Screen geometry ----
 SCREEN_ADDR         EQU $4000
 ATTR_ADDR           EQU $5800
-SECOND_DISPLAY_ADDR EQU $6000     ; The Second Display File, confirmed
-                                 ; against the manual before any Z80
-                                 ; touched it: in High Resolution
-                                 ; Graphics mode (GFX_SET_ATTR_EXT)
-                                 ; this is 6144 flat ATTRIBUTE bytes,
-                                 ; 8x1 resolution (one byte per
-                                 ; scanline row per character column,
-                                 ; not per 8x8 cell). (64-Column mode,
-                                 ; which used this same region as a
-                                 ; second BITMAP, was removed at step
-                                 ; M6.)
+SECOND_DISPLAY_ADDR EQU $6000     ; the second display file: in HIRES (8x1 colour) the attribute of the bitmap byte
+                                 ; at $4000+n is at $6000+n, in the bitmap's interleaved layout (the SCLD reads it so)
 SCREEN_WIDTH_CHARS  EQU 32
 SCREEN_HEIGHT_CHARS EQU 24
 
@@ -90,7 +81,7 @@ PORT_PRINTER        EQU $FB
 ; file. Real convention: CHARS = (glyph table base for code 32) - 256 —
 ; core/printer.asm's LPRINT_SEND_LINE sets this to FONT_TABLE-256, since
 ; FONT_TABLE's own first entry is the space (code 32) glyph. This address
-; lands inside GFX_FILL_VISITED ($5B00-$72FF, include/sysvars.inc) — safe
+; lands inside GFX_FILL_SHADOW ($5B00-$72FF, include/sysvars.inc) — safe
 ; because that buffer is fully cleared at the start of every GFX_FILL
 ; call and never read between calls, so writing CHARS here between
 ; prints does not corrupt any FILL state, and LPRINT_SEND_LINE re-sets it

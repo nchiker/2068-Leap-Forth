@@ -81,7 +81,15 @@ GRAPHICS_EXROM_TABLE:
     jp   SPRITE_HIDE_IMPL            ; slot 4 ($A00C) — SPRITE-HIDE
     jp   POLY_FILL_IMPL               ; slot 5 ($A00F) — POLYGON-FILL
     jp   VIEW_SESSION                ; slot 6 ($A012) — VIEW_SESSION (EDIT's full-screen view)
-    jp   GRAPHICS_EXROM_UNIMPLEMENTED ; slot 7 — reserved
+    jp   FILL_IMPL                   ; slot 7 ($A015) — FILL (step O15)
+    jp   CIRCLE_IMPL                 ; slot 8 ($A018) — CIRCLE (step O15)
+    jp   GRAPHICS_EXROM_UNIMPLEMENTED ; slots 9-15 — reserved (16 slots
+    jp   GRAPHICS_EXROM_UNIMPLEMENTED ; since ABI 2, step O15:
+    jp   GRAPHICS_EXROM_UNIMPLEMENTED ; docs/V2/FILL_CIRCLE_SPEC.md
+    jp   GRAPHICS_EXROM_UNIMPLEMENTED ; decision O15-1)
+    jp   GRAPHICS_EXROM_UNIMPLEMENTED
+    jp   GRAPHICS_EXROM_UNIMPLEMENTED
+    jp   GRAPHICS_EXROM_UNIMPLEMENTED
     ASSERT $ - GRAPHICS_EXROM_TABLE == GRAPHICS_EXROM_MAX_SLOTS * 3
 
 GRAPHICS_EXROM_UNIMPLEMENTED:
@@ -3013,6 +3021,739 @@ VIEW_POST:
     ret  z
 .show:
     jp   VIEW_STATUS
+
+; ============================================================================
+; CIRCLE_IMPL (slot 8, step O15 item 4; docs/V2/FILL_CIRCLE_SPEC.md section 5)
+; Draws the outline of the circle of radius GFX_CIRCLE_R about
+; (GFX_CIRCLE_XC, GFX_CIRCLE_YC) in attribute GFX_CIRCLE_ATTR. The three
+; numbers are signed 16-bit, staged by core/shapes.asm's CIRCLE.
+;   r < 0   nothing is drawn.        r = 0   the centre point only.
+; The midpoint loop of 2068-Leap-C's `circle` (libs/shapes.asm), which this is
+; a port of: px = r, py = 0, err = 1 - r; while py <= px { plot the
+; symmetric set; py += 1; if err < 0 { err += 2 py + 1 } else { px -= 1;
+; err += 2 (py - px) + 1 } }. The symmetric set draws each point once
+; (p_sym: the four points (cx +- px, cy +- py), then, unless px = py, the four
+; of (py, px); p_four leaves out the second of a pair whose offset is 0), so
+; a later XOR mode can use it unchanged. A point is drawn only if
+; 0 <= x <= 255 and 0 <= y <= 191 as a 16-bit signed sum (the sum wraps at
+; 16 bits, as Leap-C's does).
+;
+; The plot is here, not in HOME, for speed: in normal mode the bitmap byte is
+; ORed with the pixel's mask and the attribute cell is set, straight to the
+; screen. In HIRES (GFX_MODE nonzero) the point goes through the slot 0 veneer
+; (GFX_WRITE_PIXEL), which already knows HIRES's per-scanline attributes.
+;
+; The cells GFX_CIRCLE_R, _PY and _ERR double as the loop's px, py and err;
+; the loop is on 16-bit values, so r up to 32767 works (a very large radius
+; costs time, not safety: each point is range-tested before it is drawn).
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+CIRCLE_IMPL:
+    ld   hl, (GFX_CIRCLE_R)
+    bit  7, h
+    ret  nz                          ; r < 0: nothing
+    ld   de, 0
+    ld   (GFX_CIRCLE_PY), de         ; py = 0
+    inc  de
+    ex   de, hl
+    or   a
+    sbc  hl, de                      ; 1 - r  (carry cleared above)
+    ld   (GFX_CIRCLE_ERR), hl
+.loop:
+    ld   hl, (GFX_CIRCLE_R)
+    ld   de, (GFX_CIRCLE_PY)
+    or   a
+    sbc  hl, de
+    ret  m                           ; px - py < 0 (signed: px reaches -1
+                                     ; for r = 0, so not the carry): done
+    call CIRCLE_SYM
+    ld   hl, (GFX_CIRCLE_PY)
+    inc  hl
+    ld   (GFX_CIRCLE_PY), hl         ; py += 1
+    ld   de, (GFX_CIRCLE_ERR)
+    bit  7, d
+    jr   nz, .inside                 ; err < 0: HL = py
+    ld   hl, (GFX_CIRCLE_R)
+    dec  hl
+    ld   (GFX_CIRCLE_R), hl          ; px -= 1
+    ex   de, hl                      ; DE = px, HL = err
+    ld   hl, (GFX_CIRCLE_PY)
+    or   a
+    sbc  hl, de                      ; HL = py - px
+.inside:
+    add  hl, hl
+    inc  hl                          ; 2 py + 1  or  2 (py - px) + 1
+    ld   de, (GFX_CIRCLE_ERR)
+    add  hl, de
+    ld   (GFX_CIRCLE_ERR), hl
+    jr   .loop
+
+; CIRCLE_SYM: the points (cx +- px, cy +- py), and unless px = py also
+; (cx +- py, cy +- px), each once.
+CIRCLE_SYM:
+    ld   hl, (GFX_CIRCLE_R)
+    ld   de, (GFX_CIRCLE_PY)
+    call CIRCLE_FOUR
+    ld   hl, (GFX_CIRCLE_R)
+    ld   de, (GFX_CIRCLE_PY)
+    or   a
+    sbc  hl, de
+    ret  z                           ; px = py: the same four points
+    ld   hl, (GFX_CIRCLE_PY)
+    ld   de, (GFX_CIRCLE_R)
+                                     ; fall into CIRCLE_FOUR
+
+; CIRCLE_FOUR: (cx +- HL, cy +- DE), each once. HL = ox, DE = oy.
+CIRCLE_FOUR:
+    push hl
+    push de
+    call CIRCLE_PAIR                 ; x = cx + ox
+    pop  de
+    pop  hl
+    ld   a, h
+    or   l
+    ret  z                           ; ox = 0: a single column
+    xor  a
+    sub  l
+    ld   l, a
+    sbc  a, a
+    sub  h
+    ld   h, a                        ; HL = -ox
+                                     ; fall into CIRCLE_PAIR
+
+; CIRCLE_PAIR: (cx + HL, cy + DE) and, unless DE = 0, (cx + HL, cy - DE).
+CIRCLE_PAIR:
+    ld   bc, (GFX_CIRCLE_XC)
+    add  hl, bc                      ; HL = x
+    ld   a, h
+    or   a
+    ret  nz                          ; x outside 0-255: both points
+    ld   b, l                        ; B = x
+    push de
+    ld   hl, (GFX_CIRCLE_YC)
+    add  hl, de                      ; cy + oy
+    call CIRCLE_PLOT_Y
+    pop  de
+    ld   a, d
+    or   e
+    ret  z                           ; oy = 0: a single row
+    ld   hl, (GFX_CIRCLE_YC)
+    or   a
+    sbc  hl, de                      ; cy - oy
+                                     ; fall into CIRCLE_PLOT_Y
+
+; CIRCLE_PLOT_Y: B = x (0-255), HL = signed y: plot if 0 <= y <= 191.
+CIRCLE_PLOT_Y:
+    ld   a, h
+    or   a
+    ret  nz
+    ld   a, l
+    cp   192
+    ret  nc
+    ld   c, a                        ; C = y
+                                     ; fall into CIRCLE_PLOT
+
+; CIRCLE_PLOT: B = x, C = y (in range). Keeps BC; destroys AF, DE, HL.
+CIRCLE_PLOT:
+    ld   a, (GFX_MODE)
+    or   a
+    jr   z, .normal
+    push bc                          ; HIRES: the slot 0 veneer, which
+    ld   a, (GFX_CIRCLE_ATTR)        ; handles its per-scanline attributes
+    ld   d, 0                        ; D = OVER 0
+    call GRAPHICS_HOME_WRITE_PIXEL
+    pop  bc
+    ret
+.normal:
+    ld   a, b
+    and  7
+    or   low CIRCLE_MASK_TABLE
+    ld   e, a
+    ld   d, high CIRCLE_MASK_TABLE
+    ld   a, (de)
+    ld   e, a                        ; E = the pixel's mask
+    ld   a, c
+    and  7
+    ld   h, a                        ; H = y & 7
+    ld   a, c
+    rra
+    rra
+    rra
+    and  $18
+    or   h
+    or   $40
+    ld   h, a                        ; H = $40 | (y >> 3) & $18 | y & 7
+    ld   a, c
+    add  a, a
+    add  a, a
+    and  $E0
+    ld   l, a                        ; L = (y << 2) & $E0
+    ld   a, b
+    rra
+    rra
+    rra
+    and  $1F
+    or   l
+    ld   l, a                        ; L |= x >> 3
+    ld   a, (hl)
+    or   e
+    ld   (hl), a                     ; set the pixel
+    ld   a, c
+    rlca
+    rlca
+    and  3
+    or   $58
+    ld   h, a                        ; the attribute cell: $58 | y >> 6, same L
+    ld   a, (GFX_CIRCLE_ATTR)
+    ld   (hl), a
+    ret
+
+; ============================================================================
+; FILL_IMPL (slot 7, step O15 item 5; docs/V2/FILL_CIRCLE_SPEC.md section 4)
+; Flood fill from the seed (GFX_FILL_X, GFX_FILL_Y: signed 16-bit) with
+; attribute GFX_FILL_ATTR, 4-connected, through pixels equal to the seed pixel.
+; Does nothing in HIRES (the planes overlap its attribute file) or for a seed
+; outside 0-255 / 0-191. Model: docs/V2/evidence/o15_fill_model.py.
+;
+; Two planes in the screen's layout, shadow = screen + $1B00. The work plane A
+; has 0 = fillable, 1 = not; painting sets A's bits, so seed 0 paints the screen
+; itself and seed 1 (a recolour) paints the shadow = NOT screen, leaving the
+; bitmap alone. B is the other plane, read only by the recovery sweep:
+; painted = A AND (B XOR K), K = $FF (seed 0) or $00 (seed 1).
+;   seed 0: A = screen, B = shadow = copy of screen.   AOFF = 0
+;   seed 1: A = shadow = NOT screen, B = screen.        AOFF = $1B (pages)
+; The seed stack ($7300-$7FFF, 1,664 x/y byte pairs) holds one seed per run.
+; A pop is discarded if A already has the pixel; else the span is walked (whole
+; $00 bytes 8 pixels at a time), painted with edge masks, its attribute cells
+; stamped, and rows y-1 and y+1 scanned over the span for run starts. A push on
+; a full stack drops the seed and sets GFX_FILL_OVF; when the stack empties with
+; OVF set, FILL_SWEEP re-seeds every unpainted pixel above or below a painted
+; one, and the drain repeats until a sweep seeds nothing.
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+FILL_IMPL:
+    ld   a, (GFX_MODE)
+    or   a
+    ret  nz                          ; HIRES: nothing
+    ld   hl, (GFX_FILL_X)
+    ld   a, h
+    or   a
+    ret  nz                          ; x outside 0-255
+    ld   b, l                        ; B = seed x
+    ld   hl, (GFX_FILL_Y)
+    ld   a, h
+    or   a
+    ret  nz
+    ld   a, l
+    cp   192
+    ret  nc                          ; y outside 0-191
+    ld   c, a                        ; C = seed y
+    push bc
+    call FILL_ROW                    ; HL = screen row base
+    ld   a, b
+    rrca
+    rrca
+    rrca
+    and  $1F
+    or   l
+    ld   l, a                        ; HL = the seed's screen byte
+    ld   a, b
+    and  7
+    or   low CIRCLE_MASK_TABLE
+    ld   e, a
+    ld   d, high CIRCLE_MASK_TABLE
+    ld   a, (de)
+    and  (hl)                        ; nonzero: the seed pixel is set
+    ld   hl, $4000
+    ld   de, GFX_FILL_SHADOW
+    jr   nz, .set
+    xor  a
+    ld   (GFX_FILL_AOFF), a          ; seed 0: shadow = copy of the screen
+    ld   bc, 6144
+    ldir
+    jr   .planes
+.set:
+    ld   a, $1B
+    ld   (GFX_FILL_AOFF), a          ; seed 1: shadow = NOT screen
+    ld   c, 24                       ; 24 pages of 256
+.page:
+    ld   b, 0
+.byte:
+    ld   a, (hl)
+    cpl
+    ld   (de), a
+    inc  l
+    inc  e
+    djnz .byte
+    inc  h
+    inc  d
+    dec  c
+    jr   nz, .page
+.planes:
+    xor  a
+    ld   (GFX_FILL_OVF), a
+    ld   hl, GFX_FILL_STACK
+    ld   (GFX_FILL_SP), hl
+    pop  bc
+    ld   e, c
+    ld   c, b
+    call FILL_PUSH                   ; the seed (x = C, y = E)
+
+; ---- drain: pop a seed, fill its span ----
+.pop:
+    ld   hl, (GFX_FILL_SP)
+    ld   a, h
+    xor  high GFX_FILL_STACK
+    or   l
+    jp   z, .empty
+    dec  hl
+    ld   c, (hl)                     ; y
+    dec  hl
+    ld   b, (hl)                     ; x
+    ld   (GFX_FILL_SP), hl
+    ld   a, c
+    ld   (GFX_FILL_SY), a
+    call FILL_ROW
+    ld   a, (GFX_FILL_AOFF)
+    add  a, h
+    ld   h, a                        ; HL = work plane row base
+    ld   a, b
+    rrca
+    rrca
+    rrca
+    and  $1F
+    or   l
+    ld   l, a                        ; HL = the seed's byte
+    ld   a, b
+    and  7
+    or   low CIRCLE_MASK_TABLE
+    ld   e, a
+    ld   d, high CIRCLE_MASK_TABLE
+    ld   a, (de)
+    ld   c, a                        ; C = the seed pixel's mask
+    ld   b, (hl)                     ; B = its byte
+    and  b
+    jr   nz, .pop                    ; already painted: stale seed
+    push hl
+    push bc
+
+    ; ---- walk left over clear pixels: HL byte, B its value, C pixel mask ----
+.lw:
+    ld   a, c
+    cp   $80
+    jr   z, .lpre                    ; at the byte's leftmost pixel
+    add  a, a
+    ld   e, a
+    and  b
+    jr   nz, .ldone                  ; the pixel to the left is set
+    ld   c, e
+    jr   .lw
+.lpre:
+    ld   a, l
+    and  $1F
+    jr   z, .ldone                   ; column 0
+    dec  hl
+    ld   a, (hl)
+    or   a
+    jr   z, .lzero                   ; a whole clear byte: C stays $80
+    ld   b, a
+    rrca
+    jr   c, .lundo                   ; its pixel 7 is set
+    ld   c, 1
+    jr   .lw
+.lzero:
+    ld   b, a
+    jr   .lw
+.lundo:
+    inc  hl
+.ldone:
+    ld   (GFX_FILL_LPTR), hl
+    ld   a, c
+    add  a, a
+    dec  a                           ; the left edge byte's mask: 2m - 1
+    ld   (GFX_FILL_EL), a
+    pop  bc
+    pop  hl
+
+    ; ---- walk right ----
+.rw:
+    ld   a, c
+    cp   1
+    jr   z, .rnext                   ; at the byte's rightmost pixel
+    rrca
+    ld   e, a
+    and  b
+    jr   nz, .rdone
+    ld   c, e
+    jr   .rw
+.rnext:
+    ld   a, l
+    and  $1F
+    cp   $1F
+    jr   z, .rdone                   ; column 31
+    inc  hl
+    ld   a, (hl)
+    or   a
+    jr   z, .rzero
+    ld   b, a
+    rlca
+    jr   c, .rundo                   ; its pixel 0 is set
+    ld   c, $80
+    jr   .rw
+.rzero:
+    ld   b, a                        ; C stays 1
+    jr   .rw
+.rundo:
+    dec  hl
+.rdone:
+    ld   a, c
+    neg                              ; the right edge byte's mask: -m
+    ld   (GFX_FILL_ER), a
+
+    ; ---- paint: HL = right byte; A = bytes after the first ----
+    ld   de, (GFX_FILL_LPTR)
+    ld   a, l
+    sub  e
+    ld   (GFX_FILL_SN), a
+    jr   nz, .multi
+    ld   a, (GFX_FILL_EL)
+    ld   b, a
+    ld   a, (GFX_FILL_ER)
+    and  b
+    or   (hl)
+    ld   (hl), a
+    jr   .painted
+.multi:
+    ld   b, a
+    ld   a, (GFX_FILL_ER)
+    or   (hl)
+    ld   (hl), a
+    dec  b
+    jr   z, .first
+.mid:
+    dec  hl
+    ld   (hl), $FF
+    djnz .mid
+.first:
+    dec  hl
+    ld   a, (GFX_FILL_EL)
+    or   (hl)
+    ld   (hl), a
+.painted:
+
+    ; ---- stamp the attribute cells of the span ----
+    ld   a, (GFX_FILL_SY)
+    rlca
+    rlca
+    and  3
+    or   $58
+    ld   h, a                        ; $58 | y >> 6
+    ld   a, (GFX_FILL_LPTR)
+    ld   l, a                        ; same L as the bitmap byte
+    ld   a, (GFX_FILL_SN)
+    inc  a
+    ld   b, a
+    ld   a, (GFX_FILL_ATTR)
+.cell:
+    ld   (hl), a
+    inc  l
+    djnz .cell
+
+    ; ---- seeds from the rows above and below ----
+    ld   a, (GFX_FILL_SY)
+    or   a
+    jr   z, .below
+    dec  a
+    ld   c, a
+    call FILL_SCANROW
+.below:
+    ld   a, (GFX_FILL_SY)
+    cp   191
+    jp   nc, .pop
+    inc  a
+    ld   c, a
+    call FILL_SCANROW
+    jp   .pop
+
+.empty:
+    ld   a, (GFX_FILL_OVF)
+    or   a
+    ret  z                           ; stack empty, nothing was dropped: done
+    xor  a
+    ld   (GFX_FILL_OVF), a
+    call FILL_SWEEP
+    jp   .pop
+
+; FILL_ROW: C = y (0-191) -> HL = screen address of column 0 of row y.
+; Destroys A.
+FILL_ROW:
+    ld   a, c
+    and  7
+    ld   h, a
+    ld   a, c
+    rra
+    rra
+    rra
+    and  $18
+    or   h
+    or   $40
+    ld   h, a                        ; $40 | (y >> 3) & $18 | y & 7
+    ld   a, c
+    add  a, a
+    add  a, a
+    and  $E0
+    ld   l, a                        ; (y << 2) & $E0
+    ret
+
+; FILL_PUSH: push the seed (x = C, y = E). A full stack drops it and sets
+; GFX_FILL_OVF. Destroys A, HL.
+FILL_PUSH:
+    ld   hl, (GFX_FILL_SP)
+    bit  7, h
+    jr   nz, .full                   ; SP = GFX_FILL_STACK_END ($8000)
+    ld   (hl), c
+    inc  hl
+    ld   (hl), e
+    inc  hl
+    ld   (GFX_FILL_SP), hl
+    ret
+.full:
+    ld   a, 1
+    ld   (GFX_FILL_OVF), a
+    ret
+
+; FILL_RUNS: A = F (fillable pixels of one byte, nonzero), C = 0 or $80 (the
+; previous byte's pixel 7 in bit 7), HL = a byte of the row (column = L & 31),
+; E = the row's y. Pushes one seed per run start: F AND NOT (F >> 1 | C).
+; Out: C = this byte's pixel 7 in bit 7. Keeps HL, B, E; destroys A, D.
+FILL_RUNS:
+    ld   d, a
+    srl  a
+    or   c
+    cpl
+    and  d                           ; A = run starts
+    ld   c, d                        ; C = F
+    jr   z, .carry
+    push hl
+    push bc
+    ld   d, a                        ; D = run starts, pixel 0 in bit 7
+    ld   a, l
+    add  a, a
+    add  a, a
+    add  a, a                        ; (L & 31) * 8
+    ld   c, a                        ; C = x of pixel 0
+.bit:
+    sla  d
+    jr   nc, .no
+    call FILL_PUSH
+.no:
+    inc  c
+    ld   a, d
+    or   a
+    jr   nz, .bit
+    pop  bc
+    pop  hl
+.carry:
+    ld   a, c
+    rrca
+    and  $80
+    ld   c, a
+    ret
+
+; FILL_SCANROW: C = y of a row next to the span: scan it over the span's bytes
+; (GFX_FILL_LPTR's column, GFX_FILL_SN + 1 bytes) with the edge masks EL, ER.
+; FILL_SCAN: HL = work plane byte at the span's first column, E = row y,
+; B = bytes after the first. Pushes a seed per run of fillable pixels.
+FILL_SCANROW:
+    call FILL_ROW
+    ld   a, (GFX_FILL_AOFF)
+    add  a, h
+    ld   h, a
+    ld   a, (GFX_FILL_LPTR)
+    and  $1F
+    or   l
+    ld   l, a
+    ld   e, c
+    ld   a, (GFX_FILL_SN)
+    ld   b, a
+FILL_SCAN:
+    ld   c, 0
+    ld   a, (GFX_FILL_EL)
+    ld   d, a                        ; first byte's mask
+    ld   a, b
+    or   a
+    jr   nz, .first
+    ld   a, (GFX_FILL_ER)
+    and  d
+    ld   d, a                        ; a one-byte span: EL AND ER
+.first:
+    ld   a, (hl)
+    cpl
+    and  d
+    call nz, FILL_RUNS
+    ld   a, b
+    or   a
+    ret  z
+.next:
+    inc  hl
+    ld   a, (hl)
+    dec  b
+    jr   z, .last
+    inc  a
+    jr   z, .full                    ; $FF: nothing fillable
+    neg                              ; NOT the byte
+    call FILL_RUNS
+    jr   .next
+.full:
+    ld   c, 0
+    jr   .next
+.last:
+    cpl
+    ld   d, a
+    ld   a, (GFX_FILL_ER)
+    and  d
+    ret  z
+    jp   FILL_RUNS
+
+; FILL_PROW: C = y, DE = a 32-byte buffer: P[y] = A AND (B XOR K), the painted
+; pixels of row y (zeros if y is outside 0-191). DE ends 32 bytes on.
+; Destroys AF, BC, HL.
+FILL_PROW:
+    ld   a, c
+    cp   192
+    jr   nc, .zero
+    call FILL_ROW                    ; HL = screen row base
+    ld   b, h
+    ld   c, l                        ; BC = the screen row
+    ld   a, (GFX_FILL_AOFF)
+    or   a
+    ld   a, h
+    jr   z, .seed0
+    add  a, $1B
+    ld   h, a                        ; HL = shadow row = A, BC = screen = B
+.l1:
+    ld   a, (bc)
+    and  (hl)                        ; K = 0: P = A AND B
+    ld   (de), a
+    inc  de
+    inc  l
+    inc  c
+    ld   a, l
+    and  $1F
+    jr   nz, .l1
+    ret
+.seed0:
+    add  a, $1B
+    ld   b, a                        ; HL = screen row = A, BC = shadow = B
+.l0:
+    ld   a, (bc)
+    cpl
+    and  (hl)                        ; K = $FF: P = A AND NOT B
+    ld   (de), a
+    inc  de
+    inc  l
+    inc  c
+    ld   a, l
+    and  $1F
+    jr   nz, .l0
+    ret
+.zero:
+    ld   b, 32
+    xor  a
+.z:
+    ld   (de), a
+    inc  de
+    djnz .z
+    ret
+
+; FILL_SWEEP: the stack is empty and seeds were dropped. For every row y, every
+; unpainted pixel with a painted pixel above or below is a candidate; push a seed
+; at each run start of the candidates. Stops after the row where a push fails
+; (GFX_FILL_OVF set). Two 32-byte row buffers live on the machine stack.
+; Destroys AF, BC, DE, HL.
+FILL_SWEEP:
+    ld   hl, -64
+    add  hl, sp
+    ld   sp, hl
+    xor  a
+    ld   (GFX_FILL_SY), a            ; y = 0
+.row:
+    ld   hl, 0
+    add  hl, sp
+    ex   de, hl                      ; DE = the buffers
+    ld   a, (GFX_FILL_SY)
+    dec  a
+    ld   c, a
+    call FILL_PROW                   ; buffer 0 = painted row y - 1
+    ld   a, (GFX_FILL_SY)
+    inc  a
+    ld   c, a
+    call FILL_PROW                   ; buffer 1 = painted row y + 1
+    ld   hl, 0
+    add  hl, sp
+    ld   de, 32
+    add  hl, de
+    ex   de, hl                      ; DE = buffer 1
+    ld   hl, 0
+    add  hl, sp                      ; HL = buffer 0
+    ld   b, 32
+.merge:
+    ld   a, (de)
+    or   (hl)
+    ld   (hl), a                     ; buffer 0 = above OR below
+    inc  hl
+    inc  de
+    djnz .merge
+    ld   hl, 0
+    add  hl, sp
+    ex   de, hl                      ; DE = buffer 0
+    ld   a, (GFX_FILL_SY)
+    ld   c, a
+    call FILL_ROW
+    ld   a, (GFX_FILL_AOFF)
+    add  a, h
+    ld   h, a                        ; HL = work plane row y
+    ld   c, 0
+.col:
+    ld   a, (de)
+    or   a
+    jr   z, .none
+    or   (hl)
+    xor  (hl)                        ; candidates: above/below AND NOT A
+    jr   z, .none
+    push de
+    ld   d, a
+    ld   a, (GFX_FILL_SY)
+    ld   e, a
+    ld   a, d
+    call FILL_RUNS
+    pop  de
+    jr   .adv
+.none:
+    ld   c, 0
+.adv:
+    inc  de
+    inc  l
+    ld   a, l
+    and  $1F
+    jr   nz, .col
+    ld   a, (GFX_FILL_OVF)
+    or   a
+    jr   nz, .end                    ; the stack filled: drain first
+    ld   a, (GFX_FILL_SY)
+    inc  a
+    ld   (GFX_FILL_SY), a
+    cp   192
+    jp   nz, .row
+.end:
+    ld   hl, 64
+    add  hl, sp
+    ld   sp, hl
+    ret
+
+    ALIGN 8
+CIRCLE_MASK_TABLE:
+    DB   $80, $40, $20, $10, $08, $04, $02, $01
 
     DS   $C000 - $, $FF             ; pad to the end of this 8K image
                                     ; ($A000 + $2000) -- absolute ORG

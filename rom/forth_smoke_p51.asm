@@ -375,6 +375,7 @@ SRC_EMIT_LEN EQU $ - SRC_EMIT
 ; self-test code above, not before ORG $0000 ----
     INCLUDE "kernel/math/math.asm"
     INCLUDE "kernel/graphics/graphics.asm"
+    INCLUDE "kernel/graphics/readpixel.asm"   ; GFX_READ_PIXEL (step O15: test ROMs only)
     INCLUDE "core/dict.asm"
     INCLUDE "core/interp.asm"
 DICT_CHAIN_POINT DEFL H_SEMICOLON

@@ -24,7 +24,7 @@
 ;
 ; Phase 43's $C000 came from a real, confirmed hazard: core/moregfx.asm's
 ; FILL word calls the shared kernel/graphics/graphics.asm's own GFX_FILL
-; routine, which unconditionally used GFX_FILL_VISITED/GFX_FILL_STACK as
+; routine, which unconditionally used GFX_FILL_SHADOW/GFX_FILL_STACK as
 ; scratch on EVERY call. 2068-Forth's dictionary is PERMANENT RAM state
 ; sharing that same physical address space (unlike the sibling project,
 ; where that range is genuinely transient behind EXROM banking this
@@ -32,10 +32,10 @@
 ; wherever that scratch lived.
 ;
 ; Phase 44 removed the hazard at its source instead of just documenting
-; around it: GFX_FILL_VISITED/GFX_FILL_STACK were relocated out of
+; around it: GFX_FILL_SHADOW/GFX_FILL_STACK were relocated out of
 ; 2068-Forth's own dictionary range entirely, into the idle "second
 ; display file" video-RAM pool at $5B00-$7FFF (see include/sysvars.inc's
-; own GFX_FILL_VISITED header for the full relocation writeup, including
+; own GFX_FILL_SHADOW header for the full relocation writeup, including
 ; the new second-display-file (HIRES) hazard that move creates and how
 ; core/moregfx.asm's own FILL guards against it). With that hazard gone,
 ; the only other live thing found in $C000-$FEFF (via the same

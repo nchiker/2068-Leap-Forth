@@ -558,7 +558,7 @@ RUNTIME_ERROR_TABLE:
     INCLUDE "kernel/math/math.asm"
     INCLUDE "kernel/io/io.asm"
     INCLUDE "kernel/interrupt/interrupt.asm"
-    DEFINE FONT_PLACED_LATER               ; the font goes after kernel/storage, below
+    DEFINE FONT_PLACED_LATER               ; the font goes after kernel/storage, bank and dict, below
     INCLUDE "kernel/graphics/graphics.asm"
     INCLUDE "kernel/storage/storage.asm"
     ; ZEsarUX's tape autoload (on by default when a real tape is inserted) types J "" ENTER into the machine as soon as
@@ -566,8 +566,8 @@ RUNTIME_ERROR_TABLE:
     ; MACHINE_ID_TIMEX_TS2068). Any instruction of this ROM starting there would trigger it, e.g. during LOAD-TEXT, and
     ; the keys arrive at the console as a line `""` (found by make tapetest in step F). The font is data, never
     ; executed: placed here it covers $11F8 whatever the code around it does.
-    INCLUDE "kernel/graphics/font.asm"
-    ASSERT FONT_TABLE <= $11F8 && FONT_TABLE_END > $11F8   ; move the font if this fails (data must cover $11F8)
+    ; Step O15 items 4-5: the graphics kernel got smaller, so the font moved below $11F8; bank.asm, dict.asm,
+    ; interp.asm and control.asm (order-independent in memory) now come first to push it back over.
     INCLUDE "kernel/bank/bank.asm"
     INCLUDE "core/dict.asm"
     DEFINE DECIMAL_NUMBER_ENABLED
@@ -584,6 +584,8 @@ RUNTIME_ERROR_TABLE:
     INCLUDE "core/interp.asm"
 DICT_CHAIN_POINT DEFL H_SEMICOLON
     INCLUDE "core/control.asm"
+    INCLUDE "kernel/graphics/font.asm"
+    ASSERT FONT_TABLE <= $11F8 && FONT_TABLE_END > $11F8   ; move the font if this fails (data must cover $11F8)
     INCLUDE "core/ts2068.asm"
 DICT_CHAIN_POINT DEFL H_CLS
     INCLUDE "core/storage.asm"
@@ -633,6 +635,8 @@ DICT_CHAIN_POINT DEFL H_NORMAL
 ; running cartridge out (docs/lros_cartridge.md has the history). ----
     INCLUDE "core/rectfill.asm"
 DICT_CHAIN_POINT DEFL H_RECT
+    INCLUDE "core/shapes.asm"           ; CIRCLE (step O15): a stub into the EXROM
+DICT_CHAIN_POINT DEFL H_CIRCLE
     INCLUDE "core/polygon.asm"
 DICT_CHAIN_POINT DEFL H_POLYGONFILL
     INCLUDE "core/sprite.asm"

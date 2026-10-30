@@ -45,8 +45,8 @@ rom/graphics_exrom.asm include/, step G, 2026-10-28):
     registers.  The live stack (SP..$FEFF) is DEFINED.  $F600 is EXTENSION_MODULE_LIMIT, "genuine stack
     headroom starts at $F600" (include/sysvars.inc);
   * $FF00-$FFFF: above the initial SP, nothing allocates there (sysvars.inc ASSERTs keep cells < $FF00);
-  * $5B00-$7FFF: GFX_FILL_VISITED / GFX_FILL_STACK (GFX_FILL clears the first with LDIR and sets its stack
-    pointer on entry, kernel/graphics), display file 2 at $6000 (displayed only in HIRES, which
+  * $5B00-$7FFF: GFX_FILL_SHADOW / GFX_FILL_STACK (FILL_IMPL fills the first from the screen and sets its stack
+    pointer on entry, rom/graphics_exrom.asm), display file 2 at $6000 (displayed only in HIRES, which
     clears it on entry: kernel/graphics .clear_highres) and ZX_SYSVAR_CHARS $5C36 (only
     written, core/printer.asm);
   * $F000-$F17F: no Forth symbol ($F000-$F0FF) and LABEL_TABLE ($F100-$F17F, BASIC labels): no reader;

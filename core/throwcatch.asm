@@ -109,8 +109,8 @@ CATCH_DEPTH     EQU $8915        ; 1 byte: 0 = no active CATCH. MUST be
                                   ; zeroed once by every including ROM's
                                   ; own COLD_START, same requirement
                                   ; core/doloop.asm's LEAVE_DEPTH states
-CATCH_STACK     EQU $8916        ; CATCH_MAX_DEPTH x 6 bytes (SP,IX,IY
-                                  ; per frame) = 48 bytes, through $8945
+CATCH_STACK     EQU $85D8        ; CATCH_MAX_DEPTH x 6 bytes (SP,IX,IY per frame) = 48 bytes,
+                                  ; $85D8-$8607 (it was $8916, whose 8th frame overlapped SPACES_COUNT)
 THROW_CODE      EQU $85D6        ; 2 bytes: the code of an uncaught THROW, for
                                   ; RUNTIME_ERROR_HOOK's message (FLOAT_SPEC 8.4);
                                   ; the hook zeroes it, so STACK_CHECK's violation

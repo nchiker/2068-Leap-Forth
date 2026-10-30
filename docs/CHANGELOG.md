@@ -1018,3 +1018,23 @@ this is the condensed one-paragraph-per-phase version.
   last commit. Tutorial section 4 and section 13 are rewritten for the new
   behaviour, `docs/numeric_model.md` describes the float word set, and
   `forth_tutorial.docx` is regenerated. Emulators only; no hardware.
+- V2 step O15 (`docs/V2/FILL_CIRCLE_SPEC.md`): `FILL` and `CIRCLE` moved
+  from the HOME ROM into the graphics EXROM (service slots 7 and 8; the
+  table grew to 16 slots, ABI 2) and were rebuilt. `CIRCLE` takes any
+  16-bit centre and radius and leaves out the part off the screen (it
+  took bytes: `-10 50 30 CIRCLE` drew at x 246); a negative radius draws
+  nothing; about 2.6 times faster. `FILL` works on whole screen bytes,
+  never leaves holes when its seed stack fills (a recovery sweep), and
+  does nothing for a seed off the screen (`-1 50 FILL` filled the whole
+  screen); 38-66 times faster on large areas (a full screen: about 50 s
+  before, under a second now). Fixed in the same step: colours in `HIRES`
+  land on the scanline they belong to (they were written in the wrong
+  layout); `PLOT` and `LINE` draw nothing below the screen (y 192-255
+  wrote into RAM) and `PLOT` nothing off it; the eighth nested `CATCH`
+  no longer shares memory with `SPACES`; a very deep data stack can no
+  longer overwrite the dictionary pointers. `make shapetest`
+  (`tools/shapetest.py`) checks `FILL`, `CIRCLE`, `PLOT` and `LINE`
+  against a model. The demo ROM without the EXROM (Blackjack) no longer
+  has `FILL` or `CIRCLE`. HOME free space 816 bytes before the step,
+  1,758 after; EXROM 4,247 before, 3,296 after. Emulators only; no
+  hardware.

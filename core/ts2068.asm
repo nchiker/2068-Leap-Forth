@@ -1,6 +1,5 @@
 ; ============================================================================
-; core/ts2068.asm — Phase 5: TS2068 vocabulary (PLOT, LINE, CIRCLE,
-; BORDER)
+; core/ts2068.asm — Phase 5: TS2068 vocabulary (PLOT, LINE, BORDER)
 ;
 ; Builds on core/dict.asm, core/interp.asm, and core/control.asm (all
 ; must be INCLUDEd first — chains its own dictionary entries onto
@@ -15,7 +14,7 @@
 ; promised:
 ;   PLOT   ( x y -- )          GFX_WRITE_PIXEL
 ;   LINE   ( x1 y1 x2 y2 -- )  GFX_LINE (reads its args from sysvars)
-;   CIRCLE ( xc yc r -- )      GFX_CIRCLE (reads its args from sysvars)
+;   (CIRCLE moved to the EXROM in step O15: core/shapes.asm)
 ;   BORDER ( color -- )        GFX_SET_BORDER
 ;
 ; BEEP originally lived here too (raw hardware-timing units, no
@@ -31,7 +30,7 @@
 ; use the LOW BYTE of each — every TS2068 screen coordinate, radius,
 ; and color fits in 8 bits (kernel_api.inc's own comments already
 ; document x as 0-255, y as 0-191, color as 0-7), and GFX_LINE_X0/Y0/
-; X1/Y1 and GFX_CIRCLE_XC/YC/R/ATTR/OVER (include/sysvars.inc) are all
+; X1/Y1 (include/sysvars.inc) are all
 ; declared as single bytes, not words. No range checking is done —
 ; matching every earlier phase's "no error recovery yet" scope note,
 ; not an oversight specific to this file.
@@ -46,7 +45,7 @@
 ; initialization, exactly like core/print.asm's own PRINT_ROW/PRINT_COL
 ; convention: whatever ROM INCLUDEs this file must set
 ; `ld a, DEFAULT_ATTR` / `ld (CURRENT_ATTR), a` at cold start, or
-; PLOT/LINE/CIRCLE will draw with whatever garbage happens to be in
+; PLOT/LINE will draw with whatever garbage happens to be in
 ; that uninitialized RAM byte. Every ROM in this project that already
 ; included this file (rom/forth_smoke_p5.asm, rom/forth_smoke_p9.asm,
 ; rom/forth_boot.asm) was updated to do this and re-verified under real
@@ -81,7 +80,10 @@ H_PLOT:
 W_PLOT:
     rst RST_DPOP          ; hl = y
     ld   c, l
-    rst RST_DPOP          ; hl = x
+    ld   a, h
+    rst RST_DPOP          ; hl = x (A kept)
+    or   h
+    ret  nz               ; x or y outside 0-255: nothing (y 192-255: GFX_WRITE_PIXEL)
     ld   b, l
     ld   a, (CURRENT_ATTR)
     ld   d, 0              ; OVER=0: set the pixel, don't XOR-toggle it
@@ -115,33 +117,10 @@ W_LINE:
     ret
 
 ; ============================================================================
-; CIRCLE ( xc yc r -- )
-; ============================================================================
-H_CIRCLE:
-    DW   H_LINE
-    DB   6, "C", "I", "R", "C", "L", "E"
-W_CIRCLE:
-    rst RST_DPOP          ; hl = r
-    ld   a, l
-    ld   (GFX_CIRCLE_R), a
-    rst RST_DPOP          ; hl = yc
-    ld   a, l
-    ld   (GFX_CIRCLE_YC), a
-    rst RST_DPOP          ; hl = xc
-    ld   a, l
-    ld   (GFX_CIRCLE_XC), a
-    ld   a, (CURRENT_ATTR)
-    ld   (GFX_CIRCLE_ATTR), a
-    xor  a
-    ld   (GFX_CIRCLE_OVER), a
-    call GFX_CIRCLE
-    ret
-
-; ============================================================================
 ; BORDER ( color -- )
 ; ============================================================================
 H_BORDER:
-    DW   H_CIRCLE
+    DW   H_LINE
     DB   6, "B", "O", "R", "D", "E", "R"
 W_BORDER:
     rst RST_DPOP
@@ -150,7 +129,7 @@ W_BORDER:
     ret
 
 DICT_LATEST_INIT_P5 EQU H_BORDER   ; head of the dictionary as of Phase
-                                    ; 5 (PLOT/LINE/CIRCLE/BORDER) --
+                                    ; 5 (PLOT/LINE/BORDER) --
                                     ; a historical snapshot; must NOT be
                                     ; repointed at CLS below
 
