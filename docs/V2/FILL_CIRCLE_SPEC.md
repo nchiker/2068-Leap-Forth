@@ -5,7 +5,7 @@ Audit item O15 (`docs/V2/LEAPC_COMPARISON_AUDIT.md`, approved by the owner 2026-
 the words `FILL` and `CIRCLE` keep thin HOME stubs, as `RECT`, `POLYGON`, `POLYGON-FILL` and `SPRITE-*` already do.
 Rebuilt, not dropped in: the code is designed again for the EXROM, the old build runs the oracle first, each code
 commit has a measured ledger row. Evidence tags: [M] measured, [S] source, [E] estimate, [L] Leap-C/Leap V2.
-Written on `v2/step-o15-fill-circle`, branched from `v2/step-f-float` `1b6fcda` (PR #8 open).
+Written on `v2/step-o15-fill-circle`, branched from `v2/step-f-float` `1b6fcda`; rebased on master `df391e6` after PR #8 merged.
 
 ## 1. Why
 
@@ -256,9 +256,10 @@ with the other EXROM words; the EXROM-side state range grows to the new cells. S
 The cartridge build gains the same; Blackjack about +960, Gallery about +900 (section 8.2). Floors in `tools/budget.toml` are raised with ledger rows and
 history lines; EXROM's floor is lowered by its own row (the move's cost, not a loss).
 
-## 11. Decisions for the owner
+## 11. Owner decisions (decided 2026-10-29: all as recommended)
 
-The rule: what is best for the language and its users, not compatibility.
+The rule: what is best for the language and its users, not compatibility. The owner answered "All as recommended":
+O15-1 (a), O15-2 (a), O15-3 (a), O15-4 (a), O15-5 (a), O15-6 (a), O15-7 (a), O15-8 (a), O15-9 (a).
 
 | # | Decision | Options | Recommendation |
 |---|---|---|---|
@@ -278,7 +279,7 @@ speed a full-screen FILL takes well under a second [E]. A shared span painter fo
 
 ## 12. Order of work (each a commit with a measured ledger row)
 
-1. This spec (and the owner's answers in section 11).
+1. This spec; the owner's answers in section 11.
 2. Oracle: `tools/shapetest.py`, the model in `docs/V2/evidence/o15_fill_model.py`, `make shapetest`, the cartdiff
    cases; run on the old build (`docs/V2/evidence/t14_old_build.txt`).
 3. Service table to 16 slots, ABI 2 (`graphics_exrom_abi.inc`, `make_dck.py`, EightyOne), no behaviour change.
