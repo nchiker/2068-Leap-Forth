@@ -181,14 +181,10 @@ W_CLS:
     ldir
 .not_hires:
 
-    IFDEF CORE_PRINT_ASM        ; PRINT_ROW/PRINT_COL only exist once
-                                ; core/print.asm is included (a few
-                                ; smoke ROMs use CLS without it)
-    xor  a
-    ld   (PRINT_ROW), a
-    ld   (PRINT_COL), a
-    ENDIF
+    ld   hl, 0                  ; home the print position
+    ld   (PRINT_ROW), hl
     ret
+    ASSERT PRINT_COL == PRINT_ROW + 1
 
 DICT_LATEST_INIT_CLS EQU H_CLS   ; head of the dictionary once this
                                   ; file's own word (CLS) is included

@@ -190,6 +190,8 @@ H_CATCH:
     DW   H_THROW
     DB   5, "C","A","T","C","H"
 W_CATCH:
+    rst RST_DPOP                ; hl = xt, popped before the frame records
+                                 ; IX: a THROW restores the stack without it
     ld   a, (CATCH_DEPTH)
     cp   CATCH_MAX_DEPTH
     jr   nc, .no_room
@@ -197,6 +199,7 @@ W_CATCH:
     ld   (CATCH_TMP_IX), ix     ; file's own header for why the
     ld   (CATCH_TMP_IY), iy     ; computed frame slot can't be written
                                  ; to directly)
+    push hl                      ; (after SP is staged)
     ld   l, a
     ld   h, 0
     add  hl, hl                 ; a*2
@@ -213,7 +216,7 @@ W_CATCH:
     ld   a, (CATCH_DEPTH)
     inc  a
     ld   (CATCH_DEPTH), a
-    rst RST_DPOP                ; hl = xt
+    pop  hl                      ; hl = xt
     call JUMP_HL                 ; runs xt; falls through here only if
                                   ; it returned normally (no throw)
     ld   a, (CATCH_DEPTH)
@@ -228,7 +231,6 @@ W_CATCH:
     ; degradation this implies) -- if xt still returns normally, that's
     ; still a genuine success, so 0 is pushed exactly like the counted
     ; path; a throw from inside simply isn't caught HERE
-    rst RST_DPOP
     call JUMP_HL
     ld   hl, 0
     rst RST_DPUSH

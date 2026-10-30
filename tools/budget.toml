@@ -23,7 +23,7 @@ pad = 0xFF
 [[image]]
 file   = "forth_boot_rom0.bin"
 title  = "HOME ROM (Forth)"
-floor  = 1760
+floor  = 1753
 target = 200
 
 [[image]]
@@ -90,3 +90,6 @@ target = 150
 #     (the HIRES attribute at the bitmap byte + $2000 replaces GFX_SET_ATTR_EXT); docs/V2/milestones/O15.md.
 #   forth_boot_rom0.bin 1758 -> 1760 (+2 B, raised): Simplify, the cartridge build's paging variant gone (page-out
 #     writes A = 0 straight from the depth count).
+#   forth_boot_rom0.bin 1760 -> 1753 (-7 B, lowered): Simplify's two defect fixes, found migrating the smoke checks:
+#     CLS homes the print position (+6 B; its reset had been assembled out), CATCH pops the xt before it records the
+#     frame (+1 B; a THROW left the xt's cell on the stack).

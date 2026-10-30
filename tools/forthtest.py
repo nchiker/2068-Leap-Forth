@@ -19,7 +19,8 @@ dropped) must be what the line expects (the text after `expect: `, leading blank
 graphics_exrom.sym), so a test reads a ROM cell by name: `{CATCH_DEPTH} C@ .`.  Screen and attribute addresses are
 hardware and are written as numbers.
 
-An error prints the word and " ?" (`FOO ?`) and no OK.  A line's output must fit on the screen (23 rows).  A case stops at its first difference.  Every case starts from
+An error prints the word and " ?" (`FOO ?`) and no OK.  A line's output must fit on the screen (23 rows); a line that clears the screen is read from the top, and must
+print something the screen did not already show there.  A case stops at its first difference.  Every case starts from
 the booted machine (fharness's snapshot at the first key wait)."""
 import glob
 import re
@@ -106,12 +107,15 @@ def typed(m, c, text, timed=False, keys=""):
         raise RuntimeError("%d key(s) not read" % len(keys))
     after = m.screen_rows()
     r1 = m.read(S("PRINT_ROW"), 1)[0]
-    k = 0                                   # rows scrolled off the top while the line ran (none when it cleared them)
-    while k < r0 and any(after[:r0]) and after[:r0 - k] != before[k:r0]:
+    cleared = r1 < r0 or (any(before[:r0]) and not any(after[:r0]))   # (CLS: the output starts at the top)
+    k = 0                                   # rows scrolled off the top while the line ran
+    while k < r0 and not cleared and after[:r0 - k] != before[k:r0]:
         k += 1
-    rows = [r.rstrip() for r in after[r0 - k:r1 + 1]]
+    rows = [r.rstrip() for r in after[0 if cleared else r0 - k:r1 + 1]]
     while rows and not rows[-1]:
         rows.pop()
+    while cleared and rows and not rows[0]:  # (a line that cleared the screen: its output from the top)
+        rows.pop(0)
     out = "|".join(rows)
     if out.endswith("OK"):                  # the console's OK follows the output directly
         out = out[:-2].rstrip(" |")
