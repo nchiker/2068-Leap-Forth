@@ -42,11 +42,7 @@ STOCK = ("48.rom", "tc2068-0.rom", "tc2068-1.rom")
 # (image, listing, base address of image offset 0, required)
 IMAGES = (
     ("forth_boot_rom0.bin",             "forth_boot.lst",                0x0000, True),
-    ("forth_boot_cart.bin",             "forth_boot_cart.lst",           0x0000, True),
     ("graphics_exrom.bin",              "graphics_exrom.lst",            0xA000, True),
-    ("forth_demo_blackjack_rom0.bin",   "forth_demo_blackjack.lst",      0x0000, False),
-    ("forth_demo_blackjack_cart.bin",   "forth_demo_blackjack_cart.lst", 0x0000, False),
-    ("forth_demo_gallery_rom0.bin",     "forth_demo_gallery.lst",        0x0000, False),
 )
 
 # (top-level routine containing the run's first byte, length) -> {'reason': ..., 'owner': ...}

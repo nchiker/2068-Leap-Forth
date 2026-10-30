@@ -90,21 +90,9 @@
     IFNDEF KERNEL_BANK_ASM
     DEFINE KERNEL_BANK_ASM
 
-    IFDEF CARTRIDGE
-    ; CART_CHUNK_SPEC (rom/forth_boot.asm) is the LOW-active LROS chunk byte.
-    ASSERT (CART_CHUNK_SPEC & %00001000) != 0    ; chunk 3 stays Home (OS handoff)
-    ASSERT (CART_CHUNK_SPEC & %00100000) != 0    ; chunk 5 stays Home RAM: the
-                                                 ; DOCK chunk 5 is paged in by
-                                                 ; BANK_PAGE_EXROM_IN, never
-                                                 ; enabled by the OS
-    ENDIF
 
 BANK_PAGE_IN_LEN    EQU 14          ; the Home page-in's length; the cartridge's is padded to it
-    IFDEF CARTRIDGE
-BANK_F4_ALL_HOME    EQU CART_HSR    ; port $F4 with chunk 5 back to Home: the cartridge's own chunks
-    ELSE
 BANK_F4_ALL_HOME    EQU 0           ;   stay DOCK; in the Home build every chunk is Home
-    ENDIF
 
 ; ============================================================================
 ; BANK_PAGE_EXROM_IN
@@ -134,15 +122,6 @@ BANK_PAGE_EXROM_IN:
                                      ; still-active caller put it
                                      ; there) — nothing to do
 .rom_id_skip:
-    IFDEF CARTRIDGE
-    ld   a, CART_HSR | %00100000     ; the cartridge's own chunks stay
-                                     ; DOCK, chunk 5 joins them (DOCK
-                                     ; chunk 5 = the EXROM image).
-                                     ; ONE write; port $FF untouched
-    out  (PORT_BANK_HOME), a
-    jr   .already_paged_in
-    DS   BANK_PAGE_IN_LEN - ($ - .rom_id_skip), $FF   ; to the Home variant's length
-    ELSE
     ld   a, (PORT_FF_SHADOW)
     or   %10000000                   ; bit 7 only — EXROM, not Dock;
                                      ; bits 0-6 (video mode, INTEN) are
@@ -155,7 +134,6 @@ BANK_PAGE_EXROM_IN:
     ld   a, %00100000                ; bit 5 = chunk 5 only; every
                                      ; other chunk's bit stays 0 (Home)
     out  (PORT_BANK_HOME), a
-    ENDIF
 .rom_id_skip_end:
     ASSERT .rom_id_skip_end - .rom_id_skip == BANK_PAGE_IN_LEN
 .already_paged_in:

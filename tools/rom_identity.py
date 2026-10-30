@@ -5,8 +5,7 @@ A SAVE-LIB image carries the identity of the ROM that saved it, and LOAD-LIB / V
 image whose identity is not theirs. The identity is $8000 | the CRC-16/CCITT-FALSE of the whole
 image with the 2-byte ROM_IDENTITY cell and the skip ranges zeroed: any other change to the ROM's
 bytes changes it, and the value does not depend on itself. A skip range runs from a label named
-ROM_ID_SKIP_x (or a local .rom_id_skip) to ROM_ID_SKIP_x_END (.rom_id_skip_end); the Home and
-cartridge builds differ only inside them, so both get the same identity and share LIB tapes.
+ROM_ID_SKIP_x (or a local .rom_id_skip) to ROM_ID_SKIP_x_END (.rom_id_skip_end).
 The assembler emits the cell as 0; --patch writes the value into the image (the .lst keeps
 showing 0), --verify recomputes it (make check), and --shared checks that two images differ only
 inside their (identical) skip ranges and have the same identity (make check, Home vs cartridge).

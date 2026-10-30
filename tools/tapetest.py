@@ -598,8 +598,8 @@ def case_1(ctx):
     return v
 
 
-BJ_FS = REPO + "/rom/forth_smoke_p52_blackjack_test.fs"
-BJ_EXPECT = [21, 15, 4, 23, 12, 3, 21, 19, 4, 15, 23, 1]       # rom/forth_smoke_p53_realtape.asm, CHECK_MEM16 at 62120.. (seed 15785, step F O10)
+BJ_FS = REPO + "/tests/data/blackjack_rounds.txt"   # demos/blackjack.fs with a log of each round at 62120
+BJ_EXPECT = [21, 15, 4, 23, 12, 3, 21, 19, 4, 15, 23, 1]       # the round log at 62120.. (seed 15785)
 
 
 def case_2(ctx):

@@ -85,7 +85,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 BUILD = os.path.join(ROOT, "build")
 ROM0 = os.path.join(BUILD, "forth_boot_rom0.bin")
-EXROM = os.path.join(BUILD, "stock_shaped_exrom.bin")  # rom_list.txt: forth_boot's EXROM is 'none'
+EXROM = os.path.join(BUILD, "graphics_exrom.bin")
 SYM = os.path.join(BUILD, "forth_boot.sym")
 TARGET = "EDITOR_LOOP_LIVE.keyloop"
 
@@ -404,7 +404,7 @@ def main():
         smap = SymMap(rows)
         with open(ROM0, "rb") as f:
             rom0 = f.read()
-        exrom = open(EXROM, "rb").read() if os.path.isfile(EXROM) else bytes(8192)   # make_exrom_placeholder.sh: 8 K of $00
+        exrom = open(EXROM, "rb").read()
         if len(rom0) != 0x4000 or len(exrom) != 0x2000:
             raise HarnessError("ROM0 must be 16384 bytes and the EXROM 8192")
 

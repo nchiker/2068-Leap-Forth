@@ -146,7 +146,7 @@ def capture(rom_path, sym, port, lines, boot_wait=3.0, gap=0.6):
     """Boot the ROM under ZEsarUX with audio capture, type `lines`, return (samples, boot_len)."""
     tmp = tempfile.mkdtemp(prefix="ay_audio.")
     raw = os.path.join(tmp, "audio.raw")
-    exrom = (ROOT / "build" / "stock_shaped_exrom.bin").read_bytes()
+    exrom = (ROOT / "build" / "graphics_exrom.bin").read_bytes()
     dbg, proc = start_emulator(Path(rom_path).read_bytes(), exrom, sym, port, raw, tmp)
     try:
         time.sleep(boot_wait)                           # boot and the chime (about 1.1 s of emulated time)
