@@ -1,7 +1,7 @@
 ; ============================================================================
 ; core/storage.asm -- SAVE-LIB, VERIFY-LIB, LOAD-LIB, and the helpers the six tape words share
 ;
-; Rebuilt in audit step S against docs/V2/STORAGE_SPEC.md (decisions D2-D5, section 6).
+; docs/V2/STORAGE_SPEC.md (decisions D2-D5, section 6) specifies the formats.
 ;
 ; A LIB image is the compiled RAM dictionary, tied to the exact ROM that saved it: its words hold
 ; ROM addresses. On tape (spec section 4) it is a type-3 header carrying ROM_IDENTITY and LATEST,
@@ -12,8 +12,11 @@
 ;
 ; Errors are THROWn: -28 when SPACE stopped the transfer, -37 for any other tape failure, -8 when
 ; SAVE-LIB's image does not fit (core/tapeword.asm, shared with core/loadtext.asm). Needs
-; core/dict.asm, core/interp.asm, core/throwcatch.asm and kernel/storage/storage.asm first, and the including ROM to define DICT_LATEST_COLD (LATEST of
-; an empty user dictionary: what a failed LOAD-LIB that had already written resets it to).
+; core/dict.asm, core/interp.asm, core/throwcatch.asm and kernel/storage/storage.asm, and the
+; including ROM to define DICT_LATEST_COLD (LATEST of an empty user dictionary: what a failed
+; LOAD-LIB that had already written resets it to). Link fields: a word's DW is DICT_CHAIN_POINT,
+; which the including ROM sets (DEFL). Every word here may destroy all registers except IX, IY
+; and SP.
 ; ============================================================================
 
     IFNDEF CORE_STORAGE_ASM
@@ -23,7 +26,7 @@
 ; SAVE-LIB ( "name" -- )
 ; ============================================================================
 H_SAVELIB:
-    DW   DICT_CHAIN_POINT               ; the including ROM sets this (DEFL)
+    DW   DICT_CHAIN_POINT
     DB   8, "S", "A", "V", "E", "-", "L", "I", "B"
 W_SAVELIB:
     call STORAGE_PARSE_NAME
@@ -135,7 +138,11 @@ W_LOADLIB:
     scf
     jp   STORAGE_END
 
-; Z (and carry clear) = the found header carries this ROM's identity. Destroys: AF, BC, HL
+; ============================================================================
+; STORAGE_CHECK_ID -- does the found header carry this ROM's identity?
+; Out: Z and carry clear = yes
+; Destroys: AF, BC, HL
+; ============================================================================
 STORAGE_CHECK_ID:
     ld   hl, (STORAGE_HEADER_BUF + STORAGE_HEADER_PARAM1_OFF)
     ld   bc, (ROM_IDENTITY)
@@ -143,8 +150,11 @@ STORAGE_CHECK_ID:
     sbc  hl, bc
     ret
 
-; The dictionary's CRC stored at HERE, HERE + 1 (low byte first).
-; Out: DE = the image length (dictionary bytes + 2). Destroys: AF, BC, HL
+; ============================================================================
+; STORAGE_LIB_CRC -- the dictionary's CRC, stored at HERE, HERE + 1 (low byte first)
+; Out: DE = the image length (dictionary bytes + 2)
+; Destroys: AF, BC, HL
+; ============================================================================
 STORAGE_LIB_CRC:
     ld   hl, (HERE)
     ld   bc, FORTH_DICT_RAM

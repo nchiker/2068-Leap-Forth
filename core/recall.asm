@@ -1,18 +1,15 @@
 ; ============================================================================
-; core/recall.asm — the console's store append and LIST-DEFS (Phase 64;
-; RECALL retired at audit step E item 7, docs/V2/EDITOR_SPEC.md E6)
+; core/recall.asm -- the console's store append, STORE_TRIM, and LIST-DEFS
 ;
-; Builds on core/loadtext.asm (STORE_START, STORE_END, STORE_LIMIT) and
-; core/editor.asm (EDITOR_LOOP_LIVE calls STORE_APPEND for every committed
-; line, so the store holds the session's source, typed or loaded).
+; Needs core/loadtext.asm (STORE_START, STORE_END, STORE_LIMIT) and core/forget.asm
+; (FORGET_PRINT_MSG). core/editor.asm's EDITOR_LOOP_LIVE calls STORE_APPEND for every committed
+; line, so the store holds the session's source, typed or loaded (docs/V2/EDITOR_SPEC.md section 3).
+; `EDIT name` (core/edit.asm) edits the store in place.
 ;
-; Phase 64's RECALL copied a definition into the edit line and left the old
-; copy in the store; `EDIT name` (core/edit.asm, the full-screen view in the
-; graphics EXROM) now edits the store in place and runs only the changed
-; lines, so RECALL (74 B) and its RECALL_PENDING hand-off to the console are
-; gone. LIST-DEFS stays: it lists the first DEF_TABLE_MAX (16) top-level
-; ":" ... ";" spans of the store, oldest first, numbered from 0, with a
-; 20-character preview. Its scratch cells keep their Phase 64 names.
+; LIST-DEFS lists the first DEF_TABLE_MAX (16) top-level ":" ... ";" spans of the store, oldest
+; first, numbered from 0, with a 20-character preview. The link field of H_LISTDEFS is
+; DICT_CHAIN_POINT, which the including ROM sets (DEFL). Every word here may destroy all registers
+; except IX, IY and SP.
 ; ============================================================================
 
     IFNDEF CORE_RECALL_ASM
@@ -22,11 +19,12 @@ DEF_TABLE_MAX  EQU 16
     ASSERT DEF_TABLE_MAX * 4 == 64      ; DEF_TABLE's size in include/forth_layout.inc
 
 ; ============================================================================
-; STORE_APPEND ( HL = addr, B = len -- )
-; The console's append (core/editor.asm's EDITOR_LOOP_LIVE, ENTER): the line's B bytes at HL and a CR go
-; at STORE_END (docs/V2/EDITOR_SPEC.md section 3). An empty line is not appended. A line that does not fit
-; (STORE_END + len + 1 > STORE_LIMIT, an exact 16-bit test) is not appended and "STORE FULL" is printed on
-; its own line; the caller goes on to interpret the line either way.
+; STORE_APPEND -- the console's append (EDITOR_LOOP_LIVE, on ENTER): the line and a CR go at
+; STORE_END. An empty line is not appended. A line that does not fit (STORE_END + len + 1 >
+; STORE_LIMIT, an exact 16-bit test) is not appended and "STORE FULL" is printed on its own line;
+; the caller interprets the line either way.
+; In:  HL = the line, B = its length
+; Out: STORE_END moved past the CR; STORE_LAST_LINE = where the line starts (0: nothing appended)
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 STORE_APPEND:
@@ -36,17 +34,17 @@ STORE_APPEND:
     or   a
     ret  z                      ; empty line: nothing to append
     ld   c, a
-    ld   b, 0                   ; bc = len
+    ld   b, 0                   ; BC = len
     ld   de, (STORE_END)
     push hl
     ld   hl, STORE_LIMIT
     or   a
-    sbc  hl, de                 ; hl = room (STORE_END never passes STORE_LIMIT)
+    sbc  hl, de                 ; HL = the room (STORE_END never passes STORE_LIMIT)
     scf
     sbc  hl, bc                 ; room - len - 1: borrow if the line and its CR do not fit
     pop  hl
     jr   c, .full
-    ld   (STORE_LAST_LINE), de      ; where this line starts, for STORE_TRIM
+    ld   (STORE_LAST_LINE), de
     ldir
     ld   a, 13
     ld   (de), a
@@ -55,14 +53,14 @@ STORE_APPEND:
     ret
 .full:
     ld   hl, STORE_FULL_MSG
-    jp   FORGET_PRINT_MSG       ; core/forget.asm: prints the message (its CR is a newline) and returns
+    jp   FORGET_PRINT_MSG       ; the CR is a newline
 
 STORE_FULL_MSG: DB "STORE FULL", 13, 0
 
 ; ============================================================================
-; STORE_TRIM -- the console's line off the end of the store (EDITOR_SPEC.md section 3: a line holding SAVE-TEXT,
-; VERIFY-TEXT, LOAD-TEXT or EDIT is a command, not source). STORE_APPEND records where it put the line being run
-; (STORE_LAST_LINE, 0 when it appended nothing); STORE_END goes back there, once.
+; STORE_TRIM -- the console's line off the end of the store: a line holding SAVE-TEXT, VERIFY-TEXT,
+; LOAD-TEXT or EDIT is a command, not source. STORE_END goes back to STORE_LAST_LINE, once.
+; Out: STORE_LAST_LINE = 0
 ; Destroys: AF, HL
 ; ============================================================================
 STORE_TRIM:
@@ -76,17 +74,10 @@ STORE_TRIM:
     ret
 
 ; ============================================================================
-; SCAN_DEFS ( -- )
-; Walks STORE_START..STORE_END for top-level ":"..";" spans (each
-; delimiter-bounded, the same way core/interp.asm's own WORD treats
-; every byte from 0 to space as a delimiter) and populates DEF_TABLE/DEF_COUNT, oldest
-; first. Forth doesn't nest colon definitions, so no depth tracking is
-; needed: a ":" starts a span, the next ";" ends it.
+; AT_END -- has RECALL_SCAN_PTR reached STORE_END?
+; Out: Z if so
+; Destroys: AF, DE, HL
 ; ============================================================================
-; AT_END (internal) -- Z set if RECALL_SCAN_PTR has reached STORE_END.
-; Factored out of SCAN_DEFS's own three identical inline checks (one per
-; scan state below) -- pure dedup, no behavior change. Destroys HL/DE,
-; which every call site below already reloads fresh afterward anyway.
 AT_END:
     ld   hl, (RECALL_SCAN_PTR)
     ld   de, (STORE_END)
@@ -94,6 +85,12 @@ AT_END:
     sbc  hl, de
     ret
 
+; ============================================================================
+; SCAN_DEFS -- walk STORE_START..STORE_END for top-level ":" ... ";" spans and fill DEF_TABLE and
+; DEF_COUNT, oldest first (a ":" starts a span, the next ";" ends it: colon definitions do not
+; nest). A word is delimited by any byte up to a space, as WORD does. Stops at DEF_TABLE_MAX.
+; Destroys: AF, BC, DE, HL
+; ============================================================================
 SCAN_DEFS:
     xor  a
     ld   (DEF_COUNT), a
@@ -101,9 +98,7 @@ SCAN_DEFS:
     ld   (RECALL_SCAN_PTR), hl
 .outer:
     call AT_END
-    jp   z, .stop                ; reached the end: done -- jp not jr,
-                                  ; real displacement was +126, only 1
-                                  ; byte under the +-127 limit
+    jp   z, .stop                ; a jp: the jr displacement would be +126, one under its limit
     ld   hl, (RECALL_SCAN_PTR)
     ld   a, (hl)
     cp   " " + 1
@@ -115,21 +110,18 @@ SCAN_DEFS:
     cp   ":"
     jr   nz, .skip_word
     ld   (RECALL_SPAN_START), hl
-    ; found ":" -- now scan forward for the matching ";" word
 .find_semi:
     inc  hl
     ld   (RECALL_SCAN_PTR), hl
     call AT_END
-    jr   z, .stop                ; ran off the end with no ";": stop scanning
+    jr   z, .stop                ; no ";"
     ld   hl, (RECALL_SCAN_PTR)
     ld   a, (hl)
     cp   ";"
-    jr   nz, .find_semi         ; (whitespace is never ";")
-    ; ";" found -- record the span (inclusive of the ";") if room remains
+    jr   nz, .find_semi
     ld   a, (DEF_COUNT)
     cp   DEF_TABLE_MAX
-    jr   nc, .stop                ; table full: stop scanning (Phase 64's
-                                   ; own documented DEF_TABLE_MAX limit)
+    jr   nc, .stop                ; table full
     push af
     ld   hl, DEF_TABLE
     ld   d, 0
@@ -137,13 +129,13 @@ SCAN_DEFS:
     add  hl, de
     add  hl, de
     add  hl, de
-    add  hl, de                   ; hl = DEF_TABLE + a*4
+    add  hl, de                   ; HL = DEF_TABLE + a * 4
     ex   de, hl
     ld   hl, (RECALL_SPAN_START)
     ld   bc, STORE_START
     or   a
-    sbc  hl, bc                   ; hl = span start offset
-    ld   a, l                     ; Z80 has no `ld (de),hl` -- store via A
+    sbc  hl, bc                   ; the span's start offset
+    ld   a, l
     ld   (de), a
     inc  de
     ld   a, h
@@ -153,7 +145,7 @@ SCAN_DEFS:
     ld   bc, (RECALL_SPAN_START)
     or   a
     sbc  hl, bc
-    inc  hl                       ; hl = span length, inclusive of ";"
+    inc  hl                       ; the span's length, with the ";"
     ld   a, l
     ld   (de), a
     inc  de
@@ -167,7 +159,6 @@ SCAN_DEFS:
     ld   (RECALL_SCAN_PTR), hl
     jr   .outer
 .skip_word:
-    ; not ":" -- skip to the next space (or end) and keep scanning
     inc  hl
     ld   (RECALL_SCAN_PTR), hl
     call AT_END
@@ -180,10 +171,12 @@ SCAN_DEFS:
 .stop:
     ret
 
-; GET_DEF_SPAN (internal) ( C = index -- DE = span start offset, HL = span
-; length ). Factored out of W_LISTDEFS and Phase 64's W_RECALL, which both did this
-; identical DEF_TABLE index arithmetic and 4-byte read inline -- pure
-; dedup, no behavior change. Caller must ensure index < DEF_COUNT.
+; ============================================================================
+; GET_DEF_SPAN -- one DEF_TABLE entry
+; In:  C = the index (< DEF_COUNT)
+; Out: DE = the span's start offset in the store, HL = its length
+; Destroys: AF, B
+; ============================================================================
 GET_DEF_SPAN:
     ld   hl, DEF_TABLE
     ld   b, 0
@@ -193,21 +186,17 @@ GET_DEF_SPAN:
     add  hl, bc
     ld   e, (hl)
     inc  hl
-    ld   d, (hl)                  ; de = span start offset
+    ld   d, (hl)
     inc  hl
     ld   a, (hl)
     inc  hl
     ld   h, (hl)
-    ld   l, a                     ; hl = span length
+    ld   l, a
     ret
 
 ; ============================================================================
-; LIST-DEFS ( -- )
-; Scans the workspace fresh, then prints each entry as "N: " followed by
-; up to 20 preview characters of its source and a newline. 20 is a plain
-; display choice (fits one 32-column row with the "N: " prefix and room
-; to spare), not a stored/recall limit -- RECALL below copies the WHOLE
-; span, not just the preview.
+; LIST-DEFS ( -- ) -- scan the store afresh, then print each span as "N: " and up to 20 characters of
+; its source (one 32-column row) and a newline
 ; ============================================================================
 LISTDEFS_PREVIEW_LEN EQU 20
 
@@ -224,9 +213,8 @@ W_LISTDEFS:
     ld   b, 0
     ld   a, (DEF_COUNT)
     cp   c
-    ret  z                        ; RECALL_LIST_IDX == DEF_COUNT: done
-    ret  c                        ; RECALL_LIST_IDX > DEF_COUNT: done
-                                   ; (can't happen, kept as a safety net)
+    ret  z                        ; index = DEF_COUNT: done
+    ret  c                        ; index > DEF_COUNT: not reached, a safety net
 
     push bc
     ld   l, c
@@ -240,7 +228,7 @@ W_LISTDEFS:
     call W_EMIT
     pop  bc
 
-    call GET_DEF_SPAN              ; de = span start offset, hl = length
+    call GET_DEF_SPAN
 
     ld   a, LISTDEFS_PREVIEW_LEN
     cp   l
@@ -254,8 +242,8 @@ W_LISTDEFS:
 .nocap:
     push hl
     ld   hl, STORE_START
-    add  hl, de                   ; hl -> span start in the workspace
-    pop  bc                       ; bc = capped preview length
+    add  hl, de                   ; HL -> the span in the store
+    pop  bc                       ; BC = the capped length
 .printloop:
     ld   a, b
     or   c
@@ -282,7 +270,6 @@ W_LISTDEFS:
     ld   (RECALL_LIST_IDX), a
     jr   .loop
 
-DICT_LATEST_INIT_LISTDEFS EQU H_LISTDEFS   ; head of the dictionary once
-                                           ; this file is the last one INCLUDEd
+DICT_LATEST_INIT_LISTDEFS EQU H_LISTDEFS ; the chain head when this is the last file included
 
     ENDIF
