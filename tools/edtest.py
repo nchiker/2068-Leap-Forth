@@ -122,8 +122,8 @@ the text allows several outcomes the case accepts exactly those and reports whic
                      guard, an array that would pass it refused; `n ALLOT`, `,` and `C,` give THROW -8 under CATCH (to $CF00
                      exactly allowed, one more refused; 20000, 28672 and 32767 refused, the last two carry past $FFFF); a
                      200-byte definition below the guard is accepted and runs.  HOW A THROW SHOWS ON THIS BUILD: uncaught, it
-                     prints `STACK?` whatever its code (rom/forth_boot.asm RUNTIME_ERROR_HOOK discards it); `' word CATCH .`
-                     prints the code.  So -8 is asserted through CATCH, and `STACK?` for the uncaught form.
+                     prints its message (rom/forth_boot.asm RUNTIME_ERROR_HOOK: -8 is `DICTIONARY FULL`, since step F item 5); `' word CATCH .`
+                     prints the code.  So -8 is asserted through CATCH, and `DICTIONARY FULL` for the uncaught form.
   N6-N9, N12, N13    the full-screen view.  It is detected by row 23 reading `LINE n/m` while the machine waits for a key; on the
                      old build `EDIT ...` gives `EDIT ?` and each case fails at once with that.  The cases keep a MODEL of the
                      view (class VModel: store lines with their session marks, the cursor line in a buffer, the cursor
@@ -2045,7 +2045,7 @@ def cr_whitespace(env, part, ck):
         env.con.type("KEEP .")
         ck.eq("KEEP, defined before the load, still runs", last_out_row(env), "7 OK")
         env.con.type("-8 THROW")
-        ck.eq("an uncaught THROW prints", last_out_row(env), "STACK?")
+        ck.eq("an uncaught THROW prints", last_out_row(env), "DICTIONARY FULL")
         ck.true("and returns to the prompt", env.con.in_editor())
         env.con.type("5 .")
         ck.eq("the console works after the THROW", last_out_row(env), "5 OK")
@@ -2086,7 +2086,7 @@ def cr_whitespace(env, part, ck):
 # ===================================================================== N5 dictionary ceiling
 @new_case("dict-ceiling", "N5", "the dictionary stops 256 bytes below $D000 (E2a): definitions in a loop (`: Wnn ;`), data words, and a "
                                 "large `n ALLOT`, `,` and `C,` are refused with THROW -8 before HERE passes $D000 - 256 "
-                                "(uncaught it prints STACK? whatever the code; CATCH shows -8), HERE and LATEST stay, and the store at "
+                                "(uncaught it prints DICTIONARY FULL; CATCH shows -8), HERE and LATEST stay, and the store at "
                                 "$D000 is not written; what is allowed below the guard is accepted",
           parts=("defs", "data", "allot", "body"))
 @guarded
@@ -2117,7 +2117,7 @@ def dict_ceiling(env, part, ck):
     def refused(label, text):
         h0, l0 = here(), latest()
         row, flag = line(text)
-        ck.eq(label + ": refused (row, error flag)", (row, flag), ("STACK?", 1))
+        ck.eq(label + ": refused (row, error flag)", (row, flag), ("DICTIONARY FULL", 1))
         ck.eq(label + ": HERE, LATEST unchanged", (here(), latest()), (h0, l0))
 
     if part == "defs":
@@ -2135,7 +2135,7 @@ def dict_ceiling(env, part, ck):
             log.append((h0, h1, flag))
             if flag:
                 first_refusal = i
-                ck.eq("refusal %d: STACK? row" % i, row, "STACK?")
+                ck.eq("refusal %d: DICTIONARY FULL row" % i, row, "DICTIONARY FULL")
                 ck.eq("refusal %d: HERE, LATEST unchanged" % i, (h1, l1), (h0, l0))
                 ck.true("refusal %d: HERE $%04X is not near $%04X" % (i, h0, guard_top), h0 > guard_top - 16)
                 break
@@ -2168,13 +2168,13 @@ def dict_ceiling(env, part, ck):
         store_ok("data")
     elif part == "allot":
         # How the build reports a THROW to the console (rom/forth_boot.asm RUNTIME_ERROR_HOOK, core/throwcatch.asm): an
-        # uncaught THROW prints the fixed text STACK? whatever the code (the code is dropped); CATCH leaves the code, which
+        # uncaught THROW prints the message of its code (-8: DICTIONARY FULL, since step F item 5); CATCH leaves the code, which
         # `.` prints.  The control below checks that on this build before the guard cases rely on it.
         for t in (": T9 -8 THROW ;", ": A40 40 ALLOT ;", ": A1 1 ALLOT ;", ": B1 65 C, ;", ": B2 1234 , ;",
                   ": A20K 20000 ALLOT ;", ": A28K 28672 ALLOT ;", ": A32K 32767 ALLOT ;"):
             line(t)
         line("T9")
-        ck.eq("control: an uncaught THROW -8 prints", last_out_row(env), "STACK?")
+        ck.eq("control: an uncaught THROW -8 prints", last_out_row(env), "DICTIONARY FULL")
         line("' T9 CATCH .")
         ck.eq("control: CATCH leaves -8, `.` prints", last_out_row(env), "-8 OK")
         natural = here()
@@ -2198,7 +2198,7 @@ def dict_ceiling(env, part, ck):
         expect(", past the guard", "B2", -8, None)
         h = here()
         line("A1")
-        ck.eq("uncaught 1 ALLOT past the guard prints", (last_out_row(env), here()), ("STACK?", h))
+        ck.eq("uncaught 1 ALLOT past the guard prints", (last_out_row(env), here()), ("DICTIONARY FULL", h))
         poke_here(guard_top - 1)
         expect("C, to the guard exactly", "B1", 0, guard_top)
         expect("C, one past", "B1", -8, None)

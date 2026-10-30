@@ -1,5 +1,5 @@
 ; ============================================================================
-; core/fpmath.asm — FSQRT, PI, SIN, COS, RAD, DEG (step F, docs/V2/FLOAT_SPEC.md sections 8.1, 8.2)
+; core/fpmath.asm — FSQRT, PI, SIN, COS, TAN, RAD, DEG (step F, docs/V2/FLOAT_SPEC.md sections 8.1, 8.2)
 ;
 ; Builds on core/fpcore.asm and core/dict.asm (this file's first header chains through DICT_CHAIN_POINT). Every word
 ; is a sequence of fpcore operations in the order tools/fpforth.py follows, so the ROM matches it byte for byte.
@@ -15,6 +15,7 @@
 ;           exrom_v2_float_fn.asm 5.10, relative error 4.8e-11 for |r| <= 91 degrees): s = r + r^3 (c3 + r^2 (c5 +
 ;           r^2 (c7 + r^2 (c9 + r^2 c11)))); odd k negates it. COS shifts inside the reduction rather than as
 ;           SIN(x + pi/2), which would round x first.
+;   TAN ( r -- r )        SIN x / COS x (tools/fpforth.py's ftan); a cosine of exactly 0: THROW -42
 ;   RAD DEG ( r -- r )     x pi/180, x 180/pi
 ; The constants are tools/fpforth.py's (PI, HALF_PI, INV_PI, P1, P2, DEG_K, SIN_COEFFS, HALF), each a DB row.
 ; ============================================================================
@@ -194,10 +195,28 @@ W_COS:
 DICT_LATEST_INIT_FLOATTRIG EQU H_COS   ; head of the dictionary as of PI, SIN, COS
 
 ; ============================================================================
+; TAN ( r -- r ) radians: SIN x / COS x, the sine kept in FMT (F.'s buffer, free here) while COS runs
+; Errors: THROW -42 for a cosine of exactly 0 (FDIV's), -43 as SIN's
+; ============================================================================
+H_TAN:
+    DW   H_COS
+    DB   3, "T", "A", "N"
+W_TAN:
+    call FDUP                          ; [x x]
+    call W_SIN                         ; [x s]
+    ld   de, FMT
+    call FPOP_DE                       ; FMT = s; [x]
+    call W_COS                         ; [c]
+    ld   hl, FMT
+    call FCONSTX                       ; FX = s, FY = c
+    call FDIV
+    jp   FPACK
+
+; ============================================================================
 ; RAD ( degrees -- radians ) x pi/180
 ; ============================================================================
 H_RAD:
-    DW   H_COS
+    DW   H_TAN
     DB   3, "R", "A", "D"
 W_RAD:
     ld   hl, K_RAD

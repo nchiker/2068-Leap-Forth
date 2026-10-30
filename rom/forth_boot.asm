@@ -491,19 +491,41 @@ REPORT_INTERP_ERROR:              ; shared tail with RUNTIME_ERROR_HOOK's
 ; ============================================================================
 RUNTIME_ERROR_HOOK:
     call EDIT_ERR_PREFIX          ; core/edit.asm: `LINE n ` while EDIT commits line n
+    ld   hl, (THROW_CODE)         ; core/throwcatch.asm: the code of an uncaught THROW; 0 from STACK_CHECK
+    ld   de, 0
+    ld   (THROW_CODE), de         ; used up
+    ld   a, h
+    or   l
+    ex   de, hl                   ; DE = the code
     ld   hl, RUNTIME_ERROR_MSG
-.msgloop:
+    jr   z, .msg                  ; no THROW: STACK?
+    ld   a, d
+    inc  a
+    jr   nz, .other               ; the table's codes are -1 to -255
+    ld   hl, RUNTIME_ERROR_TABLE
+.find:
     ld   a, (hl)
     or   a
-    jr   z, .msgdone
-    push hl
-    ld   l, a
-    ld   h, 0
-    rst RST_DPUSH
-    call W_EMIT
-    pop  hl
+    jr   z, .other                ; end of the table
     inc  hl
-    jr   .msgloop
+    cp   e
+    jr   z, .msg
+.skip:
+    ld   a, (hl)
+    inc  hl
+    or   a
+    jr   nz, .skip
+    jr   .find
+.other:                           ; ERROR n, n signed
+    ld   hl, RUNTIME_ERROR_PFX
+    push de
+    call FORGET_PRINT_MSG
+    pop  hl
+    rst  RST_DPUSH
+    call W_DOT
+    jr   .msgdone
+.msg:
+    call FORGET_PRINT_MSG
 .msgdone:
     ld   hl, 13
     rst RST_DPUSH
@@ -515,6 +537,19 @@ RUNTIME_ERROR_HOOK:
     jr   REPORT_INTERP_ERROR
 
 RUNTIME_ERROR_MSG: DB "STACK?", 0
+RUNTIME_ERROR_PFX: DB "ERROR ", 0
+
+; The messages of an uncaught THROW (docs/V2/FLOAT_SPEC.md section 8.4): the low byte of the code (all are -1 to -255),
+; then the text, NUL-ended; a 0 byte ends the table.
+RUNTIME_ERROR_TABLE:
+    DB   -8, "DICTIONARY FULL", 0
+    DB   -13, "UNDEFINED WORD", 0
+    DB   -28, "BREAK", 0
+    DB   -37, "TAPE ERROR", 0
+    DB   -42, "DIVISION BY ZERO", 0
+    DB   -43, "OUT OF RANGE", 0
+    DB   -46, "INVALID ARGUMENT", 0
+    DB   0
 
 ; ---- kernel + dictionary: included here, after the vector table and
 ; the boot code above, not before ORG $0000. DICT_CHAIN_POINT splices
@@ -559,9 +594,9 @@ DICT_CHAIN_POINT DEFL H_FSLASH
     INCLUDE "core/print.asm"
 DICT_CHAIN_POINT DEFL H_DOT
     INCLUDE "core/fpprint.asm"
-DICT_CHAIN_POINT DEFL H_FDOT
+DICT_CHAIN_POINT DEFL H_FSDOT
     INCLUDE "core/fpconv.asm"
-DICT_CHAIN_POINT DEFL H_FROUND
+DICT_CHAIN_POINT DEFL H_FLOOR
     INCLUDE "core/fpmath.asm"
 DICT_CHAIN_POINT DEFL H_DEG
     INCLUDE "core/beep.asm"
@@ -574,6 +609,8 @@ DICT_CHAIN_POINT DEFL H_ENVELOPE
 DICT_CHAIN_POINT DEFL H_GREATER
     INCLUDE "core/variable.asm"
 DICT_CHAIN_POINT DEFL H_CONSTANT
+    INCLUDE "core/fpstack.asm"
+DICT_CHAIN_POINT DEFL H_FCONSTANT
     INCLUDE "core/dotquote.asm"
 DICT_CHAIN_POINT DEFL H_DOTQUOTE
     INCLUDE "core/loop.asm"

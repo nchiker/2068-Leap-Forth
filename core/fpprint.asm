@@ -65,6 +65,14 @@ H_FDOT:
     DB   2, "F", "."
 W_FDOT:
     call FPOP_FX
+    call FDCALC
+    call FDPRINT
+    ld   a, " "
+    jp   FEMIT
+
+; FDCALC -- FX (unpacked, a sign and a value) as 128.64 fixed point in FMT, the PLACES decimals in FDIG, rounded
+; Destroys: AF, BC, DE, HL
+FDCALC:
     ld   hl, FMT
     ld   b, 24
     call FZERO
@@ -182,6 +190,12 @@ W_FDOT:
     dec  hl
     djnz .ip
 .rounded:
+    ret
+
+; FDPRINT -- prints FDCALC's result: "-" for a negative FX unless every printed digit is 0, the integer digits, and
+; "." and the decimals (none and no point when PLACES is 0)
+; Destroys: AF, BC, DE, HL
+FDPRINT:
     ld   a, (FX + U_S)                 ; "-" for a negative value unless every printed digit is 0
     or   a
     jr   z, .digits
@@ -243,7 +257,7 @@ W_FDOT:
 .point:
     ld   a, (F_PLACES)
     or   a
-    jr   z, .space
+    ret  z
     ld   b, a
     ld   a, "."
     call FEMIT
@@ -254,10 +268,157 @@ W_FDOT:
     call FEMIT
     inc  hl
     djnz .pd
-.space:
-    ld   a, " "
-    jp   FEMIT
+    ret
 
-DICT_LATEST_INIT_FLOATPRINT EQU H_FDOT   ; head of the dictionary once this file is included
+; ============================================================================
+; PLACES ( n -- )  the decimals F. and FS. print, 0-9; another n: THROW -43
+; ============================================================================
+H_PLACES:
+    DW   H_FDOT
+    DB   6, "P", "L", "A", "C", "E", "S"
+W_PLACES:
+    rst  RST_DPOP
+    ld   a, h
+    or   a
+    jp   nz, F_RANGE
+    ld   a, l
+    cp   10
+    jp   nc, F_RANGE
+    ld   (F_PLACES), a
+    ret
+
+; ============================================================================
+; FS. ( r -- )  scientific notation: [-]d.ddddEn and a space (PLACES decimals, n in decimal, no "+").
+; tools/fpforth.py's fsdot, step for step (FLOAT_SPEC section 7): a = |x|; n = ((e - 129) x 77) >> 8 (arithmetic) from
+; the exponent byte e; a = a / 10^n in steps of POW10 entries of at most 13 (n > 0 divides, n < 0 multiplies); one
+; more step if a >= 10 (a / 10, n + 1) or a < 1 (a x 10, n - 1); the digits are F.'s for a; a rounding carry makes
+; the integer part 10, which is printed as 1 with n + 1 (the decimals are all 0 then). 0 prints 0, the decimals, E0.
+; READING: the "-" is printed first, before the scaling (nothing between can fail or print); FDEXP's first byte, free
+; (ATOF is not live), holds the exponent still to be scaled; n waits on the machine stack as a 16-bit number and
+; the E and n are printed by W_DOT (which adds the space).
+; ============================================================================
+H_FSDOT:
+    DW   H_PLACES
+    DB   3, "F", "S", "."
+W_FSDOT:
+    ld   hl, 0                         ; n for 0
+    ld   a, (iy+0)
+    or   a
+    jp   z, .digits
+    bit  7, (iy+1)
+    jr   z, .sign
+    res  7, (iy+1)                     ; a = |x|
+    ld   a, "-"
+    call FEMIT
+    ld   a, (iy+0)
+.sign:
+    sub  129                           ; e - 129: -128 to 126
+    ld   l, a
+    rla
+    sbc  a, a
+    ld   h, a
+    ld   d, h
+    ld   e, l
+    add  hl, hl
+    add  hl, hl
+    add  hl, hl
+    add  hl, de                        ; 9x
+    add  hl, hl
+    add  hl, de                        ; 19x
+    add  hl, hl
+    add  hl, hl
+    add  hl, de                        ; 77x
+    ld   l, h                          ; >> 8, sign extended
+    ld   a, h
+    rla
+    sbc  a, a
+    ld   h, a
+    ld   a, l
+    ld   (FDEXP), a                    ; the exponent still to scale
+.scale:
+    push hl                            ; n
+    ld   a, (FDEXP)
+    or   a
+    jr   z, .scaled
+    ld   b, a
+    jp   p, .k
+    neg
+.k:
+    cp   14
+    jr   c, .step
+    ld   a, 13                         ; k = min(|d|, 13)
+.step:
+    ld   c, a
+    ld   a, b                          ; d -= k (d > 0) or d += k (d < 0)
+    bit  7, b
+    jr   nz, .up
+    sub  c
+    jr   .set
+.up:
+    add  a, c
+.set:
+    ld   (FDEXP), a
+    ld   a, c
+    ld   l, a
+    ld   h, 0
+    ld   d, h
+    ld   e, l
+    add  hl, hl
+    add  hl, hl
+    add  hl, de                        ; 5k
+    ld   de, POW10 - 5
+    add  hl, de                        ; -> POW10[k]
+    bit  7, b
+    jr   nz, .mul
+    call FDIVP
+    jr   .again
+.mul:
+    call FMULP
+.again:
+    pop  hl
+    jr   .scale
+.scaled:                               ; (n is on the stack)
+    ld   hl, POW10
+    call FCONSTX                       ; FX = 10, FY = a
+    call FCMP
+    jr   c, .big
+    jr   nz, .small
+.big:                                  ; 10 <= a
+    ld   hl, POW10
+    call FDIVP
+    pop  hl
+    inc  hl
+    jr   .digits
+.small:
+    pop  hl
+    ld   a, (iy+0)
+    cp   129
+    jr   nc, .digits                   ; 1 <= a < 10
+    push hl
+    ld   hl, POW10
+    call FMULP
+    pop  hl
+    dec  hl
+.digits:
+    push hl                            ; n
+    call FPOP_FX
+    call FDCALC
+    ld   hl, FMT + 15
+    ld   a, (hl)
+    cp   10
+    jr   nz, .print
+    ld   (hl), 1                       ; 10.0000 printed as 1.0000, n + 1
+    pop  hl
+    inc  hl
+    push hl
+.print:
+    call FDPRINT
+    ld   a, "E"
+    call FEMIT
+    pop  hl
+    rst  RST_DPUSH
+    jp   W_DOT
+
+DICT_LATEST_INIT_FLOATPRINT EQU H_FSDOT   ; head of the dictionary once this file is included
 
     ENDIF

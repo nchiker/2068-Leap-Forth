@@ -12,13 +12,10 @@
 ; `:` itself, since nothing in this project supports compiling one
 ; defining word inside another yet).
 ;
-; The header-construction steps `:` (core/interp.asm's W_COLON) already
-; performs are repeated here rather than factored into a shared helper
-; — this project's standing practice is to never modify an
-; already-stable, widely-shared file for a later phase's convenience
-; (core/interp.asm is INCLUDEd by every smoke ROM in this entire
-; project); a little duplicated header-building code is the safer
-; trade against a regression surface that wide.
+; The header-construction steps `:` (core/interp.asm's W_COLON) performs are
+; repeated here, not factored into core/interp.asm (never modified for a later phase's
+; convenience: every smoke ROM includes it), but only once: VAR_HEADER and VAR_END are
+; shared by VARIABLE, CONSTANT and, in core/fpstack.asm, FVARIABLE and FCONSTANT (step F).
 ;
 ; WHAT THIS ADDS (the exact gap docs/forth_tutorial.md's "What's not
 ; here yet" section has named since Phase 4: "built on top of the @/!
@@ -54,7 +51,44 @@
     DEFINE CORE_VARIABLE_ASM
 
 ; ============================================================================
+; VAR_HEADER -- the header of a new word, shared by VARIABLE, CONSTANT, FVARIABLE and FCONSTANT (core/fpstack.asm):
+; parses the next word, builds LINK + counted name at HERE (NEW_HEADER_ADDR = the header, HERE = past the name, where
+; the code will start). Does not touch LATEST (VAR_END does, once the body is compiled).
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+VAR_HEADER:
+    call W_WORD
+    rst  RST_DPOP                 ; hl -> the counted name (<= 31 characters, W_WORD truncates)
+    ex   de, hl                   ; de -> the name
+    ld   hl, (HERE)
+    ld   (NEW_HEADER_ADDR), hl
+    ld   bc, (LATEST)
+    ld   (hl), c
+    inc  hl
+    ld   (hl), b
+    inc  hl
+    ex   de, hl                   ; hl -> the name, de -> where it goes
+    ld   c, (hl)
+    ld   b, 0
+    inc  bc                       ; the length byte and the name
+    ldir
+    ld   (HERE), de
+    ret
+
+; ============================================================================
+; VAR_END -- compiles the RET that ends the word's code and links the word in (LATEST = NEW_HEADER_ADDR)
+; Destroys: AF, HL
+; ============================================================================
+VAR_END:
+    ld   a, $C9                   ; Z80 RET opcode
+    call COMPILE_BYTE
+    ld   hl, (NEW_HEADER_ADDR)
+    ld   (LATEST), hl
+    ret
+
+; ============================================================================
 ; VARIABLE ( "name" -- )
+; VARIABLE_N -- the same with A zeroed data bytes instead of 2 (FVARIABLE: 5)
 ; ============================================================================
 H_VARIABLE:
     DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL,
@@ -63,61 +97,28 @@ H_VARIABLE:
                             ; INCLUDEing this file
     DB   8, "V", "A", "R", "I", "A", "B", "L", "E"
 W_VARIABLE:
+    ld   a, 2
+VARIABLE_N:
+    push af                       ; the data size (the machine stack: W_WORD and the header code use every register)
     call DICT_ROOM0
-    call W_WORD
-    rst RST_DPOP
-    ld   (WORD_SRC_ADDR), hl
-
-    ld   de, (HERE)
-    ld   (NEW_HEADER_ADDR), de
-    ld   hl, (LATEST)
-    ld   a, l
-    ld   (de), a
-    inc  de
-    ld   a, h
-    ld   (de), a
-    inc  de
-    ld   hl, (WORD_SRC_ADDR)
-    ld   a, (hl)                  ; name length (already <= 31, W_WORD
-                                   ; truncates at 32)
-    ld   (de), a
-    inc  de
-    inc  hl                       ; hl -> first name char
-    ld   b, a
-    ld   a, b
-    or   a
-    jr   z, .namedone
-.namecopy:
-    ld   a, (hl)
-    ld   (de), a
-    inc  hl
-    inc  de
-    djnz .namecopy
-.namedone:
-    ld   (HERE), de                ; HERE now points to this word's own
-                                    ; body, right where the compiled
-                                    ; literal below will start
-
+    call VAR_HEADER
     ld   hl, (HERE)
-    ld   de, 6                     ; 5-byte compiled literal (CALL
-                                    ; DOLIT + 2-byte target) + 1-byte
-                                    ; RET -- the data cell sits right
-                                    ; after both
-    add  hl, de                    ; hl = the data cell's own address
-    call COMPILE_LITERAL           ; compiles CALL DOLIT + that address
-    ld   a, $C9                    ; Z80 RET opcode
-    call COMPILE_BYTE
-    ld   hl, (HERE)                ; HERE now == the data cell's own
-                                    ; address, exactly as computed above
+    ld   de, 6                    ; 5-byte compiled literal (CALL
+                                  ; DOLIT + 2-byte target) + 1-byte
+                                  ; RET -- the data cell sits right
+                                  ; after both
+    add  hl, de                   ; hl = the data cell's own address
+    call COMPILE_LITERAL          ; compiles CALL DOLIT + that address
+    call VAR_END
+    pop  af
+    ld   b, a
+    ld   hl, (HERE)               ; HERE == the data cell's own address
     xor  a
+.zero:
     ld   (hl), a
     inc  hl
-    ld   (hl), a
-    inc  hl
+    djnz .zero
     ld   (HERE), hl
-
-    ld   hl, (NEW_HEADER_ADDR)
-    ld   (LATEST), hl
     ret
 
 ; ============================================================================
@@ -137,45 +138,10 @@ W_CONSTANT:
                                     ; IX-based data stack, never SP
                                     ; (core/control.asm's W_ELSE
                                     ; documents this same technique)
-    call W_WORD
-    rst RST_DPOP
-    ld   (WORD_SRC_ADDR), hl
-
-    ld   de, (HERE)
-    ld   (NEW_HEADER_ADDR), de
-    ld   hl, (LATEST)
-    ld   a, l
-    ld   (de), a
-    inc  de
-    ld   a, h
-    ld   (de), a
-    inc  de
-    ld   hl, (WORD_SRC_ADDR)
-    ld   a, (hl)
-    ld   (de), a
-    inc  de
-    inc  hl
-    ld   b, a
-    ld   a, b
-    or   a
-    jr   z, .namedone
-.namecopy:
-    ld   a, (hl)
-    ld   (de), a
-    inc  hl
-    inc  de
-    djnz .namecopy
-.namedone:
-    ld   (HERE), de
-
+    call VAR_HEADER
     pop  hl                        ; hl = the constant's own value
     call COMPILE_LITERAL
-    ld   a, $C9
-    call COMPILE_BYTE
-
-    ld   hl, (NEW_HEADER_ADDR)
-    ld   (LATEST), hl
-    ret
+    jp   VAR_END
 
 DICT_LATEST_INIT_VARIABLE EQU H_CONSTANT   ; head of the dictionary once
                                             ; this file's own words are

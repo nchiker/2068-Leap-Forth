@@ -1,5 +1,5 @@
 ; ============================================================================
-; core/fpconv.asm — S>F, F>S and FROUND (step F, docs/V2/FLOAT_SPEC.md sections 8.1, 8.4)
+; core/fpconv.asm — S>F, F>S, FROUND and FLOOR (step F, docs/V2/FLOAT_SPEC.md sections 8.1, 8.4)
 ;
 ; Builds on core/fpcore.asm and core/dict.asm (this file's first header chains through DICT_CHAIN_POINT).
 ;
@@ -7,12 +7,13 @@
 ;   F>S    ( r -- n )   truncated toward 0 (-2.5 gives -2); the integer part must be in -32768..65535 (the range an
 ;                       integer literal has: 40000 comes back as -25536), else THROW -43
 ;   FROUND ( r1 -- r2 ) the nearest integral value, ties away from 0 (2.5 gives 3, -2.5 gives -3), still a float
+;   FLOOR  ( r1 -- r2 ) the greatest integral value not above it (-2.5 gives -3, 2.5 gives 2), still a float
 ;
 ; FROUND works on the unpacked mantissa, never by adding 1/2 (which FPACK could round up across an integer): below 1
 ; in magnitude it gives +-1 for |x| >= 1/2 and 0 otherwise; from 2^31 up the value is already an integer; otherwise
 ; the integer bits are taken off the mantissa (FIPART), 1 is added when the first dropped bit is set, and the result
-; is normalised. FINT is the routine behind it with a mode, so that FLOOR (toward minus infinity, step 5) is a header
-; on the same code.
+; is normalised. FINT is the routine behind it with a mode, so that FLOOR (toward minus infinity) is a header on the
+; same code.
 ; ============================================================================
 
     IFNDEF CORE_FPCONV_ASM
@@ -158,6 +159,16 @@ W_FROUND:
     xor  a
     jp   FINT
 
-DICT_LATEST_INIT_FROUND EQU H_FROUND   ; head of the dictionary once this file is included
+; ============================================================================
+; FLOOR ( r1 -- r2 )  toward minus infinity (-2.5 gives -3, 2.5 gives 2)
+; ============================================================================
+H_FLOOR:
+    DW   H_FROUND
+    DB   5, "F", "L", "O", "O", "R"
+W_FLOOR:
+    ld   a, 1
+    jp   FINT
+
+DICT_LATEST_INIT_FROUND EQU H_FLOOR   ; head of the dictionary once this file is included (FROUND, FLOOR)
 
     ENDIF
