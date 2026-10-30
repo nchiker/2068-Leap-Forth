@@ -23,6 +23,5 @@ W_FREE:
     rst RST_DPUSH
     ret
 
-DICT_LATEST_INIT_FREE EQU H_FREE       ; the chain head when this is the last file included
 
     ENDIF

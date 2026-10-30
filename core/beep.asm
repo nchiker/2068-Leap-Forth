@@ -133,6 +133,5 @@ W_BEEP:
     pop  de                      ; DE = frames
     jp   BEEP_PLAY
 
-DICT_LATEST_INIT_BEEP EQU H_BEEP
 
     ENDIF

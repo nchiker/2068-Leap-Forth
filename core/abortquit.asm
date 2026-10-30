@@ -1,7 +1,7 @@
 ; ============================================================================
 ; core/abortquit.asm -- ABORT and QUIT
 ;
-; Needs core/dict.asm (DSTACK_TOP), core/interp.asm with THROW_CATCH_ENABLED (THROW_ROOT_SP,
+; Needs core/dict.asm (DSTACK_TOP), core/interp.asm (THROW_ROOT_SP,
 ; INTERP_ERROR_FLAG), the float stack (FSTACK_TOP), core/doloop.asm (LEAVE_DEPTH) and
 ; core/throwcatch.asm (CATCH_DEPTH). Link fields: a word's DW is DICT_CHAIN_POINT, which the
 ; including ROM sets (DEFL) to the chain the word extends. Every word here may destroy all
@@ -52,6 +52,5 @@ W_QUIT:
     ld   sp, (THROW_ROOT_SP)
     ret
 
-DICT_LATEST_INIT_ABORTQUIT EQU H_QUIT  ; the chain head when this is the last file included
 
     ENDIF

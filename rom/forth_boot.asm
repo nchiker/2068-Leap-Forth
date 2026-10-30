@@ -7,10 +7,6 @@
 ; point set before its INCLUDE). The EXROM image (rom/graphics_exrom.asm) is built separately and
 ; reaches HOME only through GRAPHICS_HOME_TABLE.
 ;
-; The DEFINEs below switch on code in the core files: DECIMAL_NUMBER_ENABLED (a literal like `3.5`
-; pushes a float), RUNTIME_ERROR_CHECK_ENABLED, THROW_CATCH_ENABLED, COMPILE_ONLY_CHECK_ENABLED and
-; TRACK_STORE_END.
-;
 ; Interrupts are enabled before STARTUP_CHIME because the chime waits with HALT.
 ; ============================================================================
 
@@ -309,10 +305,6 @@ RUNTIME_ERROR_TABLE:
     ; before it only set where the font falls; the ASSERT below checks it.
     INCLUDE "kernel/bank/bank.asm"
     INCLUDE "core/dict.asm"
-    DEFINE DECIMAL_NUMBER_ENABLED
-    DEFINE RUNTIME_ERROR_CHECK_ENABLED
-    DEFINE THROW_CATCH_ENABLED
-    DEFINE COMPILE_ONLY_CHECK_ENABLED   ; a mistyped IF/DO/." at the prompt is a reachable case here
     INCLUDE "core/interp.asm"
 DICT_CHAIN_POINT DEFL H_SEMICOLON
     INCLUDE "core/control.asm"
@@ -421,7 +413,6 @@ DICT_CHAIN_POINT DEFL H_OUT
 DICT_CHAIN_POINT DEFL H_FORGET
     INCLUDE "core/udg.asm"
 DICT_CHAIN_POINT DEFL H_UDG
-    DEFINE TRACK_STORE_END       ; core/loadtext.asm tracks STORE_END
     INCLUDE "core/loadtext.asm"
 DICT_CHAIN_POINT DEFL H_LOADTEXT
     INCLUDE "core/edit.asm"

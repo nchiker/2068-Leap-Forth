@@ -18,9 +18,7 @@ H_WHILE:
     DW   DICT_CHAIN_POINT
     DB   $85, "W", "H", "I", "L", "E"
 W_WHILE:
-    IFDEF COMPILE_ONLY_CHECK_ENABLED
     call COMPILE_ONLY_CHECK            ; refuses at the prompt (STATE = 0)
-    ENDIF
     ld   hl, QBRANCH
     call COMPILE_CALL
     ld   hl, (HERE)
@@ -37,9 +35,7 @@ H_REPEAT:
     DW   H_WHILE
     DB   $86, "R", "E", "P", "E", "A", "T"
 W_REPEAT:
-    IFDEF COMPILE_ONLY_CHECK_ENABLED
     call COMPILE_ONLY_CHECK
-    ENDIF
     rst RST_DPOP                       ; HL = WHILE's placeholder address
     push hl
     ld   hl, BRANCH
@@ -55,6 +51,5 @@ W_REPEAT:
     ld   (hl), a
     ret
 
-DICT_LATEST_INIT_LOOP EQU H_REPEAT     ; the chain head when this is the last file included
 
     ENDIF

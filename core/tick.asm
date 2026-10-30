@@ -32,6 +32,5 @@ W_TICK:
     rst RST_DPOP                       ; discard the immediate flag: the code address stays
     ret
 
-DICT_LATEST_INIT_TICK EQU H_TICK       ; the chain head when this is the last file included
 
     ENDIF

@@ -100,6 +100,5 @@ W_FLASH:
     ld   (CURRENT_ATTR), a
     ret
 
-DICT_LATEST_INIT_COLOR EQU H_FLASH
 
     ENDIF

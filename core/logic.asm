@@ -88,6 +88,5 @@ W_INVERT:
     ld   (ix+1), a
     ret
 
-DICT_LATEST_INIT_LOGIC EQU H_INVERT
 
     ENDIF

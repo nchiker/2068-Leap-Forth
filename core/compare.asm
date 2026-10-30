@@ -105,6 +105,5 @@ W_GREATER:
     ld   (ix+1), h
     ret
 
-DICT_LATEST_INIT_COMPARE EQU H_GREATER
 
     ENDIF

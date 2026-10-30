@@ -194,9 +194,7 @@ H_DO:
     DW   DICT_CHAIN_POINT
     DB   $82, "D", "O"
 W_DO:
-    IFDEF COMPILE_ONLY_CHECK_ENABLED
     call COMPILE_ONLY_CHECK            ; refuses at the prompt (STATE = 0)
-    ENDIF
     ld   hl, DO_RT
     call COMPILE_CALL
     ld   hl, (HERE)            ; the loop start, after the compiled call
@@ -219,9 +217,7 @@ H_LOOP:
     DW   H_DO
     DB   $84, "L", "O", "O", "P"
 W_LOOP:
-    IFDEF COMPILE_ONLY_CHECK_ENABLED
     call COMPILE_ONLY_CHECK
-    ENDIF
     ld   hl, LOOP_RT
     call COMPILE_CALL
     rst RST_DPOP               ; HL = DO's loop start
@@ -247,9 +243,7 @@ H_LEAVE:
     DW   H_LOOP
     DB   $85, "L", "E", "A", "V", "E"
 W_LEAVE:
-    IFDEF COMPILE_ONLY_CHECK_ENABLED
     call COMPILE_ONLY_CHECK
-    ENDIF
     ld   hl, LEAVE_RT
     call COMPILE_CALL
     call LEAVE_SLOT_ADDR_CALC
@@ -276,9 +270,7 @@ H_PLUSLOOP:
     DW   H_LEAVE
     DB   $85, "+", "L", "O", "O", "P"
 W_PLUSLOOP:
-    IFDEF COMPILE_ONLY_CHECK_ENABLED
     call COMPILE_ONLY_CHECK
-    ENDIF
     ld   hl, PLUSLOOP_RT
     call COMPILE_CALL
     rst RST_DPOP               ; HL = DO's loop start
@@ -315,6 +307,5 @@ W_I:
     rst RST_DPUSH
     ret
 
-DICT_LATEST_INIT_DOLOOP EQU H_I        ; the chain head when this is the last file included
 
     ENDIF

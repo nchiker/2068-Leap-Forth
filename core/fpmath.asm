@@ -91,7 +91,6 @@ W_FSQRT:
     djnz .step
     ret
 
-DICT_LATEST_INIT_FLOATSQRT EQU H_FSQRT
 
 ; ============================================================================
 ; PI ( -- r ) -- the 5-byte pi
@@ -202,7 +201,6 @@ W_COS:
     ld   a, 1
     jp   FSINCOS
 
-DICT_LATEST_INIT_FLOATTRIG EQU H_COS
 
 ; ============================================================================
 ; TAN ( r -- r ) -- tangent of an angle in radians: SIN x / COS x, the sine kept in FMT (F.'s buffer, free here)
@@ -243,6 +241,5 @@ W_DEG:
     ld   hl, K_DEG
     jp   FMULP
 
-DICT_LATEST_INIT_RADDEG EQU H_DEG
 
     ENDIF

@@ -70,7 +70,6 @@ W_FTOS:
     rst  RST_DPUSH
     ret
 
-DICT_LATEST_INIT_FLOATCONV EQU H_FTOS
 
 ; ============================================================================
 ; FINT -- replace the top float by its integral value (not a dictionary word)
@@ -172,6 +171,5 @@ W_FLOOR:
     ld   a, 1
     jp   FINT
 
-DICT_LATEST_INIT_FROUND EQU H_FLOOR
 
     ENDIF

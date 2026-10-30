@@ -1,7 +1,7 @@
 ; ============================================================================
 ; core/throwcatch.asm -- THROW and CATCH
 ;
-; Needs core/dict.asm, core/interp.asm with THROW_CATCH_ENABLED (THROW_ROOT_SP, THROW_CODE) and
+; Needs core/dict.asm, core/interp.asm (THROW_ROOT_SP, THROW_CODE) and
 ; the including ROM's RUNTIME_ERROR_HOOK, where an uncaught THROW ends. Link fields: a word's DW
 ; is DICT_CHAIN_POINT, which the including ROM sets (DEFL) to the chain the word extends. Every
 ; word here may destroy all registers except IX, IY and SP.
@@ -146,6 +146,5 @@ W_CATCH:
     rst RST_DPUSH
     ret
 
-DICT_LATEST_INIT_THROWCATCH EQU H_CATCH ; the chain head when this is the last file included
 
     ENDIF

@@ -52,6 +52,5 @@ W_CIRCLE:
     ld   hl, GRAPHICS_EXROM_BASE + (8 * 3)   ; slot 8 = CIRCLE_IMPL
     jp   EXROM_CALL_SLOT       ; tail jump: its RET returns to our caller
 
-DICT_LATEST_INIT_SHAPES EQU H_CIRCLE   ; the chain head once this file is included
 
     ENDIF

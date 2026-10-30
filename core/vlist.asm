@@ -49,6 +49,5 @@ W_VLIST:
     ex   de, hl
     jr   .wordloop
 
-DICT_LATEST_INIT_VLIST EQU H_VLIST     ; the chain head when this is the last file included
 
     ENDIF

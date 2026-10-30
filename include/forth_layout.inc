@@ -209,8 +209,7 @@ STATE:                    DEFS 1                        ; 0 interpreting, 1 comp
 FIND_SEARCH_ADDR:         DEFS 2                        ; FIND: scratch
 FIND_HEADER_ADDR:         DEFS 2                        ; FIND: scratch
 FIND_RAW_LENFLAGS:        DEFS 1                        ; FIND: length byte before masking (the IMMEDIATE bit)
-NUM_PTR:                  DEFS 2                        ; NUMBER, integer-only branch (not assembled): next character
-NUM_COUNT:                DEFS 1                        ; NUMBER, integer-only branch (not assembled): characters left
+    DEFS 3                                              ; free
 NUM_NEG:                  DEFS 1                        ; NUMBER: leading minus seen
 WORD_SRC_ADDR:            DEFS 2                        ; colon definition: scratch
 NEW_HEADER_ADDR:          DEFS 2                        ; colon definition: new header address

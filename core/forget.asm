@@ -108,6 +108,5 @@ W_FORGET:
 FORGET_MSG_ROM:      DB "FORGET: BUILT-IN, REFUSED", 13, 0
 FORGET_MSG_NOTFOUND: DB "FORGET: NOT FOUND", 13, 0
 
-DICT_LATEST_INIT_FORGET EQU H_FORGET   ; the chain head when this is the last file included
 
     ENDIF

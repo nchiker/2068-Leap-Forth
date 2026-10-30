@@ -86,9 +86,7 @@ H_IF:
     DW   H_ZEROEQUALS
     DB   $82, "I", "F"
 W_IF:
-    IFDEF COMPILE_ONLY_CHECK_ENABLED
     call COMPILE_ONLY_CHECK            ; refuses at the prompt (STATE = 0)
-    ENDIF
     ld   hl, QBRANCH
     call COMPILE_CALL
     ld   hl, (HERE)                    ; the placeholder about to be written
@@ -105,9 +103,7 @@ H_ELSE:
     DW   H_IF
     DB   $84, "E", "L", "S", "E"
 W_ELSE:
-    IFDEF COMPILE_ONLY_CHECK_ENABLED
     call COMPILE_ONLY_CHECK
-    ENDIF
     ld   hl, BRANCH
     call COMPILE_CALL
     ld   hl, (HERE)                    ; this BRANCH's placeholder
@@ -133,9 +129,7 @@ H_THEN:
     DW   H_ELSE
     DB   $84, "T", "H", "E", "N"
 W_THEN:
-    IFDEF COMPILE_ONLY_CHECK_ENABLED
     call COMPILE_ONLY_CHECK
-    ENDIF
     rst RST_DPOP
     ld   de, (HERE)
     ld   a, e
@@ -152,9 +146,7 @@ H_BEGIN:
     DW   H_THEN
     DB   $85, "B", "E", "G", "I", "N"
 W_BEGIN:
-    IFDEF COMPILE_ONLY_CHECK_ENABLED
     call COMPILE_ONLY_CHECK
-    ENDIF
     ld   hl, (HERE)
     rst RST_DPUSH
     ret
@@ -167,15 +159,12 @@ H_UNTIL:
     DW   H_BEGIN
     DB   $85, "U", "N", "T", "I", "L"
 W_UNTIL:
-    IFDEF COMPILE_ONLY_CHECK_ENABLED
     call COMPILE_ONLY_CHECK
-    ENDIF
     ld   hl, QBRANCH
     call COMPILE_CALL
     rst RST_DPOP                       ; HL = BEGIN's loop start
     call COMPILE_WORD
     ret
 
-DICT_LATEST_INIT_P4 EQU H_UNTIL        ; the chain head when this is the last file included
 
     ENDIF

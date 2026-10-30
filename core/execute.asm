@@ -22,6 +22,5 @@ W_EXECUTE:
     rst RST_DPOP                       ; HL = xt
     jp   (hl)                          ; a jump, not a call: its RET returns to EXECUTE's caller
 
-DICT_LATEST_INIT_EXECUTE EQU H_EXECUTE ; the chain head when this is the last file included
 
     ENDIF

@@ -52,6 +52,5 @@ W_SOUND:
     ld   b, l
     jp   SOUND_WRITE
 
-DICT_LATEST_INIT_SOUND EQU H_SOUND
 
     ENDIF

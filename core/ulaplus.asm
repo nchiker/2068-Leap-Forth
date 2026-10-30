@@ -50,6 +50,5 @@ W_PALETTE:
     out  (c), a
     ret
 
-DICT_LATEST_INIT_ULAPLUS EQU H_PALETTE
 
     ENDIF

@@ -342,6 +342,5 @@ W_VAL:
     rst RST_DPUSH
     ret
 
-DICT_LATEST_INIT_STRING EQU H_VAL
 
     ENDIF

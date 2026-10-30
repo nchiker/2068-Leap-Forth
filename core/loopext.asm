@@ -23,9 +23,7 @@ H_EXIT:
     DW   DICT_CHAIN_POINT
     DB   $84, "E","X","I","T"
 W_EXIT:
-    IFDEF COMPILE_ONLY_CHECK_ENABLED
     call COMPILE_ONLY_CHECK            ; refuses at the prompt (STATE = 0)
-    ENDIF
     ld   a, (LEAVE_DEPTH)
     or   a
     jr   z, .compileret
@@ -60,6 +58,5 @@ W_J:
     rst RST_DPUSH
     ret
 
-DICT_LATEST_INIT_LOOPEXT EQU H_J       ; the chain head when this is the last file included
 
     ENDIF

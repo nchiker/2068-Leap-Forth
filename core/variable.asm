@@ -98,6 +98,5 @@ W_CONSTANT:
     call COMPILE_LITERAL
     jp   VAR_END
 
-DICT_LATEST_INIT_VARIABLE EQU H_CONSTANT ; the chain head when this is the last file included
 
     ENDIF

@@ -88,6 +88,5 @@ W_RECT:
     call EXROM_CALL_SLOT
     ret
 
-DICT_LATEST_INIT_RECTFILL EQU H_RECT   ; the chain head once this file is included
 
     ENDIF

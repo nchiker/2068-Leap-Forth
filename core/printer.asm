@@ -251,6 +251,5 @@ W_LLIST:
 .done:
     ret
 
-DICT_LATEST_INIT_PRINTER EQU H_LLIST
 
     ENDIF

@@ -71,7 +71,6 @@ W_BORDER:
     call GFX_SET_BORDER
     ret
 
-DICT_LATEST_INIT_P5 EQU H_BORDER   ; the chain head before CLS, not this file's head
 
 ; ============================================================================
 ; CLS ( -- ) -- clear the screen, repaint the attributes with CURRENT_ATTR, home the print position
@@ -103,6 +102,5 @@ W_CLS:
     ret
     ASSERT PRINT_COL == PRINT_ROW + 1
 
-DICT_LATEST_INIT_CLS EQU H_CLS
 
     ENDIF

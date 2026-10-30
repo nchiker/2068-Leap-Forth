@@ -28,6 +28,5 @@ W_IMMEDIATE:
     ld   (hl), a
     ret
 
-DICT_LATEST_INIT_IMMEDIATE EQU H_IMMEDIATE ; the chain head when this is the last file included
 
     ENDIF

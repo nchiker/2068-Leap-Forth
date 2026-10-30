@@ -65,6 +65,5 @@ W_ALLOT:
     ld   (HERE), hl
     ret
 
-DICT_LATEST_INIT_DICTSPACE EQU H_ALLOT ; the chain head when this is the last file included
 
     ENDIF

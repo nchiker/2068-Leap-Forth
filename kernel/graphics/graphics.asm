@@ -15,17 +15,8 @@
     INCLUDE "include/hardware.inc"
 
 ; ---- character grid ----
-GFX_ROWS   EQU 24
 GFX_COLS   EQU 32
 ATTR_DEFAULT EQU $44     ; PAPER 0 (black), INK 4 (green), BRIGHT 1: GFX_CLS, GFX_CLEAR_ROW
-ATTR_STATUS_BAR EQU $07   ; PAPER 0, INK 7 (white); not used by the Forth code
-
-; solid-colour cell attributes (PAPER only; they are applied to blank cells)
-ATTR_SWATCH_RED   EQU $10   ; PAPER 2 (red),   INK 0
-ATTR_SWATCH_GREEN EQU $20   ; PAPER 4 (green), INK 0
-ATTR_SWATCH_BLUE  EQU $08   ; PAPER 1 (blue),  INK 0
-
-BORDER_DEFAULT  EQU 7     ; white; not applied anywhere (GFX_CLS leaves the border alone)
 
 ; ============================================================================
 ; GFX_CLS -- clear the bitmap and paint every attribute ATTR_DEFAULT

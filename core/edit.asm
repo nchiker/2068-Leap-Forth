@@ -150,6 +150,5 @@ EDIT_ERR_PREFIX:
 .msg:
     DB   "LINE ", 0
 
-DICT_LATEST_INIT_EDIT EQU H_EDIT    ; the chain head when this is the last file included
 
     ENDIF

@@ -3,7 +3,7 @@
 ;
 ; Needs core/interp.asm and core/print.asm (W_EMIT). ." is IMMEDIATE and compile-only. One space after
 ; ." is the delimiter W_WORD already consumed; the string runs to the next " (consumed, not printed).
-; With COMPILE_ONLY_CHECK_ENABLED defined (rom/forth_boot.asm), typing ." at the prompt is refused
+; Typing ." at the prompt is refused
 ; with the "WORD ?" error through COMPILE_ONLY_CHECK before anything is compiled.
 ; It compiles CALL DOSTR followed by a length byte and the characters: DOSTR prints them from its own
 ; return address, then returns past them (DOLIT's idiom for variable-length inline data).
@@ -51,9 +51,7 @@ H_DOTQUOTE:
     DW   DICT_CHAIN_POINT
     DB   $82, ".", '"'       ; length 2, IMMEDIATE (bit 7 set)
 W_DOTQUOTE:
-    IFDEF COMPILE_ONLY_CHECK_ENABLED
     call COMPILE_ONLY_CHECK    ; refuse cleanly if typed at the prompt (STATE=0)
-    ENDIF
     ld   hl, DOSTR
     call COMPILE_CALL
 
@@ -91,6 +89,5 @@ W_DOTQUOTE:
     ld   (HERE), de
     ret
 
-DICT_LATEST_INIT_DOTQUOTE EQU H_DOTQUOTE
 
     ENDIF

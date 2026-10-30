@@ -55,6 +55,5 @@ W_SPACES:
     call W_SPACE
     jr   .loop
 
-DICT_LATEST_INIT_OUTWORDS EQU H_SPACES
 
     ENDIF

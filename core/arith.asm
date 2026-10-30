@@ -120,6 +120,5 @@ W_MIN:
     ld   (ix+1), d
     ret
 
-DICT_LATEST_INIT_ARITH EQU H_MIN
 
     ENDIF

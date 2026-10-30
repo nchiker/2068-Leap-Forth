@@ -23,6 +23,5 @@ W_STICK:
     rst RST_DPUSH
     ret
 
-DICT_LATEST_INIT_STICK EQU H_STICK
 
     ENDIF

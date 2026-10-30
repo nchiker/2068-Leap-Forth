@@ -85,7 +85,7 @@ W_VERIFYTEXT:
 ; ============================================================================
 ; LOAD-TEXT ( "name" -- ) -- load a text tape into the store and interpret it
 ;
-; With TRACK_STORE_END, STORE_END = start + length, and a CR is added if the last byte is not CR
+; STORE_END = start + length, and a CR is added if the last byte is not CR
 ; and there is room. INTERPRET_NESTED keeps THROW_ROOT_SP the outer run's, so an error in the loaded
 ; text (unknown word, uncaught THROW, ABORT) prints its message and unwinds past this routine,
 ; abandoning the rest of the console line. On success the outer run's SRC_PTR and SRC_END are
@@ -118,7 +118,6 @@ W_LOADTEXT:
     push hl
     ld   de, (STORAGE_HEADER_BUF + STORAGE_HEADER_LENGTH_OFF)
     ld   hl, STORE_START                ; INTERPRET_NESTED: HL = source, DE = length
-    IFDEF TRACK_STORE_END
     push hl
     add  hl, de                         ; hl = end of the text
     ld   a, d
@@ -137,7 +136,6 @@ W_LOADTEXT:
 .store_end:
     ld   (STORE_END), hl
     pop  hl
-    ENDIF
     call INTERPRET_NESTED
     pop  hl
     ld   (SRC_PTR), hl
@@ -145,6 +143,5 @@ W_LOADTEXT:
     ld   (SRC_END), hl
     ret
 
-DICT_LATEST_INIT_LOADTEXT EQU H_LOADTEXT ; the chain head when this is the last file included
 
     ENDIF

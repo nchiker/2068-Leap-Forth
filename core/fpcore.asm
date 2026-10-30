@@ -122,10 +122,8 @@ F_DIVZERO:                             ; -42 floating-point divide by zero
 F_INVALID:                             ; -46 floating-point invalid argument
     ld   hl, -46
 F_THROW:
-    IFDEF THROW_CATCH_ENABLED
     rst  RST_DPUSH
     jp   W_THROW
-    ENDIF
 
 ; ============================================================================
 ; FNORM -- FX normalised: the mantissa shifted left until its top bit is set, the exponent lowered; 0 when the
@@ -760,8 +758,5 @@ POW10:
     DB   $A8, $68, $D4, $A5, $10
     DB   $AC, $11, $84, $E7, $2A
 
-DICT_LATEST_INIT_P8       EQU H_FMINUS   ; heads of the dictionary once F+ F-, F*, F/ are included
-DICT_LATEST_INIT_FLOATMUL EQU H_FSTAR
-DICT_LATEST_INIT_FLOATDIV EQU H_FSLASH
 
     ENDIF

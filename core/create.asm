@@ -96,6 +96,5 @@ W_CREATE:
     ld   (LATEST), hl
     ret
 
-DICT_LATEST_INIT_CREATE EQU H_CREATE   ; the chain head when this is the last file included
 
     ENDIF

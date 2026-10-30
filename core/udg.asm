@@ -28,6 +28,5 @@ W_UDG:
     rst RST_DPUSH
     ret
 
-DICT_LATEST_INIT_UDG EQU H_UDG
 
     ENDIF

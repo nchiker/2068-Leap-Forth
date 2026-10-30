@@ -25,6 +25,5 @@ W_ATXY:
     ld   (PRINT_COL), a
     ret
 
-DICT_LATEST_INIT_MOREGFX EQU H_ATXY
 
     ENDIF

@@ -96,6 +96,5 @@ W_POLYGONFILL:
     call EXROM_CALL_SLOT
     ret
 
-DICT_LATEST_INIT_POLYGON EQU H_POLYGONFILL   ; the chain head once this file is included
 
     ENDIF

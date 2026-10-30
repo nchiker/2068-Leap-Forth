@@ -109,6 +109,5 @@ W_INPUT:
     call W_VAL
     ret
 
-DICT_LATEST_INIT_INPUT EQU H_INPUT     ; the chain head when this is the last file included
 
     ENDIF

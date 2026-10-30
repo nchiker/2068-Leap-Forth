@@ -58,14 +58,12 @@ W_EMIT:
     ld   a, (EMIT_CHAR_TMP)
     call GFX_PUTCHAR            ; A=char, B=row, C=column
 
-    IFDEF CORE_TS2068_ASM       ; CURRENT_ATTR exists only with core/ts2068.asm
     ld   a, (PRINT_ROW)          ; GFX_PUTCHAR destroys BC: reload row/col from memory
     ld   b, a
     ld   a, (PRINT_COL)
     ld   c, a
     ld   a, (CURRENT_ATTR)
     call GFX_SET_ATTR            ; stamp the current INK/PAPER attribute into the cell
-    ENDIF
     jr   .advance
 
 .newline:
@@ -194,6 +192,5 @@ PRINT_UDEC16:
     djnz .printloop
     ret
 
-DICT_LATEST_INIT_PRINT EQU H_DOT
 
     ENDIF

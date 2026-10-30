@@ -1,8 +1,7 @@
 ; ============================================================================
 ; core/fpparse.asm -- the number parser: integers and floats, one routine (docs/V2/FLOAT_SPEC.md section 6)
 ;
-; Needs core/fpcore.asm. core/interp.asm's NUMBER jumps here when the ROM defines DECIMAL_NUMBER_ENABLED (its own
-; integer loop is then not assembled). No dictionary words.
+; Needs core/fpcore.asm. core/interp.asm's NUMBER jumps here. No dictionary words.
 ;
 ; The grammar is Leap-C's XF_ATOF (src/runtime/fpcore.asm, MIT, same copyright holder) without its suffixes:
 ;   [-] digits [. digits] [E|e [+|-] digits]   or   [-] . digits [exponent]

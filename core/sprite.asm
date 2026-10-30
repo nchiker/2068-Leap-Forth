@@ -71,6 +71,5 @@ W_SPRITEHIDE:
     call EXROM_CALL_SLOT
     ret
 
-DICT_LATEST_INIT_SPRITE EQU H_SPRITEHIDE   ; the chain head once this file is included
 
     ENDIF

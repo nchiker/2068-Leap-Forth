@@ -24,7 +24,6 @@ W_KEY:
     rst RST_DPUSH
     ret
 
-DICT_LATEST_INIT_KEY EQU H_KEY   ; the chain head with KEY alone, not this file's head
 
 ; ============================================================================
 ; KEY? ( -- flag ) -- true (-1) if a key is waiting; the key is not consumed, so KEY? IF KEY ... THEN works
@@ -60,6 +59,5 @@ W_BREAKQ:
     rst RST_DPUSH
     ret
 
-DICT_LATEST_INIT_KEYQ EQU H_BREAKQ
 
     ENDIF

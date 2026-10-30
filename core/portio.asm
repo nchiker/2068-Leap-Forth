@@ -41,6 +41,5 @@ W_OUT:
     out  (c), a
     ret
 
-DICT_LATEST_INIT_PORTIO EQU H_OUT
 
     ENDIF

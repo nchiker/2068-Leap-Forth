@@ -350,7 +350,6 @@ W_SEMICOLON:
     ld   (STATE), a
     ret
 
-DICT_LATEST_INIT_P3 EQU H_SEMICOLON    ; the chain head of this file
 
 ; ============================================================================
 ; INTERPRET_RUN -- run the outer interpreter over one source buffer until W_WORD reports the
@@ -366,9 +365,7 @@ DICT_LATEST_INIT_P3 EQU H_SEMICOLON    ; the chain head of this file
 ; returns to its caller, which restores SRC_PTR / SRC_END (core/loadtext.asm).
 ; ============================================================================
 INTERPRET_RUN:
-    IFDEF THROW_CATCH_ENABLED
     ld   (THROW_ROOT_SP), sp    ; where an uncaught THROW unwinds to (core/throwcatch.asm)
-    ENDIF
 INTERPRET_NESTED:
     ld   (SRC_PTR), hl
     add  hl, de
@@ -377,9 +374,7 @@ INTERPRET_NESTED:
     ld   (INTERP_ERROR_FLAG), a
 
 .loop:
-    IFDEF RUNTIME_ERROR_CHECK_ENABLED
     call STACK_CHECK    ; here, so every word's stack use is checked: each returns to .loop
-    ENDIF
     call W_WORD
     rst RST_DPOP
     ld   a, (hl)
@@ -417,18 +412,15 @@ INTERPRET_NESTED:
     ld   a, l
     or   a
     jr   z, .badword
-    IFDEF DECIMAL_NUMBER_ENABLED
     ; flag 2: NUMBER left a float on the float stack, not an integer on the data stack
     cp   2
     jr   z, .gotfloat
-    ENDIF
     ld   a, (STATE)
     or   a
     jr   z, .loop                  ; interpreting: n stays on the stack
     rst RST_DPOP                  ; compiling: compile n as a literal instead
     call COMPILE_LITERAL
     jr   .loop
-    IFDEF DECIMAL_NUMBER_ENABLED
 .gotfloat:
     ld   a, (STATE)
     or   a
@@ -439,7 +431,6 @@ INTERPRET_NESTED:
     ld   bc, 5
     add  iy, bc
     jp   .loop                     ; a JP: tools/check_z80_opcodes.py flags a JR this near its limit
-    ENDIF
 
 .badword:
     jp   INTERPRET_UNKNOWN_WORD
@@ -447,7 +438,6 @@ INTERPRET_NESTED:
 .done:
     ret
 
-    IFDEF RUNTIME_ERROR_CHECK_ENABLED
 ; ============================================================================
 ; STACK_CHECK -- INTERPRET_RUN calls it once per word: are IX and IY still within the data stack's
 ; and the float stack's ranges (DSTACK_TOP / DSTACK_LIMIT, FSTACK_TOP / FSTACK_LIMIT)? Needs
@@ -500,9 +490,7 @@ STACK_CHECK:
     ld   iy, FSTACK_TOP
     pop  hl                    ; the return address into .loop: one entry is left
     jp   RUNTIME_ERROR_HOOK
-    ENDIF
 
-    IFDEF COMPILE_ONLY_CHECK_ENABLED
 ; ============================================================================
 ; COMPILE_ONLY_CHECK -- not a dictionary word: the first instruction of every immediate
 ; compile-only word (IF ELSE THEN BEGIN UNTIL WHILE REPEAT DO LOOP +LOOP LEAVE EXIT, `."`). They
@@ -521,7 +509,6 @@ COMPILE_ONLY_CHECK:
     pop  hl                    ; the return address into the calling word
     pop  hl                    ; the word's return address into .loop
     jp   INTERPRET_UNKNOWN_WORD
-    ENDIF
 
 ; ============================================================================
 ; COMPILE_WORD -- compile 2 raw bytes at HERE (not wrapped in CALL DOLIT: a branch target is read

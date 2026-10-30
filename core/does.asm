@@ -46,6 +46,5 @@ W_DOES:
     pop  hl                       ; HL = the defining word's return address
     jp   (hl)
 
-DICT_LATEST_INIT_DOES EQU H_DOES       ; the chain head when this is the last file included
 
     ENDIF

@@ -41,6 +41,5 @@ W_CSTORE:
     ld   (hl), a
     ret
 
-DICT_LATEST_INIT_BYTEMEM EQU H_CSTORE
 
     ENDIF

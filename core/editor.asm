@@ -557,23 +557,19 @@ EDITOR_LOOP_LIVE:
     call EDITOR_PROCESS_KEY
     jr   nc, .keyloop
     ; the line goes to the store before it runs, so it is kept even if the run never returns
-    IFDEF CORE_RECALL_ASM
     ld   hl, EDIT_BUF
     ld   a, (EDIT_LEN)
     ld   b, a
     call STORE_APPEND
-    ENDIF
 
     ld   hl, EDIT_BUF
     ld   a, (EDIT_LEN)
     ld   d, 0
     ld   e, a
     call INTERPRET_RUN
-    IFDEF CORE_EDIT_ASM
     ld   a, (VIEW_RESULT)           ; EDIT ran, and an error may have left changed-line
     or   a                          ; marks in the store
     call nz, EDIT_CLEAR_MARKS
-    ENDIF
     ; an error prints its own message and sets INTERP_ERROR_FLAG: "OK" only without one
     ld   a, (INTERP_ERROR_FLAG)
     or   a
