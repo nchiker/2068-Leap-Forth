@@ -17,52 +17,23 @@
 ; The period table and the shift-and-round scheme follow 2068-Leap's rom/v2_ay_beep.asm (MIT, same owner), rebuilt
 ; here against the specification; the 12 table values are 16 * 110250 / f for the notes from A0 (27.5 Hz).
 ;
-; Builds on core/dict.asm, core/interp.asm, core/float.asm (FPUSH/FPOP, F_SHRA) and core/floatmul.asm (W_FSTAR);
-; all must be INCLUDEd first, chaining through DICT_CHAIN_POINT as every other float file does.
+; Builds on core/dict.asm, core/interp.asm and core/fpcore.asm (FMULP, FPOP_FX, FTOI); all must be INCLUDEd first,
+; chaining through DICT_CHAIN_POINT as every other float file does. The duration is multiplied by 120 on the float
+; engine (FLOAT_SPEC section 12): a product above 2^16 half-frames (exponent byte over 144) plays 32,768 frames, a
+; negative or zero one nothing.
 ; ============================================================================
 
     IFNDEF CORE_BEEP_ASM
     DEFINE CORE_BEEP_ASM
 
 BEEP_AY_LEVEL     EQU 15      ; channel A's fixed level while a note sounds
-; seconds * 120 = half-frames (60 frames per second, doubled so the last bit can round): 120 = 30720 * 2^-8
-BEEP_HALFFRAME_M  EQU 30720
-BEEP_HALFFRAME_E  EQU -8
+; seconds * 120 = half-frames (60 frames per second, doubled so the last bit can round)
+K_120:
+    DB   $87, $70, $00, $00, $00        ; 120.0
 
 ; 16 * 110250 / f for the 12 notes from A0 (semitone -39) to G#0
 BEEP_TABLE:
     DW   64145, 60545, 57147, 53940, 50912, 48055, 45358, 42812, 40409, 38141, 36000, 33980
-
-; ============================================================================
-; FLOAT_TO_INT16 (internal) — ( f -- ) HL=mantissa, A=exponent -> HL = truncated integer value (toward zero
-; on fractional bits, as core/floatprint.asm's F. truncates). A negative exponent shifts HL right (core/float.asm's
-; F_SHRA), a positive one left; both counts are capped at 16.
-; Destroys: AF, B
-; ============================================================================
-FLOAT_TO_INT16:
-    or   a
-    ret  z
-    jp   p, .grow
-    neg
-    cp   17
-    jr   c, .shrink_go
-    ld   a, 16
-.shrink_go:
-    ld   b, a
-    call F_SHRA
-    ret
-.grow:
-    cp   17
-    jr   c, .grow_go
-    ld   a, 16
-.grow_go:
-    ld   b, a
-    or   a
-    ret  z
-.grow_loop:
-    add  hl, hl
-    djnz .grow_loop
-    ret
 
 ; ============================================================================
 ; BEEP_PLAY (internal) — In: HL = semitones (signed), DE = frames. Does nothing for DE = 0 or a pitch outside
@@ -141,27 +112,23 @@ H_BEEP:
                             ; should extend, immediately before INCLUDEing it
     DB   4, "B", "E", "E", "P"
 W_BEEP:
-    ld   hl, BEEP_HALFFRAME_M
-    ld   a, BEEP_HALFFRAME_E
-    call FPUSH
-    call W_FSTAR                 ; float stack: seconds * 120 = half-frames
-    ld   a, (iy+1)               ; its sign, read before FPOP moves the stack pointer
+    ld   hl, K_120
+    call FMULP                   ; float stack: seconds * 120 = half-frames
+    call FPOP_FX
+    ld   hl, 0
+    ld   a, (FX + U_S)
     or   a
-    push af
-    call FPOP
+    jr   nz, .half               ; a negative duration plays nothing
+    ld   a, (FX + U_E)
     or   a
-    jp   m, .to_int              ; negative exponent: only shifts right, cannot overflow
-    cp   2
-    jr   c, .to_int
+    jr   z, .half                ; neither does 0
+    cp   145
+    jr   c, .toi
     ld   hl, $FFFF               ; 65536 half-frames or more: play 32,768 frames
-    jr   .have
-.to_int:
-    call FLOAT_TO_INT16          ; HL = half-frames, truncated
-.have:
-    pop  af
-    jp   p, .nonneg
-    ld   hl, 0                   ; a negative duration plays nothing
-.nonneg:
+    jr   .half
+.toi:
+    call FTOI                    ; HL = half-frames, truncated (the exponent is 144 at most: 16 bits)
+.half:
     srl  h
     rr   l
     jr   nc, .frames

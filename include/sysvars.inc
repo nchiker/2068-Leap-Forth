@@ -528,26 +528,14 @@ EXPR_PARSE_PTR:      DEFS 2           ; 2 bytes — basic/'s current position
                                  ; and advances together, by design
 
 ; ---- kernel/math scratch ----
-; All of these are pure per-call scratch, safe to share across nested
-; calls: each multiply/divide fully consumes and finishes with its own
-; value before any other multiply/divide call begins (Z80 execution is
-; sequential, and nothing in this project calls one of these while
-; another is still mid-calculation) — unlike EXPR_PARSE_PTR above,
-; which deliberately IS shared/persistent across recursion.
-DIV_DIVIDEND:        DEFS 2           ; 2 bytes — MATH_UDIV16's dividend,
-                                 ; shifted left one bit per iteration
-DIV_QUOT:            DEFS 2           ; 2 bytes — MATH_UDIV16's quotient
-                                 ; accumulator, built up bit by bit
-DIV_COUNTER:         DEFS 1           ; 1 byte — MATH_UDIV16's loop counter
-                                 ; (16 iterations) — kept in memory
-                                 ; since BC is needed for the divisor
-                                 ; throughout, unlike DIV10 (a fixed
-                                 ; constant) which could use DJNZ/B
-MATH_SIGN:           DEFS 1           ; 1 byte — MATH_MULTIPLY16/
-                                 ; MATH_DIVIDE16's result-sign scratch
-                                 ; (0=positive, $80=negative), shared
-                                 ; by both since they're never active
-                                 ; simultaneously
+; UNUSED since step F (O10, docs/V2/FLOAT_SPEC.md section 11): MATH_UDIV16,
+; MATH_MULTIPLY16 and MATH_DIVIDE16 are register-only routines now, and no
+; code reads or writes these 6 bytes. The DEFS lines stay so every sysvar
+; address after them does not move.
+DIV_DIVIDEND:        DEFS 2           ; 2 bytes -- UNUSED (was MATH_UDIV16's dividend)
+DIV_QUOT:            DEFS 2           ; 2 bytes -- UNUSED (was MATH_UDIV16's quotient)
+DIV_COUNTER:         DEFS 1           ; 1 byte -- UNUSED (was MATH_UDIV16's loop counter)
+MATH_SIGN:           DEFS 1           ; 1 byte -- UNUSED (was the multiply/divide result sign)
 
 ; ---- program area ceiling ----
 ; Was $FF00 (matching main.asm's placeholder stack pointer, "a round
@@ -1220,7 +1208,7 @@ SQRT_COUNTER:        DEFS 1           ; 1 byte — MATH_SQRT16's loop
                                  ; left before PROG_AREA_START by
                                  ; SQRT_RES above; 1 byte remains
                                  ; ($6182-$6182)
-RND_STATE:           DEFS 2           ; 2 bytes — MATH_RND16's LFSR
+RND_STATE:           DEFS 2           ; 2 bytes — MATH_RND16's xorshift
                                  ; state, persists across calls (each
                                  ; RND(x) both reads and updates it —
                                  ; a register can't hold this between

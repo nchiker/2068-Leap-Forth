@@ -8,7 +8,7 @@
 ;   1. Every phase's dictionary words are reachable from ONE LATEST
 ;      chain when everything is assembled into a single ROM. This
 ;      needed a real structural fix, not just careful INCLUDE ordering:
-;      core/control.asm, core/storage.asm, and core/float.asm were each
+;      core/control.asm, core/storage.asm, and the float file (core/float.asm then, core/fpcore.asm now) were each
 ;      independently written to chain their own first header directly
 ;      onto core/interp.asm's H_SEMICOLON — correct and deliberate for
 ;      keeping each phase's own smoke ROM minimal, but it silently made
@@ -88,7 +88,7 @@ COLD_START:
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
 
-    ld   hl, H_FMINUS             ; core/float.asm's own tail —
+    ld   hl, H_FSLASH             ; core/fpcore.asm's own tail —
                                     ; now correctly the head of the
                                     ; WHOLE chain, all phases included,
                                     ; thanks to the DICT_CHAIN_POINT
@@ -257,8 +257,8 @@ DICT_CHAIN_POINT DEFL H_SEMICOLON
 DICT_CHAIN_POINT DEFL H_BORDER
     INCLUDE "core/storage.asm"
 DICT_CHAIN_POINT DEFL H_LOADLIB
-    INCLUDE "core/float.asm"
-DICT_CHAIN_POINT DEFL H_FMINUS              ; satisfies core/print.asm's
+    INCLUDE "core/fpcore.asm"
+DICT_CHAIN_POINT DEFL H_FSLASH              ; satisfies core/print.asm's
                                               ; own chain requirement
                                               ; below; LATEST itself
                                               ; stays seeded to this
@@ -274,7 +274,7 @@ DICT_CHAIN_POINT DEFL H_DOT   ; core/throwcatch.asm below is needed
                                ; after core/print.asm's own tail, same
                                ; "doesn't change what checkpoint 1
                                ; FINDs" reasoning as above (LATEST is
-                               ; still seeded to H_FMINUS,
+                               ; still seeded to H_FSLASH,
                                ; well before this point in the chain)
     INCLUDE "core/throwcatch.asm"
     INCLUDE "core/editor.asm"
@@ -283,4 +283,4 @@ DICT_CHAIN_POINT DEFL H_DOT   ; core/throwcatch.asm below is needed
 
     SAVEBIN "forth_smoke_p9_rom0.bin", $0000, $4000
 
-DICT_LATEST_COLD EQU H_FMINUS   ; LATEST of an empty user dictionary (core/storage.asm LOAD-LIB)
+DICT_LATEST_COLD EQU H_FSLASH   ; LATEST of an empty user dictionary (core/storage.asm LOAD-LIB)

@@ -74,7 +74,7 @@ HOME = os.path.expanduser("~")
 ZDIR = os.environ.get("TS2068_DEBUG_ZESARUX_DIR", HOME + "/Applications/ZEsarUX-13.0")
 TSRUN_SRC = os.environ.get("TSRUN_DIR", HOME + "/TSRun")
 STOCK0, STOCK1 = HOME + "/fuse-build/roms/tc2068-0.rom", HOME + "/fuse-build/roms/tc2068-1.rom"
-NOT_ADDRESS = {"PI_M", "TWO_PI_M", "HALF_PI_M", "TABLE_STEP_M", "DEG_CONST_M", "CPU_CLOCK_M"}
+NOT_ADDRESS = {"CPU_CLOCK_M"}
 CONTROL = "1 2 + ."
 RAM0, RAMLEN = 0x4000, 0xC000
 
@@ -99,6 +99,9 @@ CASES = [
     ("sprite_hide", ["2 INK 40 40 55 55 RECT", "0 5 5 SPRITE-DEFINE", "CLS", "0 10 10 SPRITE-SHOW",
                      "0 SPRITE-HIDE"], (10, 10)),   # 3rd item: the 2x2 cells (row, col) that must be blank again
     ("stack_kept", ["1 2 3 10 10 30 30 RECT 5 S>F"]),
+    # floats typed on both builds: the multiply and divide kernels use the alternate registers, which the cartridge
+    # build's interrupts (the stock ROM's) must leave alone (docs/V2/FLOAT_SPEC.md section 5)
+    ("float_kernels", ["1.5 2.25 F* 3.0 F/ F. 2.0 FSQRT F.", ": FK 0 DO 1.1 F* 0.7 F/ LOOP ; 1.0 50 FK F.", "1.0 SIN F. PI F."]),
     ("nested_big_polygon", ["3 INK 20 20 230 20 230 170 20 170 4 POLYGON",
                             "5 INK " + BIGPOLY[0], BIGPOLY[1] + " POLYGON-FILL",
                             "1 INK " + BIGPOLY[0], BIGPOLY[1] + " POLYGON"]),
@@ -516,9 +519,9 @@ def compare(case, H, C, glyphs, blank=None):
     sh, sc = H.ram[:0x1B00], C.ram[:0x1B00]
     m["screen_diff"] = diff_count(sh, sc)
     m["screen_first"] = ["%04X:%02X/%02X" % (RAM0 + i, x, y) for i, (x, y) in enumerate(zip(sh, sc)) if x != y][:6]
-    # stacks (cells are 2 bytes, stacks grow down from DSTACK_TOP / FSTACK_TOP)
+    # stacks (data cells are 2 bytes, float cells 5, stacks grow down from DSTACK_TOP / FSTACK_TOP)
     hd, cd = (hb.dstack_top - H.ix) // 2, (cb.dstack_top - C.ix) // 2
-    hf, cf = (hb.fstack_top - H.iy) // 2, (cb.fstack_top - C.iy) // 2
+    hf, cf = (hb.fstack_top - H.iy) // 5, (cb.fstack_top - C.iy) // 5
     m["dstack_depth"], m["fstack_depth"] = (hd, cd), (hf, cf)
     sane = lambda r, top: 0x8000 <= r <= top
     sd = diff_count(H.mem(H.ix, hb.dstack_top - H.ix), C.mem(C.ix, cb.dstack_top - C.ix)) \

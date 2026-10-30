@@ -2,18 +2,17 @@
 ; rom/forth_smoke_p23.asm — Phase 23 smoke ROM: decimal number literals
 ;
 ; DEFINEs DECIMAL_NUMBER_ENABLED before INCLUDEing core/interp.asm --
-; the opt-in every ROM wanting this feature must do (see
-; core/decimal.asm's own header for why every OTHER ROM in this
-; project is unaffected).
+; the opt-in every ROM wanting this feature must do (core/fpparse.asm is
+; then the number parser; every OTHER ROM that does not DEFINE it is
+; unaffected). Regenerated for the 5-byte Sinclair float format in step F
+; (docs/V2/FLOAT_SPEC.md section 6): the expected cells are 5-byte rows
+; computed with tools/fpforth.py (parse is its model of NUMBER).
 ;
-; THREE CHECKPOINTS, the exact two parsing cases hand-verified in
-; core/decimal.asm's own header, plus a combined end-to-end test:
-;   1. Typing "3.5" directly pushes (m=28672,e=-13) onto the float
-;      stack -- checked directly, matching the same CHECK_FTOP style
+; THREE CHECKPOINTS:
+;   1. Typing "3.5" directly pushes the float 3.5 onto the float stack --
+;      checked directly, matching the same CHECK_FTOP style
 ;      rom/forth_smoke_p8.asm/p18.asm/p19.asm already use.
-;   2. Typing "0.25" pushes (m=16384,e=-16) -- the SAME representation
-;      already hand-picked for "0.25" in three earlier smoke ROMs, a
-;      real cross-check that this parser's output matches.
+;   2. Typing "0.25" pushes the float 0.25.
 ;   3. : DOUBLEIT 2.0 F* ; 3.5 DOUBLEIT F. -- a decimal literal
 ;      COMPILED inside a colon definition (2.0), combined with one
 ;      typed directly (3.5), F*, and F. -- prints "7.0000 "
@@ -60,31 +59,32 @@ COLD_START:
     ld   (PRINT_ROW), a
     ld   (PRINT_COL), a
 
+    ld   a, 4
+    ld   (F_PLACES), a
+
     call GFX_CLS
 
-; ---- checkpoint 1: "3.5" -> (28672,-13) ----
+; ---- checkpoint 1: "3.5" -> its 5-byte cell ----
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
     ld   hl, SRC_35
     ld   de, SRC_35_LEN
     call INTERPRET_RUN
-    ld   hl, 28672
-    ld   a, -13
+    ld   hl, C1_X
     call CHECK_FTOP
-    call FPOP
+    call FDROP_T
 
-; ---- checkpoint 2: "0.25" -> (16384,-16) ----
+; ---- checkpoint 2: "0.25" -> its 5-byte cell ----
     ld   a, 2
     ld   (CHECKPOINT_NUM), a
     ld   hl, SRC_025
     ld   de, SRC_025_LEN
     call INTERPRET_RUN
-    ld   hl, 16384
-    ld   a, -16
+    ld   hl, C2_X
     call CHECK_FTOP
-    call FPOP
+    call FDROP_T
 
-; ---- checkpoint 3: compiled + interpreted decimal literals, F*, F. ----
+; ---- checkpoint 3: compiled + interpreted decimal literals, F*, F. -> "7.0000 " (7 chars) ----
     ld   a, 3
     ld   (CHECKPOINT_NUM), a
     ld   hl, SRC_COMBINED
@@ -94,27 +94,33 @@ COLD_START:
     or   a
     jp   nz, FAIL_TEST
     ld   a, (PRINT_COL)
-    cp   7
+    cp   7                       ; len("7.0000") + the trailing space
     jp   nz, FAIL_TEST
 
     jp   PASS_TEST
 
 ; ---- test-harness-only helpers: NOT dictionary words ----
-CHECK_FTOP:                      ; HL = expected mantissa, A = expected
-                                  ; exponent; float stack NOT popped
-    push af
-    ld   a, (iy+0)
-    cp   l
+CHECK_FTOP:                      ; HL -> 5 expected bytes; float stack NOT popped
+    push iy
+    pop  de
+    ld   b, 5
+.cmp:
+    ld   a, (de)
+    cp   (hl)
     jp   nz, FAIL_TEST
-    ld   a, (iy+1)
-    cp   h
-    jp   nz, FAIL_TEST
-    pop  af
-    ld   l, a
-    ld   a, (iy+2)
-    cp   l
-    jp   nz, FAIL_TEST
+    inc  de
+    inc  hl
+    djnz .cmp
     ret
+
+FDROP_T:                         ; drop the top float cell
+    ld   bc, 5
+    add  iy, bc
+    ret
+
+; ---- 5-byte cells [exponent][sign | m0][m1][m2][m3]; the comment is the fpforth expression (enc = fpmodel.encode)
+C1_X:   DB   $82, $60, $00, $00, $00     ; fpforth: parse("3.5")[1]
+C2_X:   DB   $7F, $00, $00, $00, $00     ; fpforth: parse("0.25")[1]
 
 PASS_TEST:
     ld   a, 4                    ; green: all three checkpoints passed
@@ -154,14 +160,10 @@ SRC_COMBINED_LEN EQU $ - SRC_COMBINED
 DICT_CHAIN_POINT DEFL H_SEMICOLON
     INCLUDE "core/print.asm"
 DICT_CHAIN_POINT DEFL H_DOT
-    INCLUDE "core/float.asm"
-DICT_CHAIN_POINT DEFL H_FMINUS
-    INCLUDE "core/floatmul.asm"
-DICT_CHAIN_POINT DEFL H_FSTAR
-    INCLUDE "core/floatdiv.asm"
+    INCLUDE "core/fpcore.asm"
 DICT_CHAIN_POINT DEFL H_FSLASH
-    INCLUDE "core/floatprint.asm"
-    INCLUDE "core/decimal.asm"
+    INCLUDE "core/fpparse.asm"
+    INCLUDE "core/fpprint.asm"
 
     DS   $4000 - $, $FF
 

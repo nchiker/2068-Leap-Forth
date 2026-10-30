@@ -1,33 +1,26 @@
 ; ============================================================================
 ; rom/forth_smoke_p30.asm — Phase 30 smoke ROM: PI, SIN, COS
 ;
-; SIX CHECKPOINTS, each hand-derived by a bit-exact Python model of the
-; real Z80 algorithm (core/floattrig.asm's own header) before ever
-; assembling anything — not guessed, and not a naive floating-point
-; simulation either: the model reproduces F_ALIGN's own real unsigned-
-; comparison quirk, F+/F-'s own (now-fixed) overflow handling, and
-; F*/F_UDIV32BY16's exact integer arithmetic bit-for-bit, sanity-checked
-; against core/floatprint.asm's own three hand-verified F. examples
-; before being trusted for anything new:
-;   1. PI ( -- f ) pushes exactly (25736,-13).
-;   2. SIN(0.0) = 0.0 exactly (0,0) — the ordinary case.
-;   3. COS(0.0) = 1.0 exactly (16384,-14) — THE important one: COS(x) =
-;      SIN(x+HALF_PI), so COS(0.0) computes 0.0+HALF_PI internally,
-;      putting a genuine EXACT-ZERO operand through F_ALIGN. This only
-;      comes out right BECAUSE of F_ALIGN's own unsigned-comparison
-;      quirk (see core/floattrig.asm's own header and the
-;      2068forth-float-align-signed-cmp-quirk memory note) — a
-;      "corrected" F_ALIGN would silently destroy HALF_PI's own
-;      mantissa here instead. If this checkpoint ever starts failing
-;      after some future F_ALIGN change, that's exactly the regression
-;      to suspect.
-;   4. SIN(HALF_PI exactly, pushed directly as (25736,-14) — NOT a typed
-;      decimal literal, which would round independently and land
-;      slightly off the true boundary) = 1.0 exactly (16384,-14) — the
-;      table's own upper boundary (idx=16 exactly, frac=0).
-;   5. SIN(1.0) printed via F. -> "0.8408 " (7 characters).
-;   6. COS(2.0) printed via F. -> "-0.4156 " (8 characters, exercising
-;      negative-sign printing too).
+; Regenerated for the 5-byte Sinclair float format in step F (docs/V2/
+; FLOAT_SPEC.md section 8.2): every expected row and text is computed
+; with tools/fpforth.py (fsin, fcos, PI, HALF_PI, fdot; each row's
+; comment is the expression). The cold start sets F_PLACES to 4 as the
+; boot ROM does.
+;
+; SIX CHECKPOINTS:
+;   1. PI ( -- f ) pushes the constant PI.
+;   2. SIN(0.0) = 0.0 exactly -- the ordinary case; all 5 bytes are
+;      compared (the canonical zero is exponent byte 0).
+;   3. COS(0.0) = 1.0 exactly -- COS(x) reduces x - k pi and adds
+;      HALF_PI, so this puts a genuine EXACT-ZERO operand through the
+;      argument reduction and the add.
+;   4. SIN(HALF_PI exactly, pushed directly -- NOT a typed decimal
+;      literal, which would round independently and land slightly off
+;      the true boundary) = 1.0 exactly.
+;   5. SIN(1.0) printed via F. -> "0.8415 " (7 characters; the old
+;      3-byte format printed "0.8408 ").
+;   6. COS(2.0) printed via F. -> "-0.4161 " (8 characters, exercising
+;      negative-sign printing too; the old format printed "-0.4156 ").
 ;
 ; Border goes GREEN (4) if all six pass; otherwise it shows the failing
 ; checkpoint's number (1,2,3,5,6 — NOT 4, which is PASS_TEST's own
@@ -67,87 +60,67 @@ COLD_START:
     xor  a
     ld   (STATE), a
 
+    ld   a, 4
+    ld   (F_PLACES), a
+
     call GFX_CLS
 
 ; ---- checkpoint 1: PI ----
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
     call W_PI
-    ld   hl, 25736
-    ld   a, -13
+    ld   hl, C1_X
     call CHECK_FTOP
-    call FPOP
+    call FDROP_T
 
-; ---- checkpoint 2: SIN(0.0) = 0.0 exactly. Checks ONLY the mantissa
-; (not the exponent) -- SIN(0.0)'s own internal arithmetic can
-; legitimately leave a nonzero exponent alongside a zero mantissa
-; (e.g. (0,-16) here), which this project's own convention already
-; treats as an equally-valid representation of exact zero (see
-; core/floatmul.asm's own F_NORMALIZE32 header: "value is exactly
-; zero -- nothing more to do (any exponent is fine for 0)") -- an
-; exact (mantissa, exponent) CHECK_FTOP match would be over-strict and
-; was caught failing this way on the very first real Fuse run, not a
-; genuine SIN bug. ----
+; ---- checkpoint 2: SIN(0.0) = 0.0 exactly (the canonical zero: exponent byte 0, all 5 bytes compared) ----
     ld   a, 2
     ld   (CHECKPOINT_NUM), a
-    ld   hl, 0
-    ld   a, 0
-    call FPUSH
+    ld   hl, C2_A
+    call FPUSH_HL
     call W_SIN
-    ld   a, (iy+0)
-    or   a
-    jp   nz, FAIL_TEST
-    ld   a, (iy+1)
-    or   a
-    jp   nz, FAIL_TEST
-    call FPOP
+    ld   hl, C2_X
+    call CHECK_FTOP
+    call FDROP_T
 
-; ---- checkpoint 3: COS(0.0) = 1.0 exactly -- the F_ALIGN
-; zero-quirk-dependency regression case, see this file's own header ----
+; ---- checkpoint 3: COS(0.0) = 1.0 exactly -- an exact-zero operand through the argument reduction and the add of HALF_PI ----
     ld   a, 3
     ld   (CHECKPOINT_NUM), a
-    ld   hl, 0
-    ld   a, 0
-    call FPUSH
+    ld   hl, C3_A
+    call FPUSH_HL
     call W_COS
-    ld   hl, 16384
-    ld   a, -14
+    ld   hl, C3_X
     call CHECK_FTOP
-    call FPOP
+    call FDROP_T
 
-; ---- checkpoint 4 (border color 6, not 4 -- see this file's own
-; header): SIN(HALF_PI exactly) = 1.0 exactly, the table's own upper
-; boundary ----
+; ---- checkpoint 4 (border color 6, not 4 -- see this file's own header): SIN(HALF_PI exactly) = 1.0 exactly ----
     ld   a, 6
     ld   (CHECKPOINT_NUM), a
-    ld   hl, 25736
-    ld   a, -14
-    call FPUSH
+    ld   hl, C4_A
+    call FPUSH_HL
     call W_SIN
-    ld   hl, 16384
-    ld   a, -14
+    ld   hl, C4_X
     call CHECK_FTOP
-    call FPOP
+    call FDROP_T
 
-; ---- checkpoint 5: SIN(1.0) printed via F. -> "0.8408 " ----
+; ---- checkpoint 5: SIN(1.0) printed via F. -> "0.8415 " (7 chars) ----
     ld   a, 5
     ld   (CHECKPOINT_NUM), a
     xor  a
     ld   (PRINT_ROW), a
     ld   (PRINT_COL), a
-    ld   hl, 16384
-    ld   a, -14
-    call FPUSH
+    ld   hl, C5_A
+    call FPUSH_HL
     call W_SIN
     call W_FDOT
     ld   a, (PRINT_ROW)
     or   a
     jp   nz, FAIL_TEST
     ld   a, (PRINT_COL)
-    cp   7
+    cp   7                       ; len("0.8415") + the trailing space
     jp   nz, FAIL_TEST
 
-; ---- checkpoint 6: COS(2.0) printed via F. -> "-0.4156 ". Printed on
+; ---- checkpoint 6: COS(2.0) printed via F. -> "-0.4161 " (8 chars). Printed on
 ; row 1, not row 0 -- otherwise it would overwrite checkpoint 5's own
 ; printed text at the same screen position, the same class of cursor-
 ; reuse issue Phase 10's own banner-overlap bug hit (harmless for the
@@ -160,38 +133,48 @@ COLD_START:
     ld   (PRINT_ROW), a
     xor  a
     ld   (PRINT_COL), a
-    ld   hl, 16384
-    ld   a, -13
-    call FPUSH
+    ld   hl, C6_A
+    call FPUSH_HL
     call W_COS
     call W_FDOT
     ld   a, (PRINT_ROW)
     cp   1
     jp   nz, FAIL_TEST
     ld   a, (PRINT_COL)
-    cp   8
+    cp   8                       ; len("-0.4161") + the trailing space
     jp   nz, FAIL_TEST
 
     jp   PASS_TEST
 
-; ============================================================================
-; CHECK_FTOP ( HL = expected mantissa, A = expected exponent -- )
-; Identical to rom/forth_smoke_p18.asm/p29.asm's own CHECK_FTOP.
-; ============================================================================
-CHECK_FTOP:
-    push af
-    ld   a, (iy+0)
-    cp   l
+; ---- test-harness-only helpers: NOT dictionary words ----
+CHECK_FTOP:                      ; HL -> 5 expected bytes; float stack NOT popped
+    push iy
+    pop  de
+    ld   b, 5
+.cmp:
+    ld   a, (de)
+    cp   (hl)
     jp   nz, FAIL_TEST
-    ld   a, (iy+1)
-    cp   h
-    jp   nz, FAIL_TEST
-    pop  af
-    ld   l, a
-    ld   a, (iy+2)
-    cp   l
-    jp   nz, FAIL_TEST
+    inc  de
+    inc  hl
+    djnz .cmp
     ret
+
+FDROP_T:                         ; drop the top float cell
+    ld   bc, 5
+    add  iy, bc
+    ret
+
+; ---- 5-byte cells [exponent][sign | m0][m1][m2][m3]; the comment is the fpforth expression (enc = fpmodel.encode; ZERO, HALF_PI, PI are fpforth's)
+C1_X:   DB   $82, $49, $0F, $DA, $A2     ; fpforth: PI
+C2_A:   DB   $00, $00, $00, $00, $00     ; ZERO
+C2_X:   DB   $00, $00, $00, $00, $00     ; fpforth: fsin(ZERO)
+C3_A:   DB   $00, $00, $00, $00, $00     ; ZERO
+C3_X:   DB   $81, $00, $00, $00, $00     ; fpforth: fcos(ZERO)
+C4_A:   DB   $81, $49, $0F, $DA, $A2     ; HALF_PI
+C4_X:   DB   $81, $00, $00, $00, $00     ; fpforth: fsin(HALF_PI)
+C5_A:   DB   $81, $00, $00, $00, $00     ; enc(1.0); fpforth: fdot(fsin(enc(1.0))) = '0.8415'
+C6_A:   DB   $82, $00, $00, $00, $00     ; enc(2.0); fpforth: fdot(fcos(enc(2.0))) = '-0.4161'
 
 PASS_TEST:
     ld   a, 4                    ; green: all six checkpoints passed
@@ -221,16 +204,13 @@ CHECKPOINT_NUM EQU $8800
 DICT_CHAIN_POINT DEFL H_SEMICOLON
     INCLUDE "core/print.asm"
 DICT_CHAIN_POINT DEFL H_DOT
-    INCLUDE "core/float.asm"
-    INCLUDE "core/floatmul.asm"
-DICT_CHAIN_POINT DEFL H_FSTAR
-    INCLUDE "core/floatdiv.asm"
+    INCLUDE "core/fpcore.asm"
 DICT_CHAIN_POINT DEFL H_FSLASH
-    INCLUDE "core/floatprint.asm"
+    INCLUDE "core/fpprint.asm"
 DICT_CHAIN_POINT DEFL H_FDOT
-    INCLUDE "core/floatsqrt.asm"
-DICT_CHAIN_POINT DEFL H_FSQRT
-    INCLUDE "core/floattrig.asm"
+    INCLUDE "core/fpconv.asm"
+DICT_CHAIN_POINT DEFL H_FROUND
+    INCLUDE "core/fpmath.asm"
 
     DS   $4000 - $, $FF
 

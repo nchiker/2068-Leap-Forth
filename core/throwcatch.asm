@@ -80,9 +80,9 @@
 ; every nested call in one step the same way, then resets both stacks
 ; to empty (matching STACK_CHECK's own "don't try to preserve
 ; in-flight state" posture) and jumps to RUNTIME_ERROR_HOOK exactly
-; like a stack-depth violation already does. n itself is discarded —
-; this project has no error-payload reporting yet, the same honestly
-; stated limitation STACK_CHECK's own header already states.
+; like a stack-depth violation already does. n itself is left in THROW_CODE
+; for the hook's message (0 there, from a STACK_CHECK violation, means
+; "STACK?").
 ;
 ; CATCH_MAX_DEPTH OVERFLOW (nesting CATCH deeper than the bound):
 ; graceful, not a crash, matching this project's own GFX_FILL_STACK
@@ -111,6 +111,11 @@ CATCH_DEPTH     EQU $8915        ; 1 byte: 0 = no active CATCH. MUST be
                                   ; core/doloop.asm's LEAVE_DEPTH states
 CATCH_STACK     EQU $8916        ; CATCH_MAX_DEPTH x 6 bytes (SP,IX,IY
                                   ; per frame) = 48 bytes, through $8945
+THROW_CODE      EQU $85D6        ; 2 bytes: the code of an uncaught THROW, for
+                                  ; RUNTIME_ERROR_HOOK's message (FLOAT_SPEC 8.4);
+                                  ; the hook zeroes it, so STACK_CHECK's violation
+                                  ; (which leaves it alone) reads 0: STACK?. In the
+                                  ; free gap $85D6-$879F (FLOAT_SPEC section 9)
 
 ; ============================================================================
 ; JUMP_HL — NOT a dictionary word, shared plumbing local to this file
@@ -184,6 +189,7 @@ W_THROW:
                                 ; points at CATCH's own original return
                                 ; address, see this file's own header
 .uncaught:
+    ld   (THROW_CODE), bc       ; n, for RUNTIME_ERROR_HOOK's message
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
     ld   sp, (THROW_ROOT_SP)    ; core/interp.asm — discards every

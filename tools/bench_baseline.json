@@ -24,21 +24,21 @@
       ]
     },
     "pixel": {
-      "rom_sha256": "d670b4ce93875167eb84d1ebcd1fb711d72cb3c31ac33f220ba5689d9f537223",
-      "tstates_total": 57304991,
-      "tstates_region": 54821539,
-      "frames_in_rom": 785,
+      "rom_sha256": "1c8434bbb63fd1274dc8d2ed039b30c1f0749dea7fac805608f03070148cecf6",
+      "tstates_total": 36584177,
+      "tstates_region": 34104972,
+      "frames_in_rom": 488,
       "result_ok": true,
       "repeats": [
         {
-          "tstates_total": 57304991,
-          "tstates_region": 54821539,
-          "frames_in_rom": 785
+          "tstates_total": 36584177,
+          "tstates_region": 34104972,
+          "frames_in_rom": 488
         },
         {
-          "tstates_total": 57304991,
-          "tstates_region": 54821539,
-          "frames_in_rom": 785
+          "tstates_total": 36584177,
+          "tstates_region": 34104972,
+          "frames_in_rom": 488
         }
       ]
     },
@@ -80,5 +80,8 @@
         }
       ]
     }
-  }
+  },
+  "notes": [
+    "pixel reset 2026-10-29 at step F O10: RND is Leap-C's xorshift (FLOAT_SPEC.md 11.2), so the bench's work and RESULT (302, was 159) changed; the other benches keep the Phase 2 figures"
+  ]
 }

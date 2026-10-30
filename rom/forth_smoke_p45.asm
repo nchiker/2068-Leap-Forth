@@ -244,8 +244,8 @@ SRC_RUN_LEN EQU $ - SRC_RUN
     DEFINE THROW_CATCH_ENABLED
     INCLUDE "core/interp.asm"
 DICT_CHAIN_POINT DEFL H_SEMICOLON
-    INCLUDE "core/float.asm"
-DICT_CHAIN_POINT DEFL H_FMINUS
+    INCLUDE "core/fpcore.asm"
+DICT_CHAIN_POINT DEFL H_FSLASH
     INCLUDE "core/throwcatch.asm"
 
     DS   $4000 - $, $FF

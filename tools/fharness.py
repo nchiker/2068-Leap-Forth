@@ -27,8 +27,9 @@ The API (a library; `python3 -I tools/fharness.py --selftest` is its self-test):
 `build` is a directory that holds forth_boot_rom0.bin (DIR or DIR/build, as tools/tapetol.py), so the images of an
 older build in a git worktree work.  Symbols come from forth_boot.sym and, when the build has it, graphics_exrom.sym.
 
-Ports: base 10900, allowed 10900-10919 (worker k uses base + k); other harnesses own 10760-10899 and 10930-10999.  A
-port outside the range, or one that something already listens on, is refused.  Needs ts2068-debug ($TS2068_DEBUG_DIR,
+Ports: base 10900, allowed 10900-10919 and 10840-10859 (PORT_RANGES; the second is tools/floattest.py's; worker k uses
+base + k, all of a pool's ports in one range); other harnesses own 10760-10839, 10860-10899 and 10930-10999.  A
+port outside the ranges, or one that something already listens on, is refused.  Needs ts2068-debug ($TS2068_DEBUG_DIR,
 default ~/ts2068-debug; the ZRCP client and the process control), ZEsarUX 13.0 ($TS2068_DEBUG_ZESARUX_DIR, default
 ~/Applications/ZEsarUX-13.0) and sjasmplus (the glyph program).  ts2068-debug now acknowledges every segment at once
 and starts ZEsarUX with --emulatorspeed 1000 --frameskip 49 itself; this file does both too (so an older ts2068-debug
@@ -74,6 +75,7 @@ from ts2068_debug.process import ZEsarUXProcess as _ZProcess, terminate_emulator
 FAST_ARGS = [] if os.environ.get("FORTH_REALTIME") else ["--emulatorspeed", "1000", "--frameskip", "49"]
 PORT_LO, PORT_HI = 10900, 10919     # this harness's ports (make test 10760 up, bench 10780, poweron 10820-10839,
                                     # ay_audio 10880-10899, cart_diff 10930-10949, tapetest 10960-10979, tapetol 10980-10999)
+PORT_RANGES = ((10900, 10919), (10840, 10859))  # every range a Machine / run_pool accepts (the second: tools/floattest.py)
 RET_SLOT = 0xFF00                   # return address slot for routine calls (unused by the ROM: the header)
 STOP_ADDR = 0xFF02                  # `jr $` written here; routine calls return to it
 GLYPH_PROG = 0xFF10                 # the glyph rendering program and its code list
@@ -187,9 +189,18 @@ def port_in_use(port):
         return probe.connect_ex(("127.0.0.1", port)) == 0
 
 
+def port_range(lo, hi=None):
+    """The (lo, hi) range of PORT_RANGES that holds lo..hi (hi defaults to lo), else ValueError."""
+    hi = lo if hi is None else hi
+    for r in PORT_RANGES:
+        if r[0] <= lo and hi <= r[1]:
+            return r
+    raise ValueError("ports %d-%d are outside this harness's ranges %s" % (
+        lo, hi, ", ".join("%d-%d" % r for r in PORT_RANGES)))
+
+
 def check_port(port):
-    if not PORT_LO <= port <= PORT_HI:
-        raise ValueError("port %d is outside this harness's range %d-%d" % (port, PORT_LO, PORT_HI))
+    port_range(port)
     if port_in_use(port):
         raise RuntimeError("port %d is in use (an emulator left running?)" % port)
 
@@ -226,8 +237,7 @@ class Machine:
     power_on = None             # f(machine) after reset-cpu, before the boot (a RAM / register pattern)
 
     def __init__(self, build, port, snapdir=None):
-        if not PORT_LO <= port <= PORT_HI:
-            raise ValueError("port %d is outside this harness's range %d-%d" % (port, PORT_LO, PORT_HI))
+        port_range(port)
         self.build = resolve_build(build)
         self.port = port
         syms = [os.path.join(self.build, "forth_boot.sym"), os.path.join(self.build, "graphics_exrom.sym")]
@@ -655,8 +665,7 @@ def run_pool(build, tasks, fn, workers=None, port0=PORT_LO):
     Results come back in task order.  Every emulator is stopped on the way out, SIGTERM and exceptions included."""
     tasks = list(tasks)
     workers = max(1, min(workers or default_workers(), len(tasks) or 1))
-    if not PORT_LO <= port0 or port0 + workers - 1 > PORT_HI:
-        raise ValueError("ports %d-%d are outside this harness's range %d-%d" % (port0, port0 + workers - 1, PORT_LO, PORT_HI))
+    port_range(port0, port0 + workers - 1)
     build = resolve_build(build)
     for k in range(workers):
         check_port(port0 + k)

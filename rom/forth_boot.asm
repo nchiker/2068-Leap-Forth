@@ -14,7 +14,7 @@
 ; turned interrupts on. See rom/forth_smoke_p9.asm's own header for the
 ; full story of what had to be fixed first (a dictionary-chain
 ; structural bug spanning core/control.asm, core/storage.asm, and
-; core/float.asm) and how the real interrupt wiring below was confirmed
+; core/fpcore.asm) and how the real interrupt wiring below was confirmed
 ; against 2068-Leap's own working ROM files, not guessed.
 ;
 ; The full dictionary is assembled here: every word from every phase
@@ -57,7 +57,7 @@
 ; DICT_LATEST_COLD's own LINK chain through the assembled .bin)
 ; rather than incrementing this number by eye — that's exactly the habit
 ; that let it drift, repeatedly.
-; DECIMAL_NUMBER_ENABLED is also DEFINEd here (core/decimal.asm,
+; DECIMAL_NUMBER_ENABLED is also DEFINEd here (core/fpparse.asm,
 ; Phase 23) — not a dictionary word, a NUMBER/INTERPRET_RUN parsing
 ; capability: typing a literal like `3.5` now pushes a real float
 ; directly, in both interpret and compile contexts.
@@ -269,6 +269,8 @@ COLD_CLEAR_END EQU UDG_TABLE + UDG_COUNT * 8
                                    ; live: text appeared black-on-white
                                    ; instead of the intended green-on-
                                    ; black terminal look
+    ld   a, 4
+    ld   (F_PLACES), a            ; core/fpprint.asm: F. prints 4 decimals
     ld   a, 1
     ld   (FWRAP_OLD_COUNT), a ; required once at cold start -- see
                                   ; core/editor.asm's own header on this
@@ -489,19 +491,41 @@ REPORT_INTERP_ERROR:              ; shared tail with RUNTIME_ERROR_HOOK's
 ; ============================================================================
 RUNTIME_ERROR_HOOK:
     call EDIT_ERR_PREFIX          ; core/edit.asm: `LINE n ` while EDIT commits line n
+    ld   hl, (THROW_CODE)         ; core/throwcatch.asm: the code of an uncaught THROW; 0 from STACK_CHECK
+    ld   de, 0
+    ld   (THROW_CODE), de         ; used up
+    ld   a, h
+    or   l
+    ex   de, hl                   ; DE = the code
     ld   hl, RUNTIME_ERROR_MSG
-.msgloop:
+    jr   z, .msg                  ; no THROW: STACK?
+    ld   a, d
+    inc  a
+    jr   nz, .other               ; the table's codes are -1 to -255
+    ld   hl, RUNTIME_ERROR_TABLE
+.find:
     ld   a, (hl)
     or   a
-    jr   z, .msgdone
-    push hl
-    ld   l, a
-    ld   h, 0
-    rst RST_DPUSH
-    call W_EMIT
-    pop  hl
+    jr   z, .other                ; end of the table
     inc  hl
-    jr   .msgloop
+    cp   e
+    jr   z, .msg
+.skip:
+    ld   a, (hl)
+    inc  hl
+    or   a
+    jr   nz, .skip
+    jr   .find
+.other:                           ; ERROR n, n signed
+    ld   hl, RUNTIME_ERROR_PFX
+    push de
+    call FORGET_PRINT_MSG
+    pop  hl
+    rst  RST_DPUSH
+    call W_DOT
+    jr   .msgdone
+.msg:
+    call FORGET_PRINT_MSG
 .msgdone:
     ld   hl, 13
     rst RST_DPUSH
@@ -513,6 +537,19 @@ RUNTIME_ERROR_HOOK:
     jr   REPORT_INTERP_ERROR
 
 RUNTIME_ERROR_MSG: DB "STACK?", 0
+RUNTIME_ERROR_PFX: DB "ERROR ", 0
+
+; The messages of an uncaught THROW (docs/V2/FLOAT_SPEC.md section 8.4): the low byte of the code (all are -1 to -255),
+; then the text, NUL-ended; a 0 byte ends the table.
+RUNTIME_ERROR_TABLE:
+    DB   -8, "DICTIONARY FULL", 0
+    DB   -13, "UNDEFINED WORD", 0
+    DB   -28, "BREAK", 0
+    DB   -37, "TAPE ERROR", 0
+    DB   -42, "DIVISION BY ZERO", 0
+    DB   -43, "OUT OF RANGE", 0
+    DB   -46, "INVALID ARGUMENT", 0
+    DB   0
 
 ; ---- kernel + dictionary: included here, after the vector table and
 ; the boot code above, not before ORG $0000. DICT_CHAIN_POINT splices
@@ -521,8 +558,16 @@ RUNTIME_ERROR_MSG: DB "STACK?", 0
     INCLUDE "kernel/math/math.asm"
     INCLUDE "kernel/io/io.asm"
     INCLUDE "kernel/interrupt/interrupt.asm"
+    DEFINE FONT_PLACED_LATER               ; the font goes after kernel/storage, below
     INCLUDE "kernel/graphics/graphics.asm"
     INCLUDE "kernel/storage/storage.asm"
+    ; ZEsarUX's tape autoload (on by default when a real tape is inserted) types J "" ENTER into the machine as soon as
+    ; the PC equals $11F8 with the HOME ROM paged in (the stock TS2068 ROM's key wait; ZEsarUX storage/tape.c,
+    ; MACHINE_ID_TIMEX_TS2068). Any instruction of this ROM starting there would trigger it, e.g. during LOAD-TEXT, and
+    ; the keys arrive at the console as a line `""` (found by make tapetest in step F). The font is data, never
+    ; executed: placed here it covers $11F8 whatever the code around it does.
+    INCLUDE "kernel/graphics/font.asm"
+    ASSERT FONT_TABLE <= $11F8 && FONT_TABLE_END > $11F8   ; move the font if this fails (data must cover $11F8)
     INCLUDE "kernel/bank/bank.asm"
     INCLUDE "core/dict.asm"
     DEFINE DECIMAL_NUMBER_ENABLED
@@ -543,22 +588,16 @@ DICT_CHAIN_POINT DEFL H_SEMICOLON
 DICT_CHAIN_POINT DEFL H_CLS
     INCLUDE "core/storage.asm"
 DICT_CHAIN_POINT DEFL H_LOADLIB
-    INCLUDE "core/float.asm"
-DICT_CHAIN_POINT DEFL H_FMINUS
-    INCLUDE "core/floatmul.asm"
-DICT_CHAIN_POINT DEFL H_FSTAR
-    INCLUDE "core/floatdiv.asm"
+    INCLUDE "core/fpcore.asm"
 DICT_CHAIN_POINT DEFL H_FSLASH
-    INCLUDE "core/decimal.asm"
+    INCLUDE "core/fpparse.asm"
     INCLUDE "core/print.asm"
 DICT_CHAIN_POINT DEFL H_DOT
-    INCLUDE "core/floatprint.asm"
-DICT_CHAIN_POINT DEFL H_FDOT
-    INCLUDE "core/floatsqrt.asm"
-DICT_CHAIN_POINT DEFL H_FSQRT
-    INCLUDE "core/floatconv.asm"
-DICT_CHAIN_POINT DEFL H_FROUND
-    INCLUDE "core/floattrig.asm"
+    INCLUDE "core/fpprint.asm"
+DICT_CHAIN_POINT DEFL H_FSDOT
+    INCLUDE "core/fpconv.asm"
+DICT_CHAIN_POINT DEFL H_FLOOR
+    INCLUDE "core/fpmath.asm"
 DICT_CHAIN_POINT DEFL H_DEG
     INCLUDE "core/beep.asm"
 DICT_CHAIN_POINT DEFL H_BEEP
@@ -570,6 +609,8 @@ DICT_CHAIN_POINT DEFL H_ENVELOPE
 DICT_CHAIN_POINT DEFL H_GREATER
     INCLUDE "core/variable.asm"
 DICT_CHAIN_POINT DEFL H_CONSTANT
+    INCLUDE "core/fpstack.asm"
+DICT_CHAIN_POINT DEFL H_FCONSTANT
     INCLUDE "core/dotquote.asm"
 DICT_CHAIN_POINT DEFL H_DOTQUOTE
     INCLUDE "core/loop.asm"

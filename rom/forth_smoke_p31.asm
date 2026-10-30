@@ -11,6 +11,9 @@
 ;   3. out of range (`70 BEEP`, `-61 BEEP` with 0.5 s): no sound, no wait, R0/R1 untouched;
 ;   4. R7's other bits and channels B and C (R2-R5, R9, R10) survive a BEEP;
 ;   5. interrupts are on after a BEEP called with them off, and the data and float stacks are balanced.
+; Regenerated for the 5-byte Sinclair float format in step F (docs/V2/FLOAT_SPEC.md section 12): the durations are
+; 5-byte cells (enc = fpmodel.encode) and the expected frames are tools/fpforth.py's beep_frames, which equal the
+; frame counts of the 3-byte version.
 ; Border GREEN (4) = pass, otherwise the failing checkpoint's colour: 1, 2, 3 for checkpoints 1-3, 5 for checkpoint 4
 ; and 6 for checkpoint 5 (never 4: that is the pass colour).
 ; ============================================================================
@@ -53,9 +56,8 @@ COLD_START:
     push hl
     push de
     rst RST_DPUSH
-    ld   hl, DUR_ONE_FRAME_M
-    ld   a, DUR_ONE_FRAME_E
-    call FPUSH
+    ld   hl, DUR_ONE_FRAME
+    call FPUSH_HL
     call W_BEEP
     ld   b, 0
     call AY_READ                  ; A = R0
@@ -108,27 +110,15 @@ COLD_START:
     ld   (CHECKPOINT_NUM), a
     ld   hl, DUR_TABLE
 .dur:
-    ld   c, (hl)
-    inc  hl
-    ld   b, (hl)
-    inc  hl
-    ld   a, (hl)
-    inc  hl
-    ld   e, (hl)                  ; E = expected frames (low byte; all under 256)
-    inc  hl
-    push hl
-    push de
-    ld   l, c
-    ld   h, b                     ; HL = mantissa
-    ld   d, a                     ; D = exponent
-    push hl
-    push de
+    push hl                       ; this row
     ld   hl, 0
     rst RST_DPUSH                ; n = 0, middle C
-    pop  de
     pop  hl
-    ld   a, d
-    call FPUSH
+    call FPUSH_HL                ; the duration; HL -> its expected frames
+    ld   e, (hl)                  ; E = expected frames (all under 256)
+    inc  hl
+    push hl                       ; the next row
+    push de
     call INT_GET_FRAMES
     push hl
     call W_BEEP
@@ -179,9 +169,8 @@ COLD_START:
     push de
     ld   hl, 0
     rst RST_DPUSH
-    ld   hl, DUR_ONE_FRAME_M
-    ld   a, DUR_ONE_FRAME_E
-    call FPUSH
+    ld   hl, DUR_ONE_FRAME
+    call FPUSH_HL
     call W_BEEP
     pop  de
     dec  de
@@ -221,9 +210,8 @@ COLD_START:
     ld   (SAVE_IY), iy
     ld   hl, 0
     rst RST_DPUSH
-    ld   hl, DUR_ONE_FRAME_M
-    ld   a, DUR_ONE_FRAME_E
-    call FPUSH
+    ld   hl, DUR_ONE_FRAME
+    call FPUSH_HL
     di
     call W_BEEP
     ld   a, i                     ; P/V = IFF2
@@ -275,9 +263,8 @@ OOR_CASE:
     call AY_WRITE_C
     pop  hl
     rst RST_DPUSH
-    ld   hl, DUR_HALF_M
-    ld   a, DUR_HALF_E
-    call FPUSH
+    ld   hl, DUR_HALF
+    call FPUSH_HL
     call INT_GET_FRAMES
     push hl
     call W_BEEP
@@ -308,33 +295,21 @@ CHECKPOINT_NUM EQU $8800
 SAVE_IX EQU $8802
 SAVE_IY EQU $8804
 
-DUR_ONE_FRAME_M EQU 20972
-DUR_ONE_FRAME_E EQU -20     ; 0.02 s = 1.2 frames -> 1
-
-DUR_HALF_M EQU 16384
-DUR_HALF_E EQU -15
-
-; mantissa (DW), exponent (DB), expected frames (DB); $FF ends
+; 5-byte duration cell (seconds), expected frames (DB); a $FF exponent byte ends. Frames: fpforth.beep_frames(enc(seconds))
 DUR_TABLE:
-    DW   16384
-    DB   -15, 30     ; 0.5 s -> 30 frames
-    DW   26214
-    DB   -18, 6     ; 0.1 s -> 6 frames
-    DW   17476
-    DB   -20, 1     ; 0.016666666666666666 s -> 1 frames
-    DW   0
-    DB   0, 0     ; 0.0 s -> 0 frames
-    DW   16777
-    DB   -24, 0     ; 0.001 s -> 0 frames
-    DW   -16384
-    DB   -15, 0     ; -0.5 s -> 0 frames
-    DW   16777
-    DB   -21, 0     ; 0.008 s -> 0 frames
-    DW   18874
-    DB   -21, 1     ; 0.009 s -> 1 frames
-    DW   16384
-    DB   -13, 120     ; 2.0 s -> 120 frames
+    DB   $80, $00, $00, $00, $00, 30  ; 0.5 s: beep_frames(enc(0.5)) -> 30 frames
+    DB   $7D, $4C, $CC, $CC, $CD, 6  ; 0.1 s: beep_frames(enc(0.1)) -> 6 frames
+    DB   $7B, $08, $88, $88, $89, 1  ; 1/60 s: beep_frames(enc(1/60)) -> 1 frames
+    DB   $00, $00, $00, $00, $00, 0  ; 0.0 s: beep_frames(enc(0.0)) -> 0 frames
+    DB   $77, $03, $12, $6E, $98, 0  ; 0.001 s: beep_frames(enc(0.001)) -> 0 frames
+    DB   $80, $80, $00, $00, $00, 0  ; -0.5 s: beep_frames(enc(-0.5)) -> 0 frames
+    DB   $7A, $03, $12, $6E, $98, 0  ; 0.008 s: beep_frames(enc(0.008)) -> 0 frames
+    DB   $7A, $13, $74, $BC, $6A, 1  ; 0.009 s: beep_frames(enc(0.009)) -> 1 frames
+    DB   $82, $00, $00, $00, $00, 120  ; 2.0 s: beep_frames(enc(2.0)) -> 120 frames
     DB   $FF
+
+DUR_ONE_FRAME: DB   $7B, $23, $D7, $0A, $3D   ; enc(0.02): 0.02 s = 1.2 frames -> 1 (beep_frames = 1)
+DUR_HALF:      DB   $80, $00, $00, $00, $00   ; enc(0.5)
 
 ; R7 values before the call; B_C_REGS = (register, value) for R2-R5, R9, R10
 MIXER_CASES: DB $FF, $00, $41, $FE, $FF
@@ -366,13 +341,8 @@ IDEAL_TABLE:
 DICT_CHAIN_POINT DEFL H_SEMICOLON
     INCLUDE "core/print.asm"
 DICT_CHAIN_POINT DEFL H_DOT
-    INCLUDE "core/float.asm"
-    INCLUDE "core/floatmul.asm"
-DICT_CHAIN_POINT DEFL H_FSTAR
-    INCLUDE "core/floatdiv.asm"
+    INCLUDE "core/fpcore.asm"
 DICT_CHAIN_POINT DEFL H_FSLASH
-    INCLUDE "core/floatprint.asm"
-DICT_CHAIN_POINT DEFL H_FDOT
     INCLUDE "core/beep.asm"
 
     DS   $4000 - $, $FF

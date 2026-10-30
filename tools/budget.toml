@@ -24,31 +24,31 @@ pad = 0xFF
 [[image]]
 file   = "forth_boot_rom0.bin"
 title  = "HOME ROM (Forth)"
-floor  = 1629
+floor  = 816
 target = 200
 
 [[image]]
 file   = "forth_boot_cart.bin"
 title  = "HOME, DOCK cartridge build (Forth)"
-floor  = 1629
+floor  = 816
 target = 200
 
 [[image]]
 file   = "forth_demo_blackjack_rom0.bin"
 title  = "HOME ROM (Blackjack demo)"
-floor  = 1096
+floor  = 876
 target = 200
 
 [[image]]
 file   = "forth_demo_blackjack_cart.bin"
 title  = "HOME, DOCK cartridge build (Blackjack demo)"
-floor  = 1096
+floor  = 876
 target = 200
 
 [[image]]
 file   = "forth_demo_gallery_rom0.bin"
 title  = "HOME ROM (Shooting Gallery demo)"
-floor  = 1021
+floor  = 805
 target = 200
 
 [[image]]
@@ -89,3 +89,16 @@ target = 150
 #     raised), step M6: Mode 6 removed (kernel/mode64 394, 64COL/32COL/PALETTE64/PLOT64 60, the editor's 64-column
 #     branches 63, EMIT's 70; the EXROM's 32COL FIRST refusal 23); docs/V2/MODE6_REMOVAL_SPEC.md, the audit's section 9
 #     row "M6".
+#   forth_boot_rom0.bin and forth_boot_cart.bin: 1629 -> 1738 (+109 B, raised), forth_demo_blackjack_*: 1096 -> 1201
+#     (+105 B, raised: its test seed text is 4 B longer), forth_demo_gallery_rom0.bin: 1021 -> 1130 (+109 B, raised),
+#     step F item O10: kernel/math's multiply and divide on Leap-C's register-only routines (-92 B), RND on Leap-C's
+#     xorshift with a multiply for the range (-17 B); docs/V2/FLOAT_SPEC.md section 11, the audit's section 9 row "F O10".
+#   forth_boot_rom0.bin and forth_boot_cart.bin: 1738 -> 1495 (-243 B), forth_demo_blackjack_*: 1201 -> 821 (-380 B),
+#     forth_demo_gallery_rom0.bin: 1130 -> 750 (-380 B), step F item 4: the 5-byte float engine (core/fpcore, fpparse,
+#     fpprint, fpconv, fpmath) for today's 14 float words, BEEP's float part, the shared number parser; the demos carry
+#     the engine and the parser for their BEEP literals; docs/V2/FLOAT_SPEC.md, the audit's section 9 row "F item 4".
+#   forth_boot_rom0.bin and forth_boot_cart.bin: 1495 -> 816 (-679 B), forth_demo_blackjack_*: 821 -> 876 (+55 B, raised),
+#     forth_demo_gallery_rom0.bin: 750 -> 805 (+55 B, raised), step F item 5: 22 float words (core/fpstack.asm, FLOOR,
+#     TAN, PLACES, FS.), the uncaught-THROW messages; VARIABLE/CONSTANT/FVARIABLE/FCONSTANT share one header builder
+#     (-56 B, also in the demos). The owner kept the transcendentals in HOME at 816 B free (2026-10-29); the audit's
+#     section 9 row "F item 5".

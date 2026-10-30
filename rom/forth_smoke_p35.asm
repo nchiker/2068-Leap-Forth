@@ -1,25 +1,20 @@
 ; ============================================================================
 ; rom/forth_smoke_p35.asm — Phase 35 smoke ROM: FROUND
 ;
-; SIX CHECKPOINTS, the same hand-verified (Python-simulated first)
-; cases core/floatconv.asm's own header derives:
-;   1. FROUND(sqrt(2)~1.41421 = (23170,-14)) then F>S = 1 -- the
-;      fraction (.41) is below .5, floors as before; FROUND and plain
-;      F>S agree here.
-;   2. FROUND(0.5 = (16384,-15)) then F>S = 1 -- a positive tie rounds
-;      away from zero under round-half-up.
-;   3. FROUND(-0.5 = (-16384,-15)) then F>S = 0, NOT -1 -- the
-;      round-half-up rule made concrete: a negative tie rounds TOWARD
-;      zero (both "up," i.e. toward positive infinity) -- genuinely
-;      different from plain F>S's own -1 on this exact input (see
-;      rom/forth_smoke_p34.asm's own checkpoint 4).
-;   4. FROUND(2.5 = (20480,-13)) then F>S = 3 -- same rule at a larger
-;      magnitude.
-;   5. FROUND(-2.5 = (-20480,-13)) then F>S = -2, not -3.
-;   6. FROUND(-4.0 = (-16384,-12)) then F>S = -4 -- a whole number
-;      passes through unchanged, exponent >= 0 branch confirmed too by
-;      round-tripping a value whose OWN exponent is already 0 after
-;      checkpoint 1-5's own FROUND calls each leave it there.
+; Regenerated for the 5-byte Sinclair float format in step F (docs/V2/
+; FLOAT_SPEC.md section 8.1: FROUND is the nearest integral value, ties
+; away from 0). The expected integers are tools/fpforth.py's
+; ftos(fround(x)), each in a comment next to its input cell.
+;
+; SIX CHECKPOINTS:
+;   1. FROUND(1.41418) then F>S = 1 -- the fraction (.41) is below .5.
+;   2. FROUND(0.5) then F>S = 1 -- a positive tie rounds away from zero.
+;   3. FROUND(-0.5) then F>S = -1 -- a negative tie rounds away from
+;      zero too (the 3-byte format's round-half-up gave 0).
+;   4. FROUND(2.5) then F>S = 3 -- same rule at a larger magnitude.
+;   5. FROUND(-2.5) then F>S = -3 (the 3-byte format gave -2).
+;   6. FROUND(-4.0) then F>S = -4 -- a whole number passes through
+;      unchanged.
 ;
 ; Border goes GREEN (4) if all six pass; otherwise it shows the
 ; failing checkpoint's number.
@@ -59,70 +54,64 @@ COLD_START:
 
     call GFX_CLS
 
-; ---- checkpoint 1: FROUND(sqrt(2)) then F>S = 1 ----
+; ---- checkpoint 1: FROUND(1.41418) then F>S = 1 -- the fraction (.41) is below .5 ----
     ld   a, 1
     ld   (CHECKPOINT_NUM), a
-    ld   hl, 23170
-    ld   a, -14
-    call FPUSH
+    ld   hl, C1_A
+    call FPUSH_HL
     call W_FROUND
     call W_FTOS
-    ld   de, 1
+    ld   de, 1                   ; fpforth: ftos(fround(enc(23170/16384))) = 1
     call CHECK_ITOP
 
-; ---- checkpoint 2: FROUND(0.5) then F>S = 1 ----
+; ---- checkpoint 2: FROUND(0.5) then F>S = 1 -- a tie rounds away from zero ----
     ld   a, 2
     ld   (CHECKPOINT_NUM), a
-    ld   hl, 16384
-    ld   a, -15
-    call FPUSH
+    ld   hl, C2_A
+    call FPUSH_HL
     call W_FROUND
     call W_FTOS
-    ld   de, 1
+    ld   de, 1                   ; fpforth: ftos(fround(enc(0.5))) = 1
     call CHECK_ITOP
 
-; ---- checkpoint 3: FROUND(-0.5) then F>S = 0, NOT -1 ----
+; ---- checkpoint 3: FROUND(-0.5) then F>S = -1 -- a negative tie also rounds away from zero (the 3-byte format gave 0) ----
     ld   a, 3
     ld   (CHECKPOINT_NUM), a
-    ld   hl, -16384
-    ld   a, -15
-    call FPUSH
+    ld   hl, C3_A
+    call FPUSH_HL
     call W_FROUND
     call W_FTOS
-    ld   de, 0
+    ld   de, -1                   ; fpforth: ftos(fround(enc(-0.5))) = 65535
     call CHECK_ITOP
 
-; ---- checkpoint 4: FROUND(2.5) then F>S = 3 ----
+; ---- checkpoint 4: FROUND(2.5) then F>S = 3 -- same rule at a larger magnitude ----
     ld   a, 4
     ld   (CHECKPOINT_NUM), a
-    ld   hl, 20480
-    ld   a, -13
-    call FPUSH
+    ld   hl, C4_A
+    call FPUSH_HL
     call W_FROUND
     call W_FTOS
-    ld   de, 3
+    ld   de, 3                   ; fpforth: ftos(fround(enc(2.5))) = 3
     call CHECK_ITOP
 
-; ---- checkpoint 5: FROUND(-2.5) then F>S = -2, not -3 ----
+; ---- checkpoint 5: FROUND(-2.5) then F>S = -3 (the 3-byte format gave -2) ----
     ld   a, 5
     ld   (CHECKPOINT_NUM), a
-    ld   hl, -20480
-    ld   a, -13
-    call FPUSH
+    ld   hl, C5_A
+    call FPUSH_HL
     call W_FROUND
     call W_FTOS
-    ld   de, -2
+    ld   de, -3                   ; fpforth: ftos(fround(enc(-2.5))) = 65533
     call CHECK_ITOP
 
-; ---- checkpoint 6: FROUND(-4.0) then F>S = -4 -- whole number ----
+; ---- checkpoint 6: FROUND(-4.0) then F>S = -4 -- a whole number ----
     ld   a, 6
     ld   (CHECKPOINT_NUM), a
-    ld   hl, -16384
-    ld   a, -12
-    call FPUSH
+    ld   hl, C6_A
+    call FPUSH_HL
     call W_FROUND
     call W_FTOS
-    ld   de, -4
+    ld   de, -4                   ; fpforth: ftos(fround(enc(-4.0))) = 65532
     call CHECK_ITOP
 
     jp   PASS_TEST
@@ -143,6 +132,13 @@ CHECK_ITOP:
     jp   nz, FAIL_TEST
     ret
 
+; ---- 5-byte cells [exponent][sign | m0][m1][m2][m3]; the comment is the fpforth expression (enc = fpmodel.encode)
+C1_A:   DB   $81, $35, $04, $00, $00     ; enc(23170/16384)
+C2_A:   DB   $80, $00, $00, $00, $00     ; enc(0.5)
+C3_A:   DB   $80, $80, $00, $00, $00     ; enc(-0.5)
+C4_A:   DB   $82, $20, $00, $00, $00     ; enc(2.5)
+C5_A:   DB   $82, $A0, $00, $00, $00     ; enc(-2.5)
+C6_A:   DB   $83, $80, $00, $00, $00     ; enc(-4.0)
 PASS_TEST:
     ld   a, 4                    ; green: all six checkpoints passed
     out  (PORT_ULA), a
@@ -169,9 +165,9 @@ CHECKPOINT_NUM EQU $8800
     INCLUDE "core/dict.asm"
     INCLUDE "core/interp.asm"
 DICT_CHAIN_POINT DEFL H_SEMICOLON
-    INCLUDE "core/float.asm"
-DICT_CHAIN_POINT DEFL H_FMINUS
-    INCLUDE "core/floatconv.asm"
+    INCLUDE "core/fpcore.asm"
+DICT_CHAIN_POINT DEFL H_FSLASH
+    INCLUDE "core/fpconv.asm"
 
     DS   $4000 - $, $FF
 

@@ -16,10 +16,13 @@
 ;      resets to DSTACK_TOP.
 ;   3. Data-stack OVERFLOW: IX pushed one cell past DSTACK_LIMIT going
 ;      the other way -- hook fires, IX resets to DSTACK_TOP.
-;   4. Float-stack UNDERFLOW: IY pushed one cell (3 bytes) past
+;   4. Float-stack UNDERFLOW: IY pushed one cell (5 bytes) past
 ;      FSTACK_TOP -- hook fires, IY resets to FSTACK_TOP.
 ;   5. Float-stack OVERFLOW: IY pushed one cell past FSTACK_LIMIT --
 ;      hook fires, IY resets to FSTACK_TOP.
+;
+; Regenerated for the 5-byte Sinclair float format in step F (docs/V2/FLOAT_SPEC.md): a float cell is 5 bytes
+; and FSTACK_LIMIT is $8C04 (core/fpcore.asm), so the simulated float push or pop is five inc/dec iy.
 ;
 ; Border goes GREEN (4) if all five pass; otherwise it shows the
 ; failing checkpoint's number.
@@ -114,7 +117,9 @@ COLD_START:
     ld   iy, FSTACK_TOP
     inc  iy
     inc  iy
-    inc  iy                  ; simulate an underflowing FPOP
+    inc  iy
+    inc  iy
+    inc  iy                  ; simulate an underflowing FPOP (one 5-byte cell)
     call TEST_CALL_STACK_CHECK
     ld   hl, (HOOK_CALLED_COUNT)
     ld   de, 3
@@ -130,7 +135,9 @@ COLD_START:
     ld   iy, FSTACK_LIMIT
     dec  iy
     dec  iy
-    dec  iy                  ; simulate an over-pushed float stack
+    dec  iy
+    dec  iy
+    dec  iy                  ; simulate an over-pushed float stack (one 5-byte cell)
     call TEST_CALL_STACK_CHECK
     ld   hl, (HOOK_CALLED_COUNT)
     ld   de, 4
@@ -209,7 +216,7 @@ CHECKPOINT_NUM     EQU $8800
 HOOK_CALLED_COUNT  EQU $8802     ; 2 bytes
 
 ; ---- dictionary: included here, after the vector table and the
-; self-test code above, not before ORG $0000. core/float.asm is
+; self-test code above, not before ORG $0000. core/fpcore.asm is
 ; REQUIRED before core/interp.asm when RUNTIME_ERROR_CHECK_ENABLED is
 ; defined -- see core/interp.asm's own STACK_CHECK header. ----
     INCLUDE "kernel/math/math.asm"
@@ -218,7 +225,7 @@ HOOK_CALLED_COUNT  EQU $8802     ; 2 bytes
     DEFINE RUNTIME_ERROR_CHECK_ENABLED
     INCLUDE "core/interp.asm"
 DICT_CHAIN_POINT DEFL H_SEMICOLON
-    INCLUDE "core/float.asm"
+    INCLUDE "core/fpcore.asm"
 
     DS   $4000 - $, $FF
 

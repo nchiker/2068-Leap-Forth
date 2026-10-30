@@ -182,7 +182,7 @@ own, no longer as the ceiling minus 8 KB. Every place that starts a definition o
 behind `:`, `CREATE`, `VARIABLE`, `CONSTANT`, `STRING`, `ARRAY`), `ALLOT`, `,` and `C,` refuses with THROW -8 when
 `HERE` would pass `DICT_RAM_CEILING` - 256; the 256-byte guard covers a definition's body compiled before its `;`.
 The code picks the fewest central points that cover these; the oracle (N5) checks the result. An uncaught THROW
-prints the console's error text (today `STACK?` for every code), so N5 observes -8 through `CATCH` where it can
+prints the console's error text (today `STACK?` for every code; *since step F an uncaught THROW prints a message for each code the ROM raises itself, `ERROR n` for any other, and `STACK?` only for a stack check*, `FLOAT_SPEC.md` section 8.4), so N5 observes -8 through `CATCH` where it can
 (`ALLOT`, `,`, `C,`) and, for the defining words, by the error, `HERE` staying below the guard and the store's bytes. In-place LIB images
 (STORAGE_SPEC D4) are bounded by the same ceiling.
 
@@ -496,7 +496,7 @@ in `docs/V2/evidence/`.
 | 8 | `wrap-model` | screen equals the `WRAP_CALC` model, 32 and 64 columns | same model (step M6: the 64-column part is removed) |
 | 9 | `wrap-grow-shrink` | grows upward 1-4 rows, clears on shrink | same |
 | 10 | `wrap-scroll` | output scrolls up; **64-column hang** at `pr22-64` | scrolls; **no hang** (E10) (step M6: the 64-column part is removed) |
-| 11 | `enter-interprets` | `3 OK`; `FOO ?`; `STACK?` | same |
+| 11 | `enter-interprets` | `3 OK`; `FOO ?`; `STACK?` | same (note: `STACK?` here is the stack check, which still prints it; since step F an uncaught THROW prints a message such as `OUT OF RANGE` or `ERROR n`, `FLOAT_SPEC.md` section 8.4) |
 | 12 | `workspace-append` | space-separated; overruns past `$F000` | **CR-ended lines; a full store refuses** (E1, E5) |
 | 13 | `recall` | `n RECALL` edits a copy; both copies kept | **replaced by `EDIT`** cases (E6) |
 | 14 | `console-64col` | wraps at 64; refused at the 106th character | wraps at 64; **refused only when 4 rows of 64 are full** (E10) (step M6: now checks that `64COL` is an unknown word and prints `64COL ?`) |

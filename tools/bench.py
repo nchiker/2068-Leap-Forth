@@ -66,8 +66,9 @@ BENCHES = ("sieve", "pixel", "float", "string")
 # (N, RESULT) printed by the ROM, from ~/2068-rom-benchmarks/benchmarks/forth/*.fs headers.
 EXPECTED = {
     "sieve": ("10", "551"),      # pi(4003)-1
-    "pixel": ("3000", "159"),    # seeded by `26725 RANDOMIZE` (was `0 RANDOMIZE`: see rom/bench/bench_pixel.asm)
-    "float": ("300", "-0.6523"),
+    "pixel": ("3000", "302"),    # seeded by `26725 RANDOMIZE` (rom/bench/bench_pixel.asm); 302 since step F's RND (Leap-C's
+                                 # xorshift, FLOAT_SPEC.md 11.2), 159 with the earlier LFSR
+    "float": ("300", "-0.1453"),  # the exact sum is -0.1453125; -0.6523 was the 3-byte format's error (FLOAT_SPEC.md F10)
     "string": ("400", "15"),
 }
 SYM_DONE = "COLD_START.hang"

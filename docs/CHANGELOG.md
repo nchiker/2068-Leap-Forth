@@ -976,3 +976,45 @@ this is the condensed one-paragraph-per-phase version.
   13-17, and the `EDIT` refusal table and Appendix A lose their
   64-column rows; `forth_tutorial.docx` is regenerated. Checked under
   ZEsarUX, Fuse and TSRun only; no hardware.
+- V2 step F (the float rebuild, with O10 and T13; `docs/V2/FLOAT_SPEC.md`,
+  decided by the owner 2026-10-29): the 3-byte float cell (about 4.5
+  digits, truncating, no error on overflow, a table-driven `SIN`/`COS`
+  good to about 1e-3) is replaced by the 5-byte Sinclair float: about 9.6
+  digits, magnitudes from about 2.9e-39 to about 1.7e38, every result
+  rounded to nearest. The engine is 2068-Leap-C's `fpcore`, rebuilt for
+  Forth's float stack (`core/fpcore.asm`, `fpparse.asm`, `fpprint.asm`,
+  `fpconv.asm`, `fpmath.asm`, `fpstack.asm`) with register-only multiply
+  and divide kernels, bit-exact with Leap-C's Python model; the old
+  `core/float*.asm` and `core/decimal.asm` are gone. The float stack is
+  204 cells. Overflow, division by zero and invalid arguments are errors:
+  `THROW -43`, `-42`, `-46`. Number literals are read by one parser:
+  `3.5`, `.5`, `3.`, `1E3`, `2.5e-4` and `-1.5E+3` are floats; an integer
+  outside -32768..65535 is `OUT OF RANGE` instead of wrapping. `F.` prints
+  `PLACES` decimals (4 at start, `PLACES ( n -- )` sets 0-9) with exact
+  half-up rounding and no `-` on an all-zero result; the new `FS.` prints
+  `d.ddddEn`. `F>S` truncates toward 0 (it floored) and errors outside
+  -32768..65535; `FROUND` rounds ties away from 0 (it rounded them up);
+  `FLOOR` is new. `FSQRT` of a negative number is `INVALID ARGUMENT`;
+  `SIN` and `COS` (radians) are accurate to about 1e-9 for angles up to
+  about ±102,940 (beyond that `OUT OF RANGE`); `TAN`, `PI`, `RAD` and
+  `DEG` complete the set. New words: `FDUP FDROP FSWAP FOVER FDEPTH
+  FNEGATE FABS F< F> F= F0< F0= FMIN FMAX F@ F! FVARIABLE FCONSTANT
+  TAN FLOOR PLACES FS.`. An uncaught `THROW` now prints a message for the
+  ROM's own codes (`DICTIONARY FULL` -8, `UNDEFINED WORD` -13, `BREAK`
+  -28, `TAPE ERROR` -37, `DIVISION BY ZERO` -42, `OUT OF RANGE` -43,
+  `INVALID ARGUMENT` -46) and `ERROR n` for any other; a stack under- or
+  overflow still prints `STACK?`. O10: integer `*`, `/` and `MOD` run on
+  Leap-C's register-only routines (same results, faster), and `RND` uses
+  its xorshift generator with the range taken by a multiply, so `n RND`
+  has no modulo bias; every `RND` sequence changed (the Blackjack test
+  seed, `bench_pixel`'s expected result). T13: `tools/fpmodel.py` (vendored
+  unchanged) and `tools/fpforth.py` model the words step for step, and
+  `make floattest` (`tools/floattest.py`) checks the ROM against them in
+  an emulator. The font moved to `kernel/graphics/font.asm`, placed over
+  `$11F8` so ZEsarUX's tape autoload cannot fire inside the ROM. Measured:
+  HOME free space 1,629 bytes before the step, 816 after the new words
+  (the float engine and its messages cost more than the old code, the
+  integer routines saved some); the demo ROMs grew by 55 bytes in the
+  last commit. Tutorial section 4 and section 13 are rewritten for the new
+  behaviour, `docs/numeric_model.md` describes the float word set, and
+  `forth_tutorial.docx` is regenerated. Emulators only; no hardware.

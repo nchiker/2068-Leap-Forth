@@ -88,7 +88,7 @@ ALL_IMAGES := build/forth_rom0.bin $(SMOKE_BINS) $(VISUAL_BINS) $(TEST_BINS) \
               build/forth_demo_gallery_rom0.bin build/graphics_exrom.bin \
               build/forth_boot.dck build/forth_demo_blackjack.dck
 
-.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron audio cartdiff tapetest tapetol tapetol-fuse fusesave fusesave-cross harness edtest \
+.PHONY: all product cart docs dist check clean test roms-for-test repro bench poweron audio cartdiff tapetest tapetol tapetol-fuse fusesave fusesave-cross harness edtest floattest \
         bench-roms $(ALIASES)
 
 all: $(ALL_IMAGES)
@@ -306,6 +306,15 @@ harness: build/forth_boot_rom0.bin build/graphics_exrom.bin
 # old console and step E's N1-N13, docs/V2/EDITOR_SPEC.md section 8).
 edtest: build/forth_boot_rom0.bin build/graphics_exrom.bin
 	python3 -I tools/edtest.py --build $(or $(EDTEST_BUILD),build) --group $(or $(EDTEST_GROUP),both)
+
+# Float oracle (audit T13, docs/V2/FLOAT_SPEC.md section 13, tools/floattest.py's header): the ROM's float words, number
+# parsing, F. and FS., errors and messages, integer * / MOD, RND and BEEP's frames checked against the bit-exact model
+# (tools/fpforth.py on tools/fpmodel.py), and the speed table (T-states per word). Parallel emulators, ports 10840-10859.
+# Written to build/floattest.json. FLOATTEST_BUILD=<build dir> runs it on another build (the old float implementation in a
+# git worktree); FLOATTEST_GROUP=old|new|speed|all (default all). On the old build the old group passes and the new group
+# fails (that run is the oracle's baseline). About 1 minute on 7 workers; not part of `make test`.
+floattest: build/forth_boot_rom0.bin build/graphics_exrom.bin
+	python3 -I tools/floattest.py --build $(or $(FLOATTEST_BUILD),build) --group $(or $(FLOATTEST_GROUP),all)
 
 repro:
 	tools/check_repro.sh

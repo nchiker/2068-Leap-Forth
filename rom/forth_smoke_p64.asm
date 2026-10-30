@@ -16,9 +16,9 @@
 ; fake-tape harness and core/editor.asm's kernel/io dependency entirely
 ; for a test that doesn't need either.
 ;
-; PRINT_UDEC16 is stubbed to a bare `ret` -- W_LISTDEFS references it
-; (so core/recall.asm can't assemble without SOME definition existing),
-; but this smoke ROM's own checkpoints never call W_LISTDEFS: its output
+; PRINT_UDEC16 (core/print.asm since step F) is the real routine here:
+; W_LISTDEFS references it, but this smoke ROM's own checkpoints never
+; call W_LISTDEFS: its output
 ; is screen text, not a boolean pass/fail condition, an honest gap
 ; (no PASS/FAIL, reviewed by eye only) -- W_LISTDEFS was manually
 ; reviewed running under the real rom/forth_boot.asm build instead. GET_DEF_SPAN and SCAN_DEFS, the
@@ -69,8 +69,6 @@ EDIT_LEN         EQU $88E0
 EDIT_CURSOR      EQU $88E1
 EDIT_MAX_LEN     EQU 128
 
-PRINT_UDEC16:
-    ret                          ; stub -- see this file's own header
 FORGET_PRINT_MSG:
     ret                          ; stub: STORE_APPEND's STORE FULL path is not exercised here
                                  ; (tools/edtest.py case 12 covers it on the product ROM)

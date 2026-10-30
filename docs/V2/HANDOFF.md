@@ -1,43 +1,39 @@
-# Leap-Forth V2 — session handoff (2026-10-29: E merged, M6 and L in review, cartdiff fast; next is step F)
+# Leap-Forth V2 — session handoff (2026-10-29: step F done, PR #8 open; PR #7 merged)
 
-Read this first in a new session. **Next step: F, the float rebuild** (section "Step F: where to start" below). Then `docs/V2/EDITOR_SPEC.md` (step E: decisions, line store contract in section 3,
-view behaviour, sections 4 and 5.1-5.5 as built, oracle table), `docs/V2/MODE6_REMOVAL_SPEC.md` (step M6, section 7 as
-built),
-`docs/V2/LEAPC_COMPARISON_AUDIT.md` (on branch `v2/step-l-leapc-audit`) and `docs/V2/FORTH_V2_REUSE_AUDIT.md`
-(section 8 sequence, section 9 ledger, section 10 owner decisions).
+Read this first in a new session. **Step F (the 5-byte float rebuild, O10, T13) is complete** on `v2/step-f-float`
+(pushed; **PR #8** open, waiting for the owner's review; Claude merges it with a merge commit when approved).
+**Next: O15** (section "Next work") on its own branch from master once #8 merges (or from `v2/step-f-float`). Specs: `docs/V2/FLOAT_SPEC.md` (step F as built, decisions F1-F10 in section 15),
+`docs/V2/EDITOR_SPEC.md`, `docs/V2/MODE6_REMOVAL_SPEC.md`, `docs/V2/LEAPC_COMPARISON_AUDIT.md`,
+`docs/V2/FORTH_V2_REUSE_AUDIT.md` (section 8 sequence, section 9 ledger, section 10 owner decisions).
 
 ## Where things stand
 
-- **master** is `1d84127`: PR #4 (step E with the follow-up) merged with a merge commit on 2026-10-29.
-- **Open PRs, waiting for the owner's review; Claude merges them (owner: "you do the merges"), with merge commits:**
-  - **PR #5** `v2/step-m6-mode6-removal` (step M6: `aa113bf` oracle, `b531f70` code, `50b4b2a` docs).
-  - **PR #6** `v2/step-l-leapc-audit` (step L, docs only; master merged in as `0f2675f`, the ledger rows in step order).
-  - A trial merge of #5 and #6 is clean in either order.
-- **`v2/t-cartdiff-speed`** (from M6's tip, not pushed, no PR yet): `make cartdiff` 16 min → 1 min 13 s (spec
-  `docs/V2/CARTDIFF_SPEED_SPEC.md`; `bc16b55` spec, `056aab9` oracle, `f7c1ad8` change, then the ledger/HANDOFF
-  commit). Open its PR to master after #5 merges (so it shows only its own commits). This file is newest there.
+- **master** is `1ba4881`: PRs #5 (M6), #6 (L) and #7 (cartdiff speed-up) merged with merge commits on 2026-10-29.
+- **PR #8** `v2/step-f-float` (pushed; a trial merge onto master is clean): `63cfdc4`/`4371d18` spec, `9310c87` T13 oracle, `31260a1` O10 + RND, `91b05ce` ledger, `38e318b` the engine and
+  today's 14 words, `7dd20d8` the font over `$11F8` (ZEsarUX autoload) and O10's seed in the tape tests, `470f8f4` item
+  5 (22 words, PLACES, FS., TAN, FLOOR, the THROW messages), then the docs/NOTICE/HANDOFF commit.
 
   | Branch | State |
   |---|---|
-  | `v2/t-cartdiff-speed` | cartdiff speed-up done; PR after #5 merges |
-  | `v2/step-m6-mode6-removal` | PR #5 open |
-  | `v2/step-l-leapc-audit` | PR #6 open |
-  | `v2/step-e-console-editor` | merged (PR #4) |
+  | `v2/step-f-float` | PR #8 open |
+  | `v2/t-cartdiff-speed` | merged (PR #7) |
+  | `v2/f-step5-wip` | work branch, its commit cherry-picked as `470f8f4`; can be deleted |
+  | `v2/step-m6-mode6-removal`, `v2/step-l-leapc-audit`, `v2/step-e-console-editor` | merged |
   | `v2/t-cartdiff-wip`, `v2/m6-*-wip`, `v2/e-*-wip`, `v2/step-o13-rst-stack` | merged work branches; can be deleted |
 
-- **Free space [M]:** HOME 1,629 B, DOCK cartridge 1,629, Blackjack 1,096/1,096, Gallery 1,021, EXROM 4,247. The floors
-  in `tools/budget.toml` equal these.
-- **Step M6 in bytes [M]:** HOME +587 (kernel/mode64 394, the four words 60, the editor's branches 63, `EMIT`'s 70),
-  EXROM +23 (the `32COL FIRST` refusal). The listings differ only by deleted lines; the demo images are byte-identical.
-- **Last full run [M]** (M6's code commit): `make edtest` **30/30** (N11 retired); `make test` 66 PASS, 0 FAIL, 1 SKIP,
-  POWERON 7/7; `make tapetest` 16/16; `make harness` 0 failed; `make cartdiff` 26/26; `make fusesave` 41 checks,
-  0 failed (no Fuse abort this time, so no retry and one check fewer than step E's 42); `make bench` within 1% (sieve
-  −1.6%, string −1.2%, the rest faster); `make repro` 251 files identical; `make check` passes. On the cartdiff branch
-  (tools only, ROM images unchanged): `make cartdiff` 26/26 in 1 min 13 s, `--selftest` 7/7, `make test` 66/0/1,
-  `make check` passes.
+- **Free space [M]:** HOME 816 B, DOCK cartridge 816, Blackjack 876/876, Gallery 805, EXROM 4,247. Floors equal these.
+  Step F used 813 B of HOME (engine, 36 float words, messages); the owner kept the transcendentals in HOME (2026-10-29).
+- **Last full run [M]** (`470f8f4`): `make floattest` **64/64**; `make test` 66/0/1, POWERON 7/7; edtest 30/30;
+  harness 0 failed; cartdiff 28/28; fusesave 41/0; tapetest 16/16; bench float region 141,529,251
+  (−19.1%), sieve −1.6%, string −1.3%, pixel ±0 (reset at O10); repro 251 files; check passes (provenance 0 runs).
 
 ## Owner decisions (2026-10-29)
 
+- **Step F (FLOAT_SPEC.md section 15, F1-F10):** decide by what is best for the language and its users, not by
+  compatibility with old behaviour or sequences (the owner's rule for every decision). Register kernels; 22 new words;
+  F>S truncating with a range error; FROUND ties away from 0; F. with PLACES and exact rounding, FS.; E exponents;
+  integer literals outside -32768..65535 an error; messages for the ROM's THROW codes; RND on xorshift; bench_float's
+  RESULT -0.1453. The transcendentals stay in HOME at 816 B free.
 - **Mode 6 dropped entirely** (64COL, 32COL, PALETTE64, PLOT64, the 64-column kernel and every 64-column path):
   the layout is unverifiable here and not worth the effort. **HIRES/NORMAL stay** (the TS2068 high-colour mode, not
   Mode 6). Done in step M6 (`docs/V2/MODE6_REMOVAL_SPEC.md`, −587 B HOME).
@@ -66,33 +62,39 @@ built),
 
 ## Next work, in order
 
-1. **Owner:** review PRs #5 (M6) and #6 (L); Claude merges them, then opens the cartdiff PR and merges it on approval.
-2. **Step F: float rebuild** (audit section 4.2) with O10 and T13, on its own branch from master once #5 and the
-   cartdiff branch are merged (or from `v2/t-cartdiff-speed` if they are still open). See "Step F: where to start".
-3. **O15:** FILL and CIRCLE kernels to the EXROM (about −820 B HOME; the EXROM has 4,247 B free). Less urgent now:
-   HOME has 1,629 B free against the 200 B target.
-4. **K** (with O16, O17; also the text-drawing speed-up the owner may approve: an ASCII-indexed font, about
-   byte-neutral against K's planned +80 B, and a row text primitive, about 2x on every redraw), **D** (O18), **B**.
-5. **Step Z** (audit section 4.4) with O14, O19, and `W_EMIT` through `rst $28`.
+1. **Owner:** review PR #8 (step F); Claude merges it with a merge commit, then runs the full `make test` on master.
+2. **O15:** FILL and CIRCLE kernels to the EXROM (about −820 B HOME; the EXROM has 4,247 B free). Now worth more:
+   HOME has 816 B free.
+3. **K** (with O16, O17; the text-drawing speed-up), **D** (O18), **B**.
+4. **Step Z** (audit section 4.4) with O14, O19, `W_EMIT` through `rst $28`; and a size pass over the float code
+   (candidates: FINT 134 B, FADD 169, FS. 193, the shared parser 404, FDEPTH 32).
 
-## Step F: where to start
+## Step F: what was built (details in FLOAT_SPEC.md)
 
-- **Decided (owner, decision 3, 2026-10-28):** 5-byte Sinclair floats through Leap-C's `fpcore`, with its bit-exact
-  `tools/fpmodel.py` oracle. Conditions: the owner's OK is needed to re-baseline `bench_float` if it gets slower; the
-  transcendentals go to the EXROM if HOME is short; the provenance scan runs on `fpcore` in step F (decision 4: Leap
-  V2's MIT position goes in NOTICE only if the 12-byte scan is clean).
-- **The plan** is the audit's section 4.2 (items 1-6, budget about 2,260 B against 2,129 today, risks: float-stack
-  depth ~341 → ~204 cells, smoke ROMs p8, p18, p19, p22, p23, p29, p30, p34, p35, p42 hard-code 3-byte floats,
-  `fpcore`'s RAM cells must fit Forth's `$8xxx` gaps). O10 (Leap-C `RT_UMUL`/`RT_UDIV`/`RT_DIVS`/`RT_MODS`/`RT_MUL`
-  replacing `kernel/math/math.asm`'s multiply/divide, 412 B) is item 6; sieve and string are its bench gates. T13 is
-  the float oracle (audit section 6.3: Leap-C `tools/fpmodel.py`, `tools/floattest.py`).
-- **Study before designing** (the rule from step E): Leap-C `fpcore` and its tools, Leap V2's SQR (`54cd877`) and
-  SIN/COS/TAN, and today's `core/float.asm` and `core/floatmul.asm`/`floatdiv.asm` (the chain point before
-  `floatmul.asm` is `H_FMINUS` since M6). Write `docs/V2/FLOAT_SPEC.md` (decisions the owner must take marked as
-  such), then T13 and the oracle on the old build, then the code, each with a measured ledger row.
-- **Free space to work with:** HOME 1,629 B, EXROM 4,247 B.
+- **Format:** 5-byte Sinclair floats on the IY stack (204 cells, `FSTACK_LIMIT` `$8C04`); engine `core/fpcore.asm`
+  (Leap-C's fpcore rebuilt; register multiply/divide kernels with `exx`, bit-exact with `fpmodel`), `fpparse.asm`
+  (one parser for integers and floats), `fpprint.asm` (F. on 128.64 fixed point, exact half-up; FS.; PLACES),
+  `fpconv.asm` (S>F F>S FROUND FLOOR), `fpmath.asm` (FSQRT 4 Newton steps, SIN/COS Cody-Waite with COS shifted inside the
+  reduction, TAN, PI, RAD, DEG), `fpstack.asm` (18 words). RAM `$8594-$85D6`.
+- **Oracle T13:** `make floattest` (`tools/floattest.py`, ports 10840-10859) against `tools/fpforth.py` on
+  `tools/fpmodel.py` (Leap-C's, vendored unchanged, sha256 in fpforth). `python3 -I tools/fpforth.py` is the model's
+  self-test (accuracy against Python's math).
+- **O10:** `kernel/math/math.asm` multiply/divide register-only (Leap-C), RND on xorshift with a multiply for the range.
+- **Errors:** an uncaught THROW prints a message (`THROW_CODE` `$85D6`), `STACK?` only for the stack check.
 
 ## Open points (not blocking)
+
+- **cartdiff intermittent harness failure** (about 3%, both the old and new builds, HOME or cartridge side): host
+  timing reaches the run (no failure repeats with the key timing fixed). The ZEsarUX autoload trigger below was another
+  such harness-meets-emulator effect; read ZEsarUX's source (`~/zesarux-source`) first next time.
+- **Integer literals parse about 2.5× slower** (4,797 T for `12345`, was 1,926: the shared parser's 32-bit digit
+  loop); a 16-bit fast path would cost about 40 B.
+
+- **`CATCH_STACK` overlap** (found by step F's RAM map, not fixed): `CATCH_STACK` `$8916` + 8 × 6 B reaches `$8945`, over
+  `SPACES_COUNT` (`$8940`) and `PRINT_LINE_BUF`'s first 4 bytes (`$8942`): the 8th nested CATCH and SPACES/LPRINT share
+  bytes. A free 48 B gap exists (`$8316-$84FF` and others, `FLOAT_SPEC.md` section 9).
+- **`LATEST`/`HERE` inside the data stack's range** (`$9002`/`$9004`, `DSTACK_LIMIT` `$9000`): a data stack about 1,020
+  cells deep overwrites them before `STACK_CHECK` objects; `core/dict.asm`'s comment says 1,024 B (floor `$9400`).
 
 - **The view's ENTER at the bottom** is still 421k T: about 122k is `STORE_LINE` scanning a 60-line store from
   `STORE_START` per key; a cached cursor-line address would cut it. An insert or delete mid-screen redraws the rows
@@ -112,7 +114,25 @@ built),
 - **Budget floors:** never lower one without a ledger row and a history line in `tools/budget.toml`.
 - **Keep `IFDEF CARTRIDGE` code the same length in both builds** (`rom_identity.py --shared` in `make check`).
 
-## Facts that cost time to find (steps M6, E and O13; the older ones follow)
+## Facts that cost time to find (step F; then M6, E and O13; the older ones follow)
+
+- **Step F.**
+  - **ZEsarUX's tape autoload** (on by default; `realtape-open` arms it, resets the machine and starts the tape) types
+    J "" ENTER as soon as the PC equals `$11F8` with the HOME ROM paged (the stock ROM's key wait;
+    `~/zesarux-source/src/storage/tape.c`, `MACHINE_ID_TIMEX_TS2068`), feeding the keys to the next keyboard-port reads
+    (`operaciones.c` `envia_jload_pp_spectrum`). `--noautoload` also stops the tape from playing (no ZRCP command
+    plays it; the F-key function needs the GUI). Fix: data (the font, `kernel/graphics/font.asm`) covers `$11F8` in
+    the boot ROM, with an ASSERT in `rom/forth_boot.asm`. If that ASSERT fails, move the font include, not the code.
+  - **`tools/run_realtape_test.sh` opens a Fuse window** (it needs an X display). Do not run it or hand it to an agent
+    (owner, 2026-10-29); `make tapetest` case 2 covers the same text headlessly.
+  - **`make` stops at the first ROM that fails to assemble**: use `make -k` when some smoke ROMs are broken on
+    purpose, or the product image stays stale (that cost a wrong speed figure once).
+  - **z80sim** (`tools/z80sim/sim.py`) runs a routine from a scratch `.asm` file: push `('HALT',)` on its stack and
+    catch `Halt` ("clean stop") for the outermost `ret`; it supports `exx`. Used for the kernels (5,698 cases).
+  - **The stock ROM's interrupt routine keeps BC', DE', HL'** (ZEsarUX; AF' changes in the stock ROM's own main code,
+    which never runs in the cartridge build): the kernels use `exx`, never `ex af, af'`.
+  - Tests that run whole flows (tapetest, the realtape script, smoke p53) carry their own copies of expected values
+    (the Blackjack log): after a change to RND or anything they replay, grep for the old values.
 
 - **Step M6.**
   - **Suite times:** `make cartdiff` about 75 s since the speed-up (it was 16 min); `make tapetest` about 5 min, `make

@@ -2,16 +2,22 @@
 ; kernel/math/math.asm — general-purpose 16-bit integer arithmetic
 ;
 ; CURRENT STATUS: assembled into the working ROM and exercised under
-; Fuse by the automated math and language regression tests. Both
-; foundational algorithms were also verified via a
-; Python simulation mirroring the exact planned Z80 register steps —
-; MATH_UMUL16 against 32,720 signed multiply cases (as its signed
-; wrapper) and MATH_UDIV16 against 16,165 unsigned divide/remainder
-; cases, all with zero failures — before any assembly was written,
-; matching this project's established discipline for tricky arithmetic
-; (the screen address formula, the ink/paper bit-swap, DIV10 itself).
-; That verifies the ALGORITHMS; it doesn't substitute for running the
-; actual assembled-code coverage now complements that algorithm check.
+; ZEsarUX by the automated math and language regression tests.
+;
+; ORIGIN OF THE MULTIPLY, DIVIDE AND RANDOM ROUTINES: rebuilt from
+; 2068-Leap-C (MIT, same copyright holder as this project) —
+; src/runtime/helpers.asm (RT_MUL/RT_UMUL, RT_UDIV and the one shared
+; sign routine RT_SDIV behind RT_DIVS/RT_MODS) and src/runtime/
+; library.asm (LIB_RAND, the xorshift step) — under this file's own
+; names and register contracts (FLOAT_SPEC.md section 11). They
+; replace the earlier shift-and-add multiply and the divide that kept
+; its dividend, quotient and loop counter in RAM: these use registers
+; only. The old RAM cells (DIV_DIVIDEND, DIV_QUOT, DIV_COUNTER,
+; MATH_SIGN in include/sysvars.inc) are no longer used by any code.
+; The results are unchanged: 16-bit wraparound, quotient truncated
+; toward 0, remainder with the dividend's sign, divisor 0 giving 0.
+; They were checked against Python on tens of thousands of operand
+; pairs, edge values included, see docs/V2/FLOAT_SPEC.md section 11.
 ;
 ; Owns: multiply and divide, which Z80 has no hardware instructions
 ; for. Built specifically to support basic/'s expression evaluator,
@@ -34,12 +40,13 @@
 ; signal, consistent with there being no error-reporting mechanism
 ; anywhere else in this codebase yet either.
 ;
-; Divide by zero: MATH_DIVIDE16 returns 0 rather than the nonsense
-; result MATH_UDIV16 would otherwise produce (a divisor of 0 means
-; "remainder >= divisor" is trivially true every iteration, giving a
-; quotient of all 1-bits, i.e. -1) — a deliberate, safe default given
-; there's no error-reporting mechanism to surface a real error through
-; yet, not an oversight.
+; Divide by zero: MATH_DIVIDE16 and MATH_MOD16 return 0 rather than
+; the nonsense result the bare division loop would otherwise produce
+; (a divisor of 0 means "remainder >= divisor" is trivially true every
+; iteration, giving a quotient of all 1-bits, i.e. -1) — a deliberate,
+; safe default given there's no error-reporting mechanism to surface a
+; real error through yet, not an oversight. MATH_UDIV16 checks for it
+; explicitly up front.
 ; ============================================================================
 
     IFNDEF MATH_ASM
@@ -48,184 +55,165 @@
     INCLUDE "include/sysvars.inc"
 
 ; ============================================================================
+; MATH_MULTIPLY16
+; Signed 16x16->16 multiply. The low 16 bits of a product are the same
+; for signed and unsigned operands (two's complement), so this is
+; MATH_UMUL16 with the multiplier moved into BC and nothing else: the
+; negative operands wrap around exactly as the signed result needs.
+; In:  HL = multiplicand (signed), DE = multiplier (signed)
+; Out: HL = product (signed, truncated to 16 bits)
+; Destroys: AF, BC (DE is kept)
+; ============================================================================
+MATH_MULTIPLY16:
+    ld   b, h
+    ld   c, l                        ; BC = HL; falls into the routine
+                                    ; below, which scans BC's bits and
+                                    ; adds DE (the product is the same
+                                    ; whichever factor is scanned)
+
+; ============================================================================
 ; MATH_UMUL16
 ; Unsigned 16x16->16 multiply via shift-and-add (Z80 has no hardware
-; multiply). Verified via Python simulation against many values before
-; being trusted — see this file's header.
+; multiply), from Leap-C's RT_UMUL: the multiplier's bits are taken
+; from the top, one per step, so the partial product is doubled each
+; step and DE is added for every 1 bit — registers only, 16 steps.
 ; In:  DE = multiplicand, BC = multiplier
 ; Out: HL = product (truncated to 16 bits)
-; Destroys: AF, BC, DE
+; Destroys: AF, BC (DE is kept)
 ; ============================================================================
 MATH_UMUL16:
     ld   hl, 0
     ld   a, 16
-.loop:
-    push af
-    srl  b                  ; shift BC right by 1; bit0 of B goes into
-    rr   c                    ; carry, then into bit7 of C via rr — the
-                             ; carry OUT of rr c is BC's original bit0
-    jr   nc, .no_add
-    add  hl, de                ; result += multiplicand
-.no_add:
-    sla  e                       ; shift DE (multiplicand) left by 1,
-    rl   d                         ; making room for the next bit position
-    pop  af
+.bit:
+    add  hl, hl                    ; partial product *= 2
+    rl   c                           ; next multiplier bit, from the
+    rl   b                             ; top, into carry
+    jr   nc, .next
+    add  hl, de                        ; product += multiplicand
+.next:
     dec  a
-    jr   nz, .loop
+    jr   nz, .bit
     ret
 
 ; ============================================================================
 ; MATH_UDIV16
 ; Unsigned 16-bit divide via 16-iteration shift-and-subtract (restoring
-; division) — generalizes basic/'s own DIV10 to an arbitrary runtime
-; divisor rather than a fixed constant. DIV10 could use B/DJNZ for its
-; loop counter since 10 never needed a register; here BC is needed for
-; the divisor throughout all 16 iterations, so the counter lives in
-; memory (DIV_COUNTER) instead. Verified via Python simulation against
-; 16,165 dividend/divisor combinations before being trusted — see this
-; file's header.
+; division), from Leap-C's RT_UDIV — generalizes basic/'s own DIV10 to
+; an arbitrary runtime divisor. Registers only: HL starts as the
+; dividend and shifts its bits out at the top while the quotient
+; shifts in at the bottom, DE builds the remainder (it needs no 17th
+; bit: before step i it is below 2^(i-1), so 16 bits hold it).
 ; In:  HL = dividend, BC = divisor
 ; Out: HL = quotient, DE = remainder; if BC = 0 (divide by zero), HL =
 ;      DE = 0 rather than the nonsense all-1s quotient the algorithm
 ;      would otherwise produce — checked explicitly up front
-; Destroys: AF
+; Destroys: AF (BC is kept)
 ; ============================================================================
 MATH_UDIV16:
     ld   a, b
     or   c
-    jr   nz, .divisor_ok
-    ld   hl, 0                     ; divide by zero — safe default,
-    ld   de, 0                       ; see this file's header
+    jr   nz, .divide
+    ld   h, a                      ; divide by zero — safe default,
+    ld   l, a                        ; see this file's header
+    ld   d, a
+    ld   e, a
     ret
-.divisor_ok:
-    ld   (DIV_DIVIDEND), hl
-    ld   hl, 0
-    ld   (DIV_QUOT), hl
-    ld   de, 0
+.divide:
+    ld   de, 0                     ; DE = the remainder
     ld   a, 16
-    ld   (DIV_COUNTER), a
-
-.loop:
-    ld   hl, (DIV_DIVIDEND)
-    add  hl, hl                    ; shift dividend left; carry = old bit15
-    ld   (DIV_DIVIDEND), hl
-
-    rl   e                          ; shift that bit into the remainder
-    rl   d
-
-    ld   hl, (DIV_QUOT)
-    add  hl, hl                      ; shift the quotient-in-progress
-    ld   (DIV_QUOT), hl                ; left too, making room for this
-                                      ; iteration's bit
-
-    push de                            ; copy the remainder into HL for
-    pop  hl                              ; the comparison below, without
-                                        ; destroying DE (push/pop copies,
-                                        ; unlike EX DE,HL which swaps)
-    or   a
-    sbc  hl, bc                          ; HL = remainder - divisor;
-                                        ; carry set if remainder < divisor
-    jr   c, .no_sub
-
-    ; remainder >= divisor: commit the subtraction and set this bit
-    ex   de, hl                            ; DE = new remainder (HL held
-                                          ; remainder-divisor); HL = old
-                                          ; DE, unused from here
-    ld   hl, (DIV_QUOT)
-    inc  hl                                  ; set the quotient's LSB —
-                                            ; safe because the shift
-                                            ; above guarantees bit0 is
-                                            ; currently 0, same reasoning
-                                            ; as DIV10's own "inc hl is
-                                            ; safe" comment
-    ld   (DIV_QUOT), hl
-
-.no_sub:
-    ld   a, (DIV_COUNTER)
-    dec  a
-    ld   (DIV_COUNTER), a
-    jr   nz, .loop
-
-    ld   hl, (DIV_QUOT)
+.bit:
+    add  hl, hl                    ; dividend's next bit out (carry)
+    ex   de, hl                    ; HL = remainder, DE = dividend/quotient
+    adc  hl, hl                    ; remainder = remainder*2 + that bit
+    sbc  hl, bc                    ; try remainder - divisor (the carry
+                                  ; from ADC above is always 0 here)
+    jr   nc, .one                  ; it fitted: keep the difference
+    add  hl, bc                      ; it didn't: put the divisor back
+    jr   .next
+.one:
+    inc  e                         ; set the quotient's bit — safe, the
+                                  ; shift above left bit 0 clear
+.next:
+    ex   de, hl                    ; back: HL = dividend/quotient,
+    dec  a                           ; DE = remainder
+    jr   nz, .bit
     ret
-
-; ============================================================================
-; MATH_MULTIPLY16
-; Signed wrapper around MATH_UMUL16: determines the result's sign
-; (negative iff exactly one operand is negative — the XOR of their
-; sign bits), takes absolute values, multiplies unsigned, then applies
-; the sign to the result. Verified via Python simulation against
-; 32,720 signed value pairs (including -32768, 32767, 0, and many
-; negative/positive combinations) before being trusted.
-; In:  HL = multiplicand (signed), DE = multiplier (signed)
-; Out: HL = product (signed, truncated to 16 bits)
-; Destroys: AF, BC, DE
-; ============================================================================
-MATH_MULTIPLY16:
-    ld   a, h
-    xor  d
-    and  %10000000                 ; isolate just the sign bit of the
-    ld   (MATH_SIGN), a              ; XOR — that's the result's sign
-                                    ; (0 = positive, $80 = negative)
-
-    call MATH_ABS16                   ; take absolute value of HL
-
-    ex   de, hl                      ; take absolute value of DE (via
-    call MATH_ABS16                    ; HL, swapped in/out — HL's own
-    ex   de, hl                        ; value survives the round trip)
-
-    ld   b, d                        ; BC = abs(multiplier), for
-    ld   c, e                          ; MATH_UMUL16's contract
-    ex   de, hl                          ; DE = abs(multiplicand), HL =
-                                        ; old DE (unused from here)
-    call MATH_UMUL16                      ; HL = unsigned product
-
-    ld   a, (MATH_SIGN)
-    or   a
-    ret  z                              ; positive result, HL already
-                                        ; correct
-
-    jr   MATH_NEGATE16                   ; negate HL (two's complement)
-                                        ; and return directly
 
 ; ============================================================================
 ; MATH_DIVIDE16
-; Signed wrapper around MATH_UDIV16, same sign-then-magnitude approach
-; as MATH_MULTIPLY16. Truncates toward zero (matching typical integer
-; BASIC division — e.g. -7/2 = -3, not -4), since the underlying
+; Signed wrapper around MATH_UDIV16, sharing MATH_SDIV16's sign-then-
+; magnitude steps with MATH_MOD16. Truncates toward zero (matching
+; typical integer BASIC division — e.g. -7/2 = -3, not -4), since the
 ; unsigned division works on absolute values and the sign is applied
-; to the truncated magnitude afterward. Verified via the same Python
-; simulation as MATH_MULTIPLY16, 32,720 cases, zero failures.
+; to the truncated magnitude afterward. The quotient is negative iff
+; exactly one operand is (the XOR of their sign bits).
 ; In:  HL = dividend (signed), DE = divisor (signed)
 ; Out: HL = quotient (signed, truncated toward zero); HL = 0 if DE = 0
 ;      (divide by zero — see this file's header)
 ; Destroys: AF, BC, DE
 ; ============================================================================
 MATH_DIVIDE16:
+    ex   de, hl                    ; HL = divisor, DE = dividend (the
+                                  ; order MATH_SDIV16 works in)
     ld   a, h
     xor  d
-    and  %10000000
-    ld   (MATH_SIGN), a
+    and  %10000000                 ; bit 7: the quotient's sign; bit 0
+                                  ; clear: the quotient is wanted
+    jr   MATH_SDIV16
 
-    call MATH_ABS16                   ; take absolute value of HL
-                                      ; (dividend)
+; ============================================================================
+; MATH_MOD16
+; Signed 16-bit remainder, matching MATH_DIVIDE16's own truncating-
+; toward-zero convention: the remainder takes the DIVIDEND's sign (or
+; 0), not the divisor's — e.g. -17 MOD 5 = -2, not 3 (a flooring-
+; division language like Python's bare % would give 3; this matches
+; C's %, and this project's own -17/5=-3 truncating quotient: -3*5 +
+; (-2) = -17, consistent). Unlike MATH_DIVIDE16's XOR of the two
+; signs, only the dividend's sign matters here — the divisor's sign
+; doesn't flip the remainder's sign, only its magnitude range
+; (|remainder| < |divisor|). The unsigned remainder is the division's
+; DE, so no second division pass is needed.
+; In:  HL = dividend (signed), DE = divisor (signed)
+; Out: HL = remainder (signed; sign matches the dividend, or 0); HL = 0
+;      if DE = 0 (matches MATH_DIVIDE16's own divide-by-zero default —
+;      see kernel/math/math.asm's file header)
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+MATH_MOD16:
+    ex   de, hl                    ; HL = divisor, DE = dividend
+    ld   a, d
+    and  %10000000                 ; bit 7: the DIVIDEND's sign (not
+                                  ; XORed with the divisor's)
+    inc  a                         ; bit 0 set: the remainder is wanted
 
-    ex   de, hl                      ; take absolute value of DE
-    call MATH_ABS16                    ; (divisor) via HL, swapped
-    ex   de, hl                        ; in/out
-
-    ld   b, d                        ; BC = abs(divisor), for
-    ld   c, e                          ; MATH_UDIV16's contract
-    call MATH_UDIV16                     ; HL = abs(dividend)/abs(divisor)
-                                        ; (dividend, abs(HL), was already
-                                        ; in HL from the steps above)
-
-    ld   a, (MATH_SIGN)
-    or   a
-    ret  z                              ; positive result, HL already
-                                        ; correct
-
-    jr   MATH_NEGATE16                   ; negate HL and return directly
+; ----------------------------------------------------------------------
+; MATH_SDIV16 (internal; reached from MATH_DIVIDE16 and MATH_MOD16)
+; Leap-C's RT_SDIV: divide the absolute values, then give the wanted
+; result its sign. MATH_ABS16(-32768) leaves 32768, which is right as
+; an unsigned magnitude here.
+; In:  HL = divisor, DE = dividend (both signed), A: bit 7 = the sign
+;      the result gets, bit 0 = 1 for the remainder, 0 for the quotient
+;      (carry clear)
+; Out: HL = the signed quotient or remainder (0 for a divisor of 0)
+; Destroys: AF, BC, DE
+; ----------------------------------------------------------------------
+MATH_SDIV16:
+    push af                        ; keep the sign/select byte
+    call MATH_ABS16
+    ld   b, h
+    ld   c, l                      ; BC = abs(divisor)
+    ex   de, hl
+    call MATH_ABS16                ; HL = abs(dividend)
+    call MATH_UDIV16               ; HL = quotient, DE = remainder
+    pop  af
+    rra                            ; carry (clear) in: carry = bit 0,
+                                  ; bit 7 -> bit 6
+    jr   nc, .sign
+    ex   de, hl                    ; the remainder was wanted
+.sign:
+    and  %01000000                 ; the sign to apply
+    ret  z
+    jp   MATH_NEGATE16
 
 ; ============================================================================
 ; MATH_COMPARE16
@@ -310,11 +298,9 @@ MATH_COMPARE16:
 
 ; ----------------------------------------------------------------------
 ; MATH_NEGATE16
-; Two's-complement negate. Same pattern already used inline inside
-; MATH_MULTIPLY16/MATH_DIVIDE16's own sign-then-magnitude steps above
-; — pulled out here as its own documented, reusable routine rather
-; than staying duplicated three times over (those two callers are
-; NOT changed to call this — see this routine's own note below).
+; Two's-complement negate. The sign step of MATH_SDIV16 (and, before
+; step F, of the earlier multiply and divide wrappers) — a documented,
+; reusable routine of its own.
 ; In:  HL
 ; Out: HL = -HL (truncated; -32768 stays -32768 — see file header)
 ; Destroys: AF
@@ -366,68 +352,6 @@ MATH_SGN16:
     ret
 
 ; ============================================================================
-; MATH_MOD16
-; Signed 16-bit remainder, matching MATH_DIVIDE16's own truncating-
-; toward-zero convention: the remainder takes the DIVIDEND's sign (or
-; 0), not the divisor's — e.g. -17 MOD 5 = -2, not 3 (a flooring-
-; division language like Python's bare % would give 3; this matches
-; C's %, and this project's own -17/5=-3 truncating quotient: -3*5 +
-; (-2) = -17, consistent). Unlike MATH_MULTIPLY16/DIVIDE16's dual-
-; operand XOR-of-signs, only the dividend's sign matters here — the
-; divisor's sign doesn't flip the remainder's sign, only its magnitude
-; range (|remainder| < |divisor|, verified below).
-;
-; Genuinely cheap to add: MATH_UDIV16 already computes the unsigned
-; remainder internally (in DE) as a side effect of computing the
-; quotient — this wrapper reuses that instead of a second division
-; pass, following the same sign-then-magnitude shape as MATH_DIVIDE16
-; but reading DE (remainder) instead of HL (quotient) out of
-; MATH_UDIV16's result.
-;
-; Verified via Python simulation before any Z80 was written: 6,048
-; cases (edge values -32768/32767/0/±1 plus 2,000 random dividends,
-; each checked against 3 random divisors) confirming a = q*b + r,
-; |r| < |b|, and r's sign matches the dividend's (or is 0) — plus 10
-; concrete hand-checkable cases (17 MOD 5 = 2, -17 MOD 5 = -2, the
-; -32768 boundary, etc.), zero failures.
-; In:  HL = dividend (signed), DE = divisor (signed)
-; Out: HL = remainder (signed; sign matches the dividend, or 0); HL = 0
-;      if DE = 0 (matches MATH_DIVIDE16's own divide-by-zero default —
-;      see kernel/math/math.asm's file header)
-; Destroys: AF, BC, DE, HL
-; ============================================================================
-MATH_MOD16:
-    ld   a, h
-    and  %10000000                 ; isolate just the DIVIDEND's sign
-    ld   (MATH_SIGN), a              ; bit — unlike MULTIPLY16/DIVIDE16,
-                                    ; this is not XORed with the
-                                    ; divisor's sign; see this
-                                    ; routine's own header
-
-    call MATH_ABS16                   ; take absolute value of HL
-                                      ; (dividend)
-
-    ex   de, hl                      ; take absolute value of DE
-    call MATH_ABS16                    ; (divisor) via HL, swapped
-    ex   de, hl                        ; in/out
-
-    ld   b, d                        ; BC = abs(divisor), for
-    ld   c, e                          ; MATH_UDIV16's contract
-    call MATH_UDIV16                     ; DE = unsigned remainder
-                                        ; (HL = quotient, unused here)
-    ex   de, hl                          ; HL = remainder magnitude
-
-    ld   a, (MATH_SIGN)
-    or   a
-    ret  z                              ; dividend was non-negative
-                                        ; (or divisor was 0, giving
-                                        ; remainder 0 either way) — HL
-                                        ; already correct
-
-    jr   MATH_NEGATE16                   ; negate HL (apply the
-                                        ; dividend's sign) and return
-
-; ============================================================================
 ; MATH_SQRT16
 ; Signed 16-bit integer square root, truncating (SQRT16(n) is the
 ; largest R such that R*R <= n — e.g. SQRT16(15)=3, SQRT16(16)=4).
@@ -472,8 +396,8 @@ MATH_MOD16:
 ;
 ; Uses SQRT_OP/SQRT_RES/SQRT_COUNTER scratch (kernel/math's own, same
 ; "needs a copy in HL for the compare, but HL is also busy with other
-; work that same iteration" reasoning as MATH_UDIV16's own DIV_
-; DIVIDEND/DIV_QUOT/DIV_COUNTER right above — see those sysvars' own
+; work that same iteration" reasoning as MATH_UDIV16's own former DIV_
+; DIVIDEND/DIV_QUOT/DIV_COUNTER scratch, now unused — see those sysvars'
 ; header in include/sysvars.inc). `one` stays in BC the whole loop, so
 ; the usual DJNZ-in-B trick isn't available for the loop counter,
 ; hence SQRT_COUNTER instead.
@@ -544,53 +468,39 @@ MATH_SQRT16:
 ; MATH_RND16
 ; Pseudo-random integer in [0, x-1] for a positive x (matches the
 ; common BASIC RND(n) convention of "n possible results, 0 to n-1").
-; x<=0 (signed) returns 0 — no error mechanism at this layer, same
-; safe-default convention as MATH_DIVIDE16's divide-by-zero.
+; x<=0 (signed) returns 0 without advancing the generator — no error
+; mechanism at this layer, same safe-default convention as
+; MATH_DIVIDE16's divide-by-zero.
 ;
-; Generator: a 16-bit maximal-length Galois-tap-free "Fibonacci form"
-; LFSR (feedback = XOR of bit positions 1,2,4,13 of the current state;
-; new state = state shifted right 1, with that feedback bit inserted
-; at bit 15). Exhaustively verified in Python before any Z80: the taps
-; used here were found by a systematic search over candidate tap sets
-; (rather than trusting an unverified "standard" constant from memory
-; — an earlier attempt using a commonly-cited tap mask, applied as a
-; single-mask Galois-style feedback, turned out to have only a
-; 73-state cycle, not the full 65,535; a second attempt using several
-; textbook-cited Fibonacci tap sets hit the degenerate all-zero state
-; entirely, because none of them included tap position 1 — required
-; for the transition to be invertible and avoid the zero-trap). The
-; tap set actually used here (positions 1,2,4,13) was verified by
-; direct simulation to visit all 65,535 nonzero 16-bit states exactly
-; once before returning to its start — genuinely maximal length, not
-; assumed. The exact register-level bit-extraction sequence below
-; (shift-and-mask each tap bit individually, XOR-fold them, then a
-; real 16-bit logical shift with a conditional bit-15 set) was then
-; separately checked against the reference recurrence for all 65,536
-; possible states — zero mismatches — to catch any transcription
-; error between the verified design and this Z80 form.
+; Generator: Leap-C's 16-bit xorshift (src/runtime/library.asm
+; LIB_RAND; MIT, same copyright holder): x ^= x<<7, x ^= x>>9,
+; x ^= x<<8, all 16-bit. Period 65535 — every nonzero state is visited
+; once; 0 is the one fixed point, so the state is never 0 while the
+; generator runs. (The earlier LFSR moved one bit per call, so each
+; value was the previous one shifted — consecutive results were
+; strongly related, and a MOD of the 15 low bits favoured small
+; results.)
 ;
 ; RND_STATE (a persistent sysvar, not a register — must survive
-; between separate BASIC statements) is never 0: a maximal-length LFSR
-; treats 0 as a degenerate fixed point that never advances. MEM_INIT
-; zeroes all of RAM at cold start, so RND_STATE reading as 0 doubles
-; as "never seeded yet" — the first RND(x) call seeds it from the Z80
-; R register (the classic, well-established technique for this: R
-; increments on every instruction fetch, so its value at the moment of
-; the call depends on how many instructions have executed since reset
-; — genuinely unpredictable from a BASIC program's perspective, though
-; NOT cryptographically random) OR'd with 1 to guarantee it isn't 0
-; itself. This seeding step is hardware-timing-dependent and can't be
-; meaningfully verified by tools/z80sim (which has no real timing
-; model — same category of gap as the tape-signal primitives in
-; kernel/storage); only the deterministic LFSR step and the range-
-; scaling below it were verified there.
+; between separate BASIC statements) reading as 0 doubles as "never
+; seeded yet" (MEM_INIT zeroes all of RAM at cold start, and
+; MATH_RND_SEED with 0 puts it back): the first RND(x) call seeds it
+; from the Z80 R register (the classic technique: R increments on
+; every instruction fetch, so its value at the moment of the call
+; depends on how many instructions have executed since reset —
+; unpredictable from a BASIC program's perspective, though NOT
+; cryptographically random), the low byte OR'd with 1 so the seed
+; isn't 0. This seeding step is hardware-timing-dependent and can't be
+; meaningfully verified by tools/z80sim (no timing model); only the
+; deterministic step and the scaling below were verified.
 ;
-; Range-scaling: the raw 16-bit LFSR state, with its sign bit masked
-; off (0-32767, since the sign bit is just ordinary LFSR noise, not
-; meaningful), is fed as the dividend to this file's own MATH_MOD16 —
-; already-verified, and safe here since both operands are guaranteed
-; non-negative (the mask above; x's own sign already checked before
-; this point), so MOD16's dividend-sign handling never triggers.
+; Range-scaling: the result is the high word of the 16x16 unsigned
+; product state * x, i.e. floor(state * x / 65536), which lies in
+; 0..x-1 for any state in 0..65535 and uses all 16 bits of the state
+; (a MOD of it would favour small results unless x divides 65536).
+; The high word is built by the shift-right product loop: HL is the
+; high half of the running product, BC starts as the multiplier x and
+; takes the low half in as it shifts out.
 ; In:  HL = x (signed; x<=0 returns 0)
 ; Out: HL = pseudo-random value in [0, x-1] (or 0 if x<=0)
 ; Destroys: AF, BC, DE, HL
@@ -599,23 +509,15 @@ MATH_RND16:
     ld   a, h
     or   a
     jp   m, .zero_result                ; x negative -> 0
-    ld   a, h
     or   l
     jr   z, .zero_result                  ; x = 0 -> 0
 
-    push hl                                ; save x across the LFSR
-                                          ; step below (no calls happen
-                                          ; before the matching pop, so
-                                          ; this is a simple balanced
-                                          ; save — not the recursive-
-                                          ; call-survival case the rest
-                                          ; of this project usually
-                                          ; means by this comment)
-
+    ld   b, h
+    ld   c, l                              ; BC = x
     ld   hl, (RND_STATE)
     ld   a, h
     or   l
-    jr   nz, .seeded
+    jr   nz, .step
 
     ; never seeded (still 0, from MEM_INIT's cold-start zeroing) —
     ; seed from the R register, guaranteed nonzero via OR 1
@@ -626,63 +528,38 @@ MATH_RND16:
     ld   h, a                                ; byte too, for more spread
                                             ; than R's own 128-value
                                             ; cycle alone would give
-.seeded:
-    ; feedback = bit0(L) ^ bit1(L) ^ bit3(L) ^ bit12(H's bit4)
+.step:                                      ; HL ^= HL<<7; HL ^= HL>>9;
+    ld   a, h                               ; HL ^= HL<<8 (Leap-C's
+    rra                                       ; sequence, unchanged)
     ld   a, l
-    and  1
-    ld   b, a
-
+    rra
+    xor  h
+    ld   h, a
     ld   a, l
-    srl  a
-    and  1
-    xor  b
-    ld   b, a
-
-    ld   a, l
-    srl  a
-    srl  a
-    srl  a
-    and  1
-    xor  b
-    ld   b, a
-
+    rra
     ld   a, h
-    srl  a
-    srl  a
-    srl  a
-    srl  a
-    and  1
-    xor  b                                 ; A = feedback bit (0 or 1)
-    ld   c, a                                ; stash it — B is about to
-                                            ; be overwritten by the
-                                            ; actual state shift below
+    rra
+    xor  l
+    ld   l, a
+    xor  h
+    ld   h, a
+    ld   (RND_STATE), hl                    ; commit the new state
 
-    srl  h                                   ; HL >>= 1 (logical;
-    rr   l                                     ; discards old bit0)
-
-    ld   a, c
-    or   a
-    jr   z, .no_set_bit
-    ld   a, h
-    or   $80                                 ; set bit 15 (the
-    ld   h, a                                  ; feedback bit)
-.no_set_bit:
-    ld   (RND_STATE), hl                     ; commit the new state
-
-    ld   a, h
-    and  $7F                                 ; mask off the sign bit —
-    ld   h, a                                  ; it's just ordinary LFSR
-                                              ; noise, not meaningful;
-                                              ; guarantees a non-
-                                              ; negative dividend below
-
-    pop  de                                    ; DE = x (saved earlier)
-    call MATH_MOD16                              ; HL MOD DE — both
-                                                ; operands non-negative
-                                                ; here, so this is a
-                                                ; plain modulo, MOD16's
-                                                ; dividend-sign handling
-                                                ; never triggers
+    ex   de, hl                              ; DE = state (multiplicand)
+    ld   hl, 0                                ; HL = the product's high
+    ld   a, 16                                  ; half; carry is clear
+.mul:
+    rr   h                                   ; shift (carry, HL, BC)
+    rr   l                                     ; right: the previous
+    rr   b                                       ; step's carry enters
+    rr   c                                         ; at the top, the
+    jr   nc, .no_add                                 ; multiplier's next
+    add  hl, de                                      ; bit leaves: add
+.no_add:                                             ; the state for 1
+    dec  a
+    jr   nz, .mul
+    rr   h                                   ; the last add's carry and
+    rr   l                                     ; the final shift
     ret
 
 .zero_result:

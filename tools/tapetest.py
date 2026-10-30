@@ -48,7 +48,10 @@ HOW A CASE RUNS (probe findings, spec section 8)
 
 HOW THE THROW CODE IS READ
   An uncaught THROW goes to RUNTIME_ERROR_HOOK, which prints the fixed text `STACK?` for every code (rom/forth_boot.asm,
-  RUNTIME_ERROR_MSG) and sets INTERP_ERROR_FLAG: it cannot tell -37 from -28.  So the failing commands are run as
+  RUNTIME_ERROR_MSG) and sets INTERP_ERROR_FLAG: it cannot tell -37 from -28.  [Correction since step F (docs/V2/
+  FLOAT_SPEC.md section 8.4): the hook now prints a message per code (-37 TAPE ERROR, -28 BREAK, -8 DICTIONARY FULL, and
+  so on, ERROR n for any other code), and STACK? only for a stack check.  The reading below is unchanged and still
+  right: the harness takes the code from CATCH, not from the screen.]  So the failing commands are run as
   `' LL CATCH [name]` with `: LL LOAD-LIB ;` (likewise LOAD-TEXT, SAVE-TEXT, VERIFY-*) defined during the lead:  LOAD-LIB
   parses its name from the rest of the input line (CATCH runs it from the interpreter), CATCH leaves the thrown code (or
   0) on the data stack, and the harness reads the cell at IX when the prompt is back.  "No error" is 0, "silent" is 0.
@@ -595,7 +598,7 @@ def case_1(ctx):
 
 
 BJ_FS = REPO + "/rom/forth_smoke_p52_blackjack_test.fs"
-BJ_EXPECT = [21, 18, 4, 22, 20, 3, 21, 12, 4, 17, 23, 1]       # rom/forth_smoke_p53_realtape.asm, CHECK_MEM16 at 62120..
+BJ_EXPECT = [21, 15, 4, 23, 12, 3, 21, 19, 4, 15, 23, 1]       # rom/forth_smoke_p53_realtape.asm, CHECK_MEM16 at 62120.. (seed 15785, step F O10)
 
 
 def case_2(ctx):
