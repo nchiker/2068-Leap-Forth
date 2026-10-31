@@ -135,7 +135,7 @@ MATH_SDIV16:
 .sign:
     and  %01000000                 ; the sign to apply
     ret  z
-    jp   MATH_NEGATE16
+    jr   MATH_NEGATE16
 
 ; ============================================================================
 ; MATH_COMPARE16 -- signed 16-bit comparison

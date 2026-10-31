@@ -131,12 +131,3 @@ KBD_ISR_TICK:
     pop  af
     ret
 
-; ============================================================================
-; INT_GET_FRAMES -- the frame counter
-; In:  none
-; Out: HL = FRAMES
-; Destroys: HL
-; ============================================================================
-INT_GET_FRAMES:
-    ld   hl, (FRAMES)
-    ret

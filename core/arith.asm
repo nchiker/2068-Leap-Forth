@@ -49,12 +49,7 @@ H_NEGATE:
 W_NEGATE:
     ld   l, (ix+0)
     ld   h, (ix+1)
-    xor  a               ; 0 - n
-    sub  l
-    ld   l, a
-    ld   a, 0
-    sbc  a, h
-    ld   h, a
+    call MATH_NEGATE16           ; -32768 stays -32768
     ld   (ix+0), l
     ld   (ix+1), h
     ret

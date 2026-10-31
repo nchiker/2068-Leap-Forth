@@ -106,8 +106,7 @@ W_INPUT:
     rst RST_DPUSH
     pop  hl
     rst RST_DPUSH                 ; ( addr len ), as W_VAL expects
-    call W_VAL
-    ret
+    jp   W_VAL
 
 
     ENDIF

@@ -80,7 +80,7 @@ FPACK:
     ld   (hl), $80                     ; 0.111...1 + 1 ulp = 1.000: the mantissa $80000000, e + 1
     dec  hl
     inc  (hl)
-    jp   z, F_RANGE
+    jr   z, F_RANGE
 .pack:
     push iy
     pop  de

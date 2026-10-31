@@ -58,8 +58,7 @@ W_TONE:
     call AY_WRITE
     inc  b                     ; b = channel*2+1 = coarse-period register
     ld   c, d
-    call AY_WRITE
-    ret
+    jr   AY_WRITE
 
 ; ============================================================================
 ; VOLUME ( channel level -- ) -- channel 0=A, 1=B, 2=C; level 0-15 (the low 4 bits of the cell)
@@ -79,8 +78,7 @@ W_VOLUME:
     ret  nc                    ; channel not 0-2 -- ignore
     add  a, 8                  ; channel 0/1/2 -> register 8/9/10
     ld   b, a
-    call AY_WRITE
-    ret
+    jr   AY_WRITE
 
 ; ============================================================================
 ; MIXER ( mask -- ) -- write mask unchanged to register 7
@@ -94,8 +92,7 @@ W_MIXER:
     rst RST_DPOP               ; hl = mask
     ld   c, l
     ld   b, 7
-    call AY_WRITE
-    ret
+    jr   AY_WRITE
 
 ; ============================================================================
 ; NOISE ( period -- ) -- write the low 5 bits of period to register 6 (the one shared noise generator)
@@ -110,8 +107,7 @@ W_NOISE:
     and  $1F
     ld   c, a
     ld   b, 6
-    call AY_WRITE
-    ret
+    jr   AY_WRITE
 
 ; ============================================================================
 ; ENVELOPE ( period shape -- ) -- period: 16 bits to registers 11/12; shape: low 4 bits to register 13
@@ -138,8 +134,7 @@ W_ENVELOPE:
     call AY_WRITE
     ld   b, 13
     ld   c, e
-    call AY_WRITE
-    ret
+    jp   AY_WRITE
 
 
     ENDIF

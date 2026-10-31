@@ -59,11 +59,11 @@ HOW THE THROW CODE IS READ
   Code -37 is the cell $FFDB, -28 is $FFE4.  Passing paths (a load that must succeed) use the plain command.
 
 HOW "UNCHANGED" IS JUDGED
-  Before the command and after it the harness reads HERE, LATEST and the dictionary RAM $9800..LOADTEXT_BUF-1 (so a
-  stray write beyond HERE, such as a 64 KB LDIR, shows up).  LOADTEXT_BUF..DICT_RAM_CEILING-1 is left out: it is
+  Before the command and after it the harness reads HERE, LATEST and the dictionary RAM FORTH_DICT_RAM..LOADTEXT_BUF-1
+  (so a stray write beyond HERE, such as a 64 KB LDIR, shows up).  LOADTEXT_BUF..DICT_RAM_CEILING-1 is left out: it is
   core/recall.asm's workspace, where the editor appends every line typed at the prompt on ENTER (an earlier version
   compared it and reported the typed command as a change).  VERIFY-LIB may write its CRC at HERE, HERE + 1 (spec
-  section 6); those two bytes are not compared.  "Dictionary reset" = HERE $9800 and LATEST = DICT_LATEST_COLD
+  section 6); those two bytes are not compared.  "Dictionary reset" = HERE FORTH_DICT_RAM and LATEST = DICT_LATEST_COLD
   (cold start's values).
 
 THE ROM IDENTITY
@@ -306,7 +306,8 @@ class Sess:
 
     def snap(self):
         """HERE, LATEST and the whole dictionary RAM (paused)."""
-        return dict(here=self.here(), latest=self.latest(), ram=bytes(self.rd(self.b.dict0, self.b.ceiling - self.b.dict0)))
+        return dict(here=self.here(), latest=self.latest(), base=self.b.dict0,
+                    ram=bytes(self.rd(self.b.dict0, self.b.ceiling - self.b.dict0)))
 
     # ---- typing
     def type_text(self, text, enter=False):
@@ -451,14 +452,15 @@ def chk_bytes(v, label, got, want):
 
 
 def chk_same(v, label, before, after, whole=True, workspace=0xD000, skip=()):
-    """HERE, LATEST and the dictionary RAM identical: $9800 up to the recall workspace (whole), or only below HERE
-    (whole=False: for commands that use S", which leaves its string just above HERE). skip: addresses allowed to change
-    (VERIFY-LIB's CRC at HERE, HERE + 1)."""
-    n = (workspace if whole else before["here"]) - 0x9800
+    """HERE, LATEST and the dictionary RAM identical: FORTH_DICT_RAM up to the recall workspace (whole), or only below
+    HERE (whole=False: for commands that use S", which leaves its string just above HERE). skip: addresses allowed to
+    change (VERIFY-LIB's CRC at HERE, HERE + 1)."""
+    d0 = before["base"]
+    n = (workspace if whole else before["here"]) - d0
     before, after = dict(before, ram=bytearray(before["ram"][:n])), dict(after, ram=bytearray(after["ram"][:n]))
     for a in skip:
-        if 0 <= a - 0x9800 < n:
-            after["ram"][a - 0x9800] = before["ram"][a - 0x9800]
+        if 0 <= a - d0 < n:
+            after["ram"][a - d0] = before["ram"][a - d0]
     ok = True
     if before["here"] != after["here"]:
         ok = v.check(False, "%s: HERE %04X -> %04X" % (label, before["here"], after["here"]))
@@ -466,7 +468,7 @@ def chk_same(v, label, before, after, whole=True, workspace=0xD000, skip=()):
         ok = v.check(False, "%s: LATEST %04X -> %04X" % (label, before["latest"], after["latest"]))
     if before["ram"] != after["ram"]:
         n = [i for i in range(len(before["ram"])) if before["ram"][i] != after["ram"][i]]
-        ok = v.check(False, "%s: %d dictionary RAM bytes changed (first at $%04X)" % (label, len(n), 0x9800 + n[0]))
+        ok = v.check(False, "%s: %d dictionary RAM bytes changed (first at $%04X)" % (label, len(n), d0 + n[0]))
     return ok
 
 
@@ -557,7 +559,7 @@ def catch_cmd(word, name=""):
 TEXT_DBL = ": DOUBLER DUP + ; 21 DOUBLER ."
 LL_LINE = ": LL LOAD-LIB ;"
 SYN_DICT = bytes((i * 7 + 3) & 0xFF for i in range(96))         # a synthetic dictionary image for the rejecting cases
-SYN_LATEST = 0x9840
+SYN_LATEST = 0x40                                                # its LATEST: FORTH_DICT_RAM + this
 
 
 def foreign_identity(b):
@@ -849,7 +851,7 @@ def lib_case(ctx, items, expect, label, setup=None, word="LL", name="", reset=Fa
 
 def case_5(ctx):
     b = ctx.b
-    items = tapes.lib_file("LIBF", SYN_DICT, SYN_LATEST, foreign_identity(b))
+    items = tapes.lib_file("LIBF", SYN_DICT, b.dict0 + SYN_LATEST, foreign_identity(b))
     return lib_case(ctx, items, -37, "foreign identity", name="LIBF")
 
 
@@ -859,7 +861,7 @@ def v1_image(ctx):
     _, _, d0, errs = prep_dict(ctx, [LL_LINE])
     if errs:
         raise HarnessError("the setup line %r failed" % LL_LINE)
-    return d0 + SYN_DICT, 0x9800 + len(d0) + 0x20
+    return d0 + SYN_DICT, ctx.b.dict0 + len(d0) + 0x20
 
 
 def case_6(ctx):
@@ -872,26 +874,26 @@ def case_7(ctx):
     b = ctx.b
     bad = bytearray(SYN_DICT)
     bad[40] ^= 0x04
-    items = tapes.lib_file("LIBC", bytes(bad), SYN_LATEST, b.identity, crc=tapes.crc16(SYN_DICT))
+    items = tapes.lib_file("LIBC", bytes(bad), b.dict0 + SYN_LATEST, b.identity, crc=tapes.crc16(SYN_DICT))
     return lib_case(ctx, items, -37, "CRC mismatch (XOR fixed up)", name="LIBC", reset=True)
 
 
 def case_8(ctx):
     b = ctx.b
-    items = tapes.lib_file("LIBL0", b"", SYN_LATEST, b.identity, length=0)[:1] + [tapes.framed(0xFF, b"")] + \
-        tapes.lib_file("LIBL1", b"", SYN_LATEST, b.identity, length=1)[:1] + [tapes.framed(0xFF, b"\x5A")]
+    items = tapes.lib_file("LIBL0", b"", b.dict0 + SYN_LATEST, b.identity, length=0)[:1] + [tapes.framed(0xFF, b"")] + \
+        tapes.lib_file("LIBL1", b"", b.dict0 + SYN_LATEST, b.identity, length=1)[:1] + [tapes.framed(0xFF, b"\x5A")]
     # a wildcard load: the first acceptable type-3 header wins, so a wrongly accepted length 0 or 1 would load
     return lib_case(ctx, items, -37, "header length 0 and 1", name="")
 
 
 def case_9(ctx):
     b = ctx.b
-    items = tapes.lib_file("LIBW", SYN_DICT, SYN_LATEST, b.identity, flag=0x55)
+    items = tapes.lib_file("LIBW", SYN_DICT, b.dict0 + SYN_LATEST, b.identity, flag=0x55)
     return lib_case(ctx, items, -37, "data block with the wrong flag", name="LIBW")
 
 
 def dropout_items(b, name, dropout_bytes=(10, 2), identity=None):
-    hdr, data = tapes.lib_file(name, SYN_DICT, SYN_LATEST, b.identity if identity is None else identity)
+    hdr, data = tapes.lib_file(name, SYN_DICT, b.dict0 + SYN_LATEST, b.identity if identity is None else identity)
     t = tapes.Tape().block(data, dropout=dropout_bytes, gap=0)
     return [hdr, ("pulses", t.pulses()), ("pause", 1000)]
 
@@ -1092,7 +1094,7 @@ def legacy_run(ctx, items, label, image=None, max_wall=60):
               "RAM bytes changed" % (label, r["idle"], r["emu_s"], st[0] if st else None, before["here"], after["here"],
                                      before["latest"], after["latest"], changed)
         if image is not None:
-            txt += "; the %d image bytes are at $9800: %s" % (len(image), after["ram"][:len(image)] == image)
+            txt += "; the %d image bytes are at FORTH_DICT_RAM: %s" % (len(image), after["ram"][:len(image)] == image)
         if not r["idle"]:
             txt += "; screen %s" % s.screen()[-3:]
         v.note(txt)

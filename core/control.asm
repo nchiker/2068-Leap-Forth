@@ -92,8 +92,7 @@ W_IF:
     ld   hl, (HERE)                    ; the placeholder about to be written
     rst RST_DPUSH
     ld   hl, 0
-    call COMPILE_WORD
-    ret
+    jr   COMPILE_WORD
 
 ; ============================================================================
 ; ELSE ( -- ) IMMEDIATE -- compile the branch that skips the false part, patch IF's placeholder to
@@ -163,8 +162,7 @@ W_UNTIL:
     ld   hl, QBRANCH
     call COMPILE_CALL
     rst RST_DPOP                       ; HL = BEGIN's loop start
-    call COMPILE_WORD
-    ret
+    jp   COMPILE_WORD
 
 
     ENDIF

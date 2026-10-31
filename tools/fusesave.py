@@ -13,7 +13,7 @@ compared with what docs/V2/STORAGE_SPEC.md section 4 says they must be:
                  data length (TEXT: the text length; LIB: dictionary length + 2), param 1 ($8000 / ROM_IDENTITY),
                  param 2 (text length / LATEST)
   data block     flag $FF, XOR checksum good: TEXT: the line store, i.e. the typed lines each + CR (the console appends
-                 every committed line; STORE_TRIM removes the SAVE-TEXT line itself, docs/V2/EDITOR_SPEC.md section 3); LIB: the dictionary $9800..HERE-1 read from
+                 every committed line; STORE_TRIM removes the SAVE-TEXT line itself, docs/V2/EDITOR_SPEC.md section 3); LIB: the dictionary FORTH_DICT_RAM..HERE-1 read from
                  Fuse's memory, then CRC-16/CCITT-FALSE of it, low byte then high byte
 
 and SAVE-LIB must leave HERE and LATEST alone.  Then the recording is played into a fresh Fuse (tape traps off) with

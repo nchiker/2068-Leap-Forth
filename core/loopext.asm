@@ -37,8 +37,7 @@ W_EXIT:
     djnz .discardloop
 .compileret:
     ld   a, $C9                        ; RET
-    call COMPILE_BYTE
-    ret
+    jp   COMPILE_BYTE
 
 ; ============================================================================
 ; J ( -- n ) -- the index of the loop enclosing the innermost one (I's counterpart, one frame out)

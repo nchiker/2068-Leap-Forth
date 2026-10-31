@@ -24,8 +24,7 @@ H_HIRES:
     DB   5, "H", "I", "R", "E", "S"
 W_HIRES:
     ld   a, 1
-    call GFX_SET_MODE
-    ret
+    jp   GFX_SET_MODE
 
 ; ============================================================================
 ; NORMAL ( -- ) -- switch back to Normal mode (GFX_MODE 0)
@@ -35,8 +34,7 @@ H_NORMAL:
     DB   6, "N", "O", "R", "M", "A", "L"
 W_NORMAL:
     xor  a
-    call GFX_SET_MODE
-    ret
+    jp   GFX_SET_MODE
 
 
     ENDIF

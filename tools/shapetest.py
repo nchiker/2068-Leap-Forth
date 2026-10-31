@@ -76,7 +76,6 @@ BITMAP, ATTRS, SCREEN_END = 0x4000, 0x5800, 0x5B00
 HI_ATTRS, HI_SIZE = 0x6000, 0x1800      # include/hardware.inc SECOND_DISPLAY_ADDR; one attribute byte per scanline and column
 POOL_LO, POOL_HI = 0x5B00, 0x7FFF       # the shadow plane and the seed stack (FILL_CIRCLE_SPEC section 7)
 RAM_LO, RAM_HI = 0x5B00, 0xFDFF         # RAM compared outside the screen; $FE00-$FFFF: machine stack, harness slots
-LATEST_DEFAULT, DSTACK_DEFAULT = 0x8608, 0x9800
 BUDGET = dict(FILL=800_000_000, CIRCLE=100_000_000, PLOT=1_000_000, LINE=10_000_000)     # instructions; today's FILL can need ~10^8 T-states
 TYPE_MAXI = 1_000_000                   # instructions a typed key may take before the console counts as stuck
 LINE_MAX = 100                          # characters per typed line (EDIT_MAX_LEN is 128)
@@ -228,7 +227,7 @@ def dictionary(m):
     words = getattr(m, "_shape_words", None)
     if words is None:
         words = {}
-        a, n = m.w16(m.S.get("LATEST", LATEST_DEFAULT)), 0
+        a, n = m.w16(m.S["LATEST"]), 0
         while a and n < 4000:
             b = m.read(a, 36)
             ln = b[2] & 0x1F
@@ -277,7 +276,7 @@ def snapshot(m):
 def call_word(m, code, args, maxi):
     """Call a word's code address with `args` as ints on the data stack (the last is the top); (reached STOP, T-states,
     registers)."""
-    dtop = m.S.get("DSTACK_TOP", DSTACK_DEFAULT)
+    dtop = m.S["DSTACK_TOP"]
     ix0 = dtop - 2 * len(args)
     m.write(ix0, b"".join(struct.pack("<H", v & 0xFFFF) for v in reversed(args)))
     m.write(STOP_ADDR, b"\x18\xFE")
@@ -345,7 +344,7 @@ def describe_diff(name, got, want, what):
 def check_ram(m, pre, post, nargs):
     """RAM outside the screen (see the header): a message, or None.  The `nargs` cells under DSTACK_TOP are the arguments the
     harness wrote itself (the words consume them but leave them there)."""
-    dtop = m.S.get("DSTACK_TOP", DSTACK_DEFAULT)
+    dtop = m.S["DSTACK_TOP"]
     lst, mask = home_syms(m)
     bad = []
     for lo, hi in m.ram_diff(pre["ram"], post["ram"], RAM_LO):
@@ -425,7 +424,7 @@ def run_case(m, cs):
         ram = check_ram(m, pre, post, len(args))
         if ram:
             bad.append(ram)
-        if regs["IX"] != S.get("DSTACK_TOP", DSTACK_DEFAULT):
+        if regs["IX"] != S["DSTACK_TOP"]:
             bad.append("IX = $%04X afterwards, not DSTACK_TOP (arguments not consumed)" % regs["IX"])
         if regs["SP"] != NORMAL_SP:
             bad.append("SP = $%04X afterwards, not $%04X" % (regs["SP"], NORMAL_SP))

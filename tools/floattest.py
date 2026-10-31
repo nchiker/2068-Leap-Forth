@@ -78,7 +78,6 @@ TEXT = 0xFF50                           # counted strings (NUMBER); up to 31 cha
 MEMA = 0xFFA0                           # the cell F@ and F! use; $FF9C-$FFA8 guard bytes
 GUARD = 0xA5
 BANNER = "2068-FORTH"
-FSTACK_TOP, DSTACK_TOP, LATEST = 0x9000, 0x9800, 0x8608
 FSTACK_CELLS = 204
 BEEP_PLAY_SYM = "BEEP_PLAY"
 
@@ -140,9 +139,10 @@ LIT_MORE = ["-1.5", "-.5", "-1E3", "-2.5e-4", "-0.0", "3.", "12345678901.", "123
             "9.999999999", "1.7E38", "2.9E-39", "1E-50", "65536.0", "40000.0", "-40000.0", "1E0", "5E+2", "0.10000"]
 # not floats: integers (a 16-bit pattern, or -43 outside -32768..65535), non-numbers, out of range
 INT_TEXTS = ["0", "1", "-1", "12345", "32767", "32768", "40000", "65535", "-32768", "-32767", "007", "-0",
-             "65536", "100000", "-40000", "-32769", "99999999999999999999"]
+             "65536", "100000", "-40000", "-32769", "99999999999999999999",
+             "6399", "6400", "6409", "64009", "64010", "64019", "-6400", "0006400"]   # the 16-bit loop's hand-over
 BAD_TEXTS = ["", "-", ".", "-.", "1.2.3", "1..2", "ABC", "1E", "1E+", "E5", "+5", "1.5f", "2.5L", "0x10", "1_000",
-             "--1", "1e5e5", "1.5x", "1E39", "1E300", "-1E39", "2E38"]
+             "--1", "1e5e5", "1.5x", "1E39", "1E300", "-1E39", "2E38", "12a", "5-", "64009x"]
 
 
 def random_texts(rng, n):
@@ -294,9 +294,10 @@ class Fw:
     def __init__(self, m):
         self.m = m
         self.syms = m.S
+        self.ftop, self.dtop = m.S["FSTACK_TOP"], m.S["DSTACK_TOP"]
         self.cell = 5                                        # bytes per float cell (3 only for the old build's speed operands)
         self.words = {}
-        a, n = m.w16(m.S.get("LATEST", LATEST)), 0
+        a, n = m.w16(m.S["LATEST"]), 0
         while a and n < 4000:
             b = m.read(a, 36)
             ln = b[2] & 0x1F
@@ -322,7 +323,7 @@ class Fw:
         code = self.addr(word)
         nf, ni = len(floats), len(ints)
         cw = self.cell
-        iy0, ix0 = FSTACK_TOP - cw * nf, DSTACK_TOP - 2 * ni
+        iy0, ix0 = self.ftop - cw * nf, self.dtop - 2 * ni
         if nf:
             m.write(iy0, b"".join(reversed(floats)))                # the last cell is the top, at IY
         if ni:
@@ -350,12 +351,14 @@ class Fw:
         r.regs, r.pc, r.sp, r.iy, r.ix = g, pc, g["SP"], g["IY"], g["IX"]
         r.ok = pc == STOP_ADDR
         r.threw = r.ok and r.sp == THROWN_SP
-        nfl = (FSTACK_TOP - r.iy) // cw if r.iy <= FSTACK_TOP and (FSTACK_TOP - r.iy) % cw == 0 else None
+        r.ftop = ftop = self.ftop
+        nfl = (ftop - r.iy) // cw if r.iy <= ftop and (ftop - r.iy) % cw == 0 else None
         r.f = None
         if nfl is not None and nfl <= 210:
             raw = m.read(r.iy, cw * nfl) if nfl else b""
             r.f = [raw[cw * k:cw * k + cw] for k in range(nfl)][::-1]
-        nin = (DSTACK_TOP - r.ix) // 2 if r.ix <= DSTACK_TOP and (DSTACK_TOP - r.ix) % 2 == 0 else None
+        dtop = self.dtop
+        nin = (dtop - r.ix) // 2 if r.ix <= dtop and (dtop - r.ix) % 2 == 0 else None
         r.ints = None
         if nin is not None and nin <= 64:
             raw = m.read(r.ix, 2 * nin) if nin else b""
@@ -402,7 +405,7 @@ def judge(fw, r, cs):
     if why:
         return "%s, wanted %s %s" % (why, cstr(exp[1]), [s16(v) for v in exp[2]])
     if r.f is None:
-        return "IY=$%04X is not a whole number of cells under $%04X (wanted %s)" % (r.iy, FSTACK_TOP, cstr(exp[1]))
+        return "IY=$%04X is not a whole number of cells under $%04X (wanted %s)" % (r.iy, r.ftop, cstr(exp[1]))
     if r.f != exp[1]:
         return "float stack ROM %s, model %s" % (cstr(r.f), cstr(exp[1]))
     if r.ints != exp[2]:
@@ -573,8 +576,8 @@ def do_beep(fw, cs):
     if r.pc == m.sym(BEEP_PLAY_SYM):
         g = r.regs
         frames, hl = g["DE"], g["HL"]
-        if g["IY"] != FSTACK_TOP or g["IX"] != DSTACK_TOP:
-            return "stacks at BEEP_PLAY: IX=$%04X IY=$%04X, wanted $%04X $%04X" % (g["IX"], g["IY"], DSTACK_TOP, FSTACK_TOP)
+        if g["IY"] != fw.ftop or g["IX"] != fw.dtop:
+            return "stacks at BEEP_PLAY: IX=$%04X IY=$%04X, wanted $%04X $%04X" % (g["IX"], g["IY"], fw.dtop, fw.ftop)
         if hl != cs["i"][0] & 0xFFFF:                       # (a negative semitone count is the 16-bit pattern in HL)
             return "semitones at BEEP_PLAY %d, wanted %d" % (s16(hl), s16(cs["i"][0] & 0xFFFF))
     else:
@@ -712,7 +715,7 @@ def t_beep_typed(m, fw, a):
 
 def top_cell(m):
     iy = m.regs()["IY"]
-    d = FSTACK_TOP - iy
+    d = m.S["FSTACK_TOP"] - iy
     return m.read(iy, 5) if 5 <= d <= 5 * FSTACK_CELLS and d % 5 == 0 else None, iy
 
 
@@ -723,7 +726,7 @@ def t_lit(m, fw, a):
     fails = []
     for k, tok in enumerate(a["tokens"]):
         want = P.parse(tok)[1]
-        m.setreg("IY", FSTACK_TOP)
+        m.setreg("IY", fw.ftop)
         if mode == "typed":
             typ(c, tok)
         else:
@@ -734,7 +737,7 @@ def t_lit(m, fw, a):
                 continue
             typ(c, "T%d" % k)
         cell, iy = top_cell(m)
-        if cell != want or iy != FSTACK_TOP - 5:
+        if cell != want or iy != fw.ftop - 5:
             fails.append("%s %r: float stack top %s (IY=$%04X), model %s" % (mode, tok, cellstr(cell) if cell else None, iy, cellstr(want)))
     return result(len(a["tokens"]), len(a["tokens"]), fails)
 
@@ -746,8 +749,9 @@ def t_stack(m, fw, a):
         iy = m.regs()["IY"]
         o2 = con_out(m, c, [": U 204 0 DO FDROP LOOP ;", "U FDEPTH ."])
         iy2 = m.regs()["IY"]
-        ok = o1 == "204" and o2 == "0" and iy2 == FSTACK_TOP
-        return dict(ok=ok, detail="204 pushes: FDEPTH %r, IY=$%04X (FSTACK_LIMIT $8C04); 204 drops: FDEPTH %r, IY=$%04X" % (o1, iy, o2, iy2))
+        ok = o1 == "204" and o2 == "0" and iy2 == m.S["FSTACK_TOP"]
+        return dict(ok=ok, detail="204 pushes: FDEPTH %r, IY=$%04X (FSTACK_LIMIT $%04X); 204 drops: FDEPTH %r, IY=$%04X" % (
+            o1, iy, m.S["FSTACK_LIMIT"], o2, iy2))
     o = con_out(m, c, [": T 205 0 DO 1.5 LOOP ;", "T"])
     return dict(ok=o == "STACK?", detail="205 pushes: %r (IY=$%04X)" % (o, m.regs()["IY"]))
 

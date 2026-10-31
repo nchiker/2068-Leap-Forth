@@ -96,7 +96,7 @@ W_CONSTANT:
     call VAR_HEADER
     pop  hl
     call COMPILE_LITERAL
-    jp   VAR_END
+    jr   VAR_END
 
 
     ENDIF

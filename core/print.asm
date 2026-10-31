@@ -112,12 +112,7 @@ W_DOT:
     rst RST_DPUSH
     call W_EMIT
     pop  hl
-    xor  a                       ; negate hl -- correct even for $8000
-    sub  l
-    ld   l, a
-    ld   a, 0
-    sbc  a, h
-    ld   h, a
+    call MATH_NEGATE16           ; -32768 stays -32768
 .positive:
     ld   a, h
     or   l
@@ -151,8 +146,7 @@ W_DOT:
 .donedigits:
     ld   hl, " "
     rst RST_DPUSH
-    call W_EMIT
-    ret
+    jp   W_EMIT
 
 ; ============================================================================
 ; PRINT_UDEC16 -- print an unsigned number in decimal, no leading zeros, no trailing space
@@ -166,8 +160,7 @@ PRINT_UDEC16:
     jr   nz, .hasdigits
     ld   hl, "0"
     rst RST_DPUSH
-    call W_EMIT
-    ret
+    jp   W_EMIT
 .hasdigits:
     ld   c, 0
 .divloop:

@@ -55,8 +55,7 @@ H_2DROP:
     DB   5, "2","D","R","O","P"
 W_2DROP:
     call W_DROP
-    call W_DROP
-    ret
+    jp   W_DROP
 
 ; ============================================================================
 ; ?DUP ( x -- 0 | x x ) -- duplicate x only if it is nonzero
@@ -70,8 +69,7 @@ W_QDUP:
     ld   a, h
     or   l
     ret  z                   ; x = 0: leave the single 0 exactly as is
-    call W_DUP
-    ret
+    jp   W_DUP
 
 ; ============================================================================
 ; PICK ( x_u ... x_0 u -- x_u ... x_0 x_u ) -- copy the u-th item to the top (0 PICK = DUP, 1 PICK = OVER)

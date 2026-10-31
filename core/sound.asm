@@ -50,7 +50,7 @@ W_SOUND:
     or   a
     ret  nz               ; 256 and up: ignored
     ld   b, l
-    jp   SOUND_WRITE
+    jr   SOUND_WRITE
 
 
     ENDIF

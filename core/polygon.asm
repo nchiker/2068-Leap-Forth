@@ -76,8 +76,7 @@ W_POLYGON:
     ld   a, (CURRENT_ATTR)
     ld   (POLY_ATTR), a
     ld   hl, GRAPHICS_EXROM_BASE + (1 * 3)   ; slot 1 = POLY_DRAW_IMPL
-    call EXROM_CALL_SLOT
-    ret
+    jp   EXROM_CALL_SLOT
 
 ; ============================================================================
 ; POLYGON-FILL ( x1 y1 x2 y2 ... xn yn n -- ) -- fill the polygon's interior (even-odd rule),
@@ -93,8 +92,7 @@ W_POLYGONFILL:
     ld   a, (CURRENT_ATTR)
     ld   (POLY_ATTR), a
     ld   hl, GRAPHICS_EXROM_BASE + (5 * 3)   ; slot 5 = POLY_FILL_IMPL
-    call EXROM_CALL_SLOT
-    ret
+    jp   EXROM_CALL_SLOT
 
 
     ENDIF

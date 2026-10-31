@@ -30,7 +30,7 @@ W_FILL:
     ld   a, (CURRENT_ATTR)
     ld   (GFX_FILL_ATTR), a
     ld   hl, GRAPHICS_EXROM_BASE + (7 * 3)   ; slot 7 = FILL_IMPL
-    jp   EXROM_CALL_SLOT       ; tail jump: its RET returns to our caller
+    jr   EXROM_CALL_SLOT       ; tail jump: its RET returns to our caller
 
 ; ============================================================================
 ; CIRCLE ( xc yc r -- ) -- draw the outline of the circle of radius r about (xc, yc) in the

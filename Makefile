@@ -13,7 +13,7 @@
 #   make audio        what the emulated AY plays for BEEP (real time, about two minutes)
 #   make repro        two clean builds must give identical hashes
 #   make docs, dist   the PDF/DOCX documents; the download bundle (CI)
-.PHONY: all check budget test test-fast tapetol tapetol-fuse fusesave audio repro docs dist clean
+.PHONY: all check budget inventory test test-fast tapetol tapetol-fuse fusesave audio repro docs dist clean
 
 SJASM := tools/sjasmplus_strict.sh --outprefix=build/
 SRC := $(shell find core kernel include rom -name '*.asm' -o -name '*.inc' | sort) tools/sjasmplus_strict.sh
@@ -57,6 +57,10 @@ check: all
 
 budget: all
 	python3 -I tools/budget.py
+
+inventory: all
+	python3 -I tools/rom_inventory.py
+	python3 -I tools/rom_inventory.py --image exrom
 
 test: all
 	python3 -I tools/run_tests.py

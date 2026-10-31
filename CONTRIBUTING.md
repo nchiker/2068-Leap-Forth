@@ -31,6 +31,7 @@ make check       # strict assembly, opcode and source checks, the RAM layout gua
                  # the adopted tape code, the tape tools' self-test, ROM_IDENTITY
 make repro       # two clean builds must give identical hashes
 make budget      # free bytes per image against the floors (budget.toml)
+make inventory   # every routine's size and referrers, per component; the ones nothing reaches (UNR)
 make test        # ZEsarUX: every suite on a pool of emulators (tools/run_tests.py), about 10 minutes
 make test-fast   # the development subset, about 2 minutes
 make tapetol     # the tape receiver's tolerance (TAPETOL_BASE=<old build dir> compares two builds)

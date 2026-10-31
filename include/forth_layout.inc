@@ -13,10 +13,10 @@
 ;   $7300-$7FFF  FILL's seed stack                                GFX_FILL_STACK .. GFX_FILL_STACK_END
 ;   $6000-$77FF  display file 2 (HIRES), over the two FILL areas  SECOND_DISPLAY_ADDR .. SECOND_DISPLAY_END
 ;                (FILL does nothing in HIRES)
-;   $8000-$8C03  the cells                                        RAM_CELLS_BASE .. RAM_CELLS_END
-;   $8C04-$8FFF  float stack, 204 cells of 5 bytes                FSTACK_LIMIT .. FSTACK_TOP
-;   $9000-$97FF  data stack                                       DSTACK_LIMIT .. DSTACK_TOP
-;   $9800-$CFFF  dictionary ($A000-$BFFF is hidden while the      FORTH_DICT_RAM .. DICT_RAM_CEILING
+;   $8000-$8503  the cells                                        RAM_CELLS_BASE .. RAM_CELLS_END
+;   $8504-$88FF  float stack, 204 cells of 5 bytes                FSTACK_LIMIT .. FSTACK_TOP
+;   $8900-$90FF  data stack                                       DSTACK_LIMIT .. DSTACK_TOP
+;   $9100-$CFFF  dictionary ($A000-$BFFF is hidden while the      FORTH_DICT_RAM .. DICT_RAM_CEILING
 ;                EXROM is paged in)
 ;   $D000-$EFFF  line store                                       STORE_START .. STORE_LIMIT
 ;   $F000-$F17F  sprite buffers, then free                        SPRITE_SLOT_IMG_BUF, SPRITE_SLOT_BG_BUF
@@ -27,8 +27,8 @@
 ;   $FF00-$FFFF  not used by the ROM (the test harness's return slot)
 ;
 ; Region symbols come first, then the cells block ($8000 up, assembler-computed: a name and
-; its size, free space as DEFS), then the cells above it. A cell the code does not reference
-; has no name; its space stays as DEFS n ; free.
+; its size, packed; the room left for new cells is at its end), then the cells above it. A cell
+; the code no longer references is removed.
 ; ============================================================================
 
     IFNDEF FORTH_LAYOUT_INC
@@ -42,12 +42,12 @@ GFX_FILL_STACK_END  EQU $8000
 SECOND_DISPLAY_ADDR EQU $6000       ; HIRES attributes: byte $6000+n belongs to the bitmap byte at $4000+n
 SECOND_DISPLAY_END  EQU $7800
 RAM_CELLS_BASE      EQU $8000
-RAM_CELLS_END       EQU $8C04
-FSTACK_LIMIT        EQU $8C04       ; lowest legal IY
-FSTACK_TOP          EQU $9000       ; empty-stack value of IY; the first push lands at $8FFB
-DSTACK_LIMIT        EQU $9000       ; lowest legal IX
-DSTACK_TOP          EQU $9800       ; empty-stack value of IX; the first push lands at $97FE
-FORTH_DICT_RAM      EQU $9800       ; first byte of the RAM dictionary
+RAM_CELLS_END       EQU $8504
+FSTACK_LIMIT        EQU $8504       ; lowest legal IY
+FSTACK_TOP          EQU $8900       ; empty-stack value of IY; the first push lands at $88FB
+DSTACK_LIMIT        EQU $8900       ; lowest legal IX
+DSTACK_TOP          EQU $9100       ; empty-stack value of IX; the first push lands at $90FE
+FORTH_DICT_RAM      EQU $9100       ; first byte of the RAM dictionary
 DICT_RAM_CEILING    EQU $D000       ; the dictionary ends where the line store begins
 STORE_START         EQU $D000
 LOADTEXT_BUF        EQU STORE_START ; LOAD-TEXT receives here
@@ -92,16 +92,11 @@ GFX_LINE_Y1         EQU $F3C7       ; LINE: end y
 ; ---- the cells block: RAM_CELLS_BASE .. RAM_CELLS_END ----
 LAYOUT_RETURN_ORG   EQU $
     ORG RAM_CELLS_BASE
-    DEFS 48                                             ; free
 IO_SCAN_TABLE:            DEFS 8                        ; keyboard matrix scan, one byte per row
-    DEFS 335                                            ; free
 PORT_FE_SHADOW:           DEFS 1                        ; last byte written to port $FE (border colour, MIC)
-    DEFS 3                                              ; free
 STORAGE_HEADER_BUF:       DEFS 17                       ; tape header payload: type, name (10), length, parameter 1, parameter 2
 STORAGE_REQUEST_TYPE:     DEFS 1                        ; header type a SAVE or LOAD asks for
-    DEFS 3                                              ; free
 STORAGE_ENTRY_RETRY:      DEFS 2                        ; tape receive: pilot search budget
-    DEFS 2                                              ; free
 SQRT_OP:                  DEFS 2                        ; SQRT: working copy of the operand
 SQRT_RES:                 DEFS 2                        ; SQRT: result so far
 SQRT_COUNTER:             DEFS 1                        ; SQRT: loop count
@@ -175,17 +170,14 @@ POLY_FILL_I:              DEFS 1                        ; POLYGON fill: loop cur
 POLY_FILL_J:              DEFS 1                        ; POLYGON fill: inner loop cursor of the sort
 POLY_FILL_PASS:           DEFS 1                        ; POLYGON fill: sort passes left
 POLY_FILL_ERR_ADDR:       DEFS 2                        ; POLYGON fill: address of the current edge's error
-    DEFS 37                                             ; free
 GFX_SCROLL_DST_ROW:       DEFS 1                        ; scroll: destination row (0-22)
 GFX_SCROLL_SRC_ROW:       DEFS 1                        ; scroll: source row (0-22)
-    DEFS 1                                              ; free
 KBD_LASTK:                DEFS 1                        ; last accepted key code
 KBD_KEYHIT:               DEFS 1                        ; nonzero: KBD_LASTK holds a key not yet read
 KBD_CUR_ROW:              DEFS 1                        ; matrix row of the key being tracked ($FF: none)
 KBD_CUR_BIT:              DEFS 1                        ; its bit in that row (0-4)
 KBD_DEBOUNCE:             DEFS 1                        ; ticks until a newly seen key is accepted
 KBD_REPEAT:               DEFS 1                        ; ticks until the next auto-repeat
-    DEFS 73                                             ; free
 FRAMES:                   DEFS 2                        ; frame counter, one per interrupt
 SPRITE_SLOT_DEFINED:      DEFS SPRITE_SLOT_MAX          ; per sprite slot: defined
 SPRITE_SLOT_SHOWN:        DEFS SPRITE_SLOT_MAX          ; per sprite slot: drawn on the screen
@@ -202,23 +194,17 @@ SPRITE_CELL_ROW:          DEFS 1                        ; sprite transfer: the c
 SPRITE_CELL_COL:          DEFS 1                        ; sprite transfer: the cell's character column
 BANK_EXROM_DEPTH:         DEFS 1                        ; EXROM page-in nesting depth (0: chunk 5 is HOME)
 BLOCK_GFX_SCRATCH:        DEFS 8                        ; block graphics: glyph being built
-    DEFS 495                                            ; free
 SRC_PTR:                  DEFS 2                        ; interpreter: next unread source character
 SRC_END:                  DEFS 2                        ; interpreter: one past the last source byte
 STATE:                    DEFS 1                        ; 0 interpreting, 1 compiling
 FIND_SEARCH_ADDR:         DEFS 2                        ; FIND: scratch
-FIND_HEADER_ADDR:         DEFS 2                        ; FIND: scratch
-FIND_RAW_LENFLAGS:        DEFS 1                        ; FIND: length byte before masking (the IMMEDIATE bit)
-    DEFS 3                                              ; free
 NUM_NEG:                  DEFS 1                        ; NUMBER: leading minus seen
 WORD_SRC_ADDR:            DEFS 2                        ; colon definition: scratch
 NEW_HEADER_ADDR:          DEFS 2                        ; colon definition: new header address
 INTERP_IMM_FLAG:          DEFS 1                        ; INTERPRET_RUN: scratch
 INTERP_ERROR_FLAG:        DEFS 1                        ; set to 1 by an error; cleared on entry to INTERPRET_RUN
-    DEFS 12                                             ; free
 WORD_BUF:                 DEFS 34                       ; the word being looked up: count byte, up to 32 upper-case characters
 THROW_ROOT_SP:            DEFS 2                        ; SP at the outermost INTERPRET_RUN, where an uncaught THROW returns
-    DEFS 69                                             ; free
 STORAGE_NAME_LEN:         DEFS 1                        ; tape name length (0: any name on LOAD)
 STORAGE_NAME_BUF:         DEFS STORAGE_HEADER_FILENAME_LEN; tape name, space padded
 FP_RAM:                   DEFS 66                       ; float scratch, one area; the names below overlay it
@@ -237,7 +223,6 @@ THROW_CODE:               DEFS 2                        ; code of an uncaught TH
 CATCH_STACK:              DEFS 48                       ; CATCH frames: 8 x (SP, IX, IY)
 LATEST:                   DEFS 2                        ; head of the dictionary chain
 HERE:                     DEFS 2                        ; next free dictionary byte
-    DEFS 444                                            ; free
 PRINT_ROW:                DEFS 1                        ; EMIT: next row (0-22)
 PRINT_COL:                DEFS 1                        ; EMIT: next column (0-31)
 EMIT_CHAR_TMP:            DEFS 1                        ; EMIT: scratch
@@ -261,7 +246,6 @@ ACCEPT_MAX:               DEFS 1                        ; ACCEPT: maximum count
 ACCEPT_LEN:               DEFS 1                        ; ACCEPT: count so far
 ACCEPT_CHAR:              DEFS 1                        ; ACCEPT: character just read
 FINPUT_BUF:               DEFS 8                        ; INPUT: number buffer
-    DEFS 97                                             ; free
 EDIT_BUF:                 DEFS 128                      ; the line being edited; EDIT_LEN is its length
 EDIT_LEN:                 DEFS 1                        ; characters in EDIT_BUF
 EDIT_CURSOR:              DEFS 1                        ; cursor position in EDIT_BUF, 0 to EDIT_LEN
@@ -278,26 +262,17 @@ FWRAP_TMP_LEN:            DEFS 1                        ; wrap: scratch
 FWRAP_TMP_OFFSET:         DEFS 1                        ; wrap: scratch
 FWRAP_OLD_COUNT:          DEFS 1                        ; FWRAP_COUNT at the last redraw (1 from the cold start)
 FWRAP_OVERFLOW:           DEFS 1                        ; 1: the line needs more rows than the table holds
-    DEFS 1                                              ; free
 FWRAP_WIDTH_MINUS1:       DEFS 1                        ; wrap width - 1
 FWRAP_TOP:                DEFS 1                        ; screen row of the table's first row
 FWRAP_CURSOR_AT_END:      DEFS 1                        ; wrap: 0 when the cursor is at the end of the text
 FWRAP_BASE:               DEFS 2                        ; the text the wrap table describes
 ED_ROW_JP:                DEFS 3                        ; RAM JP to the row drawer for the width
-    DEFS 1                                              ; free
 CHR_BUF:                  DEFS 1                        ; CHR: the one-character result
 STR_BUF:                  DEFS 6                        ; STR: the result
-SRCH_ADDR1:               DEFS 2                        ; SEARCH: haystack address
-SRCH_LEN1:                DEFS 1                        ; SEARCH: haystack length
-SRCH_ADDR2:               DEFS 2                        ; SEARCH: needle address
-SRCH_LEN2:                DEFS 1                        ; SEARCH: needle length
-SRCH_POS:                 DEFS 1                        ; SEARCH: offset being tried
-SRCH_MAXPOS:              DEFS 1                        ; SEARCH: last offset worth trying
 CATCH_TMP_SP:             DEFS 2                        ; CATCH: staging cell for SP
 CATCH_TMP_IX:             DEFS 2                        ; CATCH: staging cell for IX
 CATCH_TMP_IY:             DEFS 2                        ; CATCH: staging cell for IY
 CATCH_DEPTH:              DEFS 1                        ; active CATCH frames (0: none)
-    DEFS 42                                             ; free
 SPACES_COUNT:             DEFS 2                        ; SPACES: count left
 PRINT_LINE_BUF:           DEFS 256                      ; printer: one line of dots, 8 raster rows x 32 bytes
 PRINT_COL_IDX:            DEFS 1                        ; printer: column (0-31)
@@ -309,16 +284,13 @@ PRINT_ROW_IDX:            DEFS 1                        ; printer: raster row (0
 PRINT_REMAINING:          DEFS 2                        ; LPRINT: characters left
 PRINT_CUR_ADDR:           DEFS 2                        ; LPRINT: current source pointer
 PRINT_LLIST_HDR:          DEFS 2                        ; LLIST: current header
-    DEFS 15                                             ; free
 FORGET_TARGET_ADDR:       DEFS 2                        ; FORGET: candidate header address
-    DEFS 18                                             ; free
 STORE_END:                DEFS 2                        ; line store: one past the last byte, the append cursor
 DEF_COUNT:                DEFS 1                        ; LIST-DEFS: spans found (0-16)
 DEF_TABLE:                DEFS 64                       ; LIST-DEFS spans: 16 x (offset from STORE_START, length)
 RECALL_SCAN_PTR:          DEFS 2                        ; SCAN_DEFS: scratch
 RECALL_SPAN_START:        DEFS 2                        ; SCAN_DEFS: scratch
 RECALL_LIST_IDX:          DEFS 1                        ; LIST-DEFS: index of the span being listed
-    DEFS 4                                              ; free
 VIEW_RESULT:              DEFS 1                        ; what VIEW_SESSION reports
 VIEW_CUR:                 DEFS 2                        ; view: the cursor line (its text is in EDIT_BUF)
 VIEW_TOP:                 DEFS 2                        ; view: the first line on screen
@@ -343,14 +315,12 @@ VIEW_T1:                  DEFS 2                        ; view: scratch
 VIEW_T2:                  DEFS 2                        ; view: scratch
 VIEW_FLAG:                DEFS 1                        ; view: scratch
 VIEW_TEXT:                DEFS 14                       ; view: the status row's text
-    DEFS 1                                              ; free
 EDIT_LINE_NO:             DEFS 2                        ; number of the line the commit loop is running (0: none)
 VIEW_SH:                  DEFS 69                       ; view: row shadow, rows 0-22 x (line index 2, row in line 1); index $FFFF blank, $FFFE unknown
 VIEW_SH_END:                                            ; one past VIEW_SH
 VIEW_STOP:                DEFS 2                        ; view: VIEW_RENDER may stop after this line once the shadow agrees
-    DEFS 196                                            ; free
 STORE_LAST_LINE:          DEFS 2                        ; last line STORE_APPEND appended (0: none), for STORE_TRIM
-    DEFS 4                                              ; free
+    DEFS RAM_CELLS_END - $                              ; free: room for new cells
     ASSERT $ == RAM_CELLS_END
     ASSERT FP_RAM + 66 == THROW_CODE && FMT + 24 == FDIG && FDIG + 9 == FSQ_N && FQ + 8 == FFLAGS + 1
     ASSERT VIEW_SH_END == VIEW_SH + 69 && VIEW_TEXT + 14 <= EDIT_LINE_NO && (VIEW_TEXT & $FF) + 14 < $100

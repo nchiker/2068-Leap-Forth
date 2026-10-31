@@ -3,13 +3,15 @@
 Read this, then `docs/V2/ROADMAP.md` (done / next / known defects) and `CONTRIBUTING.md` (build, test, rules). Milestone
 reports: `docs/V2/milestones/`.
 
-## Where things stand (2026-10-30)
+## Where things stand (2026-10-31)
 
-- **master** `c7ac8b1` (PR #9, step O15, merged 2026-10-30; `make test` passed on it).
-- **`v2/step-simplify`** (not pushed): step Simplify complete, `docs/V2/milestones/Simplify.md`. Open its PR when the
-  owner asks; the owner reviews it before the next session. Merge with a merge commit, run `make test` on master.
-- **Free bytes:** HOME 1,732, EXROM 3,296; per component in `budget.toml` (`make budget`).
-- **Next:** ROADMAP step 1, *Space*.
+- **master:** step Space (`docs/V2/milestones/Space.md`) merged from `v2/step-space` with a merge commit on
+  2026-10-31, after Simplify (PR #10); `make test` run on master after the merge (`git log --merges -2`).
+- **Decided (2026-10-31):** nothing moves to the EXROM now; Space report section 5 is the measured list for when a
+  step runs short.
+- **Free bytes:** HOME 2,052, EXROM 3,296; per component in `budget.toml` (`make budget`), per routine
+  `make inventory`. The dictionary starts at `$9100` (`FREE` 16,128 at power-on).
+- **Next:** ROADMAP step 1, *Words and keys*.
 
 ## How the owner wants the work done
 
@@ -38,17 +40,20 @@ reports: `docs/V2/milestones/`.
   10900-10919, tapetest 10960-10979, tapetol 10980-10999.
 - **Suite times:** `make test` ~9 min (pool ~3, poweron 0.5, tape ~5.5), `make test-fast` ~2 min,
   `python3 tools/forthtest.py` (the Forth tests alone) ~30 s.
-- **Forth tests:** `{NAME}` in a test line is a ROM symbol's value (never a literal RAM address in a test: the layout
-  will be compacted). A line's output must fit the screen; a line that clears the screen must print something new;
-  `\ keys:` feeds KEY/ACCEPT/INPUT; `\ draws` for picture lines.
+- **Forth tests:** `{NAME}` in a test line is a ROM symbol's value (never a literal RAM address in a test). A line's
+  output must fit the screen; a line that clears the screen must print something new; `\ keys:` feeds
+  KEY/ACCEPT/INPUT; `\ draws` for picture lines. A full screen scrolls: put `CLS 0 0 AT-XY` before a long block. A
+  timing test reads `FRAMES` just after a tick (`tests/sound/ay.fs`'s `TICK`): any change in speed moves where a line
+  starts in the frame.
 - **ZEsarUX's tape autoload** types J "" ENTER when the PC reaches `$11F8` with the HOME ROM paged in. Data (the font)
   must cover `$11F8`: `rom/forth_boot.asm` ASSERTs it. When HOME shrinks and the ASSERT fails, move includes ahead of
   the font, never the ASSERT.
 - **HIRES is the SCLD's 8×1 colour mode**: the attribute of bitmap byte `$4000+n` is at `$6000+n`.
 - **The EXROM hides `$A000-$BFFF`** (dictionary RAM) while paged in; EXROM code reaches HOME only through
   `GRAPHICS_HOME_TABLE`, and HOME cells through `include/forth_layout.inc`.
-- **The layout file keeps every address** (dead cells are `DEFS n ; free`); compacting moves addresses, so tools must
-  use `.sym` names (they do) and tests `{NAME}`.
+- **The layout file is packed** (Space): a cell no code references is removed, and new cells go in the room at the
+  end of the cells block (123 B). Addresses move whenever cells change, so tools read `.sym` names and tests use
+  `{NAME}`; `tests/core/free.fs` holds the dictionary size on purpose.
 - **z80sim** (`tools/z80sim/`) is a vendored copy: change it upstream (`~/z80sim`), never here; its `SYSVARS` table is
   from the BASIC project.
 - **Whole-flow tests carry their own expected values** (the Blackjack round log in tapetest case 2): after a change to

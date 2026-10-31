@@ -1054,3 +1054,13 @@ this is the condensed one-paragraph-per-phase version.
   32 or more characters (31 are kept); `LIST-DEFS` with a `;` inside a
   string. HOME free space 1,758 bytes before, 1,732 after; EXROM 3,296.
   Emulators only; no hardware.
+- V2 step Space (`docs/V2/milestones/Space.md`): `make inventory` lists
+  every routine with its size and callers; dead code removed and a
+  shrink pass over HOME. `FIND` is about twice as fast per dictionary
+  entry, so typing and compiling are about a third faster. `SEARCH`,
+  `UPPER` and `LOWER` now handle strings longer than 255 bytes. The RAM
+  variables are packed, so the dictionary starts lower: `FREE` reports
+  16,128 bytes on a fresh machine instead of 14,336. LIB tapes saved by
+  an earlier ROM do not load (as with every ROM change); source text
+  saved with `SAVE-TEXT` does. HOME free space 1,732 bytes before, 2,052
+  after; EXROM 3,296. Emulators only; no hardware.

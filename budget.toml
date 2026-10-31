@@ -157,3 +157,58 @@ image = "home"
 component = "console"
 delta = 14
 reason = "LIST-DEFS ends a definition at the word ; only (it ended at any ; byte, so : CC .\" A;B\" ; was cut short): whitespace tested on both sides; from the reserve"
+
+# Space (2026-10-31): the shrink pass's bytes return to the HOME reserve, so a budget is again the component's size.
+[[ledger]]
+image = "home"
+component = "boot"
+delta = -152
+reason = "Space: kernel/memory/memory.asm and kernel/interrupt/interrupt.asm assemble in page zero's two gaps (before the NMI vector and before $0100), which were fill counted here (-156); INT_GET_FRAMES's 4 B are fill again (+4); returned to the reserve"
+
+[[ledger]]
+image = "home"
+component = "kernel"
+delta = -5
+reason = "Space: INT_GET_FRAMES removed (4 B, nothing called it), one jump relaxed (1 B); returned to the reserve"
+
+[[ledger]]
+image = "home"
+component = "interp"
+delta = -44
+reason = "Space: FIND keeps its state in registers (-30 B, and 82 T per header instead of about 180), tail jumps and relaxed jumps (-14 B); returned to the reserve"
+
+[[ledger]]
+image = "home"
+component = "integer"
+delta = -8
+reason = "Space: NEGATE calls MATH_NEGATE16 (-4 B), tail jumps (-4 B); returned to the reserve"
+
+[[ledger]]
+image = "home"
+component = "float"
+delta = -2
+reason = "Space: two relaxed jumps; returned to the reserve"
+
+[[ledger]]
+image = "home"
+component = "text"
+delta = -85
+reason = "Space: SEARCH, UPPER and LOWER rebuilt with 16-bit lengths (-72 B: UPPER and LOWER share one loop, SEARCH keeps its state in registers), STR and . call MATH_NEGATE16 (-8 B), tail and relaxed jumps (-5 B); returned to the reserve"
+
+[[ledger]]
+image = "home"
+component = "graphics"
+delta = -13
+reason = "Space: tail jumps and relaxed jumps; returned to the reserve"
+
+[[ledger]]
+image = "home"
+component = "sound"
+delta = -10
+reason = "Space: tail jumps (AY_WRITE, SOUND_WRITE) and relaxed jumps; returned to the reserve"
+
+[[ledger]]
+image = "home"
+component = "console"
+delta = -2
+reason = "Space: a tail jump and a relaxed jump; returned to the reserve"

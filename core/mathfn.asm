@@ -83,8 +83,7 @@ H_RANDOMIZE:
     DB   9, "R", "A", "N", "D", "O", "M", "I", "Z", "E"
 W_RANDOMIZE:
     rst RST_DPOP
-    call MATH_RND_SEED
-    ret
+    jp   MATH_RND_SEED
 
 ; ============================================================================
 ; * ( a b -- a*b ) -- MATH_MULTIPLY16, signed, the result truncated to 16 bits

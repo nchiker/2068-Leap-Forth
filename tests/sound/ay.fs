@@ -24,8 +24,10 @@ ALL
 CLS 0 0 AT-XY
 0 0.02 BEEP PER 421 - ABS 2 < .          \ expect: -1
 12 0.02 BEEP PER 211 - ABS 2 < .         \ expect: -1
-\ the time BEEP takes, in 50 Hz frames (typed in a definition so that parsing the line does not add frames)
-: BT {FRAMES} @ 0 BEEP {FRAMES} @ SWAP - ;
+\ the time BEEP takes, in 60 Hz frames (typed in a definition so that parsing the line does not add frames); BT
+\ starts just after a tick, so that BEEP's setup cannot straddle one whatever the time the line takes to type
+: TICK {FRAMES} @ BEGIN {FRAMES} @ OVER - UNTIL DROP ;
+: BT TICK {FRAMES} @ 0 BEEP {FRAMES} @ SWAP - ;
 0.5 BT .                                 \ expect: 30
 0.1 BT .                                 \ expect: 6
 0.0166667 BT .                           \ expect: 1
