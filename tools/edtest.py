@@ -2237,6 +2237,9 @@ def dict_ceiling(env, part, ck):
 # ===================================================================== the stores the view cases use
 N6_STORE = [": SQ DUP * ;", ": CUBE DUP SQ * ;", "3 : sq 1 + ;", ": SQRT DROP ;", ": X SQ ;", ": SQUARE ;", ":", "SQ ."]
 N6_OPENS = [("SQ", 2), ("cube", 1), ("Sqrt", 3), ("x", 4), ("square", 5)]
+# Step Words and keys: `: SQ` inside a comment is not a definition (\ ends a line's words, ( skips to the next ) )
+N6C_STORE = [": SQ DUP * ;", "\\ : SQ 2 * ;", "1 ( : SQ ) DROP", ": CUBE ( n : SQ ) DUP SQ * ;", "( x ) : TWICE 2 * ;"]
+N6C_OPENS = [("SQ", 0), ("cube", 3), ("twice", 4)]
 WRAP71 = "one two three four five six seven eight nine ten eleven twelve thirteen"       # 3 rows: 27, 27, 15
 WRAP70 = "the quick brown fox jumps over the lazy dog and keeps running far away"          # 3 rows: 30, 30, 8
 
@@ -2254,11 +2257,17 @@ def big_store():
                              "(case-insensitive; not `: SQRT`, not `: X SQ`, not across a line break), cursor at the line's start, "
                              "status row `LINE n/m`, every line on screen; `EDIT` alone opens a new line after the last; in a "
                              "60-line store the cursor line is on screen",
-          parts=("name", "bare", "scroll"))
+          parts=("name", "bare", "scroll", "comment"))
 @guarded
 def edit_open(env, part, ck):
     m = env.m
-    if part == "name":
+    if part == "comment":
+        for name, idx in N6C_OPENS:
+            if start_view(env, ck, N6C_STORE, name, idx) is None:
+                return
+        ck.note("comments: EDIT %s -> lines %s of %d" % (
+            "/".join(n for n, _ in N6C_OPENS), "/".join(str(i + 1) for _, i in N6C_OPENS), len(N6C_STORE)))
+    elif part == "name":
         # READING (spec section 5, Entry): "the last line in the store in which the words : and name follow each other",
         # words separated by whitespace, case-insensitive: the match is per line, so `:` ending one line and `SQ` starting
         # the next is not a match (N6_STORE lines 7 and 8), and `: X SQ` (both words, not adjacent) is not.

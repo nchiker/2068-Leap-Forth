@@ -255,3 +255,15 @@ image = "home"
 component = "console"
 delta = -3
 reason = "Words and keys: the console's cells draw through GFX_PUTCHAR_ATTR (-5); SCAN_DEFS (LIST-DEFS) reads the store word by word and skips the comments (+2); returned to the reserve"
+
+[[ledger]]
+image = "exrom"
+component = "view"
+delta = 28
+reason = "Words and keys: EDIT name skips the comments when it looks for the line with : name (VIEW_MATCH: \\ ends a line's words, ( runs past the next ) ), so a commented-out definition is not opened; from the reserve (3,296 B free)"
+
+[[ledger]]
+image = "exrom"
+component = "fill"
+delta = -4
+reason = "Words and keys: the ALIGN 8 before CIRCLE_MASK_TABLE (counted in FILL's range) pads 4 B less after view's +28; returned to the reserve"
