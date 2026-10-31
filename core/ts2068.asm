@@ -30,8 +30,7 @@ W_PLOT:
     ld   b, l
     ld   a, (CURRENT_ATTR)
     ld   d, 0              ; OVER=0: set the pixel, don't XOR-toggle it
-    call GFX_WRITE_PIXEL
-    ret
+    jp   GFX_WRITE_PIXEL
 
 ; ============================================================================
 ; LINE ( x1 y1 x2 y2 -- ) -- draw a line (GFX_LINE, which reads its arguments from the GFX_LINE_* bytes)
@@ -56,8 +55,7 @@ W_LINE:
     ld   (GFX_LINE_ATTR), a
     xor  a
     ld   (GFX_LINE_OVER), a
-    call GFX_LINE
-    ret
+    jp   GFX_LINE
 
 ; ============================================================================
 ; BORDER ( color -- ) -- set the border colour (GFX_SET_BORDER)
@@ -68,8 +66,7 @@ H_BORDER:
 W_BORDER:
     rst RST_DPOP
     ld   a, l
-    call GFX_SET_BORDER
-    ret
+    jp   GFX_SET_BORDER
 
 
 ; ============================================================================

@@ -29,10 +29,14 @@ RST_38:
     ei
     reti
 
+; the room up to the NMI vector and up to the table at $0100 holds two kernel files
+    INCLUDE "kernel/memory/memory.asm"
+    ASSERT $ <= $0066
     DS   $0066 - $, $FF
 NMI_ENTRY:
     retn
-
+    INCLUDE "kernel/interrupt/interrupt.asm"
+    ASSERT $ <= $0100
     DS   $0100 - $, $FF
 
 ; ============================================================================
@@ -293,10 +297,8 @@ RUNTIME_ERROR_TABLE:
     DB   0
 
 ; ---- the kernel and the dictionary (after the boot code) ----
-    INCLUDE "kernel/memory/memory.asm"
     INCLUDE "kernel/math/math.asm"
     INCLUDE "kernel/io/io.asm"
-    INCLUDE "kernel/interrupt/interrupt.asm"
     INCLUDE "kernel/graphics/graphics.asm"
     INCLUDE "kernel/storage/storage.asm"
     ; The font (included below) must cover $11F8: ZEsarUX's tape autoload types J "" ENTER into the

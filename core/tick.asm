@@ -26,8 +26,7 @@ W_TICK:
     call W_DROP                        ; FIND left the search address: drop it before throwing
     ld   hl, -13                       ; undefined word
     rst RST_DPUSH
-    call W_THROW
-    ret                                ; reached only if an active CATCH unwinds past this call
+    jp   W_THROW
 .found:
     rst RST_DPOP                       ; discard the immediate flag: the code address stays
     ret

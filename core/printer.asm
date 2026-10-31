@@ -165,8 +165,7 @@ LPRINT_SEND_LINE:
     ld   (PRINT_ROW_IDX), a
     cp   8
     jr   c, .rowloop
-    call PRINTER_MOTOR_STOP
-    ret
+    jp   PRINTER_MOTOR_STOP
 
 ; ============================================================================
 ; LPRINT ( addr len -- ) -- print len characters from addr on the printer, 32 to a line (the last line

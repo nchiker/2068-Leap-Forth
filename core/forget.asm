@@ -98,12 +98,10 @@ W_FORGET:
     jr   .searchloop
 .refuse_rom:
     ld   hl, FORGET_MSG_ROM
-    call FORGET_PRINT_MSG
-    ret
+    jp   FORGET_PRINT_MSG
 .notfound:
     ld   hl, FORGET_MSG_NOTFOUND
-    call FORGET_PRINT_MSG
-    ret
+    jp   FORGET_PRINT_MSG
 
 FORGET_MSG_ROM:      DB "FORGET: BUILT-IN, REFUSED", 13, 0
 FORGET_MSG_NOTFOUND: DB "FORGET: NOT FOUND", 13, 0

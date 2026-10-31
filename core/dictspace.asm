@@ -33,8 +33,7 @@ W_COMMA:
     ld   hl, 2
     call DICT_ROOM
     rst RST_DPOP
-    call COMPILE_WORD
-    ret
+    jp   COMPILE_WORD
 
 ; ============================================================================
 ; C, ( n -- ) -- compile the low byte of n at HERE
@@ -47,8 +46,7 @@ W_CCOMMA:
     call DICT_ROOM
     rst RST_DPOP
     ld   a, l
-    call COMPILE_BYTE
-    ret
+    jp   COMPILE_BYTE
 
 ; ============================================================================
 ; ALLOT ( n -- ) -- advance HERE by n bytes, writing nothing; a negative n shrinks the dictionary

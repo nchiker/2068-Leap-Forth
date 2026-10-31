@@ -32,8 +32,7 @@ W_SPRITEDEFINE:
     ld   a, l
     ld   (SPRITE_OP_SLOT), a
     ld   hl, GRAPHICS_EXROM_BASE + (2 * 3)   ; slot 2 = SPRITE_DEFINE_IMPL
-    call EXROM_CALL_SLOT
-    ret
+    jp   EXROM_CALL_SLOT
 
 ; ============================================================================
 ; SPRITE-SHOW ( slot row col -- ) -- save the screen at (row, col) as the slot's background,
@@ -53,8 +52,7 @@ W_SPRITESHOW:
     ld   a, l
     ld   (SPRITE_OP_SLOT), a
     ld   hl, GRAPHICS_EXROM_BASE + (3 * 3)   ; slot 3 = SPRITE_SHOW_IMPL
-    call EXROM_CALL_SLOT
-    ret
+    jp   EXROM_CALL_SLOT
 
 ; ============================================================================
 ; SPRITE-HIDE ( slot -- ) -- restore the slot's saved background over where it was shown;
@@ -68,8 +66,7 @@ W_SPRITEHIDE:
     ld   a, l
     ld   (SPRITE_OP_SLOT), a
     ld   hl, GRAPHICS_EXROM_BASE + (4 * 3)   ; slot 4 = SPRITE_HIDE_IMPL
-    call EXROM_CALL_SLOT
-    ret
+    jp   EXROM_CALL_SLOT
 
 
     ENDIF

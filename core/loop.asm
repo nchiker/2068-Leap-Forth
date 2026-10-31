@@ -24,8 +24,7 @@ W_WHILE:
     ld   hl, (HERE)
     rst RST_DPUSH
     ld   hl, 0
-    call COMPILE_WORD
-    ret
+    jp   COMPILE_WORD
 
 ; ============================================================================
 ; REPEAT ( -- ) IMMEDIATE -- compile a branch back to BEGIN's address, then patch WHILE's

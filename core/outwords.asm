@@ -21,8 +21,7 @@ H_CR:
 W_CR:
     ld   hl, 13
     rst RST_DPUSH
-    call W_EMIT
-    ret
+    jp   W_EMIT
 
 ; ============================================================================
 ; SPACE ( -- ) -- 32 EMIT
@@ -33,8 +32,7 @@ H_SPACE:
 W_SPACE:
     ld   hl, 32
     rst RST_DPUSH
-    call W_EMIT
-    ret
+    jp   W_EMIT
 
 ; ============================================================================
 ; SPACES ( n -- ) -- print n spaces

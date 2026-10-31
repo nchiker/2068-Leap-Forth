@@ -151,8 +151,7 @@ W_DOT:
 .donedigits:
     ld   hl, " "
     rst RST_DPUSH
-    call W_EMIT
-    ret
+    jp   W_EMIT
 
 ; ============================================================================
 ; PRINT_UDEC16 -- print an unsigned number in decimal, no leading zeros, no trailing space
@@ -166,8 +165,7 @@ PRINT_UDEC16:
     jr   nz, .hasdigits
     ld   hl, "0"
     rst RST_DPUSH
-    call W_EMIT
-    ret
+    jp   W_EMIT
 .hasdigits:
     ld   c, 0
 .divloop:
