@@ -92,7 +92,7 @@ W_IF:
     ld   hl, (HERE)                    ; the placeholder about to be written
     rst RST_DPUSH
     ld   hl, 0
-    jp   COMPILE_WORD
+    jr   COMPILE_WORD
 
 ; ============================================================================
 ; ELSE ( -- ) IMMEDIATE -- compile the branch that skips the false part, patch IF's placeholder to

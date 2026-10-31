@@ -584,6 +584,6 @@ EDITOR_LOOP_LIVE:
     rst RST_DPUSH
     call W_EMIT
 .no_ok:
-    jp   EDITOR_LOOP_LIVE
+    jr   EDITOR_LOOP_LIVE
 
     ENDIF

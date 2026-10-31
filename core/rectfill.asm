@@ -85,7 +85,7 @@ W_RECT:
     ld   a, (CURRENT_ATTR)
     ld   (RECT_ATTR), a
     ld   hl, GRAPHICS_EXROM_BASE + (0 * 3)   ; slot 0 = RECT_FILL_IMPL
-    jp   EXROM_CALL_SLOT
+    jr   EXROM_CALL_SLOT
 
 
     ENDIF

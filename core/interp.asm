@@ -173,7 +173,7 @@ NUMBER:
     rst RST_DPOP
     ld   a, (hl)
     or   a
-    jp   z, .fail
+    jr   z, .fail
     jp   NUMBER_PARSE             ; HL -> the token, A = its length
 .fail:
     ld   hl, 0

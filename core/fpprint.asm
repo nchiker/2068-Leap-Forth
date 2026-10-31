@@ -76,7 +76,7 @@ W_FDOT:
     call FDCALC
     call FDPRINT
     ld   a, " "
-    jp   FEMIT
+    jr   FEMIT
 
 ; ============================================================================
 ; FDCALC -- lay FX out as 128.64 fixed point in FMT and the PLACES decimals in FDIG, rounded (not a

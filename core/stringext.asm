@@ -49,12 +49,7 @@ W_STR:
     ld   a, "-"
     ld   (de), a
     inc  de
-    xor  a                     ; negate hl -- correct even for $8000
-    sub  l
-    ld   l, a
-    ld   a, 0
-    sbc  a, h
-    ld   h, a
+    call MATH_NEGATE16           ; -32768 stays -32768
 .positive:
     ld   a, h
     or   l
