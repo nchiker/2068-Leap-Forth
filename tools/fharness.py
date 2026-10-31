@@ -419,9 +419,9 @@ class Machine:
     def _glyph_table(self, putchar):
         """Render chars 32..143 with the real putchar routine (A=char, B=row, C=col; GFX_PUTCHAR, 32 columns) and map
         each 8x8 cell bitmap back to its character (as lcharness).  GFX_PUTCHAR draws a
-        glyph for space, 0-9, A-Z, a-z, the 23 PUNCT_CHAR_TABLE characters and 128-143 (block graphics); any other
-        code is drawn as a space, so those cells read blank and `[ \\ ] ^ ` { | } ~` have no cell (plain_cells
-        lacks them).  Codes 128-143 map to U+2580 + (code - 128).  UDG codes 144-164 are not rendered: UDG_TABLE
+        glyph for printable ASCII (32-126) and 128-143 (block graphics); code 127 is drawn as a space (a build
+        before step Words and keys, which has PUNCT_CHAR_TABLE, drew `[ \\ ] ^ ` { | } ~` as spaces too, so
+        plain_cells lacks them there).  Codes 128-143 map to U+2580 + (code - 128).  UDG codes 144-164 are not rendered: UDG_TABLE
         is zero at boot and a program may redefine them; screen_rows matches an unknown cell against the live
         UDG_TABLE instead.  Returns (table, plain_cells)."""
         codes = list(range(32, 144))
@@ -551,9 +551,9 @@ class Console:
     (self.caller; in_editor() is true when the editor's EDITOR_LOOP_LIVE is the one waiting).
 
     What press() can type: the characters in Forth's own key tables (key_map: unshifted letters and digits, SPACE and
-    ENTER; CAPS SHIFT + letter = upper case; SYMBOL SHIFT + key: ! @ # $ % & ' ( ) _ : ? / < > " ; = + - . , *), and the
-    control codes of CTRL_KEYS.  Forth cannot type, at this build: [ \\ ] ^ ` { | } ~ (Forth draws none of them
-    either; audit step K).  key() and type() can latch any code, typeable or not."""
+    ENTER; CAPS SHIFT + letter = upper case; SYMBOL SHIFT + key: ! @ # $ % & ' ( ) _ : ? / < > " ; = + - . , * and
+    ~ | \\ { } ] [ ^ on A S D F G U Y H), and the control codes of CTRL_KEYS.  Forth has no key for ` (it draws it).
+    key() and type() can latch any code, typeable or not."""
 
     def __init__(self, m):
         self.m = m
@@ -784,7 +784,10 @@ def banner_text():
 
 
 def drawn_chars(m):
-    """The characters GFX_PUTCHAR has a glyph for in 32-126, from the ROM's own PUNCT_CHAR_TABLE (pairs: char, font index)."""
+    """The characters GFX_PUTCHAR has a glyph for in 32-126: all of them, or (a build before step Words and keys) space,
+    0-9, A-Z, a-z and the ROM's own PUNCT_CHAR_TABLE (pairs: char, font index)."""
+    if "PUNCT_CHAR_TABLE" not in m.S:
+        return set(map(chr, range(32, 127)))
     n, a = m.sym("PUNCT_CHAR_COUNT"), m.sym("PUNCT_CHAR_TABLE")
     punct = {chr(m.rom_home[a + 2 * i]) for i in range(n)}
     return set(" 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz") | punct

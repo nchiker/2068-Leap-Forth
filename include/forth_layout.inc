@@ -225,7 +225,6 @@ LATEST:                   DEFS 2                        ; head of the dictionary
 HERE:                     DEFS 2                        ; next free dictionary byte
 PRINT_ROW:                DEFS 1                        ; EMIT: next row (0-22)
 PRINT_COL:                DEFS 1                        ; EMIT: next column (0-31)
-EMIT_CHAR_TMP:            DEFS 1                        ; EMIT: scratch
 CURRENT_ATTR:             DEFS 1                        ; attribute PLOT, LINE and CIRCLE draw with
 PL_TARGET:                DEFS 2                        ; +LOOP: pointer to the inline branch target
 PL_INDEX:                 DEFS 2                        ; +LOOP: index before the step

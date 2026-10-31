@@ -266,8 +266,10 @@ class Machine:
         self.pid = self.dbg._proc.pid
         self.z = self.dbg._zrcp
         ft = self.S["FONT_TABLE"]
-        self.glyph = {bytes(self.rom[ft + i * 8:ft + i * 8 + 8]): c
-                      for i, c in enumerate(" 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")}
+        # FONT_TABLE: printable ASCII in code order; before step Words and keys, space, 0-9, A-Z first
+        chars = " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ" if "PUNCT_CHAR_TABLE" in self.S else \
+            "".join(map(chr, range(32, 127)))
+        self.glyph = {bytes(self.rom[ft + i * 8:ft + i * 8 + 8]): c for i, c in enumerate(chars)}
 
     def stop(self):
         try:

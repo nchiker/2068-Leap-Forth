@@ -161,11 +161,13 @@ class Build:
         names = ("TAPE_SEND_BLOCK", "TAPE_RECV_BLOCK") if "TAPE_RECV_BLOCK" in s and "TAPE_SEND_BLOCK" in s else \
             ("STORAGE_SEND_BLOCK", "STORAGE_RECEIVE_BLOCK")
         self.send_lo, self.send_hi = s[names[0]], s[names[1]]
-        # glyph -> character, for reading the screen (FONT_TABLE: space, 0-9, A-Z, a-z, then PUNCT_CHAR_TABLE)
+        # glyph -> character, for reading the screen (FONT_TABLE: printable ASCII in code order; before step Words
+        # and keys, space, 0-9, A-Z, a-z, then PUNCT_CHAR_TABLE)
         ft = s["FONT_TABLE"]
-        chars = " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-        idx = {i: c for i, c in enumerate(chars)}
-        if "PUNCT_CHAR_TABLE" in s and "PUNCT_CHAR_COUNT" in s:
+        if "PUNCT_CHAR_TABLE" not in s:
+            idx = {c - 32: chr(c) for c in range(32, 127)}
+        else:
+            idx = dict(enumerate(" 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"))
             p = s["PUNCT_CHAR_TABLE"]
             for k in range(s["PUNCT_CHAR_COUNT"]):
                 idx[self.rom[p + 2 * k + 1]] = chr(self.rom[p + 2 * k])
