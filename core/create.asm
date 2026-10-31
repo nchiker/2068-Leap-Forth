@@ -1,10 +1,10 @@
 ; ============================================================================
 ; core/create.asm -- CREATE
 ;
-; Needs core/dict.asm, core/interp.asm (W_WORD, WORD_SRC_ADDR, NEW_HEADER_ADDR, COMPILE_CALL,
-; COMPILE_BYTE, DICT_ROOM0). Link fields: a word's DW is DICT_CHAIN_POINT, which the including ROM
+; Needs core/dict.asm, core/interp.asm (HEADER_BUILD, HEADER_LINK, COMPILE_CALL, COMPILE_BYTE,
+; COMPILE_WORD, DICT_ROOM0). Link fields: a word's DW is DICT_CHAIN_POINT, which the including ROM
 ; sets (DEFL) to the chain the word extends. Every word here may destroy all registers except IX,
-; IY and SP. Its header building repeats core/variable.asm's.
+; IY and SP.
 ;
 ; CREATE compiles a patchable 6-byte run time at the new word's code address:
 ;     CALL DODOES              ; $CD, DODOES
@@ -50,51 +50,14 @@ H_CREATE:
     DB   6, "C","R","E","A","T","E"
 W_CREATE:
     call DICT_ROOM0
-    call W_WORD
-    rst RST_DPOP
-    ld   (WORD_SRC_ADDR), hl
-
-    ld   de, (HERE)
-    ld   (NEW_HEADER_ADDR), de
-    ld   hl, (LATEST)
-    ld   a, l
-    ld   (de), a
-    inc  de
-    ld   a, h
-    ld   (de), a
-    inc  de
-    ld   hl, (WORD_SRC_ADDR)
-    ld   a, (hl)                  ; the name length
-    ld   (de), a
-    inc  de
-    inc  hl                       ; HL -> the first character
-    ld   b, a
-    ld   a, b
-    or   a
-    jr   z, .namedone
-.namecopy:
-    ld   a, (hl)
-    ld   (de), a
-    inc  hl
-    inc  de
-    djnz .namecopy
-.namedone:
-    ld   (HERE), de                ; the code address
-
+    call HEADER_BUILD
     ld   hl, DODOES
     call COMPILE_CALL               ; CALL DODOES
     ld   a, $C3                      ; JP
     call COMPILE_BYTE
     ld   hl, CREATE_DEFAULT_RET
-    ld   a, l
-    call COMPILE_BYTE
-    ld   hl, CREATE_DEFAULT_RET      ; reloaded: COMPILE_BYTE destroys HL
-    ld   a, h
-    call COMPILE_BYTE                ; HERE is now the data field
-
-    ld   hl, (NEW_HEADER_ADDR)
-    ld   (LATEST), hl
-    ret
+    call COMPILE_WORD               ; HERE is now the data field
+    jp   HEADER_LINK
 
 
     ENDIF

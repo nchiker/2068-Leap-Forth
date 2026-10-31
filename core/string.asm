@@ -141,68 +141,16 @@ H_STRING:
     DW   H_TYPE
     DB   6, "S", "T", "R", "I", "N", "G"
 W_STRING:
-    rst RST_DPOP            ; hl = n (max characters)
-    push hl                  ; kept on the machine stack: only the IX data stack is touched until the pop
-    call DICT_ROOM                 ; hl = n: the buffer must fit below the ceiling guard
-    call W_WORD
-    rst RST_DPOP
-    ld   (WORD_SRC_ADDR), hl
-
-    ld   de, (HERE)
-    ld   (NEW_HEADER_ADDR), de
-    ld   hl, (LATEST)
-    ld   a, l
-    ld   (de), a
-    inc  de
+    rst RST_DPOP                  ; HL = n (max characters)
+    inc  hl                       ; and the count byte
     ld   a, h
-    ld   (de), a
-    inc  de
-    ld   hl, (WORD_SRC_ADDR)
-    ld   a, (hl)                  ; name length (W_WORD truncates at 32)
-    ld   (de), a
-    inc  de
-    inc  hl                       ; hl -> first name char
-    ld   b, a
-    or   a
-    jr   z, .namedone
-.namecopy:
-    ld   a, (hl)
-    ld   (de), a
-    inc  hl
-    inc  de
-    djnz .namecopy
-.namedone:
-    ld   (HERE), de                ; HERE = this word's body, where the literal below starts
-
-    ld   hl, (HERE)
-    ld   de, 6                     ; 5-byte literal (CALL DOLIT + 2-byte target) + 1-byte RET;
-    add  hl, de                    ; the buffer follows both: hl = its base address (the count byte)
-    call COMPILE_LITERAL           ; compiles CALL DOLIT + that address
-    ld   a, $C9                    ; Z80 RET opcode
-    call COMPILE_BYTE
-
-    pop  hl                        ; hl = n
-    inc  hl                        ; +1 for the count byte itself
+    or   l
+    jr   nz, .sized
+    dec  hl                       ; n = 65535: $FFFF, which DICT_ROOM refuses whatever HERE is
+.sized:
     ld   b, h
-    ld   c, l                      ; bc = total bytes to zero
-    ld   hl, (HERE)                ; hl = the buffer's base address
-    ld   a, b
-    or   c
-    jr   z, .noinit                ; n=0 -- nothing to zero
-.zeroloop:
-    xor  a
-    ld   (hl), a
-    inc  hl
-    dec  bc
-    ld   a, b
-    or   c
-    jr   nz, .zeroloop
-.noinit:
-    ld   (HERE), hl
-
-    ld   hl, (NEW_HEADER_ADDR)
-    ld   (LATEST), hl
-    ret
+    ld   c, l
+    jp   VARIABLE_N              ; a STRING is a VARIABLE with n + 1 data bytes
 
 ; ============================================================================
 ; PLACE ( addr len dest -- ) -- copy len bytes from addr to dest's data and set dest's count byte to len

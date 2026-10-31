@@ -49,40 +49,21 @@ W_EMIT:
     cp   13                    ; CR: move to a new line instead of printing
     jr   z, .newline
 
-    ld   (EMIT_CHAR_TMP), a    ; stash the character while B/C load row/col
-
-    ld   a, (PRINT_ROW)
-    ld   b, a
-    ld   a, (PRINT_COL)
-    ld   c, a
-    ld   a, (EMIT_CHAR_TMP)
-    call GFX_PUTCHAR            ; A=char, B=row, C=column
-
-    ld   a, (PRINT_ROW)          ; GFX_PUTCHAR destroys BC: reload row/col from memory
-    ld   b, a
-    ld   a, (PRINT_COL)
-    ld   c, a
-    ld   a, (CURRENT_ATTR)
-    call GFX_SET_ATTR            ; stamp the current INK/PAPER attribute into the cell
-    jr   .advance
-
-.newline:
-    xor  a
-    ld   (PRINT_COL), a
-    jr   .nextrow
-
-.advance:
-    ld   a, (PRINT_COL)
+    ld   hl, (PRINT_ROW)         ; L = row, H = column (PRINT_COL follows PRINT_ROW)
+    ld   b, l
+    ld   c, h
+    ld   hl, CURRENT_ATTR
+    ld   e, (hl)                 ; the current INK/PAPER attribute, stamped into the cell
+    call GFX_PUTCHAR_ATTR        ; A=char, B=row, C=column, E=attribute; keeps BC
+    ld   a, c                    ; advance the column
     inc  a
     cp   32
-    jr   c, .storecol
-    xor  a
-    ld   (PRINT_COL), a
-    jr   .nextrow
-.storecol:
+    jr   nc, .newline
     ld   (PRINT_COL), a
     ret
-
+.newline:                        ; CR, or past column 31: column 0 of the next row
+    xor  a
+    ld   (PRINT_COL), a
 .nextrow:
     ld   a, (PRINT_ROW)
     inc  a

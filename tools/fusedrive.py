@@ -84,14 +84,18 @@ def chord_map(rom, S):
 
 
 def glyph_map(rom, S):
-    """{8 glyph bytes: character} from FONT_TABLE: space, 0-9, A-Z, a-z, then PUNCT_CHAR_TABLE's (char, index) pairs."""
+    """{8 glyph bytes: character} from FONT_TABLE: printable ASCII in code order, or (a build before step Words and
+    keys, which has PUNCT_CHAR_TABLE) space, 0-9, A-Z, a-z, then PUNCT_CHAR_TABLE's (char, index) pairs."""
     ft = S["FONT_TABLE"]
-    chars = {0: " "}
-    for i, c in enumerate("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"):
-        chars[i + 1] = c
-    pt = S["PUNCT_CHAR_TABLE"]
-    for i in range(S["PUNCT_CHAR_COUNT"]):
-        chars[rom[pt + 2 * i + 1]] = chr(rom[pt + 2 * i])
+    if "PUNCT_CHAR_TABLE" not in S:
+        chars = {c - 32: chr(c) for c in range(32, 127)}
+    else:
+        chars = {0: " "}
+        for i, c in enumerate("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"):
+            chars[i + 1] = c
+        pt = S["PUNCT_CHAR_TABLE"]
+        for i in range(S["PUNCT_CHAR_COUNT"]):
+            chars[rom[pt + 2 * i + 1]] = chr(rom[pt + 2 * i])
     return {bytes(rom[ft + n * 8:ft + n * 8 + 8]): c for n, c in chars.items()}
 
 

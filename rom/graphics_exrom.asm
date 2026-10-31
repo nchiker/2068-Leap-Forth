@@ -1484,7 +1484,8 @@ VIEW_WORD_EQ:
 
 ; ============================================================================
 ; VIEW_MATCH -- does a stored line hold the words `:` and WORD_BUF's name next
-; to each other? (words are runs of bytes above space)
+; to each other? (words are runs of bytes above space; the comments are skipped
+; as the interpreter skips them: \ ends the line's words, ( runs past the next ))
 ; In:  HL = the line's text, C = its length, VIEW_COUNT = the line's index
 ; Out: VIEW_FOUND = index + 1 if it does (else unchanged)
 ; Destroys: AF, BC, DE, HL, VIEW_FLAG
@@ -1516,6 +1517,27 @@ VIEW_MATCH:
     cp   " " + 1
     jr   nc, .len
 .end:
+    dec  c
+    jr   nz, .long                  ; C = the length again below
+    ld   a, (de)
+    cp   $5C
+    ret  z                          ; \ : the rest of the line is a comment
+    cp   "("
+    jr   nz, .long
+.paren:                             ; ( : past the next ) of the line
+    ld   a, b
+    or   a
+    ret  z
+    ld   a, (hl)
+    inc  hl
+    dec  b
+    cp   ")"
+    jr   nz, .paren
+    xor  a
+    ld   (VIEW_FLAG), a             ; the word before was a comment
+    jr   .next
+.long:
+    inc  c
     push hl
     push bc
     ld   a, (VIEW_FLAG)

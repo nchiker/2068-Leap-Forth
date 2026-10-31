@@ -199,8 +199,8 @@ SRC_END:                  DEFS 2                        ; interpreter: one past 
 STATE:                    DEFS 1                        ; 0 interpreting, 1 compiling
 FIND_SEARCH_ADDR:         DEFS 2                        ; FIND: scratch
 NUM_NEG:                  DEFS 1                        ; NUMBER: leading minus seen
-WORD_SRC_ADDR:            DEFS 2                        ; colon definition: scratch
-NEW_HEADER_ADDR:          DEFS 2                        ; colon definition: new header address
+WORD_SRC_ADDR:            DEFS 2                        ; FORGET: the parsed name
+NEW_HEADER_ADDR:          DEFS 2                        ; HEADER_BUILD: the new header's address
 INTERP_IMM_FLAG:          DEFS 1                        ; INTERPRET_RUN: scratch
 INTERP_ERROR_FLAG:        DEFS 1                        ; set to 1 by an error; cleared on entry to INTERPRET_RUN
 WORD_BUF:                 DEFS 34                       ; the word being looked up: count byte, up to 32 upper-case characters
@@ -225,7 +225,6 @@ LATEST:                   DEFS 2                        ; head of the dictionary
 HERE:                     DEFS 2                        ; next free dictionary byte
 PRINT_ROW:                DEFS 1                        ; EMIT: next row (0-22)
 PRINT_COL:                DEFS 1                        ; EMIT: next column (0-31)
-EMIT_CHAR_TMP:            DEFS 1                        ; EMIT: scratch
 CURRENT_ATTR:             DEFS 1                        ; attribute PLOT, LINE and CIRCLE draw with
 PL_TARGET:                DEFS 2                        ; +LOOP: pointer to the inline branch target
 PL_INDEX:                 DEFS 2                        ; +LOOP: index before the step

@@ -2,7 +2,7 @@
 ; core/fpstack.asm -- the float stack words, comparisons and memory (docs/V2/FLOAT_SPEC.md 8.3)
 ;
 ; Needs core/fpcore.asm (FBIN, FCMP, FPUSH_HL, FPOP_DE, FNEG_TOP), core/fpparse.asm (COMPILE_FLOAT_LITERAL)
-; and core/variable.asm (VAR_HEADER, VAR_END, VARIABLE_N). Included by rom/forth_boot.asm only. Chained from
+; core/interp.asm (HEADER_BUILD, HEADER_END) and core/variable.asm (VARIABLE_N). Included by rom/forth_boot.asm only. Chained from
 ; DICT_CHAIN_POINT (set by the including ROM before the INCLUDE); every word may destroy all registers except IX
 ; (the data stack pointer), IY (the float stack pointer) and SP. Flags are -1 (true) and 0, as `<`.
 ;
@@ -241,7 +241,7 @@ H_FVARIABLE:
     DW   H_FSTORE
     DB   9, "F", "V", "A", "R", "I", "A", "B", "L", "E"
 W_FVARIABLE:
-    ld   a, 5
+    ld   bc, 5
     jp   VARIABLE_N
 
 ; ============================================================================
@@ -252,12 +252,12 @@ H_FCONSTANT:
     DB   9, "F", "C", "O", "N", "S", "T", "A", "N", "T"
 W_FCONSTANT:
     call DICT_ROOM0
-    call VAR_HEADER
+    call HEADER_BUILD
     push iy
     pop  hl
     call COMPILE_FLOAT_LITERAL
     call W_FDROP
-    jp   VAR_END
+    jp   HEADER_END
 
 
     ENDIF

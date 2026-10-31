@@ -40,7 +40,7 @@ files = ["storage.asm", "tapeblock.asm", "tapeword.asm", "loadtext.asm"]
 id = "interp"
 title = "Interpreter and compiler: dictionary, control structures, defining words, errors, CATCH and THROW"
 budget = 2291
-files = ["interp.asm", "dict.asm", "control.asm", "loop.asm", "loopext.asm", "doloop.asm", "create.asm", "variable.asm", "does.asm", "immediate.asm", "tick.asm", "execute.asm", "forget.asm", "dictspace.asm", "abortquit.asm", "throwcatch.asm", "vlist.asm", "free.asm"]
+files = ["interp.asm", "dict.asm", "control.asm", "loop.asm", "loopext.asm", "doloop.asm", "create.asm", "variable.asm", "does.asm", "immediate.asm", "tick.asm", "comment.asm", "execute.asm", "forget.asm", "dictspace.asm", "abortquit.asm", "throwcatch.asm", "vlist.asm", "free.asm"]
 
 [[home.component]]
 id = "integer"
@@ -212,3 +212,58 @@ image = "home"
 component = "console"
 delta = -2
 reason = "Space: a tail jump and a relaxed jump; returned to the reserve"
+
+# Words and keys (2026-10-31): bytes the step freed return to the HOME reserve; its additions come from it.
+[[ledger]]
+image = "home"
+component = "boot"
+delta = 14
+reason = "Words and keys: the message of THROW -16 (MISSING NAME), which : CREATE VARIABLE CONSTANT ARRAY STRING FVARIABLE FCONSTANT ' CHAR FORGET give for a missing name (each made a nameless word); from the reserve"
+
+[[ledger]]
+image = "home"
+component = "kernel"
+delta = -45
+reason = "Words and keys: the font in ASCII order with 9 more glyphs (+72), the glyph lookup without the range chain and the punctuation table and scan, GFX_CHAR_SETUP merged into GFX_PUTCHAR, the unrolled scanline copy, GFX_PUTCHAR_ATTR (-99 together), IO_DECODE_KEY's one table lookup (-18); returned to the reserve"
+
+[[ledger]]
+image = "home"
+component = "interp"
+delta = 61
+reason = "Words and keys: ['] CHAR [CHAR] LITERAL [ ] (88 B) and \\ ( (47 B); WORD_SKIP and WORD_NAME, and one header builder (HEADER_BUILD, HEADER_END, HEADER_LINK) for : CREATE VARIABLE CONSTANT FVARIABLE FCONSTANT, which had their own copies (-74 B net); from the reserve"
+
+[[ledger]]
+image = "home"
+component = "integer"
+delta = -89
+reason = "Words and keys: ARRAY is VARIABLE_N with 2n data bytes (it repeated the header and data code); returned to the reserve"
+
+[[ledger]]
+image = "home"
+component = "float"
+delta = 1
+reason = "Words and keys: FVARIABLE passes its data size to VARIABLE_N in BC (ld bc,5 is 1 B more than ld a,5); from the reserve"
+
+[[ledger]]
+image = "home"
+component = "text"
+delta = -113
+reason = "Words and keys: EMIT draws through GFX_PUTCHAR_ATTR (-31), STRING is VARIABLE_N with n + 1 data bytes (-82); returned to the reserve"
+
+[[ledger]]
+image = "home"
+component = "console"
+delta = -3
+reason = "Words and keys: the console's cells draw through GFX_PUTCHAR_ATTR (-5); SCAN_DEFS (LIST-DEFS) reads the store word by word and skips the comments (+2); returned to the reserve"
+
+[[ledger]]
+image = "exrom"
+component = "view"
+delta = 28
+reason = "Words and keys: EDIT name skips the comments when it looks for the line with : name (VIEW_MATCH: \\ ends a line's words, ( runs past the next ) ), so a commented-out definition is not opened; from the reserve (3,296 B free)"
+
+[[ledger]]
+image = "exrom"
+component = "fill"
+delta = -4
+reason = "Words and keys: the ALIGN 8 before CIRCLE_MASK_TABLE (counted in FILL's range) pads 4 B less after view's +28; returned to the reserve"

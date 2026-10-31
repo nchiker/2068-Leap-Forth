@@ -447,11 +447,8 @@ ED_ROW32:                             ; the row drawer behind ED_ROW_JP
 
 ; ED_CELL32 -- A = the character at (B, C) with ATTR_DEFAULT; keeps BC
 ED_CELL32:
-    push bc
-    call GFX_PUTCHAR
-    pop  bc
-    ld   a, ATTR_DEFAULT
-    jp   GFX_SET_ATTR                    ; keeps BC
+    ld   e, ATTR_DEFAULT
+    jp   GFX_PUTCHAR_ATTR                ; keeps BC
 
 ; ============================================================================
 ; EDITOR_EDIT_KEY -- the console's editing without a redraw (the full-screen view edits its line

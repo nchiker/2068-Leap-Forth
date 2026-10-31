@@ -14,10 +14,10 @@
 ; A printed line is 256 dots (32 characters of 8 pixels) by 8 raster rows, each byte sent MSB first. Every
 ; row starts with an unconditional setup write of the speed bits (slow for the last two rows, as the ROM
 ; does), then the start-of-paper wait; the motor is stopped once, after the eighth row.
-; LPRINT sets ZX_SYSVAR_CHARS to FONT_TABLE - 256 for each line, so that Fuse's printer text output looks
-; in the right font. It still shows wrong characters: Fuse assumes a dense ASCII-ordered font table and
-; FONT_TABLE is packed in definition order. The .pbm output is correct to the dot except that Fuse's
-; printer model lets the head position drift across the 8 rows of a line (the stock ROM shows the same).
+; LPRINT sets ZX_SYSVAR_CHARS to FONT_TABLE - 256 for each line, so that Fuse's printer text output reads
+; the characters in Forth's own font (FONT_TABLE is printable ASCII in code order, as Fuse assumes). The
+; .pbm output is correct to the dot except that Fuse's printer model lets the head position drift across
+; the 8 rows of a line (the stock ROM shows the same).
 ; ============================================================================
 
     IFNDEF CORE_PRINTER_ASM

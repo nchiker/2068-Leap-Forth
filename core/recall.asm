@@ -86,100 +86,109 @@ AT_END:
     ret
 
 ; ============================================================================
-; SCAN_DEFS -- walk STORE_START..STORE_END for top-level ":" ... ";" spans and fill DEF_TABLE and
-; DEF_COUNT, oldest first (a ":" starts a span, the next word ";" ends it: colon definitions do not
-; nest). A word is delimited by any byte up to a space, as WORD does. Stops at DEF_TABLE_MAX.
+; SCAN_DEFS -- walk STORE_START..STORE_END word by word, as the interpreter reads it, for the top-level
+; ":" ... ";" spans, and fill DEF_TABLE and DEF_COUNT, oldest first. The words ":" and ";" open
+; and close a span (colon definitions do not nest: a ":" in an open span is ignored); the comments
+; are skipped, so a ":" or ";" in one counts for nothing: "\" to the next CR (from its own
+; delimiter, which may be that CR), "(" past the next ")". A word is delimited by any byte up to a
+; space, as WORD does; the byte after a word's first is in the store (the last line ends with CR).
+; Stops at DEF_TABLE_MAX.
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 SCAN_DEFS:
     xor  a
     ld   (DEF_COUNT), a
+    ld   h, a
+    ld   l, a
+    ld   (RECALL_SPAN_START), hl      ; 0: no span open
     ld   hl, STORE_START
+.next:                                ; HL = the scan position
     ld   (RECALL_SCAN_PTR), hl
-.outer:
     call AT_END
-    jp   z, .stop                ; a jp: the jr displacement would be +126, one under its limit
+    ret  z
     ld   hl, (RECALL_SCAN_PTR)
     ld   a, (hl)
-    cp   " " + 1
-    jr   nc, .check_colon
     inc  hl
-    ld   (RECALL_SCAN_PTR), hl
-    jr   .outer
-.check_colon:
+    cp   " " + 1
+    jr   c, .next                     ; whitespace
+    ld   c, a                         ; C = the word's first character
+    ld   a, (hl)
+    cp   " " + 1
+    jr   nc, .rest                    ; two characters or more: none of the words below
+    ld   a, c
+    ld   b, 13
+    cp   $5C
+    jr   z, .comment                  ; \ : past the next CR
+    ld   b, ")"
+    cp   "("
+    jr   z, .comment                  ; ( : past the next )
+    ld   de, (RECALL_SPAN_START)
     cp   ":"
-    jr   nz, .skip_word
-    ld   (RECALL_SPAN_START), hl
-.find_semi:
-    inc  hl
-    ld   (RECALL_SCAN_PTR), hl
-    call AT_END
-    jr   z, .stop                ; no ";"
-    ld   hl, (RECALL_SCAN_PTR)
-    ld   a, (hl)
+    jr   z, .colon
     cp   ";"
-    jr   nz, .find_semi
-    dec  hl                       ; only the word ";" ends a span: whitespace on both sides (the
-    ld   a, (hl)                  ; store's last line ends with CR, so the byte after is in the store)
-    inc  hl
-    cp   " " + 1
-    jr   nc, .find_semi
-    inc  hl
-    ld   a, (hl)
-    dec  hl
-    cp   " " + 1
-    jr   nc, .find_semi
+    jr   nz, .next
+    ld   a, d                         ; ; : record the open span, if any
+    or   e
+    jr   z, .next
     ld   a, (DEF_COUNT)
     cp   DEF_TABLE_MAX
-    jr   nc, .stop                ; table full
-    push af
-    ld   hl, DEF_TABLE
-    ld   d, 0
-    ld   e, a
-    add  hl, de
-    add  hl, de
-    add  hl, de
-    add  hl, de                   ; HL = DEF_TABLE + a * 4
-    ex   de, hl
-    ld   hl, (RECALL_SPAN_START)
-    ld   bc, STORE_START
+    ret  nc                           ; table full
+    push hl                           ; past the ;
     or   a
-    sbc  hl, bc                   ; the span's start offset
-    ld   a, l
-    ld   (de), a
-    inc  de
-    ld   a, h
-    ld   (de), a
-    inc  de
-    ld   hl, (RECALL_SCAN_PTR)
-    ld   bc, (RECALL_SPAN_START)
-    or   a
-    sbc  hl, bc
-    inc  hl                       ; the span's length, with the ";"
-    ld   a, l
-    ld   (de), a
-    inc  de
-    ld   a, h
-    ld   (de), a
-    pop  af
+    sbc  hl, de                       ; the span's length, with the ;
+    push hl
+    ld   hl, -STORE_START
+    add  hl, de
+    ex   de, hl                       ; DE = the span's start offset
+    ld   l, a
+    ld   h, 0
+    add  hl, hl
+    add  hl, hl
+    ld   bc, DEF_TABLE
+    add  hl, bc                       ; HL = DEF_TABLE + DEF_COUNT * 4
+    ld   (hl), e
+    inc  hl
+    ld   (hl), d
+    inc  hl
+    pop  de
+    ld   (hl), e
+    inc  hl
+    ld   (hl), d
     inc  a
     ld   (DEF_COUNT), a
-    ld   hl, (RECALL_SCAN_PTR)
-    inc  hl
+    pop  hl
+    ld   de, 0                        ; the span is closed: .colon stores 0
+    jr   .store
+.colon:
+    ld   a, d
+    or   e
+    jr   nz, .next                    ; a span is open
+    ld   d, h
+    ld   e, l
+    dec  de                           ; the span starts at the ":"
+.store:
+    ld   (RECALL_SPAN_START), de
+    jr   .next
+.comment:                             ; skip past the byte B, or to the end
     ld   (RECALL_SCAN_PTR), hl
-    jr   .outer
-.skip_word:
+    call AT_END
+    ret  z
+    ld   hl, (RECALL_SCAN_PTR)
+    ld   a, (hl)
+    inc  hl
+    cp   b
+    jr   nz, .comment
+    jr   .next
+.rest:                                ; skip the rest of a longer word
     inc  hl
     ld   (RECALL_SCAN_PTR), hl
     call AT_END
-    jr   z, .stop
+    ret  z
     ld   hl, (RECALL_SCAN_PTR)
     ld   a, (hl)
     cp   " " + 1
-    jr   nc, .skip_word
-    jp   .outer
-.stop:
-    ret
+    jr   nc, .rest
+    jp   .next                        ; a jp: out of jr's reach
 
 ; ============================================================================
 ; GET_DEF_SPAN -- one DEF_TABLE entry

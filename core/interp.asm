@@ -3,8 +3,9 @@
 ;
 ; Needs core/dict.asm first: it uses RST_DPUSH / RST_DPOP, LATEST and HERE, and extends the chain
 ; from H_STORE. The words here are `:` and `;` (FIND finds them like any other); the rest are
-; routines: W_WORD (parse a token), FIND, NUMBER, DOLIT (the run-time half of a literal), the
-; COMPILE_* helpers, DICT_ROOM, and INTERPRET_RUN, the interpreter loop. DICT_LATEST_INIT_P3 is
+; routines: WORD_SKIP, W_WORD and WORD_NAME (parse a token), FIND, NUMBER, DOLIT (the run-time half
+; of a literal), the COMPILE_* helpers, DICT_ROOM, the HEADER_* routines every defining word builds
+; its header with, and INTERPRET_RUN, the interpreter loop. DICT_LATEST_INIT_P3 is
 ; the value LATEST is seeded with (H_SEMICOLON; core/dict.asm's DICT_LATEST_INIT stops at H_STORE).
 ;
 ; IMMEDIATE is LENFLAGS bit 7 (core/dict.asm). FIND reports it and INTERPRET_RUN is the only place
@@ -22,6 +23,35 @@
     DEFINE CORE_INTERP_ASM
 
 ; ============================================================================
+; WORD_SKIP -- skip the whitespace from SRC_PTR to the next token (SRC_PTR is left at it)
+; Out: A = the token's first character, as typed (not folded), and NZ; A = 0 and Z if SRC_PTR
+;      reached SRC_END (the input is exhausted). HL = SRC_PTR
+; Destroys: AF, DE, HL
+; ============================================================================
+WORD_SKIP:
+    ld   hl, (SRC_PTR)
+    ld   de, (SRC_END)
+.loop:
+    ld   a, h
+    cp   d
+    jr   nz, .more
+    ld   a, l
+    cp   e
+    jr   z, .end
+.more:
+    ld   a, (hl)
+    cp   " " + 1             ; every byte from 0 to space is whitespace
+    jr   nc, .found          ; (CR and TAB included: the line store's CR-ended lines)
+    inc  hl
+    jr   .loop
+.end:
+    xor  a
+.found:
+    ld   (SRC_PTR), hl
+    or   a
+    ret
+
+; ============================================================================
 ; W_WORD ( -- addr ) -- parse the next token from SRC_PTR into WORD_BUF as a counted string, folding
 ; a-z to upper case; advance SRC_PTR past it and the delimiter. A count of 0 means SRC_PTR had
 ; reached SRC_END: the input is exhausted. At most 31 characters are kept (a header's length field
@@ -29,22 +59,8 @@
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 W_WORD:
-.skip:
-    ld   hl, (SRC_PTR)
-    ld   de, (SRC_END)
-    ld   a, h
-    cp   d
-    jr   nz, .skip_continue
-    ld   a, l
-    cp   e
+    call WORD_SKIP
     jr   z, .empty
-.skip_continue:
-    ld   a, (hl)
-    cp   " " + 1             ; every byte from 0 to space is whitespace
-    jr   nc, .foundstart     ; (CR and TAB included: the line store's CR-ended lines)
-    inc  hl
-    ld   (SRC_PTR), hl
-    jr   .skip
 
 .foundstart:
     ld   de, WORD_BUF+1
@@ -97,6 +113,20 @@ W_WORD:
     ld   hl, WORD_BUF
     rst RST_DPUSH
     ret
+
+; ============================================================================
+; WORD_NAME ( -- addr ) -- W_WORD for a word that takes a name (`:` CREATE VARIABLE ' CHAR ...): the
+; input must hold one, else THROW -16 (MISSING NAME)
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+WORD_NAME:
+    call W_WORD
+    ld   a, (WORD_BUF)
+    or   a
+    ret  nz
+    ld   hl, -16                  ; the standard's "zero-length string as a name"
+    rst  RST_DPUSH                ; (THROW resets the stack W_WORD's push left)
+    jp   W_THROW
 
 ; ============================================================================
 ; FIND ( addr -- code_addr imm found | addr 0 ) -- search the dictionary from LATEST back. addr is a
@@ -282,53 +312,56 @@ COMPILE_BYTE:
     ret
 
 ; ============================================================================
-; : ( "name" -- ) -- build a header at HERE (LINK = LATEST, LENFLAGS = the length, immediate bit
-; clear, the name), set LATEST to it and STATE to 1. HERE is left past the name, where the code
-; starts. Not immediate: a `:` inside a definition is not supported.
+; HEADER_BUILD -- the header of a new word at HERE: parse its name (WORD_NAME), build LINK =
+; LATEST and the counted name. LATEST is not changed (HEADER_LINK does that).
+; Out: NEW_HEADER_ADDR = the header, HERE = past the name, where the code starts
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+HEADER_BUILD:
+    call WORD_NAME
+    rst  RST_DPOP                 ; HL -> the counted name
+    ex   de, hl                   ; DE -> the name
+    ld   hl, (HERE)
+    ld   (NEW_HEADER_ADDR), hl
+    ld   bc, (LATEST)
+    ld   (hl), c
+    inc  hl
+    ld   (hl), b
+    inc  hl
+    ex   de, hl                   ; HL -> the name, DE -> where it goes
+    ld   c, (hl)
+    ld   b, 0
+    inc  bc                       ; the length byte and the name
+    ldir
+    ld   (HERE), de
+    ret
+
+; ============================================================================
+; HEADER_END -- compile the RET that ends a word's code, then HEADER_LINK
+; HEADER_LINK -- link the word HEADER_BUILD made into the dictionary: LATEST = NEW_HEADER_ADDR
+; Destroys: AF, HL
+; ============================================================================
+HEADER_END:
+    ld   a, $C9                   ; RET
+    call COMPILE_BYTE
+HEADER_LINK:
+    ld   hl, (NEW_HEADER_ADDR)
+    ld   (LATEST), hl
+    ret
+
+; ============================================================================
+; : ( "name" -- ) -- build a header at HERE (HEADER_BUILD), link it (LATEST) and set STATE to 1.
+; HERE is left past the name, where the code starts. Not immediate: a `:` inside a definition is
+; not supported.
 ; ============================================================================
 H_COLON:
     DW   H_STORE
     DB   1, ":"
 W_COLON:
     call DICT_ROOM0
-    call W_WORD
-    rst RST_DPOP
-    ld   (WORD_SRC_ADDR), hl
-
-    ld   de, (HERE)
-    ld   (NEW_HEADER_ADDR), de
-
-    ld   hl, (LATEST)
-    ld   a, l
-    ld   (de), a
-    inc  de
-    ld   a, h
-    ld   (de), a
-    inc  de
-
-    ld   hl, (WORD_SRC_ADDR)
-    ld   a, (hl)                  ; the name length
-    ld   (de), a
-    inc  de
-    inc  hl                       ; HL -> the first character
-
-    ld   b, a
-    ld   a, b
-    or   a
-    jr   z, .namedone
-.namecopy:
-    ld   a, (hl)
-    ld   (de), a
-    inc  hl
-    inc  de
-    djnz .namecopy
-.namedone:
-    ld   (HERE), de
-    ld   hl, (NEW_HEADER_ADDR)
-    ld   (LATEST), hl
-    ld   a, 1
-    ld   (STATE), a
-    ret
+    call HEADER_BUILD
+    call HEADER_LINK
+    jp   W_RBRACKET               ; STATE = 1 (core/tick.asm)
 
 ; ============================================================================
 ; ; ( -- ) IMMEDIATE -- compile a RET, ending the definition's CALL chain, and set STATE to 0.

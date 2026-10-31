@@ -1064,3 +1064,17 @@ this is the condensed one-paragraph-per-phase version.
   an earlier ROM do not load (as with every ROM change); source text
   saved with `SAVE-TEXT` does. HOME free space 1,732 bytes before, 2,052
   after; EXROM 3,296. Emulators only; no hardware.
+- V2 step Words and keys (`docs/V2/milestones/Words_and_keys.md`):
+  comments (`\` to the end of the line, `(` to the next `)`), `[` and
+  `]` with `LITERAL`, `[']`, `CHAR` and `[CHAR]`. SYMBOL SHIFT + A S D
+  F G Y U H type `~ | \ { } [ ] ^` (2068-Leap-C's map), and the font
+  has every printable ASCII character, with Leap-C's `1` and `l`, which
+  no longer look alike. Text is drawn about twice as fast, and typing at
+  the prompt is faster with it. Fixed: `:`, `CREATE`, `VARIABLE`,
+  `CONSTANT`, `ARRAY`, `STRING`, `FVARIABLE` and `FCONSTANT` with no
+  name after them made a nameless word (`:` left the console
+  compiling); they, `'`, `CHAR` and `FORGET` now report `MISSING NAME`.
+  `LIST-DEFS` and `EDIT name` skip comments. LIB tapes saved by an
+  earlier ROM do not load; `SAVE-TEXT` source does. HOME free space
+  2,052 bytes before, 2,226 after; EXROM 3,296 before, 3,272 after.
+  Emulators only; no hardware.

@@ -4,7 +4,7 @@
 ; The screen is the standard 256x192 bitmap at SCREEN_ADDR (interleaved by thirds) with the 32x24
 ; attribute area at ATTR_ADDR. ROW_BASE_TABLE gives the bitmap address of (row, column 0,
 ; scanline 0); a column adds 1 and a scanline down adds 256. Characters are 8-byte glyphs from
-; FONT_TABLE (kernel/graphics/font.asm); PUNCT_CHAR_TABLE maps punctuation to font indexes; codes
+; FONT_TABLE (kernel/graphics/font.asm), which holds printable ASCII (32-126) in code order; codes
 ; 128-143 are block graphics built into BLOCK_GFX_SCRATCH and 144-164 the UDGs (UDG_TABLE).
 ;
 ; A row or column off the grid is clipped, not written: the routines return carry set (or do
@@ -189,89 +189,48 @@ GFX_SET_BORDER:
 
 ; ============================================================================
 ; GFX_CHAR_TO_FONT_OFFSET -- the glyph pointer for a character code
-; Despite the name this returns an absolute address: FONT_TABLE + index * 8 for the font and
-; punctuation, BLOCK_GFX_SCRATCH (built here) for codes 128-143, UDG_TABLE + offset for 144-164.
+; Despite the name this returns an absolute address: FONT_TABLE + (code - 32) * 8 for printable
+; ASCII, BLOCK_GFX_SCRATCH (built here) for codes 128-143, UDG_TABLE + offset for 144-164.
 ; In:  A = character code
-; Out: carry clear + HL = the 8-byte glyph; carry set if the code has no glyph (GFX_CHAR_SETUP
-;      draws a space)
-; Destroys: AF, BC, DE, HL (E holds the code throughout; the punctuation scan counts in B)
+; Out: carry clear + HL = the 8-byte glyph; carry set if the code has no glyph (0-31, 127, 165 up;
+;      GFX_PUTCHAR draws a space)
+; Destroys: AF, DE, HL (BC is kept)
 ; ============================================================================
 GFX_CHAR_TO_FONT_OFFSET:
-    ld   e, a                      ; E = the character, kept through the scans below
-    cp   " "
-    jr   z, .is_space
-    cp   "0"
-    jr   c, .try_punct             ; below the digits
-    cp   "9" + 1
-    jr   c, .is_digit
-    cp   "A"
-    jr   c, .try_punct              ; between the digits and the letters
-    cp   "Z" + 1
-    jr   c, .is_upper
-    cp   "a"
-    jr   c, .try_punct               ; between the cases
-    cp   "z" + 1
-    jr   c, .is_lower
-    ; above 'z': 128-143 block graphics and 144-164 UDGs are taken here; the rest is scanned
-    cp   128
-    jr   c, .try_punct
-    cp   UDG_CODE_BASE                  ; 144
-    jr   c, .is_block_graphics
-    cp   UDG_CODE_BASE + UDG_COUNT      ; 165
-    jr   c, .is_udg
-    ; 165+: not in the table either, so .not_found
-
-.try_punct:
-    ; linear scan of PUNCT_CHAR_TABLE's (char, index) pairs
-    ld   hl, PUNCT_CHAR_TABLE
-    ld   b, PUNCT_CHAR_COUNT
-.punct_loop:
-    ld   a, (hl)
-    cp   e
-    jr   z, .punct_found
-    inc  hl
-    inc  hl                          ; 2 bytes per entry
-    djnz .punct_loop
-    jr   .not_found
-
-.punct_found:
-    inc  hl
-    ld   a, (hl)                      ; A = this character's font index
-    jr   .to_offset
-
-.is_space:
-    ld   hl, FONT_TABLE                ; glyph 0
-    or   a
-    ret
-.is_digit:
-    sub  "0"
-    add  a, 1                      ; index 0 is space; digits start at 1
-    jr   .to_offset
-.is_upper:
-    sub  "A"
-    add  a, 11                      ; index 0=space, 1-10=digits, 11-36=upper
-    jr   .to_offset
-.is_lower:
-    sub  "a"
-    add  a, 37                       ; 37-62=lowercase
-.to_offset:
-    ; glyph pointer = FONT_TABLE + index * 8
+    sub  " "
+    cp   "~" - " " + 1
+    jr   nc, .not_ascii
+    ld   de, FONT_TABLE
+.scale:                             ; HL = DE + A * 8 (A <= 94: A * 2 fits a byte)
+    add  a, a
     ld   l, a
     ld   h, 0
-    add  hl, hl                      ; x2
-    add  hl, hl                      ; x4
-    add  hl, hl                      ; x8
-    ld   bc, FONT_TABLE
-    add  hl, bc
-    or   a
+    add  hl, hl
+    add  hl, hl
+    add  hl, de                     ; carry clear: no overflow
     ret
 
+.not_ascii:
+    add  a, " "                     ; A = the code again
+    cp   128
+    ret  c                          ; 0-31 and 127: carry set, no glyph
+    sub  UDG_CODE_BASE              ; 144
+    jr   c, .is_block_graphics      ; 128-143
+    cp   UDG_COUNT
+    ccf
+    ret  c                          ; 165 up: no glyph
+    ld   de, UDG_TABLE              ; 144-164: UDG_TABLE + (code - 144) * 8; the UDGs are RAM
+    jr   .scale
+
 .is_block_graphics:
-    ; Codes 128-143: the glyph is built in BLOCK_GFX_SCRATCH from the code's low nibble (bit0 =
-    ; top-right, bit1 = top-left, bit2 = bottom-right, bit3 = bottom-left; each a solid 4x4 block).
-    ; Each half is four identical rows: the low bit of its pair selects the right nibble ($0F),
-    ; the next the left ($F0); E shifts down two bits between halves (top, then bottom).
-    ; Leap-C's block-graphics routine (2068-Leap-C delta D21, clean-room from the screen format).
+    ; Codes 128-143 (A = code - 144): the glyph is built in BLOCK_GFX_SCRATCH from the code's low
+    ; nibble (bit0 = top-right, bit1 = top-left, bit2 = bottom-right, bit3 = bottom-left; each a
+    ; solid 4x4 block). Each half is four identical rows: the low bit of its pair selects the right
+    ; nibble ($0F), the next the left ($F0); E shifts down two bits between halves (top, then
+    ; bottom). Leap-C's block-graphics routine (2068-Leap-C delta D21, clean-room from the screen
+    ; format).
+    push bc
+    ld   e, a                        ; the low nibble is the code's
     ld   hl, BLOCK_GFX_SCRATCH
     ld   b, 2                        ; two halves
 .bg_half:
@@ -295,89 +254,78 @@ GFX_CHAR_TO_FONT_OFFSET:
     srl  e
     srl  e                           ; next pair of quarters
     djnz .bg_half
+    pop  bc
     ld   hl, BLOCK_GFX_SCRATCH
     or   a                           ; carry clear = success
-    ret
-
-.is_udg:
-    ; Codes 144-164: UDG_TABLE + (code - UDG_CODE_BASE) * 8; the UDGs are RAM
-    ld   a, e
-    sub  UDG_CODE_BASE
-    ld   l, a
-    ld   h, 0
-    add  hl, hl                        ; x2
-    add  hl, hl                        ; x4
-    add  hl, hl                        ; x8
-    ld   bc, UDG_TABLE
-    add  hl, bc
-    or   a
-    ret
-
-.not_found:
-    scf
-    ret
-
-; ============================================================================
-; GFX_CHAR_SETUP -- glyph pointer and screen address for a character cell (shared by GFX_PUTCHAR)
-; In:  A = character code, B = row (0-23), C = column (0-31)
-; Out: carry clear + HL = the glyph's 8 bytes, DE = the cell's top-left screen address; carry set
-;      (HL/DE undefined) if row >= 24 or column >= 32
-; Destroys: AF, DE, HL (BC is kept)
-; ============================================================================
-GFX_CHAR_SETUP:
-    ld   d, a                      ; the character; A is scratch for the checks
-    ld   a, b
-    cp   24
-    jr   nc, .out_of_range
-    ld   a, c
-    cp   32
-    jr   nc, .out_of_range
-    ld   a, d                      ; restore the character
-    push bc                        ; GFX_CHAR_TO_FONT_OFFSET destroys B
-    call GFX_CHAR_TO_FONT_OFFSET
-    jr   nc, .have_offset
-    ld   hl, FONT_TABLE             ; no glyph: a space
-.have_offset:
-    pop  bc
-    push hl                            ; the glyph pointer
-
-    ld   a, b
-    call GFX_ROW_BASE_ADDR
-    ex   de, hl                       ; DE = row_base
-    ld   a, c
-    add  a, e
-    ld   e, a
-    jr   nc, .no_carry
-    inc  d
-.no_carry:                             ; DE = row_base + column
-
-    pop  hl                                ; HL = the glyph
-    or   a                                ; carry clear: success
-    ret
-
-.out_of_range:
-    scf
     ret
 
 ; ============================================================================
 ; GFX_PUTCHAR -- draw one character in the grid (bitmap only; the attribute is not touched)
 ; In:  A = character code, B = row (0-23), C = column (0-31)
-; Out: carry set if the position is off the grid (nothing drawn), else clear
-; Destroys: AF, BC, DE, HL
+; Out: carry set if the position is off the grid (nothing drawn); else carry clear and DE = the
+;      cell's top-left bitmap address + 8 scanlines (D + 8: GFX_PUTCHAR_ATTR's input)
+; Destroys: AF, DE, HL (BC is kept)
 ; ============================================================================
 GFX_PUTCHAR:
-    call GFX_CHAR_SETUP
-    ret  c                                 ; off the grid: nothing drawn
-    ld   b, 8                              ; 8 scanlines
-.scanline_loop:
-    ld   a, (hl)                            ; A = this scanline's font byte
-    ex   de, hl                              ; HL = screen address, DE = font ptr
-    ld   (hl), a                              ; write font byte to screen
-    inc  h                                     ; next scanline: screen address += 256
-    ex   de, hl                                ; HL = font ptr, DE = screen address
-    inc  hl                                    ; next font byte
-    djnz .scanline_loop
+    ld   d, a                       ; the character; A is scratch for the checks
+    ld   a, b
+    cp   24
+    ccf
+    ret  c
+    ld   a, c
+    cp   32
+    ccf
+    ret  c
+    ld   a, d
+    call GFX_CHAR_TO_FONT_OFFSET    ; keeps BC
+    jr   nc, .have_glyph
+    ld   hl, FONT_TABLE              ; no glyph: a space
+.have_glyph:
+    ; the cell's address: 010tt000 rrrccccc (tt = row / 8, rrr = row MOD 8, ccccc = column)
+    ld   a, b
+    and  $18
+    or   HIGH SCREEN_ADDR
+    ld   d, a
+    ld   a, b
+    rrca
+    rrca
+    rrca
+    and  $E0
+    add  a, c                       ; carry clear: rrr00000 + column < 256
+    ld   e, a
+    REPT 7                          ; the 8 scanlines, 256 bytes apart
+    ld   a, (hl)
+    ld   (de), a
+    inc  hl
+    inc  d
+    ENDR
+    ld   a, (hl)
+    ld   (de), a
+    inc  d
     ret
+    ASSERT LOW SCREEN_ADDR == 0 && (HIGH SCREEN_ADDR & $1F) == 0
+
+; ============================================================================
+; GFX_PUTCHAR_ATTR -- draw one character and set its cell's attribute (EMIT, the console)
+; In:  A = character code, B = row (0-23), C = column (0-31), E = the attribute
+; Out: carry set if the position is off the grid (nothing drawn or set)
+; Destroys: AF, DE, HL (BC is kept)
+; ============================================================================
+GFX_PUTCHAR_ATTR:
+    push de
+    call GFX_PUTCHAR
+    pop  hl                         ; L = the attribute
+    ret  c
+    ld   a, d                       ; 010tt000 + 8: bits 3-4 hold tt + 1, bits 0-2 are 0
+    rrca
+    rrca
+    rrca                            ; 9 + tt
+    add  a, HIGH ATTR_ADDR - 9
+    ld   d, a                       ; DE = ATTR_ADDR + row * 32 + column
+    ld   a, l
+    ld   (de), a
+    ret
+    ASSERT LOW ATTR_ADDR == 0 && HIGH ATTR_ADDR == HIGH SCREEN_ADDR + $18
 
 ; ============================================================================
 ; GFX_PRINT_STRING -- draw a zero-terminated string, one column per character
@@ -392,9 +340,7 @@ GFX_PRINT_STRING:
     or   a
     ret  z
     push hl
-    push bc                  ; GFX_PUTCHAR destroys BC
     call GFX_PUTCHAR
-    pop  bc
     pop  hl
     inc  hl
     inc  c
@@ -521,16 +467,9 @@ GFX_SET_MODE:
 GFX_CLEAR_ROW:
     ld   c, 0
 .loop:
-    push bc
     ld   a, " "
-    call GFX_PUTCHAR
-    pop  bc
-
-    push bc
-    ld   a, ATTR_DEFAULT
-    call GFX_SET_ATTR
-    pop  bc
-
+    ld   e, ATTR_DEFAULT
+    call GFX_PUTCHAR_ATTR
     inc  c
     ld   a, c
     cp   GFX_COLS
@@ -773,33 +712,6 @@ GFX_LINE:
 BIT_MASK_TABLE:
     DB   %10000000, %01000000, %00100000, %00010000
     DB   %00001000, %00000100, %00000010, %00000001
-
-; the glyph index for each punctuation character (FONT_TABLE order)
-PUNCT_CHAR_TABLE:
-    DB   '"', 63
-    DB   "!", 64
-    DB   "@", 65
-    DB   "#", 66
-    DB   "$", 67
-    DB   "%", 68
-    DB   "&", 69
-    DB   "'", 70
-    DB   "(", 71
-    DB   ")", 72
-    DB   "_", 73
-    DB   ":", 74
-    DB   ".", 75
-    DB   ",", 76
-    DB   "=", 77
-    DB   "+", 78
-    DB   "-", 79
-    DB   ";", 80
-    DB   "/", 81
-    DB   "*", 82
-    DB   "<", 83
-    DB   ">", 84
-    DB   "?", 85
-PUNCT_CHAR_COUNT EQU 23
 
 ; the first UDG character code (UDGs are 144 to 144 + UDG_COUNT - 1; block graphics are 128-143)
 UDG_CODE_BASE EQU 144
