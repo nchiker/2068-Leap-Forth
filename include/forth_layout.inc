@@ -285,12 +285,7 @@ ED_ROW_JP:                DEFS 3                        ; RAM JP to the row draw
     DEFS 1                                              ; free
 CHR_BUF:                  DEFS 1                        ; CHR: the one-character result
 STR_BUF:                  DEFS 6                        ; STR: the result
-SRCH_ADDR1:               DEFS 2                        ; SEARCH: haystack address
-SRCH_LEN1:                DEFS 1                        ; SEARCH: haystack length
-SRCH_ADDR2:               DEFS 2                        ; SEARCH: needle address
-SRCH_LEN2:                DEFS 1                        ; SEARCH: needle length
-SRCH_POS:                 DEFS 1                        ; SEARCH: offset being tried
-SRCH_MAXPOS:              DEFS 1                        ; SEARCH: last offset worth trying
+    DEFS 8                                              ; free
 CATCH_TMP_SP:             DEFS 2                        ; CATCH: staging cell for SP
 CATCH_TMP_IX:             DEFS 2                        ; CATCH: staging cell for IX
 CATCH_TMP_IY:             DEFS 2                        ; CATCH: staging cell for IY

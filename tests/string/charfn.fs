@@ -21,3 +21,15 @@ HW 256 LEFT . DROP HW 256 RIGHT . A1 - .   \ expect: 11 11 0
 HW WD SEARCH . . A1 - .                \ expect: -1 5 6
 HW DROP 5 XY SEARCH . . A1 - .         \ expect: 0 5 0
 XY HW SEARCH . . XY DROP - .           \ expect: 0 3 0
+CLS 0 0 AT-XY
+\ a buffer of 300 bytes made by hand: UPPER, LOWER and SEARCH take the whole 16-bit length
+CREATE B3 300 ALLOT
+: FB 300 0 DO DUP B3 I + C! LOOP DROP ;
+: NE S" XY" ;
+: NZ S" XZ" ;
+97 FB B3 300 UPPER 2DROP B3 C@ . B3 299 + C@ .    \ expect: 65 65
+65 FB B3 300 LOWER 2DROP B3 C@ . B3 299 + C@ .    \ expect: 97 97
+88 B3 298 + C! 89 B3 299 + C!
+B3 300 NE SEARCH . . B3 - .              \ expect: -1 2 298
+B3 300 NZ SEARCH . . B3 - .              \ expect: 0 300 0
+B3 300 B3 300 SEARCH . . B3 - .          \ expect: -1 300 0

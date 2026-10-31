@@ -93,25 +93,8 @@ H_UPPER:
     DW   H_STR
     DB   5, "U", "P", "P", "E", "R"
 W_UPPER:
-    ld   a, (ix+0)
-    or   (ix+1)
-    ret  z                      ; len == 0 -- nothing to do (also
-                                 ; avoids DJNZ's own "0 means 256" trap)
-    ld   b, (ix+0)
-    ld   l, (ix+2)
-    ld   h, (ix+3)
-.loop:
-    ld   a, (hl)
-    cp   "a"
-    jr   c, .skip
-    cp   "z" + 1
-    jr   nc, .skip
-    sub  32                      ; lowercase -> uppercase
-    ld   (hl), a
-.skip:
-    inc  hl
-    djnz .loop
-    ret
+    ld   bc, "a" * 256 + (-32 & $FF)   ; B = the first letter changed, C = what is added to it
+    jr   W_LOWER.map
 
 ; ============================================================================
 ; LOWER ( addr len -- addr len ) -- upper case to lower case in place
@@ -120,24 +103,27 @@ H_LOWER:
     DW   H_UPPER
     DB   5, "L", "O", "W", "E", "R"
 W_LOWER:
-    ld   a, (ix+0)
-    or   (ix+1)
-    ret  z
-    ld   b, (ix+0)
+    ld   bc, "A" * 256 + 32
+.map:
+    ld   e, (ix+0)
+    ld   d, (ix+1)                     ; DE = len
     ld   l, (ix+2)
     ld   h, (ix+3)
 .loop:
+    ld   a, d
+    or   e
+    ret  z
+    dec  de
     ld   a, (hl)
-    cp   "A"
-    jr   c, .skip
-    cp   "Z" + 1
-    jr   nc, .skip
-    add  a, 32                   ; uppercase -> lowercase
+    sub  b
+    cp   26
+    jr   nc, .skip                     ; not one of the 26 letters
+    add  a, b
+    add  a, c
     ld   (hl), a
 .skip:
     inc  hl
-    djnz .loop
-    ret
+    jr   .loop
 
 ; ============================================================================
 ; LEFT ( addr len n -- addr len' ) -- the first n characters (the whole string if n >= len, or n < 0)
@@ -198,86 +184,70 @@ H_SEARCH:
     DW   H_RIGHT
     DB   6, "S", "E", "A", "R", "C", "H"
 W_SEARCH:
-    rst RST_DPOP                 ; hl = len2
-    ld   a, l
-    ld   (SRCH_LEN2), a
-    rst RST_DPOP                  ; hl = addr2
-    ld   (SRCH_ADDR2), hl
-    ld   a, (ix+0)                  ; peek len1: addr1/len1 stay on the stack,
-    ld   (SRCH_LEN1), a              ; popped once the result is known
-    ld   l, (ix+2)
-    ld   h, (ix+3)
-    ld   (SRCH_ADDR1), hl
-
-    ld   a, (SRCH_LEN2)
-    or   a
-    jr   z, .notfound                   ; empty needle
-
-    ld   a, (SRCH_LEN1)
-    ld   b, a
-    ld   a, (SRCH_LEN2)
-    ld   c, a
+    rst RST_DPOP
+    ld   b, h
+    ld   c, l                          ; BC = len2
+    rst RST_DPOP
+    ex   de, hl                        ; DE = addr2
     ld   a, b
-    sub  c                                ; a = len1 - len2
-    jr   c, .notfound                      ; borrow: the needle is longer than the haystack
-    ld   (SRCH_MAXPOS), a
-    xor  a
-    ld   (SRCH_POS), a
+    or   c
+    jr   z, .notfound                  ; an empty needle
+    ld   l, (ix+0)
+    ld   h, (ix+1)                     ; HL = len1 (addr1 and len1 stay on the stack)
+    or   a
+    sbc  hl, bc
+    jr   c, .notfound                  ; the needle is longer than the haystack
+    inc  hl
+    push hl                            ; the number of places to try
+    ld   l, (ix+2)
+    ld   h, (ix+3)                     ; HL = the place in string 1
 .outer:
-    ld   a, (SRCH_POS)
-    ld   b, a
-    ld   a, (SRCH_MAXPOS)
-    cp   b
-    jr   c, .notfound                       ; pos > maxpos -- exhausted
-    ld   hl, (SRCH_ADDR1)
-    ld   a, (SRCH_POS)
-    ld   d, 0
-    ld   e, a
-    add  hl, de                              ; hl = addr1 + pos
-    ld   de, (SRCH_ADDR2)
-    ld   a, (SRCH_LEN2)
-    ld   b, a
+    push hl
+    push de
+    push bc
 .inner:
     ld   a, (de)
     cp   (hl)
-    jr   nz, .nomatch
+    jr   nz, .differ
     inc  hl
     inc  de
-    djnz .inner
-    jr   .found                                ; all len2 bytes matched
-.nomatch:
-    ld   a, (SRCH_POS)
-    inc  a
-    ld   (SRCH_POS), a
-    jr   .outer
-.found:
-    rst RST_DPOP                               ; discard len1
-    rst RST_DPOP                                ; and addr1 (both are in SRCH_*)
-    ld   hl, (SRCH_ADDR1)
-    ld   a, (SRCH_POS)
-    ld   d, 0
-    ld   e, a
-    add  hl, de
-    rst RST_DPUSH                                ; addr3
-    ld   a, (SRCH_LEN1)
-    sub  e                                          ; len3 = len1 - pos (E = pos; RST_DPUSH keeps DE)
-    ld   l, a
-    ld   h, 0
-    rst RST_DPUSH                                   ; len3
+    dec  bc
+    ld   a, b
+    or   c
+    jr   nz, .inner
+    pop  bc
+    pop  de
+    pop  de                            ; DE = the match
+    pop  hl                            ; (the count)
+    ld   l, (ix+2)
+    ld   h, (ix+3)
+    ld   c, (ix+0)
+    ld   b, (ix+1)
+    add  hl, bc
+    or   a
+    sbc  hl, de                        ; len3 = addr1 + len1 - the match
+    ld   (ix+0), l
+    ld   (ix+1), h
+    ld   (ix+2), e
+    ld   (ix+3), d
     ld   hl, -1
-    rst RST_DPUSH                                    ; flag = true
+    rst RST_DPUSH
     ret
+.differ:
+    pop  bc
+    pop  de
+    pop  hl
+    inc  hl
+    ex   (sp), hl
+    dec  hl
+    ld   a, h
+    or   l
+    ex   (sp), hl
+    jr   nz, .outer
+    pop  hl
 .notfound:
-    rst RST_DPOP                                      ; discard len1
-    rst RST_DPOP                                       ; discard addr1
-    ld   hl, (SRCH_ADDR1)
-    rst RST_DPUSH                                        ; addr3 = addr1
-    ld   a, (SRCH_LEN1)
-    ld   l, a
-    ld   h, 0
-    rst RST_DPUSH                                          ; len3 = len1
     ld   hl, 0
-    rst RST_DPUSH                                           ; flag = false
+    rst RST_DPUSH
     ret
 
 ; ============================================================================
