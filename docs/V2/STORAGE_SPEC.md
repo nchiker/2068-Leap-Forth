@@ -109,13 +109,13 @@ and carry the same identity, and `make check` runs both.
 
 **D4. LIB images are saved and loaded in place, with a CRC-16 trailer.**
 
-- **On tape.** The data block is the dictionary bytes `$9800..HERE-1` followed by 2 bytes of CRC-16/CCITT-FALSE
+- **On tape.** The data block is the dictionary bytes `FORTH_DICT_RAM..HERE-1` followed by 2 bytes of CRC-16/CCITT-FALSE
   (polynomial `$1021`, init `$FFFF`, MSB first, no final XOR, stored low byte first) over those bytes. `SAVE-LIB`
-  writes the CRC at `HERE` (free dictionary space) and sends `$9800..HERE+1` straight from RAM. LATEST travels in
+  writes the CRC at `HERE` (free dictionary space) and sends `FORTH_DICT_RAM..HERE+1` straight from RAM. LATEST travels in
   the header.
 - **The `$D000` copy goes.** That removes the 8,190-byte limit. The new limit is `HERE + 2 <= DICT_RAM_CEILING`,
   else `THROW -8` before anything is sent.
-- **On load.** `LOAD-LIB` receives into `$9800` directly. It checks the CRC, then sets `HERE = $9800 + len - 2` and
+- **On load.** `LOAD-LIB` receives into `FORTH_DICT_RAM` directly. It checks the CRC, then sets `HERE = FORTH_DICT_RAM + len - 2` and
   `LATEST` from the header.
 - **Why the CRC.** The XOR checksum misses an even number of errors in the same bit column; the CRC adds about 40 B
   [E] and about 400 T per byte [E] (2.6 s for a full 22 KB dictionary).
@@ -227,9 +227,9 @@ own copy, and their own name cells at `$8580` and `$8A62`).
 
 | Word | Stack | Behaviour |
 |---|---|---|
-| `SAVE-LIB` | `( "name" -- )` | `HERE + 2 > DICT_RAM_CEILING`: `THROW -8`. Else CRC over `$9800..HERE-1` into `HERE`, save type 3 with identity and LATEST. SPACE: `THROW -28` |
-| `LOAD-LIB` | `( "name" -- )` | Load type 3 into `$9800`, max `DICT_RAM_CEILING - $9800`. CRC check. Success: `HERE`, `LATEST` set. Failure with nothing written: dictionary unchanged, `THROW -37` (or -28). Failure after writing, or CRC mismatch: **the user dictionary is reset to empty** (`LATEST = DICT_LATEST_INIT_RECALL`, `HERE = $9800`, as cold start does), then `THROW -37` (or -28) |
-| `VERIFY-LIB` | `( "name" -- )` | CRC of the current dictionary into `HERE`; verify type 3 against `$9800..HERE+1`, requiring identity, length and LATEST to match. Nothing is written. Failure: `THROW -37` (or -28) |
+| `SAVE-LIB` | `( "name" -- )` | `HERE + 2 > DICT_RAM_CEILING`: `THROW -8`. Else CRC over `FORTH_DICT_RAM..HERE-1` into `HERE`, save type 3 with identity and LATEST. SPACE: `THROW -28` |
+| `LOAD-LIB` | `( "name" -- )` | Load type 3 into `FORTH_DICT_RAM`, max `DICT_RAM_CEILING - FORTH_DICT_RAM`. CRC check. Success: `HERE`, `LATEST` set. Failure with nothing written: dictionary unchanged, `THROW -37` (or -28). Failure after writing, or CRC mismatch: **the user dictionary is reset to empty** (`LATEST = DICT_LATEST_INIT_RECALL`, `HERE = FORTH_DICT_RAM`, as cold start does), then `THROW -37` (or -28) |
+| `VERIFY-LIB` | `( "name" -- )` | CRC of the current dictionary into `HERE`; verify type 3 against `FORTH_DICT_RAM..HERE+1`, requiring identity, length and LATEST to match. Nothing is written. Failure: `THROW -37` (or -28) |
 | `SAVE-TEXT` | `( addr len "name" -- )` | As today; SPACE: `THROW -28` |
 | `LOAD-TEXT` | `( "name" -- )` | As today (into `LOADTEXT_BUF`, max 8,192, then interpret); failure: `THROW -37` (or -28) instead of silence |
 | `VERIFY-TEXT` | `( addr len "name" -- )` | Verify type 0 of exactly `len` bytes against `addr`. Failure: `THROW -37` (or -28) |

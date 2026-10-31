@@ -31,7 +31,7 @@ below).  The ROM "defines" a byte at the idle prompt if its cold start (rom/fort
 COLD_START) writes it, or the editor writes it before the prompt: a byte whose value after the
 boot depends on the power-on pattern is a bug (a program or the user can read it back, e.g.
 UDG_TABLE is read by the UDG words and the graphics print routine without any initialisation).
-COLD_START: SP=$FF00, IX=DSTACK_TOP ($9800), IY=FSTACK_TOP ($9000); zeroes $8000..
+COLD_START: SP=$FF00, IX=DSTACK_TOP, IY=FSTACK_TOP; zeroes $8000..
 DICT_RAM_CEILING with MEM_FILL_ZERO (the dictionary, both Forth stacks, the workspace and most
 cells in that range); GFX_CLS clears the bitmap and attributes ($4000-$5AFF); a handful of
 cells are stored one by one (LATEST, WORKSPACE_END, HERE, STATE, LEAVE_DEPTH, CATCH_DEPTH,
