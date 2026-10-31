@@ -1074,6 +1074,7 @@ this is the condensed one-paragraph-per-phase version.
   `CONSTANT`, `ARRAY`, `STRING`, `FVARIABLE` and `FCONSTANT` with no
   name after them made a nameless word (`:` left the console
   compiling); they, `'`, `CHAR` and `FORGET` now report `MISSING NAME`.
-  `LIST-DEFS` skips comments. LIB tapes saved by an earlier ROM do not
-  load; `SAVE-TEXT` source does. HOME free space 2,052 bytes before,
-  2,226 after; EXROM 3,296. Emulators only; no hardware.
+  `LIST-DEFS` and `EDIT name` skip comments. LIB tapes saved by an
+  earlier ROM do not load; `SAVE-TEXT` source does. HOME free space
+  2,052 bytes before, 2,226 after; EXROM 3,296 before, 3,272 after.
+  Emulators only; no hardware.
