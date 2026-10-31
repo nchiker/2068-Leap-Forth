@@ -6,7 +6,7 @@ the best solution for the language and its users; fix a problem in the session i
 reason not to (the reason is written here); **follow Leap-C's conventions** (`~/2068-Leap-C` `CONTRIBUTING.md` and
 `project_plan.md` section 1) for testing, paperwork, code style and RAM layout.
 
-Last updated 2026-10-31. Free bytes: HOME 2,226, EXROM 3,272 (`make budget`: per component, `budget.toml`;
+Last updated 2026-10-31. Free bytes: HOME 2,232, EXROM 3,272 (`make budget`: per component, `budget.toml`;
 `make inventory`: per routine). Dictionary: 16,128 bytes at power-on.
 
 ## Done
@@ -26,27 +26,21 @@ Last updated 2026-10-31. Free bytes: HOME 2,226, EXROM 3,272 (`make budget`: per
 | FILL and CIRCLE | Rebuilt in the EXROM, much faster, always complete (`milestones/O15.md`) |
 | Simplify | Leap-C's conventions: two images, one test runner, one RAM layout file, budgets (`milestones/Simplify.md`) |
 | Space | `make inventory`, dead code, the shrink pass, `FIND` twice as fast, the RAM cells packed (`milestones/Space.md`) |
+| Words and keys | Comments, `[ ] LITERAL ['] CHAR [CHAR]`, Leap-C's keys, the font in ASCII order, text twice as fast (`milestones/Words_and_keys.md`) |
 
-## Now: Words and keys — done (`docs/V2/milestones/Words_and_keys.md`)
+## Now: Display look — done (`docs/V2/milestones/Display_look.md`)
 
-Comments `\` and `(`; `[` `]` `LITERAL`; `[']` `CHAR` `[CHAR]`. Leap-C's keys for `~ | \ { } [ ] ^` and one key-table
-lookup; the font in ASCII order with all of printable ASCII and Leap-C's `1`/`l`; text drawn twice as fast. Fixed on
-the way: a missing name made a nameless word (now `MISSING NAME`, -16); `LIST-DEFS` and `EDIT name` skip comments. The
-six defining words share one header builder. HOME 2,052 → 2,226 B free, EXROM 3,296 → 3,272.
+Leap V2's screen: black on white, a white border set at the cold start, no banner; the version (`2068 FORTH V2.0`,
+`include/forth_version.inc`) on the status bar of row 23 (white on black, red, green and blue cells at the right)
+from before the chime to the first key; `EDIT`'s status row on the same bar; the chime in Leap V2's loop form (the
+same sound, 23 B less). HOME 2,226 → 2,232 B free, EXROM 3,272 (unchanged).
 
 ## Next, in order
 
-1. **Display look**: review the screen's appearance and make it match Leap V2 (`~/2068-Leap`), with its startup
-   sound and its version display. Today Forth prints `2068-FORTH` on row 0 and plays its C4/E4/G4 chord (Leap V2's
-   chime was ported from it; Leap V2 builds the `V2_MAINT_CHIME_C` form). Leap V2 shows the ROM's version
-   (`2068 LEAP V2.1`, `include/v2_version.inc`) on the status row, row 23, in the bar's attribute, from power-on
-   while the chime plays until the first key (`rom/v2_version.asm`, `V2_DRAW_STATUS`). Compare the two screens
-   (border, paper and ink, banner, status row, console and editor rows) and list each difference with the owner
-   before changing it.
-2. **Display speed**, and LINE on 16-bit coordinates with clipping (today it takes bytes: `-10 50 100 50 LINE`
+1. **Display speed**, and LINE on 16-bit coordinates with clipping (today it takes bytes: `-10 50 100 50 LINE`
    starts at x 246); it rebuilds `GFX_LINE`, whose cells POLYGON also uses through the EXROM.
-3. **BREAK and timing**: BREAK in the interrupt routine, so long words can be stopped.
-4. **Blackjack** rebuilt from its saved source (`demos/blackjack.fs`) as a program for the finished ROM; the Shooting
+2. **BREAK and timing**: BREAK in the interrupt routine, so long words can be stopped.
+3. **Blackjack** rebuilt from its saved source (`demos/blackjack.fs`) as a program for the finished ROM; the Shooting
    Gallery's source is beside it (`demos/gallery.fs`).
 
 ## Known defects
@@ -56,6 +50,9 @@ six defining words share one header builder. HOME 2,052 → 2,226 B free, EXROM 
 | LINE takes its coordinates as bytes (no 16-bit clipping) | O15 | Display speed (the `GFX_LINE` rebuild) |
 | The editor's ENTER at the bottom of the view takes 406k T (the store is scanned from the start per key) | Editor | Display speed |
 | Nothing checks the machine stack's depth ($F3C8-$FEFF, 2.8 KB) | Simplify | BREAK and timing (with the interrupt-side checks) |
+
+Fixed in Display look: the border was never set, so it showed whatever the ULA held at power-on (white in ZEsarUX);
+`core/ts2068.asm`'s unused `DEFAULT_ATTR` said the cold start used it.
 
 Fixed in Words and keys: `:` `CREATE` `VARIABLE` `CONSTANT` `ARRAY` `STRING` `FVARIABLE` `FCONSTANT` with no name made a
 nameless word (`:` left the console compiling); `'` with no name said `UNDEFINED WORD`, `FORGET` `NOT FOUND`; a `:` or `;`
