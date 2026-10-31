@@ -21,8 +21,7 @@
 ;   $D000-$EFFF  line store                                       STORE_START .. STORE_LIMIT
 ;   $F000-$F17F  sprite buffers, then free                        SPRITE_SLOT_IMG_BUF, SPRITE_SLOT_BG_BUF
 ;   $F180-$F227  UDG table                                        UDG_TABLE
-;   $F228-$F3C3  free
-;   $F3C4-$F3C7  LINE's coordinates                               GFX_LINE_X0, _Y0, _X1, _Y1
+;   $F228-$F3C7  free
 ;   $F3C8-$FEFF  machine stack, top MACHINE_STACK_TOP, grows down (nothing in the ROM checks its depth)
 ;   $FF00-$FFFF  not used by the ROM (the test harness's return slot)
 ;
@@ -68,10 +67,6 @@ SPRITE_SLOT_IMG_BUF EQU $F000       ; 144 bytes: the captured sprites, 36 per sl
 SPRITE_SLOT_BG_BUF  EQU SPRITE_SLOT_IMG_BUF + SPRITE_SLOT_MAX * SPRITE_SLOT_BYTES   ; 144 bytes: the saved backgrounds
 UDG_TABLE           EQU $F180       ; UDG_COUNT x 8 bytes
 COLD_CLEAR_END      EQU UDG_TABLE + UDG_COUNT * 8   ; the cold start zeroes RAM_CELLS_BASE up to here
-GFX_LINE_X0         EQU $F3C4       ; LINE: start x
-GFX_LINE_Y0         EQU $F3C5       ; LINE: start y
-GFX_LINE_X1         EQU $F3C6       ; LINE: end x
-GFX_LINE_Y1         EQU $F3C7       ; LINE: end y
 
 ; ---- the map tiles RAM (assembly time) ----
     ASSERT GFX_FILL_SHADOW == ATTR_ADDR + 768
@@ -86,7 +81,7 @@ GFX_LINE_Y1         EQU $F3C7       ; LINE: end y
     ASSERT (STORE_LIMIT & $FF) == 0     ; LOAD-TEXT's room test looks at the high byte only
     ASSERT STORE_LIMIT <= SPRITE_SLOT_IMG_BUF
     ASSERT SPRITE_SLOT_BG_BUF + SPRITE_SLOT_MAX * SPRITE_SLOT_BYTES <= UDG_TABLE
-    ASSERT COLD_CLEAR_END <= GFX_LINE_X0 && GFX_LINE_Y1 + 1 <= MACHINE_STACK_LIMIT
+    ASSERT COLD_CLEAR_END <= MACHINE_STACK_LIMIT
     ASSERT MACHINE_STACK_LIMIT < MACHINE_STACK_TOP && MACHINE_STACK_TOP <= $FF00
 
 ; ---- the cells block: RAM_CELLS_BASE .. RAM_CELLS_END ----
@@ -101,20 +96,12 @@ SQRT_OP:                  DEFS 2                        ; SQRT: working copy of 
 SQRT_RES:                 DEFS 2                        ; SQRT: result so far
 SQRT_COUNTER:             DEFS 1                        ; SQRT: loop count
 RND_STATE:                DEFS 2                        ; RND: xorshift state, never 0
-GFX_PIXEL_ROW:            DEFS 1                        ; pixel being drawn: character row (0-23)
-GFX_PIXEL_COL:            DEFS 1                        ; pixel being drawn: character column (0-31)
-GFX_PIXEL_SCANLINE:       DEFS 1                        ; pixel being drawn: scanline in the cell (0-7)
-GFX_PIXEL_MASK:           DEFS 1                        ; pixel being drawn: bit mask in its byte
-GFX_PIXEL_ATTR:           DEFS 1                        ; pixel being drawn: attribute byte
-GFX_PIXEL_OVER:           DEFS 1                        ; pixel being drawn: OVER flag (0 set, nonzero XOR)
-GFX_LINE_ATTR:            DEFS 1                        ; LINE: attribute byte
-GFX_LINE_OVER:            DEFS 1                        ; LINE: OVER flag
-GFX_LINE_DX:              DEFS 1                        ; LINE: abs(x1 - x0)
-GFX_LINE_DY_ABS:          DEFS 1                        ; LINE: abs(y1 - y0)
-GFX_LINE_SX:              DEFS 1                        ; LINE: x step, +1 or -1
-GFX_LINE_SY:              DEFS 1                        ; LINE: y step, +1 or -1
-GFX_LINE_ERR:             DEFS 2                        ; LINE: error term, signed
-GFX_LINE_E2:              DEFS 2                        ; LINE: twice the error term, this step
+GFX_LINE_X0:              DEFS 2                        ; LINE: start x (signed)
+GFX_LINE_Y0:              DEFS 2                        ; LINE: start y
+GFX_LINE_X1:              DEFS 2                        ; LINE: end x
+GFX_LINE_Y1:              DEFS 2                        ; LINE: end y
+GFX_LINE_ATTR:            DEFS 1                        ; LINE and PLOT: attribute byte
+GFX_LINE_N:               DEFS 2                        ; LINE: steps left
 GFX_CIRCLE_XC:            DEFS 2                        ; CIRCLE: centre x
 GFX_CIRCLE_YC:            DEFS 2                        ; CIRCLE: centre y
 GFX_CIRCLE_R:             DEFS 2                        ; CIRCLE: radius; the octant's x offset while drawing
@@ -320,9 +307,12 @@ VIEW_SH_END:                                            ; one past VIEW_SH
 VIEW_STOP:                DEFS 2                        ; view: VIEW_RENDER may stop after this line once the shadow agrees
 STORE_LAST_LINE:          DEFS 2                        ; last line STORE_APPEND appended (0: none), for STORE_TRIM
 VERSION_UP:               DEFS 1                        ; 1: the version is on row 23 (cold start to the first key)
+STORE_MARK_N:             DEFS 2                        ; view: the line STORE_LINE found last ...
+STORE_MARK_PTR:           DEFS 2                        ; ... and its address (line 0 at STORE_START: none yet)
     DEFS RAM_CELLS_END - $                              ; free: room for new cells
     ASSERT $ == RAM_CELLS_END
     ASSERT FP_RAM + 66 == THROW_CODE && FMT + 24 == FDIG && FDIG + 9 == FSQ_N && FQ + 8 == FFLAGS + 1
+    ASSERT GFX_LINE_Y0 == GFX_LINE_X0 + 2 && GFX_LINE_X1 == GFX_LINE_X0 + 4 && GFX_LINE_Y1 == GFX_LINE_X0 + 6
     ASSERT VIEW_SH_END == VIEW_SH + 69 && VIEW_TEXT + 14 <= EDIT_LINE_NO && (VIEW_TEXT & $FF) + 14 < $100
     ORG LAYOUT_RETURN_ORG
 

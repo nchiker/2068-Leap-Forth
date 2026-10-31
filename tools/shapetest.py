@@ -27,9 +27,13 @@ GROUPS (FILL_CIRCLE_SPEC section 9)
          PAPER, in HIRES.  Must pass on the old build and the new one.
   new    the spec: FILL on a noise screen that overflows the old 512-entry seed stack (the region must be complete), FILL
          seeds outside the screen (nothing changes), CIRCLE with a negative or beyond-the-screen centre, a radius above
-         255, a negative radius (nothing).  Fails on the old build (low bytes, dropped seeds), passes on the new one.
+         255, a negative radius (nothing); LINE on signed 16-bit ends (Display speed): its octants, the screen's edges,
+         starts off the screen, lines wholly off it, ends at +-32768, 40 random lines, HIRES, against the unbounded
+         Bresenham line's points on the screen.  Fails on the old build (low bytes, dropped seeds), passes on the new one.
   speed  T-states of FILL on a box, the full screen, a solid disc recoloured, a 3-pixel pocket and a worst-case serpentine;
-         of CIRCLE at r 5, 40, 90, 200; recorded, gated only by --compare (new <= old).  The screen check still applies.
+         of CIRCLE at r 5, 40, 90, 200; of LINE on a diagonal, a row, a column and a row starting 2,000 pixels to the left;
+         recorded, gated by --compare (new <= old) and, for the three LINE cases on the screen, by a ceiling (the build
+         before Display speed fails it).  The screen check still applies.
          `speed_repeat` runs one FILL case twice and requires the same T-states (the figures are deterministic).
 
 HOW A CASE RUNS (white box).  The machine is restored to its booted state; the set-up lines are typed at the console
@@ -213,12 +217,23 @@ def model_plot_points(bmp, attr, hi, pts, cur, mode):
 
 
 def line_points(x0, y0, x1, y1):
-    """LINE takes its coordinates as bytes (0-255); only vertical lines are modelled (a READING: their pixels are the
-    same for any line algorithm), the y range is clipped to the screen by the model's caller."""
-    x0, y0, x1, y1 = x0 & 0xFF, y0 & 0xFF, x1 & 0xFF, y1 & 0xFF
-    if x0 != x1:
-        raise SetupError("only vertical LINEs are modelled")
-    return [(x0, y) for y in range(min(y0, y1), max(y0, y1) + 1)]
+    """LINE's points: Bresenham's line between signed 16-bit ends on an unbounded plane, the e2 form (err = dx - dy; both
+    axes may step at a point) the ROM has always used; the model's caller keeps the points on the screen."""
+    x0, y0, x1, y1 = s16(x0), s16(y0), s16(x1), s16(y1)
+    dx, dy = abs(x1 - x0), abs(y1 - y0)
+    sx, sy = (1 if x0 < x1 else -1), (1 if y0 < y1 else -1)
+    err, pts = dx - dy, []
+    while True:
+        pts.append((x0, y0))
+        if (x0, y0) == (x1, y1):
+            return pts
+        e2 = 2 * err
+        if e2 >= -dy:
+            err -= dy
+            x0 += sx
+        if e2 <= dx:
+            err += dx
+            y0 += sy
 
 
 # ---------------------------------------------------------------------------------------------------- the machine side
@@ -417,6 +432,8 @@ def run_case(m, cs):
         else:
             want = model_circle(pre["bmp"], pre["attr"], pre["hi"], args[0], args[1], args[2], pre["cur"], pre["mode"])
         bad = []
+        if cs.get("ceil") is not None and t > cs["ceil"]:
+            bad.append("%d T, over the ceiling of %d" % (t, cs["ceil"]))
         d = describe_diff("bitmap", post["bmp"], want[0], "bitmap")
         d2 = describe_diff("attributes", post["attr"], want[1], "attr")
         d3 = describe_diff("hires attributes", post["hi"], want[2], "hires") if want[2] is not None else None
@@ -600,6 +617,37 @@ def new_checks():
     # READING: 128 96 -5 alone would pass on the old build by accident (low byte 251: a circle with no point on the screen),
     # so the case adds 128 96 -250 (low byte 6: the old build draws a small circle there, the spec draws nothing).
     L.append(case("circle_negative_radius", "new", ["CLS"], [circle(128, 96, -5), circle(128, 96, -250)]))
+    L += line_checks()
+    return L
+
+
+def line(*a):
+    return ("LINE", list(a))
+
+
+def line_checks():
+    """LINE on signed 16-bit ends (Display speed): the points on the screen of the unbounded line, nothing else.  Each
+    fails on the build before it, which took the coordinates' low bytes."""
+    L = []
+    L.append(case("line_from_off_left", "new", ["CLS", "2 INK"], [line(-10, 50, 100, 50), line(-300, -40, 120, 170),
+                                                                  line(100, 10, -50, 80)]))
+    octants = [(60, 20), (20, 60), (-20, 60), (-60, 20), (-60, -20), (-20, -60), (20, -60), (60, -20), (40, 40), (-40, 40),
+               (40, -40), (-40, -40), (0, 0), (50, 0), (-50, 0), (0, 50), (0, -50), (1, 7), (7, -1)]
+    L.append(case("line_octants", "new", ["CLS"], [line(128, 96, 128 + dx, 96 + dy) for dx, dy in octants]))
+    L.append(case("line_edges", "new", ["CLS", "3 INK"], [line(200, 10, 300, 40), line(10, 180, 60, 250), line(250, 100, 255, 191),
+                                                          line(0, 0, 255, 191), line(255, 0, 0, 191), line(-5, -5, 5, 5),
+                                                          line(250, 186, 260, 196), line(0, 191, -1, 192), line(255, 5, 256, 5),
+                                                          line(3, 0, 3, -1), line(-1, 100, 300, 101), line(31, -20, 32, 300)]))
+    L.append(case("line_off_screen", "new", ["CLS"], [line(-50, 10, -10, 100), line(300, 300, 400, 250), line(-100, 300, 300, 200),
+                                                       line(-1, -1, -1, -1), line(256, 0, 256, 191), line(0, 192, 255, 192)]))
+    L.append(case("line_far", "new", ["CLS", "4 INK"], [line(-32768, -32768, 32767, 32767), line(-32768, 100, 32767, 90),
+                                                        line(30000, -20000, -1000, 500), line(100, -32768, 140, 32767)], weight=4))
+    rng = random.Random(2068)
+    L.append(case("line_random", "new", ["CLS", "1 INK"], [line(rng.randint(-300, 560), rng.randint(-250, 450),
+                                                                rng.randint(-300, 560), rng.randint(-250, 450)) for _ in range(40)],
+                  weight=3))
+    L.append(case("line_hires", "new", ["CLS", "5 INK", "HIRES"], [line(-20, 3, 300, 150), line(7, 190, 7, -4), line(255, 191, 0, 0),
+                                                                   line(100, 0, 140, 191), line(0, 100, 255, 99)]))
     return L
 
 
@@ -616,6 +664,12 @@ def speed_checks():
         L.append(case("circle_speed_r%d" % r, "speed", ["CLS"], [circle(128, 96, r)]))
     L.append(case("fill_speed_serpentine", "speed", ["CLS"], [fill(0, 0)], draw=draw_serpentine, seed_bit=0,
                   region=(24704, 24704), weight=8))
+    # LINE (Display speed): ceilings about 10% over the new figures (83,901 / 58,954 / 52,286 T); the build before takes
+    # about 363,000 / 341,000 / 266,000
+    L.append(case("line_speed_diagonal", "speed", ["CLS"], [line(0, 0, 255, 191)], ceil=92_000))
+    L.append(case("line_speed_horizontal", "speed", ["CLS"], [line(0, 96, 255, 96)], ceil=65_000))
+    L.append(case("line_speed_vertical", "speed", ["CLS"], [line(128, 0, 128, 191)], ceil=58_000))
+    L.append(case("line_speed_walk", "speed", ["CLS"], [line(-2000, 96, 255, 96)]))
     rep = case("fill_speed_box160x120", "speed", ["CLS"] + box(48, 36, 207, 155), [fill(128, 96)], seed_bit=0,
                region=(18000, 19000), ymin=36)
     L.append(Check("speed_repeat", "speed", [task("repeat", rep.tasks[0]["args"], 12)]))

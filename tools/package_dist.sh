@@ -98,6 +98,14 @@ which is the same as:
 It boots to a white screen with its version on the status bar at the bottom,
 plays a short startup chord, and drops you at a keyboard-driven prompt. Try:   5 BORDER      5 3 + .      : GREET ." HI" ; GREET
 
+Running it in ZEsarUX
+---------------------
+ZEsarUX runs from its own folder, so give the ROM's full path:
+    FORTH="\$PWD/roms"
+    cd <ZEsarUX's folder> && ./zesarux --noconfigfile --machine TS2068 --romfile "\$FORTH/forth_zesarux.bin"
+The EXROM words need ZEsarUX built with the EXROM patch (docs/zesarux_setup.md
+in the source repository).
+
 roms/forth_boot_rom0.bin is a raw 16384-byte image for the TS2068's HOME ROM
 slot and roms/graphics_exrom.bin an 8192-byte image for the EXROM slot (checked
 in emulators only).

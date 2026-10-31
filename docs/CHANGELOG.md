@@ -1089,3 +1089,15 @@ this is the condensed one-paragraph-per-phase version.
   LIB tapes saved by an earlier ROM do not load; `SAVE-TEXT` source
   does. HOME free space 2,226 bytes before, 2,232 after; EXROM 3,272.
   Emulators only; no hardware.
+- V2 step Display speed (`docs/V2/milestones/Display_speed.md`): `LINE`
+  takes any coordinates from -32768 to 32767 and draws the part of the
+  line that is on the screen (it used the coordinates' low bytes, so
+  `-10 50 100 50 LINE` started at x 246); a line on the screen draws the
+  same pixels as before, about five times faster. In the full-screen
+  editor, ENTER on the last line of a full screen takes about half the
+  time, and moving through a long text is faster. Output scrolls a third
+  faster. `PLOT` is a little faster. The emulator commands in the README
+  and the ZEsarUX setup page work as written. `POLYGON` still takes its
+  points as 0-255. LIB tapes saved by an earlier ROM do not load;
+  `SAVE-TEXT` source does. HOME free space 2,229 bytes before, 2,188
+  after; EXROM 3,272 before, 3,208 after. Emulators only; no hardware.

@@ -2882,7 +2882,7 @@ beyond what each word's own arguments say.
 | Word       | Stack effect                   | What it does                                                                                                                             |
 | ---------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `PLOT`     | `( x y -- )`                   | Set the pixel at `(x, y)`; a point off the screen (x outside 0-255, y outside 0-191) draws nothing                                       |
-| `LINE`     | `( x1 y1 x2 y2 -- )`           | Draw a line from `(x1, y1)` to `(x2, y2)`                                                                                                |
+| `LINE`     | `( x1 y1 x2 y2 -- )`           | Draw a line from `(x1, y1)` to `(x2, y2)`; any ends (-32768 to 32767), the part off the screen is left out                              |
 | `CIRCLE`   | `( xc yc r -- )`               | Draw a circle outline centered at `(xc, yc)` with radius `r`; any centre and radius, the part off the screen is left out; `r` < 0 draws nothing (second ROM) |
 | `FILL`     | `( x y -- )`                   | Flood-fill the enclosed area touching `(x, y)` with the current color; a seed off the screen does nothing (second ROM)                  |
 | `CLS`      | `( -- )`                       | Clear the whole screen and home the print position to column 0, row 0                                                                    |

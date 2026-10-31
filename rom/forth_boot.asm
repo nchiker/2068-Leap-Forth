@@ -46,9 +46,9 @@ NMI_ENTRY:
 ; this table from the source: the `DS $0100 - $, $FF` pad above it fixes the base).
 ; ============================================================================
 GRAPHICS_HOME_TABLE:
-    jp   GFX_WRITE_PIXEL          ; slot 0: B=x, C=y, A=attr, D=OVER
+    jp   GFX_WRITE_PIXEL          ; slot 0: B=x, C=y, A=attr
     jp   GFX_SET_ATTR             ; slot 1: A=attr, B=row, C=col
-    jp   GFX_LINE                 ; slot 2: no registers; reads GFX_LINE_X0/Y0/X1/Y1/ATTR/OVER
+    jp   GFX_LINE                 ; slot 2: no registers; reads GFX_LINE_X0/Y0/X1/Y1/ATTR
     jp   GFX_ROW_BASE_ADDR        ; slot 3: A=row -> HL=that row's bitmap base (scanline 0)
     jp   GFX_CELL_ATTR_ADDR       ; slot 4: B=row, C=col -> HL=addr
     jp   WRAP_CALC                ; slot 5: the edit line's wrap table

@@ -5,18 +5,17 @@ reports: `docs/V2/milestones/`.
 
 ## Where things stand (2026-10-31)
 
-- **Branch `v2/step-display-look`** (from master `85d727a`, PR #12 Words and keys merged; `make test` passed on master
-  first): step Display look is complete (`docs/V2/milestones/Display_look.md`); `make test`, `make check` and
-  `make repro` pass on it. PR #13 open; the owner reviews it before the next session (Claude merges on the owner's
+- **Branch `v2/step-display-speed`** (from master `f7ab173`, PR #13 Display look merged; `make test` passed on master
+  first): step Display speed is complete (`docs/V2/milestones/Display_speed.md`); `make test` (497 s), `make check` and
+  `make repro` pass on it. PR #14 open; the owner reviews it before the next session (Claude merges on the owner's
   word, with a merge commit).
-- **Decided (2026-10-31):** the screen follows Leap V2: black on white, white border, no banner, the version
-  `2068 FORTH V2.0` on the status bar of row 23 until the first key (the owner's option A), `EDIT`'s status bar, Leap
-  V2's chime C. Kept as Forth's: errors printed in the console, the colours a program sets survive (no reset on
-  return), no keyword bolding, the chime not stopped by BREAK. Nothing moves to the EXROM now; Space report section 5
-  is the measured list for when a step runs short.
-- **Free bytes:** HOME 2,232, EXROM 3,272; per component in `budget.toml` (`make budget`), per routine
+- **Decided (2026-10-31):** all four proposed changes (LINE rebuilt on 16-bit ends, the view's store lookup from the
+  line found last, the console scroll, `.` through `PRINT_UDEC16`); POLYGON's vertices stay bytes (option (a), the
+  least ROM space; in the roadmap's known defects). The exact off-screen jump for LINE (built: about 130 B) was left
+  out; its walk costs about 270 T a step (roadmap).
+- **Free bytes:** HOME 2,188, EXROM 3,208; per component in `budget.toml` (`make budget`), per routine
   `make inventory`. The dictionary starts at `$9100` (`FREE` 16,128 at power-on).
-- **Next:** ROADMAP step 1, *Display speed* (and LINE on 16-bit coordinates), then *BREAK and timing*.
+- **Next:** ROADMAP step 1, *BREAK and timing*, then *Blackjack*.
 
 ## How the owner wants the work done
 
@@ -66,6 +65,15 @@ reports: `docs/V2/milestones/`.
 - **ZEsarUX's tape autoload** types J "" ENTER when the PC reaches `$11F8` with the HOME ROM paged in. Data (the font)
   must cover `$11F8`: `rom/forth_boot.asm` ASSERTs it. When HOME shrinks and the ASSERT fails, move includes ahead of
   the font, never the ASSERT.
+- **LINE uses the alternate registers** (r, dmin, dmaj in HL', DE', BC') and nothing the interrupt runs touches them
+  today. *BREAK and timing* changes the interrupt routine: it must not use EXX or the alternates without saving them.
+  LINE's coordinates are 2-byte cells (`GFX_LINE_X0` .. `_Y1`, consecutive, an `ASSERT` says so); `GFX_WRITE_PIXEL`
+  keeps BC and takes no OVER flag.
+- **The view's store lookup remembers a line** (`STORE_MARK_N`, `STORE_MARK_PTR`): every change to the store during a
+  session must go through `STORE_GAP` (which keeps or resets the mark); a session starts it at line 0.
+- **Profiling a ROM routine:** ZEsarUX's ZRCP `cpu-transaction-log` with `tstates yes`, `address yes` (a file of
+  "T-states PC" lines) around one key or call, PCs attributed to the nearest label of both `.sym` files: the method
+  this step's measurements used (about 30 lines of Python on fharness and edtest's helpers).
 - **HIRES is the SCLD's 8×1 colour mode**: the attribute of bitmap byte `$4000+n` is at `$6000+n`.
 - **The EXROM hides `$A000-$BFFF`** (dictionary RAM) while paged in; EXROM code reaches HOME only through
   `GRAPHICS_HOME_TABLE`, and HOME cells through `include/forth_layout.inc`.
@@ -79,6 +87,11 @@ reports: `docs/V2/milestones/`.
 - **Old-build comparisons:** `git worktree add --detach <scratch>/old <commit> && make -C <scratch>/old`, then
   `python3 tools/forthtest.py --build <scratch>/old/build`, or `--build` for the edtest/floattest/shapetest tools,
   `TAPETOL_BASE=`.
+- **Speed ceilings:** a step that makes something faster gives it a ceiling the old build fails: the editor suite's
+  `COST_CEIL` / `VCOST_CEIL`, the shape suite's `ceil=` on a speed case. A later change that slows one of them fails
+  the suite: raise the ceiling only with the reason in the commit.
+- **Emulator commands for people:** Fuse finds a ROM given by its name alone only in the current folder, then its own
+  ROM folders; ZEsarUX runs from its own folder. The README and `docs/zesarux_setup.md` give full paths.
 - **fusesave** counts 17 checks (the cartridge half is gone); Fuse 1.9.1 can abort in its own `tape_write` on some
   recorded signals (glibc assertion).
 - **CI runs `make check`, `make repro`, `make dist`** (no pandoc locally): `tools/package_dist.sh` heredocs expand `$`,

@@ -51,7 +51,8 @@ MATH_UMUL16:
 ; MATH_UDIV16 -- unsigned 16-bit divide (Leap-C's RT_UDIV)
 ; Restoring division, 16 steps, registers only: HL shifts the dividend out at the top and the
 ; quotient in at the bottom; DE builds the remainder.
-; In:  HL = dividend, BC = divisor
+; In:  HL = dividend, BC = divisor (at most 32768, as MATH_SDIV16's: a larger one can carry out of the
+;      remainder's ADC)
 ; Out: HL = quotient, DE = remainder; HL = DE = 0 if BC = 0
 ; Destroys: AF (BC is kept)
 ; ============================================================================
@@ -136,33 +137,6 @@ MATH_SDIV16:
     and  %01000000                 ; the sign to apply
     ret  z
     jr   MATH_NEGATE16
-
-; ============================================================================
-; MATH_COMPARE16 -- signed 16-bit comparison
-; SBC HL,DE gives HL-DE's true sign in S unless it overflowed (P/V set), when S is inverted.
-; In:  HL = left operand (signed), DE = right operand (signed)
-; Out: A = 0 if HL = DE, 1 if HL > DE, $FF if HL < DE
-; Destroys: AF, HL
-; ============================================================================
-MATH_COMPARE16:
-    or   a
-    sbc  hl, de
-    jr   z, .equal
-    jp   po, .no_overflow           ; P/V clear: S is true
-    jp   m, .greater                 ; overflow: S is inverted, so negative means HL > DE
-    jr   .less
-.no_overflow:
-    jp   m, .less
-    jr   .greater
-.equal:
-    xor  a
-    ret
-.less:
-    ld   a, $FF
-    ret
-.greater:
-    ld   a, 1
-    ret
 
 ; ============================================================================
 ; MATH_NEGATE16 -- two's-complement negate

@@ -93,38 +93,9 @@ W_DOT:
     rst RST_DPUSH
     call W_EMIT
     pop  hl
-    call MATH_NEGATE16           ; -32768 stays -32768
+    call MATH_NEGATE16           ; -32768 stays -32768, read as unsigned 32768
 .positive:
-    ld   a, h
-    or   l
-    jr   nz, .hasdigits
-    ld   hl, "0"
-    rst RST_DPUSH
-    call W_EMIT
-    jr   .donedigits
-.hasdigits:
-    ld   c, 0                    ; digit count; the digits wait on the machine stack (UDIV10 keeps C)
-.divloop:
-    ld   a, h
-    or   l
-    jr   z, .printdigits
-    call UDIV10                  ; hl = hl/10, a = digit (0-9)
-    push af
-    inc  c
-    jr   .divloop
-.printdigits:
-    ld   b, c
-.printloop:
-    pop  af
-    add  a, "0"
-    ld   l, a
-    ld   h, 0
-    push bc                       ; W_EMIT destroys BC: keep the djnz counter
-    rst RST_DPUSH
-    call W_EMIT
-    pop  bc
-    djnz .printloop
-.donedigits:
+    call PRINT_UDEC16
     ld   hl, " "
     rst RST_DPUSH
     jp   W_EMIT

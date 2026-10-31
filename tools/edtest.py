@@ -87,8 +87,8 @@ attribute are each seen as a difference.
 
 TYPING COST  T-states from the latch write (key delivery) to the next key wait (IO_READ_KEY), interrupts included
 (fharness reset-tstates-partial / get-tstates-partial around Console.key).  Every figure is taken twice, each time from a
-restored machine; the two must be equal (the emulation is deterministic: that is what makes the number a baseline).  No
-threshold: the table is the baseline step E is measured against.  A figure includes the keyboard interrupt service
+restored machine; the two must be equal (the emulation is deterministic: that is what makes the number a baseline).  The
+figures a step made faster have ceilings (COST_CEIL, VCOST_CEIL: Display speed's), which the build before fails.  A figure includes the keyboard interrupt service
 (KBD_ISR_TICK, about 2000 T, reported as isr_tstates) when one of the 50 Hz interrupts falls inside the key's processing;
 which keys that is depends on the frame phase at the idle prompt, which depends on the length of the boot, so a rebuild
 that changes the cold start moves the phase: compare figures within about one interrupt service (and the 20 ms-class
@@ -133,8 +133,9 @@ the text allows several outcomes the case accepts exactly those and reports whic
                      itself in place of the emulator, to find test bugs before the ROM exists.
   N6 edit-open       `EDIT SQ` opens on the last line where the words `:` and `SQ` follow each other (case-insensitive; not
                      `: SQRT`, not `: X SQ`, not a `:` line followed by an `SQ` line), cursor at its start; bare `EDIT`; a 60-line store.
-  N7 edit-keys       the key table, 9 sequences (characters including all 95 printable codes, the limits, UP/DOWN, DELETE, ENTER,
-                     delete-line, insert-line, BREAK, scrolling, the control keys through the keyboard matrix).
+  N7 edit-keys       the key table, 10 sequences (characters including all 95 printable codes, the limits, UP/DOWN, DELETE, ENTER,
+                     delete-line, insert-line, BREAK, scrolling, edits around the line STORE_LINE remembers, the control keys
+                     through the keyboard matrix).
   N8 edit-commit     leaving: only marked lines run, in order, each with its mark cleared first (a line reads its own terminator);
                      an unchanged session runs nothing; an error stops at `LINE n`; no $8D left.
   N9 edit-redraw-oracle  after every key the 6,912-byte screen equals what the EXROM routine VIEW_REDRAW_ALL draws from the
@@ -146,7 +147,8 @@ the text allows several outcomes the case accepts exactly those and reports whic
                      (the store may gain the typed line), console still works.
   N11                retired in step M6 (`EDIT` in 64-column mode printed 32COL FIRST: there is no 64-column mode).
   N12 edit-typing-cost  T-states per key in the view (same method as typing-cost), 11 scenarios, each taken twice from a restored
-                     machine; passes when the two are equal; no threshold (the first measurement sets the gate); printed as a table.
+                     machine; passes when the two are equal and the gated ones (VCOST_CEIL) are at or under their ceilings;
+                     printed as a table.
   N13 edit-store-full  with 0, 1 and 3 bytes of room: a change that would overflow the store (a grown line written back, a line
                      inserted) is refused with `STORE FULL` on the status row until the next key, store and line unchanged; a change
                      that fits exactly is made; delete-line gives room back.
@@ -1258,7 +1260,11 @@ def redraw_oracle(env, part):
 # ===================================================================== 19 typing cost
 COST_CASES = [("key-end-short", "a key at the end of a short line"), ("key-mid-100", "a key in the middle of a 100-character line"),
               ("key-3row", "a key at the end of a 3-row wrapped line"), ("delete", "DELETE at the end of a short line"),
-              ("left", "LEFT in the middle of a short line"), ("enter", "ENTER on `1 2 + .`")]
+              ("left", "LEFT in the middle of a short line"), ("enter", "ENTER on `1 2 + .`"),
+              ("enter-scroll", "ENTER on `.( A) CR .( B)` typed on row 22 (the output scrolls)")]
+# Ceilings (T-states) for the figures a step made faster; each fails on the build before it (Display speed: the console's
+# scroll by thirds with unrolled LDI, 267,678 -> 178,309).
+COST_CEIL = {"enter-scroll": 200_000}
 
 
 def cost_once(env, which):
@@ -1289,6 +1295,11 @@ def cost_once(env, which):
         for _ in range(4):
             con.key(LEFT)
         key = LEFT
+    elif which == "enter-scroll":
+        con.type("CLS 0 22 AT-XY")
+        for ch in ".( A) CR .( B)":
+            con.key(ord(ch))
+        key = ENTER
     else:
         for ch in "1 2 + .":
             con.key(ord(ch))
@@ -1300,7 +1311,7 @@ def cost_once(env, which):
 
 @case("typing-cost", "T-states from key delivery (latch write) to the next key wait, interrupts included, for a key at the end of a "
                      "short line, in the middle of a 100-character line, on a 3-row wrapped line, DELETE, LEFT and ENTER on "
-                     "`1 2 + .`; each figure taken twice and equal; the baseline, no threshold",
+                     "`1 2 + .`, ENTER whose output scrolls; each figure taken twice and equal; COST_CEIL's ceilings",
       parts=("32",))
 def typing_cost(env, part):
     ck = Check()
@@ -1311,6 +1322,8 @@ def typing_cost(env, part):
         b = cost_once(env, which)
         table[which] = [a, b]
         ck.eq("%s repeatable" % which, a, b)
+        if which in COST_CEIL:
+            ck.true("%s at most %d T" % (which, COST_CEIL[which]), a <= COST_CEIL[which], "%d T" % a)
     env.boot()
     env.m.tstates_reset()
     env.m.call("KBD_ISR_TICK")
@@ -2374,6 +2387,16 @@ def seq_scroll():
     return store, "W30", 29, keys
 
 
+def seq_mark():
+    """The line STORE_LINE remembers (Display speed): walks forward and back over the 3-row lines, edits before, at and after
+    it, line 0 and the last line, the store's end."""
+    store = big_store()
+    keys = K((UP, 25), ENTER, "n1", (DOWN, 30), DELETE_LINE, (UP, 5), INSERT_LINE, "n2", (DOWN, 15), ENTER, (UP, 50), "x",
+             (DOWN, 64), DELETE_LINE, DELETE_LINE, (UP, 2), RIGHT, "y", ENTER, DELETE, (UP, 19), DELETE_LINE, (DOWN, 3), INSERT_LINE,
+             (UP, 40), DELETE_LINE, "z", (DOWN, 40), BREAK)
+    return store, "W45", 44, keys
+
+
 def seq_matrix():
     store = [": AA 1 ;", ": BB 2 ;", ": CC 3 ;"]
     keys = K("ab", LEFT, RIGHT, DELETE, DOWN, UP, ENTER, "c", INSERT_LINE, DELETE_LINE, BREAK)
@@ -2381,7 +2404,8 @@ def seq_matrix():
 
 
 N7_SEQS = {"chars": seq_chars, "limits": seq_limits, "updown": seq_updown, "delete": seq_delete, "enter": seq_enter,
-           "delete-line": seq_delete_line, "insert-line": seq_insert_line, "scroll": seq_scroll, "matrix": seq_matrix}
+           "delete-line": seq_delete_line, "insert-line": seq_insert_line, "scroll": seq_scroll, "mark": seq_mark,
+           "matrix": seq_matrix}
 
 
 def run_seq(env, ck, seq, via=None, io_factory=None):
@@ -2401,7 +2425,7 @@ def run_seq(env, ck, seq, via=None, io_factory=None):
                             "checked against a model after each key: characters (all 95 printable codes), LEFT, RIGHT, the limits "
                             "(4 rows, 128 characters), UP and DOWN inside a wrapped line and between lines and at the ends, DELETE "
                             "(character, empty line, column 0), ENTER, delete-line, insert-line, BREAK, scrolling in a 60-line store, "
-                            "and the control keys through the keyboard matrix",
+                            "edits around the line the store lookup remembers, and the control keys through the keyboard matrix",
           parts=tuple(N7_SEQS))
 @guarded
 def edit_keys(env, part, ck):
@@ -2685,6 +2709,9 @@ VCOST_CASES = [("key-end-short", "a key at the end of a short line"), ("key-mid-
                ("down-mid-full", "DOWN between two lines mid-screen, 60-line store"),
                ("up-scroll", "UP that scrolls the view up, 60-line store"),
                ("enter-bottom", "ENTER on the last line of a full screen")]
+# Ceilings (T-states), as COST_CEIL's (Display speed: STORE_LINE walks from the line it found last: enter-bottom 407,197 ->
+# 220,765, scroll-down 238,346 -> 201,175, down-mid-full 61,104 -> 39,348, up-scroll 210,240 -> 183,169).
+VCOST_CEIL = {"enter-bottom": 250_000, "scroll-down": 215_000, "down-mid-full": 45_000, "up-scroll": 195_000}
 
 
 def vcost_once(env, ck, which):
@@ -2704,7 +2731,7 @@ def vcost_once(env, ck, which):
 @new_case("edit-typing-cost", "N12", "T-states from key delivery (latch write) to the next key wait, interrupts included, for a key at the end "
                                     "of a short line, in the middle of a 100-character line, on a 3-row line, DELETE, LEFT, UP in a "
                                     "wrapped line, DOWN, ENTER, insert-line, delete-line and a DOWN that scrolls, in the view; each figure "
-                                    "taken twice and equal; recorded, no threshold (the gate is set from this first measurement)",
+                                    "taken twice and equal; VCOST_CEIL's ceilings",
           parts=("a", "b"))
 @guarded
 def edit_typing_cost(env, part, ck):
@@ -2717,6 +2744,8 @@ def edit_typing_cost(env, part, ck):
         b = vcost_once(env, ck, which)
         table[which] = [a, b]
         ck.eq("%s repeatable" % which, a, b)
+        if which in VCOST_CEIL:
+            ck.true("%s at most %d T" % (which, VCOST_CEIL[which]), a <= VCOST_CEIL[which], "%d T" % a)
     ck.data = {"t_states": table, "what": dict(VCOST_CASES)}
     ck.note(", ".join("%s %d" % (k, v[0]) for k, v in table.items()))
 
