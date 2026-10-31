@@ -320,6 +320,8 @@ VIEW_SH_END:                                            ; one past VIEW_SH
 VIEW_STOP:                DEFS 2                        ; view: VIEW_RENDER may stop after this line once the shadow agrees
 STORE_LAST_LINE:          DEFS 2                        ; last line STORE_APPEND appended (0: none), for STORE_TRIM
 VERSION_UP:               DEFS 1                        ; 1: the version is on row 23 (cold start to the first key)
+STORE_MARK_N:             DEFS 2                        ; view: the line STORE_LINE found last ...
+STORE_MARK_PTR:           DEFS 2                        ; ... and its address (line 0 at STORE_START: none yet)
     DEFS RAM_CELLS_END - $                              ; free: room for new cells
     ASSERT $ == RAM_CELLS_END
     ASSERT FP_RAM + 66 == THROW_CODE && FMT + 24 == FDIG && FDIG + 9 == FSQ_N && FQ + 8 == FFLAGS + 1

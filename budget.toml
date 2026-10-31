@@ -280,3 +280,15 @@ image = "home"
 component = "kernel"
 delta = 54
 reason = "Display speed: the console's scroll copies a third's scanline runs in 32-byte unrolled-LDI blocks (GFX_SCROLL_ROWS, GFX_LDI_BLOCKS: +88 B, GFX_COPY_ROW_BITMAP -32 B) and GFX_CLEAR_ROW writes the row's bytes (Leap V2's, audit O4: +2 B); an output line that scrolls 267,678 -> 178,309 T; from the reserve"
+
+[[ledger]]
+image = "exrom"
+component = "view"
+delta = 94
+reason = "Display speed: STORE_LINE walks from the nearest of line 0 and the line it found last, forward or back (+59 B), STORE_GAP keeps that line unless a change starts before it (+29 B), a session starts it at line 0 (+6 B); ENTER on the last line of a full screen 407,197 -> 220,765 T (the walk back alone: 315,613 -> 220,765 for 29 B); from the reserve"
+
+[[ledger]]
+image = "exrom"
+component = "fill"
+delta = 2
+reason = "Display speed: the ALIGN 8 before CIRCLE_MASK_TABLE (counted in FILL's range) pads 2 B more after view's +94; from the reserve"

@@ -1146,23 +1146,68 @@ STORE_NEXT:
     ret
 
 ; ============================================================================
-; STORE_LINE -- line n.
+; STORE_LINE -- line n. The walk starts at the nearest of line 0 and the mark (STORE_MARK_N at
+; STORE_MARK_PTR: the line found last), forward or back, and leaves the mark on line n. A walk
+; back to line n >= 1 stops at line n - 1's terminator; to line 0 it is always from STORE_START.
 ; In:  DE = n (0 to the line count; the count itself is the end of the store)
 ; Out: HL = the line's address (STORE_END for n = count), BC = its length (0)
 ; Destroys: AF, DE
 ; ============================================================================
 STORE_LINE:
-    ld   hl, STORE_START
-.skip:
-    ld   a, d
-    or   e
-    jr   z, .here
     push de
+    ld   hl, (STORE_MARK_N)
+    or   a
+    sbc  hl, de                     ; mark - n
+    jr   c, .ahead
+    ld   b, h
+    ld   c, l                       ; bc = lines back from the mark
+    ex   de, hl
+    sbc  hl, bc                     ; n - (mark - n) (no carry from the test above)
+    jr   c, .zero                   ; line 0 is nearer
+    ld   hl, (STORE_MARK_PTR)
+    jr   .back_test
+.back:
+    dec  hl                         ; the line before's terminator
+.scan:
+    dec  hl
+    ld   a, (hl)
+    and  $7F
+    cp   13
+    jr   nz, .scan
+    inc  hl                         ; the line before
+    dec  bc
+.back_test:
+    ld   a, b
+    or   c
+    jr   nz, .back
+    jr   .here
+.ahead:
+    xor  a
+    sub  l
+    ld   c, a
+    sbc  a, a
+    sub  h
+    ld   b, a                       ; bc = -(mark - n)
+    ld   hl, (STORE_MARK_PTR)
+    jr   .fwd_test
+.zero:
+    pop  bc
+    push bc                         ; bc = n
+    ld   hl, STORE_START
+    jr   .fwd_test
+.fwd:
+    push bc
     call STORE_NEXT
-    pop  de
-    dec  de
-    jr   .skip
+    pop  bc
+    dec  bc
+.fwd_test:
+    ld   a, b
+    or   c
+    jr   nz, .fwd
 .here:
+    pop  de
+    ld   (STORE_MARK_N), de
+    ld   (STORE_MARK_PTR), hl
     ld   bc, 0
     ld   de, (STORE_END)
     or   a
@@ -1211,6 +1256,20 @@ STORE_GAP:
     ld   (VIEW_T2), de
     call STORE_ROOM
     ret  c
+    ld   hl, (VIEW_T1)              ; the mark stays true unless the change starts before it
+    bit  7, d
+    jr   z, .start
+    add  hl, de                     ; closing: it starts at POS + delta
+.start:
+    ld   de, (STORE_MARK_PTR)
+    or   a
+    sbc  hl, de
+    jr   nc, .kept
+    ld   hl, 0
+    ld   (STORE_MARK_N), hl
+    ld   hl, STORE_START
+    ld   (STORE_MARK_PTR), hl
+.kept:
     ld   hl, (STORE_END)
     ld   de, (VIEW_T1)
     or   a
@@ -1356,8 +1415,10 @@ VIEW_SESSION:
     ld   hl, 0
     ld   (VIEW_COUNT), hl
     ld   (VIEW_FOUND), hl
+    ld   (STORE_MARK_N), hl         ; Home may have changed the store: the mark on line 0
     ld   hl, STORE_START
     ld   (VIEW_PTR), hl
+    ld   (STORE_MARK_PTR), hl
 .scan:
     ld   hl, (VIEW_PTR)
     ld   de, (STORE_END)
