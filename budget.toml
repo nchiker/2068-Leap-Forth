@@ -267,3 +267,10 @@ image = "exrom"
 component = "fill"
 delta = -4
 reason = "Words and keys: the ALIGN 8 before CIRCLE_MASK_TABLE (counted in FILL's range) pads 4 B less after view's +28; returned to the reserve"
+
+# Display speed (2026-10-31)
+[[ledger]]
+image = "home"
+component = "text"
+delta = -38
+reason = "Display speed: . prints its digits through PRINT_UDEC16 (it held a second copy of that loop and the zero case); returned to the reserve"
