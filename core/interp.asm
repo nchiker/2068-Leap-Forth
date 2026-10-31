@@ -102,67 +102,58 @@ W_WORD:
 ; FIND ( addr -- code_addr imm found | addr 0 ) -- search the dictionary from LATEST back. addr is a
 ; counted string in WORD_BUF's format. On a match: the code address, imm = 1 if the word is
 ; immediate else 0, found = 1. Otherwise addr is pushed back and found = 0.
-; Destroys: AF, BC, DE, HL, and the cells FIND_SEARCH_ADDR, FIND_HEADER_ADDR, FIND_RAW_LENFLAGS
+; Destroys: AF, BC, DE, HL, the cell FIND_SEARCH_ADDR
 ; ============================================================================
 FIND:
     rst RST_DPOP
     ld   (FIND_SEARCH_ADDR), hl
+    ld   c, (hl)                  ; C = the length searched for
     ld   hl, (LATEST)
-.loop:
+.loop:                            ; a header whose length differs costs 82 T
     ld   a, h
     or   l
     jr   z, .notfound
-    ld   (FIND_HEADER_ADDR), hl
-    ld   de, 2
-    add  hl, de
+    ld   e, (hl)
+    inc  hl
+    ld   d, (hl)                  ; DE = the previous header
+    inc  hl
     ld   a, (hl)                  ; LENFLAGS
-    ld   (FIND_RAW_LENFLAGS), a
     and  $1F
-    ld   c, a                     ; C = the name length
-    ld   hl, (FIND_SEARCH_ADDR)
-    ld   a, (hl)
     cp   c
-    jr   nz, .next
-    inc  hl                       ; HL -> the search string's characters
-    ld   de, (FIND_HEADER_ADDR)
-    inc  de
-    inc  de
-    inc  de                       ; DE -> the header's name
-    ld   a, c
-    or   a
-    jr   z, .match
+    jr   z, .same
+    ex   de, hl
+    jr   .loop
+.same:
+    push de
+    push hl                       ; -> LENFLAGS
+    ld   de, (FIND_SEARCH_ADDR)
     ld   b, c
-.cmploop:
-    ld   a, (de)
-    cp   (hl)
-    jr   nz, .next
+    inc  b
+    jr   .cmpin
+.cmp:
     inc  hl
     inc  de
-    djnz .cmploop
-.match:
-    ld   hl, (FIND_HEADER_ADDR)
-    ld   de, 3
-    add  hl, de
-    ld   d, 0
-    ld   e, c
-    add  hl, de                   ; HL = the code address, header + 3 + name length
+    ld   a, (de)
+    cp   (hl)
+    jr   nz, .differ
+.cmpin:
+    djnz .cmp
+    inc  hl                       ; the code address: after the name
     rst RST_DPUSH
-    ld   a, (FIND_RAW_LENFLAGS)
-    and  $80
-    ld   hl, 0
-    jr   z, .notimm
-    ld   hl, 1
-.notimm:
+    pop  hl
+    pop  de
+    ld   a, (hl)
+    rlca
+    and  1                        ; the IMMEDIATE bit
+    ld   l, a
+    ld   h, b
     rst RST_DPUSH
     ld   hl, 1
     rst RST_DPUSH
     ret
-.next:
-    ld   hl, (FIND_HEADER_ADDR)
-    ld   e, (hl)
-    inc  hl
-    ld   d, (hl)
-    ex   de, hl                   ; HL = the previous header
+.differ:
+    pop  hl
+    pop  hl
     jr   .loop
 .notfound:
     ld   hl, (FIND_SEARCH_ADDR)

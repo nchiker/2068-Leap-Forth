@@ -207,9 +207,7 @@ SRC_PTR:                  DEFS 2                        ; interpreter: next unre
 SRC_END:                  DEFS 2                        ; interpreter: one past the last source byte
 STATE:                    DEFS 1                        ; 0 interpreting, 1 compiling
 FIND_SEARCH_ADDR:         DEFS 2                        ; FIND: scratch
-FIND_HEADER_ADDR:         DEFS 2                        ; FIND: scratch
-FIND_RAW_LENFLAGS:        DEFS 1                        ; FIND: length byte before masking (the IMMEDIATE bit)
-    DEFS 3                                              ; free
+    DEFS 6                                              ; free
 NUM_NEG:                  DEFS 1                        ; NUMBER: leading minus seen
 WORD_SRC_ADDR:            DEFS 2                        ; colon definition: scratch
 NEW_HEADER_ADDR:          DEFS 2                        ; colon definition: new header address
