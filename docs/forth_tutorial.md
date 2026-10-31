@@ -14,11 +14,11 @@ When you turn on the machine, you will immediately be greeted by a startup banne
 
 To make the most of this manual, keep two conventions in mind before you start typing:
 
-#### Understanding Comments (and Their Absence)
+#### Understanding Comments
 
 - Anything appearing after a `\` symbol in an example is an explanatory note for you, **not** part of the Forth code.
 
-- **Important:** 2068-Leap-Forth does not include a built-in comment word (unlike larger Forth implementations that use `\` or parentheses). If you type a backslash and its note into the interpreter, it will treat `\` as a command, fail to find it, and return an error. **Type only the code that precedes the backslash.**
+- `\` is also Forth's own comment word: everything after it on the line is skipped. You can type the notes in with the code or leave them out; Forth runs the same either way. A comment in the middle of a line goes between `(` and `)`: `2 ( width ) 3 ( height ) *`. Both need a space after them, like every other word.
 
 #### Sequential Learning
 
@@ -116,6 +116,13 @@ Everything so far has described *what happens* when a line of Forth runs. This s
 | Enter                  | Finishes the line and runs it                |
 | Delete / backspace     | Removes the character just before the cursor |
 | Cursor left / right    | Moves the cursor without changing anything   |
+
+Punctuation is typed with SYMBOL SHIFT. These characters are on SYMBOL SHIFT with the keys below them (the stock
+ROM gives most of these keys keywords, not characters):
+
+| SYMBOL SHIFT + | A   | S    | D   | F   | G   | Y   | U   | H   |
+| -------------- | --- | ---- | --- | --- | --- | --- | --- | --- |
+| gives          | `~` | `\|` | `\` | `{` | `}` | `[` | `]` | `^` |
 
 The habit worth noting is that **the cursor does not have to stay at the end of the line.** Type `13`, move the cursor left one position so it sits between the `1` and the `3`, and type `2`. The line becomes `123`—the `2` is inserted exactly where the cursor was, and everything following it shifts over to make room.
 
@@ -453,7 +460,21 @@ This raises a vital question: *if everything between `:` and `;` gets recorded r
 
 It cannot, under the ordinary rule. If `;` were recorded like everything else, the definition would never close and you would compile forever. Therefore, `;` is exempt. It runs the instant it is read—even while compiling is active—and flips `STATE` back before the interpreter reads the next word. Words carrying this exemption are called **IMMEDIATE**.
 
-`;` is not alone: `IF`, `ELSE`, `THEN`, `DO`, `LOOP`, `BEGIN`, `UNTIL`, `WHILE`, `REPEAT`, `LEAVE`, `EXIT`, `."`, and `S"` are all immediate as well. When you reach control structures and loops, this explains how they work: words like `IF` do not get compiled into your definition to run later; they run *while you are typing*, shaping the code being built around them.
+`;` is not alone: `IF`, `ELSE`, `THEN`, `DO`, `LOOP`, `BEGIN`, `UNTIL`, `WHILE`, `REPEAT`, `LEAVE`, `EXIT`, `."`, `S"`, the comments `\` and `(`, and the words of the next sections (`[`, `LITERAL`, `[']`, `[CHAR]`) are all immediate as well. When you reach control structures and loops, this explains how they work: words like `IF` do not get compiled into your definition to run later; they run *while you are typing*, shaping the code being built around them.
+
+### Working Something Out While Compiling: `[`, `]` and `LITERAL`
+
+`[` switches `STATE` back to interpreting in the middle of a definition, and `]` switches it to compiling again. The
+words between them run at once, while the definition is being built. **`LITERAL`** then takes the number they left and
+compiles it into the definition, exactly as if you had typed that number there:
+
+```forth
+: SECONDS-PER-HOUR  [ 60 60 * ] LITERAL ;
+SECONDS-PER-HOUR .    \ 3600
+```
+
+The multiplication happens once, when `SECONDS-PER-HOUR` is compiled, not every time it runs. `LITERAL` is
+compile-only: at the prompt it is refused like `IF`.
 
 ### Marking Your Own Words IMMEDIATE
 
@@ -490,6 +511,18 @@ Every word encountered so far is called by typing its name directly. The tick ma
 - **`EXECUTE`:** Takes an `xt` off the stack and calls whatever word it represents.
 
 Splitting finding and calling into two separate steps allows you to store word identities in variables, pass functions as arguments, or decide at runtime which routine to run.
+
+Inside a definition, `'` would look up the word that follows it each time the definition *runs*. To look it up once,
+while compiling, and keep the `xt` in the definition, use **`[']`**:
+
+```forth
+: RUN-DOUBLE  ['] DOUBLE EXECUTE ;
+5 RUN-DOUBLE .        \ 10
+```
+
+**`CHAR`** does the same kind of job for characters: `CHAR A` pushes `65`, the code of the first character of the next
+word, exactly as typed (`CHAR a` is `97`, even though names are not case-sensitive). Its compiling form is
+**`[CHAR]`**: `: STAR [CHAR] * EMIT ;` prints a star. `[']` and `[CHAR]` are compile-only.
 
 ### Summary
 
@@ -4138,8 +4171,8 @@ that doesn't have it built in, without touching `SQRT` itself:
 
 #### The Messages of an Uncaught Error
 
-The words of the system `THROW` these codes themselves (the first four
-come from the dictionary, `'` and the tape words; the last three from
+The words of the system `THROW` these codes themselves (the first five
+come from the dictionary, the words that take a name and the tape words; the last three from
 decimal arithmetic, section 4). With nothing to `CATCH` them, each
 prints its message:
 
@@ -4147,6 +4180,7 @@ prints its message:
 | ----- | ------------------ | --------------------------------------------------------------- |
 | `-8`  | `DICTIONARY FULL`  | A definition, `ALLOT`, `,` or `SAVE-LIB` that doesn't fit       |
 | `-13` | `UNDEFINED WORD`   | `'` given a name that isn't in the dictionary                   |
+| `-16` | `MISSING NAME`     | `:`, `VARIABLE`, `CONSTANT`, `CREATE`, `'`, `CHAR` or another word that takes a name, with nothing after it on the line |
 | `-28` | `BREAK`            | A tape word stopped with SPACE                                  |
 | `-37` | `TAPE ERROR`       | Any other tape failure                                          |
 | `-42` | `DIVISION BY ZERO` | `F/` by zero; `TAN` where the cosine is zero                    |
@@ -5029,6 +5063,13 @@ the same convention applied to the full ANS Forth standard.
 | -------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------- |
 | `:` ... `;`                      | —                                    | define a new word                                                                         |
 | `'`                              | `( -- xt )`                          | look up a word by name, without calling it                                                |
+| `[']`                            | `( -- )` compiling; `( -- xt )` at run time | IMMEDIATE, compile-only; `'` done once, while compiling                              |
+| `CHAR`                           | `( -- char )`                        | the code of the next word's first character, as typed                                     |
+| `[CHAR]`                         | `( -- )` compiling; `( -- char )` at run time | IMMEDIATE, compile-only; `CHAR` done once, while compiling                         |
+| `[` ... `]`                      | `( -- )`                             | `[` (IMMEDIATE) interprets inside a definition; `]` compiles again                        |
+| `LITERAL`                        | `( n -- )` compiling; `( -- n )` at run time | IMMEDIATE, compile-only; compile the number on the stack                           |
+| `\` text                         | `( -- )`                             | IMMEDIATE; a comment to the end of the line                                               |
+| `(` text `)`                     | `( -- )`                             | IMMEDIATE; a comment to the next `)`                                                      |
 | `EXECUTE`                        | `( xt -- )`                          | call the word an `xt` identifies                                                          |
 | `IF` ... `ELSE` ... `THEN`       | `( flag -- )`                        | IMMEDIATE, compile-only                                                                   |
 | `BEGIN` ... `UNTIL`              | `( flag -- )`                        | IMMEDIATE, compile-only                                                                   |
