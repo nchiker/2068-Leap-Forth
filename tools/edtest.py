@@ -177,7 +177,7 @@ import tapes                                                                # no
 from fharness import CTRL_KEYS, INVERSE_MARK, KEY_ENTER, Z_CAPS, Z_SPACE    # noqa: E402
 
 ROOT = fh.ROOT
-BANNER = "2068-FORTH"                   # rom/forth_boot.asm BANNER
+VERSION = "  " + fh.version_text()     # row 23 from the cold start to the first key (include/forth_version.inc)
 LEFT, DOWN, UP, RIGHT, DELETE, INSERT_LINE, DELETE_LINE, BREAK, ENTER = 1, 2, 3, 4, 8, 0x0B, 0x0F, 0x10, 13
 MAX_LEN, MAX_ROWS = 128, 4              # EDIT_MAX_LEN, FWRAP_MAX_ROWS
 LOADTEXT_BUF = 0xD000                   # LOADTEXT_BUF (checked against the symbol in the cases)
@@ -407,9 +407,10 @@ class Env:
         self.con = fh.Console(m)
 
     def boot(self):
-        """The booted machine.  Returns the base rows (the output rows above the input area)."""
+        """The booted machine.  Returns the base rows (the output rows above the input area): blank (the version on row
+        23 goes with the first key)."""
         self.con.boot()
-        return [BANNER] + [""] * 23
+        return [""] * 24
 
     def u8(self, name):
         return self.m.read(self.S(name), 1)[0]
@@ -475,28 +476,28 @@ def case(name, title, parts=("-",), group="old", num=None):
 
 
 # ===================================================================== 1 boot
-@case("boot-console", "the cold start ends at the idle prompt: the banner on row 0, rows 1-22 blank, an empty edit line on row 23, "
-                      "the cursor (FLASH, swapped colours) at row 23 column 0, the editor waiting for a key")
+@case("boot-console", "the cold start ends at the idle prompt: rows 0-22 blank, the version on the status bar of row 23 with the "
+                      "cursor (FLASH, swapped colours) in its column 0, an empty edit line, the editor waiting for a key")
 def boot_console(env, part):
     ck, m = Check(), env.m
     env.boot()
     v = view(m)
-    ck.eq("row 0", v.rows[0], BANNER)
-    ck.eq("rows 1-23", [r for r in v.rows[1:] if r], [])
+    ck.eq("rows 0-22", [r for r in v.rows[:23] if r], [])
+    ck.eq("row 23", v.rows[23], VERSION)
     ck.eq("cursor cell", v.cursor, [(23, 0)])
-    ck.eq("stray attributes", v.odd, [])
+    ck.eq("attributes off row 23", [o for o in v.odd if o[0] != 23], [])
     cur_attr = m.read(0x5800 + 23 * 32, 1)[0]
-    ck.eq("cursor attribute", cur_attr, 0x87)
-    ck.eq("row 23 bitmap", any(any(row_cell(m, 23, c)) for c in range(32)), False)
+    ck.eq("cursor attribute", cur_attr, 0xB8)
+    ck.eq("row 23 attributes", m.read(0x5800 + 23 * 32 + 1, 31), fh.STATUS_BAR[1:])
     ck.eq("edit line, cursor", env.edit_state(), ("", 0))
     ck.eq("in_editor", env.con.in_editor(), True)
-    ck.eq("PRINT_ROW, PRINT_COL", env.print_pos(), (1, 0))
+    ck.eq("PRINT_ROW, PRINT_COL", env.print_pos(), (0, 0))
     ck.eq("wrap table", wrap_table(m), (1, [(0, 0)], 0))
     ck.eq("FWRAP_OLD_COUNT", env.u8("FWRAP_OLD_COUNT"), 1)
     ck.eq("GFX_MODE", env.u8("GFX_MODE"), 0)
     ck.eq(end_name(env), m.w16(env.S(end_name(env))), env.S("LOADTEXT_BUF"))
-    ck.note("row 0 %r, rows 1-23 blank, cursor (23, 0) attribute $%02X, other attributes $%02X, PRINT_ROW 1, workspace empty" % (
-        BANNER, cur_attr, m.S["ATTR_DEFAULT"]))
+    ck.note("row 23 %r on the status bar, cursor (23, 0) attribute $%02X, other attributes $%02X, PRINT_ROW 0, workspace "
+            "empty" % (VERSION, cur_attr, m.S["ATTR_DEFAULT"]))
     return ck.result()
 
 
@@ -564,7 +565,7 @@ def keys_editing_matrix(env, part):
     ck.eq("line before ENTER", env.edit_state(), ("axc", 2))
     env.con.press("\r")
     ck.eq("ENTER: edit line, cursor", env.edit_state(), ("", 0))
-    ck.eq("ENTER: rows", view(m).rows[:3], [BANNER, "AXC ?", ""])
+    ck.eq("ENTER: rows", view(m).rows[:3], ["AXC ?", "", ""])
     ck.true("in_editor after ENTER", env.con.in_editor())
     ck.note("matrix: LEFT LEFT insert RIGHT DELETE ENTER as the model; codes seen for CAPS+6/7/1/ENTER: %s, all ignored" %
             ", ".join("%s=%d" % kv for kv in seen.items()))
@@ -573,14 +574,17 @@ def keys_editing_matrix(env, part):
 
 # ===================================================================== 4 BREAK at the prompt
 @case("break-key-console", "BREAK (CAPS SHIFT+SPACE) at the prompt reaches the latch as code $10 and inserts nothing, with an empty "
-                           "line and in the middle of a line; the screen is unchanged")
+                           "line and in the middle of a line; the screen is unchanged (but for the first key after the cold "
+                           "start, which takes the version off row 23 as any key does)")
 def break_key_console(env, part):
     ck, m = Check(), env.m
     base = env.boot()
     ed = Ed(32)
-    sig = screen_sig(m)
     env.press_ctrl(BREAK)
     ck.eq("latch", m.read(env.S("KBD_LASTK"), 1)[0], BREAK)
+    env.check_view(ck, "first key: the version off", base, ed)
+    sig = screen_sig(m)
+    env.press_ctrl(BREAK)
     ck.eq("screen bytes unchanged", screen_sig(m) == sig, True)
     env.check_view(ck, "empty line", base, ed)
     for ch in "abcd":
@@ -825,7 +829,7 @@ def wrap_grow_shrink(env, part):
         counts.append(ed.nrows())
     ck.eq("growth steps", sorted(set(counts)), list(range(1, max(counts) + 1)))
     ck.eq("rows grow one at a time", [b - a for a, b in zip(counts, counts[1:]) if b != a and b - a != 1], [])
-    ck.eq("PRINT_ROW untouched", env.print_pos(), (1, 0))
+    ck.eq("PRINT_ROW untouched", env.print_pos(), (0, 0))
     shrink = []
     for _ in range(len(ed.text)):
         env.con.key(DELETE)
@@ -833,7 +837,7 @@ def wrap_grow_shrink(env, part):
         env.check_view(ck, "shrink %d" % len(ed.text), base, ed)
         shrink.append(ed.nrows())
     ck.eq("empty again", env.edit_state(), ("", 0))
-    ck.eq("rows 20-23 blank, banner intact", [r for r in view(m).rows[2:] if r], [])
+    ck.eq("rows 0-23 blank", [r for r in view(m).rows if r], [])
     ck.note("%d chars, rows used 1..%d on the way up, back to 1 on the way down; every key checked against the model" % (
         len(text), max(counts)))
     return ck.result()
@@ -841,14 +845,14 @@ def wrap_grow_shrink(env, part):
 
 # ===================================================================== 10 scroll
 @case("wrap-scroll", "with output on the rows just above the edit line, a line growing to 2-4 rows scrolls the whole screen up "
-                     "(row 0, the banner, is lost) only when the row it claims is not blank, PRINT_ROW follows; shrinking "
+                     "(row 0 is lost) only when the row it claims is not blank, PRINT_ROW follows; shrinking "
                      "does not scroll back; the next output starts at PRINT_ROW",
       parts=("pr3-32", "pr20-32", "pr22-32"))
 def wrap_scroll(env, part):
     ck, m = Check(), env.m
     start_pr = int(part.split("-")[0][2:])
     base = env.boot()
-    for i in range(start_pr - 1):                              # PRINT_ROW starts at 1
+    for i in range(start_pr):                                  # PRINT_ROW starts at 0
         env.con.type("%d ." % i)
     pr = env.print_pos()[0]
     ck.eq("PRINT_ROW before", pr, start_pr)
@@ -894,15 +898,15 @@ def enter_interprets(env, part):
     con = env.con
     con.type("1 2 + .")
     v = view(m)
-    ck.eq("rows 0-2", v.rows[:3], [BANNER, "3 OK", ""])
+    ck.eq("rows 0-2", v.rows[:3], ["3 OK", "", ""])
     ck.eq("edit line", env.edit_state(), ("", 0))
     ck.eq("cursor", v.cursor, [(23, 0)])
-    ck.eq("PRINT_ROW", env.print_pos(), (2, 0))
+    ck.eq("PRINT_ROW", env.print_pos(), (1, 0))
     ck.eq("INTERP_ERROR_FLAG", env.u8("INTERP_ERROR_FLAG"), 0)
     ck.true("editor waiting", con.in_editor())
     con.type("foo")
     v = view(m)
-    ck.eq("unknown word: rows 0-3", v.rows[:4], [BANNER, "3 OK", "FOO ?", ""])
+    ck.eq("unknown word: rows 0-3", v.rows[:4], ["3 OK", "FOO ?", "", ""])
     ck.eq("INTERP_ERROR_FLAG", env.u8("INTERP_ERROR_FLAG"), 1)
     ck.eq("no OK, edit line", env.edit_state(), ("", 0))
     ck.true("editor waiting", con.in_editor())
@@ -912,9 +916,9 @@ def enter_interprets(env, part):
     env.check_view(ck, "typing after the error", base, ed)
     con.key(ENTER)
     con.type("drop")
-    ck.eq("stack error: rows 0-5", view(m).rows[:6], [BANNER, "3 OK", "FOO ?", "AB ?", "STACK?", ""])
+    ck.eq("stack error: rows 0-5", view(m).rows[:6], ["3 OK", "FOO ?", "AB ?", "STACK?", "", ""])
     con.type("1 .")
-    ck.eq("error flag cleared by the next line", (env.u8("INTERP_ERROR_FLAG"), view(m).rows[5]), (0, "1 OK"))
+    ck.eq("error flag cleared by the next line", (env.u8("INTERP_ERROR_FLAG"), view(m).rows[4]), (0, "1 OK"))
     ck.note("`1 2 + .` -> '3 OK'; `foo` -> 'FOO ?' (no OK), `drop` -> 'STACK?'; typing and ENTER still work")
     return ck.result()
 
@@ -982,12 +986,12 @@ def recall(env, part):
     con = env.con
     con.type(": SQ DUP * ;")
     con.type("3 SQ .")
-    ck.eq("old SQ: 3 SQ .", view(m).rows[:4], [BANNER, "OK", "9 OK", ""])
+    ck.eq("old SQ: 3 SQ .", view(m).rows[:4], ["OK", "9 OK", "", ""])
     con.type("0 RECALL")
-    ck.eq("0 RECALL: an unknown word", view(m).rows[3], "RECALL ?")
+    ck.eq("0 RECALL: an unknown word", view(m).rows[2], "RECALL ?")
     ck.eq("0 RECALL: edit line", env.edit_state(), ("", 0))
     con.type("LIST-DEFS")
-    ck.eq("LIST-DEFS", view(m).rows[4:6], ["0: : SQ DUP * ;", "OK"])
+    ck.eq("LIST-DEFS", view(m).rows[3:5], ["0: : SQ DUP * ;", "OK"])
     for ch in "EDIT SQ":
         con.key(ord(ch), maxi=VIEW_MAXI)
     con.key(KEY_ENTER, maxi=VIEW_MAXI * 3)
@@ -1017,7 +1021,7 @@ def no_64col(env, part):
     con.boot()
     ck.eq("GFX_MODE before", env.u8("GFX_MODE"), 0)
     words = ["64COL"] if part == "64col" else ["32COL", "PALETTE64", "PLOT64"]
-    rows = [BANNER]
+    rows = []
     for w in words:
         con.type(w)
         rows.append("%s ?" % w)              # the console prints an unknown word in upper case, then ` ?` and no OK
@@ -1038,7 +1042,7 @@ def no_64col(env, part):
 
 # ===================================================================== 15 scroll output
 @case("scroll-output", "enough output lines to scroll: the edit line stays on row 23 (cursor at column 0), row 22 stays blank, the "
-                       "banner scrolls away and the last 22 lines are on rows 0-21")
+                       "first lines scroll away and the last 22 lines are on rows 0-21")
 def scroll_output(env, part):
     ck, m = Check(), env.m
     env.boot()
@@ -1054,12 +1058,11 @@ def scroll_output(env, part):
     ck.eq("rows 22, 23", v.rows[22:], ["", ""])
     ck.eq("cursor", v.cursor, [(23, 0)])
     ck.eq("PRINT_ROW", env.print_pos(), (22, 0))
-    ck.eq("banner gone", BANNER in v.rows, False)
     ck.eq("PRINT_ROW and rows 0-1 after 20..23 lines", rows_at,
-          {19: (21, [BANNER, "0 OK"]), 20: (22, [BANNER, "0 OK"]), 21: (22, ["0 OK", "1 OK"]), 22: (22, ["1 OK", "2 OK"])})
+          {19: (20, ["0 OK", "1 OK"]), 20: (21, ["0 OK", "1 OK"]), 21: (22, ["0 OK", "1 OK"]), 22: (22, ["1 OK", "2 OK"])})
     ck.true("editor waiting", con.in_editor())
-    ck.note("%d lines: rows 0-21 = '%d OK'..'%d OK', PRINT_ROW 22 (the last output row is 21); the banner is lost with the 22nd "
-            "line" % (n, n - 22, n - 1))
+    ck.note("%d lines: rows 0-21 = '%d OK'..'%d OK', PRINT_ROW 22 (the last output row is 21); the first line is lost with the "
+            "23rd" % (n, n - 22, n - 1))
     return ck.result()
 
 
@@ -1102,7 +1105,7 @@ def break_running(env, part):
         ck.eq("ISR latch (KBD_LASTK, KBD_KEYHIT)", latch, (BREAK, 0xFF))
         pc = m.run_to([S("IO_READ_KEY")], 2_000_000)
         ck.true("BREAK released: still looping", pc != S("IO_READ_KEY"), "PC=%04X" % pc)
-        ck.eq("screen: the typed L is still on row 23", view(m).rows[:2] + view(m).rows[23:], [BANNER, "OK", "L"])
+        ck.eq("screen: the typed L is still on row 23", view(m).rows[:2] + view(m).rows[23:], ["OK", "", "L"])
         ck.note("the loop was never broken: Forth has no BREAK check in the interpreter (only the word BREAK?); the key stays "
                 "latched (KBD_LASTK $10, KBD_KEYHIT $FF) and would reach the editor after a loop that ends")
     else:
@@ -1117,14 +1120,14 @@ def break_running(env, part):
             _hold_break(m, False)
         ck.eq("BREAK? ends the loop: back at the key wait", pc, S("IO_READ_KEY"))
         con.wait()
-        ck.eq("rows 0-3", view(m).rows[:4], [BANNER, "OK", "OK", ""])
+        ck.eq("rows 0-3", view(m).rows[:4], ["OK", "OK", "", ""])
         ck.true("editor waiting", con.in_editor())
         ck.eq("edit line", env.edit_state(), ("", 0))
         # the BREAK key was latched meanwhile; the editor ignores it
         ed = Ed(32)
         env.con.key(ord("a"))
         ed.key(ord("a"))
-        env.check_view(ck, "typing after", [BANNER, "OK", "OK"] + [""] * 21, ed)
+        env.check_view(ck, "typing after", ["OK", "OK"] + [""] * 22, ed)
         ck.note("`BEGIN BREAK? UNTIL` returns to the prompt with 'OK' (no error message) once BREAK is held")
     return ck.result()
 
@@ -1142,9 +1145,9 @@ def colour_state(env, part):
     ck.eq("CURRENT_ATTR", env.u8("CURRENT_ATTR"), 0x32)
     ck.eq("border (PORT_FE_SHADOW & 7)", env.u8("PORT_FE_SHADOW") & 7, 1)
     attrs = m.read(0x5800, 768)
-    ck.eq("OK on row 1 (cells 0-1) and the rest of row 1", (list(attrs[32:34]), set(attrs[34:64])), ([0x32, 0x32], {0x38}))
+    ck.eq("OK on row 0 (cells 0-1) and the rest of row 0", (list(attrs[0:2]), set(attrs[2:32])), ([0x32, 0x32], {0x38}))
     ck.eq("edit row 23 after the command", (attrs[23 * 32], set(attrs[23 * 32 + 1:])), (0x87, {0x38}))
-    ck.eq("banner row attributes", set(attrs[:32]), {0x38})
+    ck.eq("row 1 attributes", set(attrs[32:64]), {0x38})
     ed = Ed(32)
     base = view(m).rows
     type_keys(env, ed, "abc")
@@ -1154,8 +1157,8 @@ def colour_state(env, part):
     con.key(ENTER)
     con.type("1 .")
     attrs = m.read(0x5800, 768)
-    ck.eq("rows", view(m).rows[:4], [BANNER, "OK", "ABC ?", "1 OK"])
-    ck.eq("output attributes: 'ABC ?' (5 cells), '1 OK' (4 cells)", (list(attrs[64:70]), list(attrs[96:101])),
+    ck.eq("rows", view(m).rows[:4], ["OK", "ABC ?", "1 OK", ""])
+    ck.eq("output attributes: 'ABC ?' (5 cells), '1 OK' (4 cells)", (list(attrs[32:38]), list(attrs[64:69])),
           ([0x32] * 5 + [0x38], [0x32] * 4 + [0x38]))
     ck.eq("border still", env.u8("PORT_FE_SHADOW") & 7, 1)
     ck.note("INK/PAPER change CURRENT_ATTR ($38 -> $32) which output (OK, error text) uses; the editor ignores it "
@@ -1687,10 +1690,11 @@ def layout23(shown, top, partial):
 
 
 class Obs:
-    """What the oracle sees of the view: the store, its end cell, the 24 screen rows and the FLASH cells."""
+    """What the oracle sees of the view: the store, its end cell, the 24 screen rows, the FLASH cells and the status
+    row's attributes (Leap V2's status bar unless given)."""
 
-    def __init__(self, store, end, rows, flash):
-        self.store, self.end, self.rows, self.flash = store, end, rows, flash
+    def __init__(self, store, end, rows, flash, bar=fh.STATUS_BAR):
+        self.store, self.end, self.rows, self.flash, self.bar = store, end, rows, flash, bar
 
 
 def check_view(model, obs, prev_top):
@@ -1709,6 +1713,8 @@ def check_view(model, obs, prev_top):
     cur = model.cur
     nrows = [len(wrows(t)) for t in shown]
     status = obs.rows[SCREEN_ROWS]
+    if obs.bar != fh.STATUS_BAR:
+        errs.append("status row attributes %s, want the status bar %s" % (obs.bar.hex(), fh.STATUS_BAR.hex()))
     if model.msg:
         if model.msg not in status:
             errs.append("status row %r should show %r" % (status, model.msg))
@@ -1772,7 +1778,7 @@ class RealIO:
         env, m = self.env, self.env.m
         attrs = m.read(0x5800, 768)
         flash = [(i // 32, i % 32) for i, a in enumerate(attrs) if a & 0x80]
-        return Obs(store_read(env), store_end(env), m.screen_rows(), flash)
+        return Obs(store_read(env), store_end(env), m.screen_rows(), flash, attrs[23 * 32:])
 
 
 class FakeIO:
@@ -2019,7 +2025,7 @@ def cr_whitespace(env, part, ck):
             if not ck.true("%s: INTERPRET_RUN returned" % name, r["ok"], "PC=%04X" % r["pc"]):
                 return
             rows = m.screen_rows()
-            ck.eq("%s-separated source: row 1" % name, rows[1], "49")
+            ck.eq("%s-separated source: row 0" % name, rows[0], "49")
             ck.eq("%s-separated source: INTERP_ERROR_FLAG" % name, env.u8("INTERP_ERROR_FLAG"), 0)
         ck.note("%d sources: `: SQ DUP * ; 7 SQ .` with each delimiter prints 49" % len(sources))
         return
@@ -2037,8 +2043,8 @@ def cr_whitespace(env, part, ck):
             return
         # (`1 .` leaves the print column after "1 ", so the message follows it on the same row: '1 FOO ?')
         ck.true("FOO ? on the screen", any(r == "FOO ?" or r.endswith(" FOO ?") for r in rows), _short(rows[:6]))
-        ck.eq("1 printed by the first line, nothing from the rest (rows below the banner)", digits(rows[1:]), ["1"])
-        ck.eq("banner kept", rows[0], BANNER)
+        ck.eq("1 printed by the first line, nothing from the rest (rows 0-22)", digits(rows[:23]), ["1"])
+        ck.eq("no cold start: the version is not on row 23", rows[23] != VERSION, True)
         ck.true("back at the console key wait", env.con.in_editor() and env.edit_state() == ("", 0))
         eq_bytes(ck, "store after LOAD-TEXT", store_read(env), data)
         eq_bytes(ck, "$F000-$F0FF untouched", read_above_limit(env), pat)
@@ -2075,7 +2081,7 @@ def cr_whitespace(env, part, ck):
         # loop, one level too far)
         ck.true("the machine kept running", False, "LOAD-TEXT restarted the machine (cold start: seed and store gone); screen %s" % _short(rows[:5]))
         return
-    ck.eq("49 printed by the loaded program (rows below the banner)", digits(rows[1:]), ["49"])
+    ck.eq("49 printed by the loaded program (rows 0-22)", digits(rows[:23]), ["49"])
     ck.eq("INTERP_ERROR_FLAG", env.u8("INTERP_ERROR_FLAG"), 0)
     eq_bytes(ck, "store after LOAD-TEXT", store_read(env), want)
     ck.eq(end_name(env), store_end(env), buf + len(want))

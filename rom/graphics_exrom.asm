@@ -1689,7 +1689,8 @@ VIEW_DEC:
 
 ; ============================================================================
 ; VIEW_STATUS -- row 23: `LINE n/m` (cursor line, line count), or STORE FULL
-; while VIEW_MSG is set.
+; while VIEW_MSG is set, on the status bar (white on black, the red, green
+; and blue cells at the right).
 ; Destroys: AF, BC, DE, HL, VIEW_T1
 ; ============================================================================
 VIEW_STATUS:
@@ -1716,7 +1717,7 @@ VIEW_STATUS:
     ld   hl, VIEW_TEXT
 .draw:
     ld   b, 23
-    jp   ED_ROW_JP
+    jp   GRAPHICS_HOME_ED_STATUS_ROW    ; the text on the status bar (Leap V2's colours)
 .line:
     DB   "LINE "
 

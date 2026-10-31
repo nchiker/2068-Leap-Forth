@@ -59,10 +59,11 @@ GRAPHICS_HOME_TABLE:
     jp   IO_READ_KEY              ; slot 10: the key wait -> A
     jp   EDIT_CURSOR_TO_ROWCOL    ; slot 11: B=row, C=col
     jp   FORGET_PRINT_MSG         ; slot 12: HL=zero-terminated text
+    jp   ED_STATUS_ROW            ; slot 13: B=23, HL=text, D=characters: the status bar
 
 ; ============================================================================
-; COLD_START -- reset entry: initialise the machine and the system cells, print the banner, chime,
-; and enter the interactive loop
+; COLD_START -- reset entry: initialise the machine and the system cells, show the version on the
+; status bar, chime, and enter the interactive loop with the version still up
 ; In:  none (RST 00, interrupts off)
 ; Out: does not return (jumps to EDITOR_LOOP_LIVE)
 ; ============================================================================
@@ -103,20 +104,15 @@ COLD_START:
     ld   (F_PLACES), a            ; core/fpprint.asm: F. prints 4 decimals
     ld   a, 1
     ld   (FWRAP_OLD_COUNT), a
+    ld   (VERSION_UP), a          ; core/editor.asm: the first key takes the version off row 23
 
     ld   a, BORDER_DEFAULT        ; the border's power-on colour is the ULA's, not defined
     call GFX_SET_BORDER
-    call GFX_CLS
-    ld   hl, BANNER
-    ld   b, 0
-    ld   c, 0
+    call GFX_CLS                  ; EMIT's output starts at row 0, column 0 (PRINT_ROW/PRINT_COL: the fill)
+    ld   hl, FORTH_VERSION_TEXT   ; the version on the status bar (Leap V2's), up before the chime
+    ld   bc, EDIT_ROW << 8 | 2
     call GFX_PRINT_STRING
-
-    ; EMIT's output position starts on the row under the banner (PRINT_ROW/PRINT_COL have no default)
-    xor  a
-    ld   (PRINT_COL), a
-    ld   a, 1
-    ld   (PRINT_ROW), a
+    call GFX_STATUS_BAR
 
     call KBD_ISR_INIT               ; before EI
     im   1
@@ -124,7 +120,13 @@ COLD_START:
 
     call STARTUP_CHIME
 
-    jp   EDITOR_LOOP_LIVE
+    ; the empty input line as EDITOR_LOOP_LIVE's redraw leaves it, but row 23 not redrawn: the cursor
+    ; flashes in the bar's column 0 and the first key's redraw (EDITOR_PROCESS_KEY) clears the version
+    call WRAP_CALC
+    ld   a, EDIT_ROW
+    ld   (FWRAP_TOP), a
+    call ED_DRAW_CURSOR
+    jp   EDITOR_LOOP_LIVE.keyloop
 
 ; ============================================================================
 ; STARTUP_CHIME -- a startup chord: C4/E4/G4 on the three AY channels, entering one after another
@@ -191,7 +193,8 @@ CHIME_REGS:
     ; the mixer (tones on, noise off); the three levels 0
     DB   165,1, 78,1, 25,1, 0, 248, 0,0,0
 
-BANNER: DB "2068-FORTH", 0
+    INCLUDE "include/forth_version.inc"
+    ASSERT $ - FORTH_VERSION_TEXT <= 28       ; 27 characters and the 0: columns 2-28
 
 ; ============================================================================
 ; INTERPRET_UNKNOWN_WORD -- core/interp.asm's hook for a token that is neither a word nor a number

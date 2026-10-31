@@ -8,7 +8,7 @@ back with the ROM's own font rendered by the real GFX_PUTCHAR, memory compared b
 (docs/V2/FORTH_V2_REUSE_AUDIT.md section 6.3); the base of the editor screen oracle (T12) and the float oracle (T13).
 
 What is real: the assembled images (forth_boot_rom0.bin and graphics_exrom.bin, written as one 24 KB ROM file for
-ZEsarUX's --romfile exactly as tools/tapetol.py does), cold start through the banner to the idle prompt's key wait
+ZEsarUX's --romfile exactly as tools/tapetol.py does), cold start through the version and the chime to the idle prompt's key wait
 (IO_READ_KEY), the interrupt service (KBD_ISR_TICK scanning the keyboard matrix), banking, the editor and the
 interpreter.  What is substituted: the machine is snapshotted at the first IO_READ_KEY and every case restores it
 (RAM, registers and paging come back; the T-state phase within a frame is ZEsarUX's); Console.key() writes the
@@ -812,10 +812,16 @@ def run_pool(build, tasks, fn, workers=None, port0=PORT_LO):
 
 
 # ---------------------------------------------------------------------------------------------------- self-test
-def banner_text():
-    """The banner the ROM prints, from rom/forth_boot.asm (`BANNER: DB "...", 0`)."""
-    src = open(os.path.join(ROOT, "rom", "forth_boot.asm")).read()
-    return re.search(r'^BANNER:\s+DB\s+"([^"]*)"\s*,\s*0', src, re.M).group(1)
+def version_text():
+    """The version the ROM shows on the status bar at power-on, from include/forth_version.inc."""
+    src = open(os.path.join(ROOT, "include", "forth_version.inc")).read()
+    return re.search(r'^FORTH_VERSION_TEXT:\s+DB\s+"([^"]*)"\s*,\s*0', src, re.M).group(1)
+
+
+# Row 23's attributes as the status bar (include/hardware.inc): white on black, then red, green, blue; the cursor
+# on the bar's column 0 is its colours swapped, flashing.
+STATUS_BAR = bytes([0x07] * 29 + [0x10, 0x20, 0x08])
+STATUS_BAR_CURSOR = bytes([0xB8]) + STATUS_BAR[1:]
 
 
 def drawn_chars(m):
@@ -848,22 +854,50 @@ def _check_glyphs(m, _):
                 info="")
 
 
-def _check_banner(m, _):
-    want = banner_text()
+def _check_version(m, _):
+    """At the first key wait: rows 0-22 blank, the version from column 2 of row 23 on the status bar, the cursor in its
+    column 0."""
+    want = "  " + version_text()
     rows = m.screen_rows()
-    return dict(ok=rows[0] == want and not any(rows[1:]), detail="row 0 = %r, rows 1-23 blank" % rows[0])
+    bar = m.read(0x5800 + 23 * 32, 32)
+    ok = rows[23] == want and not any(rows[:23]) and bar == STATUS_BAR_CURSOR
+    return dict(ok=ok, detail="row 23 = %r (want %r) on the bar with the cursor in column 0: %s; rows 0-22 blank: %s" % (
+        rows[23], want, bar == STATUS_BAR_CURSOR, not any(rows[:23])))
 
 
 def _check_screen(m, _):
-    """The boot screen's colours (Leap V2's): the border white from any power-on colour, every cell of rows 0-22 black
-    on white (ATTR_DEFAULT $38), CURRENT_ATTR the same."""
+    """The boot screen (Leap V2's): the border white from any power-on colour, every cell of rows 0-22 black on white
+    (ATTR_DEFAULT $38), CURRENT_ATTR the same; the version on the status bar from the chime's first note (rows 0-22
+    blank) to the key wait (then with the cursor)."""
     t = m.boot_trace(border=2)
-    scr, border = t["last"]
-    attrs = set(scr[6144:6144 + 23 * 32])
+    want = "  " + version_text()
+    seen = []
+    for (scr, border), bar in ((t["first"], STATUS_BAR), (t["last"], STATUS_BAR_CURSOR)):
+        rows = m.screen_rows(scr[:6144])
+        seen.append((rows[23] == want and not any(rows[:23]), scr[6144 + 23 * 32:] == bar, border))
+    attrs = set(t["last"][0][6144:6144 + 23 * 32])
     cur = m.read(m.sym("CURRENT_ATTR"), 1)[0]
-    ok = border == 7 and attrs == {0x38} and cur == 0x38
-    return dict(ok=ok, detail="border %d from 2 (want 7); rows 0-22 attributes %s, CURRENT_ATTR $%02X (want $38)" % (
-        border, " ".join("$%02X" % a for a in sorted(attrs)), cur))
+    ok = seen == [(True, True, 7)] * 2 and attrs == {0x38} and cur == 0x38
+    return dict(ok=ok, detail="(version on row 23 alone, bar attributes, border) at the chime's first write and at the key "
+                              "wait: %s (want (True, True, 7), border 2 before the reset); rows 0-22 attributes %s, "
+                              "CURRENT_ATTR $%02X (want $38)" % (seen, " ".join("$%02X" % a for a in sorted(attrs)), cur))
+
+
+def _check_first_key(m, _):
+    """The first key takes the version off: a key that changes nothing (LEFT on the empty line) leaves row 23 the empty
+    input line (ATTR_DEFAULT, the cursor $87); ENTER does too and its OK is on row 0; a typed key shows on row 23."""
+    con = Console(m)
+    out = []
+    for keys in ([0x01], [KEY_ENTER], [ord("7")]):
+        con.boot()
+        for k in keys:
+            con.key(k)
+        rows = con.rows()
+        out.append((rows[0], rows[23], m.read(0x5800 + 23 * 32, 32) == bytes([0x87] + [0x38] * 31)
+                    if keys != [ord("7")] else m.read(0x5800 + 23 * 32, 2) == bytes([0x38, 0x87])))
+    want = [("", "", True), ("OK", "", True), ("", "7", True)]
+    return dict(ok=out == want and con.in_editor(), detail="(row 0, row 23, row 23's attributes the input line's) after LEFT, "
+                "ENTER, 7: %s (want %s)" % (out, want))
 
 
 def _check_restore(m, _):
@@ -894,9 +928,9 @@ def _check_type(m, _):
     con.boot()
     con.type("1 2 + .")
     rows = con.rows()
-    shown = [r for r in rows[1:23] if r]
+    shown = [r for r in rows[:23] if r]
     ok = shown == ["3 OK"] and con.edit_line() == "" and con.in_editor()
-    return dict(ok=ok, detail="rows 1-22 = %r, edit line %r, editor waiting=%s" % (shown, con.edit_line(), con.in_editor()))
+    return dict(ok=ok, detail="rows 0-22 = %r, edit line %r, editor waiting=%s" % (shown, con.edit_line(), con.in_editor()))
 
 
 def _check_press(m, _):
@@ -905,7 +939,7 @@ def _check_press(m, _):
     for ch in "2 3 * .":
         con.press(ch)
     con.press("\r")
-    shown = [r for r in con.rows()[1:23] if r]
+    shown = [r for r in con.rows()[:23] if r]
     line = "Ab:?(+~|\\{}][^"                           # CAPS SHIFT + a letter, SYMBOL SHIFT + Z, C, 8, K, A-G, U, Y, H
     try:
         for ch in line:
@@ -914,7 +948,7 @@ def _check_press(m, _):
         return dict(ok=False, detail=str(e))
     got, last = con.edit_line(), con.rows()[23]
     ok = shown == ["6 OK"] and got == line and last == line and con.in_editor()
-    return dict(ok=ok, detail="matrix: rows 1-22 = %r; edit line %r (row 23 %r)" % (shown, got, last))
+    return dict(ok=ok, detail="matrix: rows 0-22 = %r; edit line %r (row 23 %r)" % (shown, got, last))
 
 
 def _check_checkpoint(m, _):
@@ -972,12 +1006,12 @@ def _check_chime(m, _):
 
 
 # (letter i, the 64-column screen, was retired in step M6 with the mode; the letters are not renumbered)
-CHECKS = [("a", "boot", _check_boot), ("b", "glyph table", _check_glyphs), ("c", "banner", _check_banner),
+CHECKS = [("a", "boot", _check_boot), ("b", "glyph table", _check_glyphs), ("c", "version", _check_version),
           ("d", "restore determinism", _check_restore), ("e", "call GFX_CLS", _check_call),
           ("f", "Console.type", _check_type), ("g", "Console.press", _check_press),
           ("j", "memory assertions", _check_mem),
           ("k", "checkpoint/rollback", _check_checkpoint), ("l", "startup chime", _check_chime),
-          ("m", "boot screen", _check_screen)]
+          ("m", "boot screen", _check_screen), ("n", "first key", _check_first_key)]
 
 
 def _run_checks(build, workers, port0):

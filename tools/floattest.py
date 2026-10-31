@@ -77,7 +77,6 @@ NORMAL_SP, THROWN_SP = RET_SLOT + 2, THROW_SLOT + 2
 TEXT = 0xFF50                           # counted strings (NUMBER); up to 31 characters ($FF70)
 MEMA = 0xFFA0                           # the cell F@ and F! use; $FF9C-$FFA8 guard bytes
 GUARD = 0xA5
-BANNER = "2068-FORTH"
 FSTACK_CELLS = 204
 BEEP_PLAY_SYM = "BEEP_PLAY"
 
@@ -453,10 +452,8 @@ def con_boot(m):
 
 
 def nonblank_rows(m):
-    rows = m.screen_rows()
-    if rows and rows[0] == BANNER:
-        rows = rows[1:]
-    return [r for r in rows if r]
+    """The output rows (0-22) that are not blank: row 23 is the input line (the version's status bar until the first key)."""
+    return [r for r in m.screen_rows()[:23] if r]
 
 
 def con_line(m, c, line):

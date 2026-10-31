@@ -95,8 +95,8 @@ which is the same as:
     fuse --machine ts2068 --rom-ts2068-0 roms/forth_boot_rom0.bin \\
          --rom-ts2068-1 roms/graphics_exrom.bin
 
-It boots to a banner, plays a short startup sound, and drops you at a
-keyboard-driven prompt. Try:   5 BORDER      5 3 + .      : GREET ." HI" ; GREET
+It boots to a white screen with its version on the status bar at the bottom,
+plays a short startup chord, and drops you at a keyboard-driven prompt. Try:   5 BORDER      5 3 + .      : GREET ." HI" ; GREET
 
 roms/forth_boot_rom0.bin is a raw 16384-byte image for the TS2068's HOME ROM
 slot and roms/graphics_exrom.bin an 8192-byte image for the EXROM slot (checked

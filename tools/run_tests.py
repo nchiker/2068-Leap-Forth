@@ -2,7 +2,7 @@
 """Leap-Forth test runner (make test, make test-fast): every suite on the production images in ZEsarUX.
 
 Suites on one pool of emulators (ports 10760 up, one per worker):
-  boot    the image boots to the prompt: banner, glyph table, the harness's own checks (tools/fharness.py)
+  boot    the image boots to the prompt: the version on the status bar, the chime, the colours, glyph table, the harness's own checks (tools/fharness.py)
   forth   tests/**/*.fs typed at the prompt, each line against its `\\ expect:` (tools/forthtest.py)
   editor  the console and the full-screen editor, the redraw oracle, typing cost (tools/edtest.py)
   float   the float words against the bit-exact model, integer * / MOD, RND, speeds (tools/floattest.py)
