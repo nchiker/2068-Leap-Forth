@@ -29,11 +29,17 @@ The images are also in the release zip.
 
 ## Run
 
+ZEsarUX runs from its own folder (it reads its data files from there), so the ROM file needs its full path. From
+this repository's folder, after `make` (for the release zip, set `FORTH` to the zip's `roms/` folder instead):
+
 ```sh
-zesarux --noconfigfile --machine TS2068 --romfile build/forth_zesarux.bin
+FORTH="$PWD/build"
+cd ~/Applications/ZEsarUX-13.0 && ./zesarux --noconfigfile --machine TS2068 --romfile "$FORTH/forth_zesarux.bin"
 ```
 
-`--enableulaplus` is optional; add it to use the `ULAPLUS` and `PALETTE` words.
+`~/Applications/ZEsarUX-13.0` is where the test tools expect ZEsarUX (`TS2068_DEBUG_ZESARUX_DIR`,
+[CONTRIBUTING.md](../CONTRIBUTING.md)); use the folder you built or unpacked it in. `--enableulaplus` is optional; add
+it to use the `ULAPLUS` and `PALETTE` words.
 
 For the patched build, see [`../patches/README.md`](../patches/README.md): clone upstream ZEsarUX, `git am` the patch,
 then `configure` and `make`. Without the patch, `EDIT`, `FILL`, `CIRCLE`, `RECT`, `POLYGON`, `POLYGON-FILL` and the

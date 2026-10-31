@@ -84,9 +84,14 @@ Locally, take the images from the latest build (see "Download") or build them (`
 EXROM. The EXROM holds the full-screen editor (`EDIT`), `FILL`, `CIRCLE`, `RECT`, `POLYGON`, `POLYGON-FILL` and the
 sprites; without it those words report `NO EXROM` and everything else works.
 
+From the folder that holds the images (`build/` after `make`, `roms/` in the release zip):
+
 ```sh
-fuse --machine ts2068 --rom-ts2068-0 forth_boot_rom0.bin --rom-ts2068-1 graphics_exrom.bin
+fuse --machine ts2068 --rom-ts2068-0 "$PWD/forth_boot_rom0.bin" --rom-ts2068-1 "$PWD/graphics_exrom.bin"
 ```
+
+With full paths (`$PWD/...`) the command works from any folder: Fuse looks for a ROM given by its name alone in the
+current folder and then in its own ROM folders, so the bare names work only from the images' folder.
 
 It boots to a white screen with its version (`2068 FORTH V2.0`) on the status bar at the bottom, plays a short startup
 chord and waits at the prompt. Try:
@@ -108,8 +113,8 @@ chord and waits at the prompt. Try:
 
 | Emulator | How |
 |---|---|
-| Fuse 1.9.1 | `--rom-ts2068-0 forth_boot_rom0.bin --rom-ts2068-1 graphics_exrom.bin` (as above). Fuse has no ULAplus for Timex machines, so `ULAPLUS`/`PALETTE` do nothing there. |
-| ZEsarUX 13.0 | `zesarux --noconfigfile --machine TS2068 --romfile forth_zesarux.bin` (the two images as one file). The EXROM words need ZEsarUX built with `patches/0001-zesarux-mirror-ts2068-exrom.patch` (the real TS2068 mirrors its EXROM across all eight chunks; stock ZEsarUX mirrors two): [docs/zesarux_setup.md](docs/zesarux_setup.md). |
+| Fuse 1.9.1 | `--rom-ts2068-0` the HOME ROM, `--rom-ts2068-1` the EXROM, each with its full path (as above). Fuse has no ULAplus for Timex machines, so `ULAPLUS`/`PALETTE` do nothing there. |
+| ZEsarUX 13.0 | from ZEsarUX's own folder (it reads its data files from there), `./zesarux --noconfigfile --machine TS2068 --romfile` and the full path of `forth_zesarux.bin` (the two images as one file); the commands are in [docs/zesarux_setup.md](docs/zesarux_setup.md). The EXROM words need ZEsarUX built with `patches/0001-zesarux-mirror-ts2068-exrom.patch` (the real TS2068 mirrors its EXROM across all eight chunks; stock ZEsarUX mirrors two). |
 | TSRun (browser) | "Load ROM0" `forth_boot_rom0.bin`, "Load ROM1" `graphics_exrom.bin`. |
 | EightyOne 1.41 | the HOME ROM as the ROM file, `graphics_exrom.dck` as a Timex ROM cartridge: [docs/eightyone_setup.md](docs/eightyone_setup.md) (the EXROM cartridge does not load correctly on EightyOne 1.41). |
 | TS-Pico | the HOME ROM in its ROM slot; TS-Pico has no EXROM slot yet: [docs/ts_pico_setup.md](docs/ts_pico_setup.md). |
