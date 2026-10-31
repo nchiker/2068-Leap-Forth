@@ -394,3 +394,15 @@ image = "home"
 component = "boot"
 delta = 19
 reason = "BREAK and timing: the message of THROW -5, RETURN STACK FULL; from the reserve"
+
+[[ledger]]
+image = "home"
+component = "kernel"
+delta = 2
+reason = "BREAK and timing: GFX_CLEAR_ROW takes the attribute in A (EMIT's new output row is cleared in CURRENT_ATTR, not white; found by the owner); from the reserve"
+
+[[ledger]]
+image = "home"
+component = "text"
+delta = 3
+reason = "BREAK and timing: EMIT clears the new output row in CURRENT_ATTR; from the reserve"

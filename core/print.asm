@@ -71,6 +71,7 @@ W_EMIT:
     jr   c, .storerow
     call GFX_SCROLL_TEXT_UP
     ld   b, 22
+    ld   a, (CURRENT_ATTR)        ; the new output row in the output's colours (PAPER, INK, CLS)
     call GFX_CLEAR_ROW           ; GFX_SCROLL_TEXT_UP leaves row 22 for the caller to draw
     ld   a, 22
 .storerow:

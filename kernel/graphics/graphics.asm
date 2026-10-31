@@ -15,7 +15,7 @@
     INCLUDE "include/hardware.inc"
 
 ; ---- character grid ----
-GFX_COLS   EQU 32          ; ATTR_DEFAULT (GFX_CLS, GFX_CLEAR_ROW) is in include/hardware.inc
+GFX_COLS   EQU 32          ; ATTR_DEFAULT (GFX_CLS, the edit line's row) is in include/hardware.inc
 
 ; ============================================================================
 ; GFX_CLS -- clear the bitmap and paint every attribute ATTR_DEFAULT
@@ -97,7 +97,8 @@ GFX_SCROLL_TEXT_UP:
     jr   GFX_SCROLL_ROWS
 
 ; ============================================================================
-; GFX_SCROLL_OUTPUT_UP -- scroll all 24 rows up one row and clear the new row 23
+; GFX_SCROLL_OUTPUT_UP -- scroll all 24 rows up one row and clear the new row 23 (the edit line's:
+; ATTR_DEFAULT)
 ; In:  none
 ; Out: none
 ; Destroys: AF, BC, DE, HL
@@ -106,6 +107,7 @@ GFX_SCROLL_OUTPUT_UP:
     ld   a, 7                       ; rows 17-23 of the last third
     call GFX_SCROLL_ROWS
     ld   b, 23
+    ld   a, ATTR_DEFAULT
     jp   GFX_CLEAR_ROW
 
 ; ============================================================================
@@ -470,17 +472,19 @@ GFX_STATUS_BAR:
     ret
 
 ; ============================================================================
-; GFX_CLEAR_ROW -- clear one text row (bitmap and attributes) to blank / ATTR_DEFAULT
+; GFX_CLEAR_ROW -- clear one text row (bitmap and attributes) to blank cells of attribute A
 ; The bytes 32 spaces would leave (the space glyph is 8 zero bytes), written directly: Leap V2's
 ; GFX_CLEAR_ROW (audit item O4).
-; In:  B = row (0-23)
+; In:  B = row (0-23), A = the attribute (EMIT's new output row: CURRENT_ATTR; the edit line's row:
+;      ATTR_DEFAULT)
 ; Out: none
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 GFX_CLEAR_ROW:
+    push af
     ld   c, 0
     call GFX_CELL_ATTR_ADDR         ; HL = the row's first attribute (BC kept)
-    ld   a, ATTR_DEFAULT
+    pop  af
     ld   c, GFX_COLS
 .attr:
     ld   (hl), a
