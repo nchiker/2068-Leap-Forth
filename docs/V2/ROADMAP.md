@@ -6,7 +6,8 @@ the best solution for the language and its users; fix a problem in the session i
 reason not to (the reason is written here); **follow Leap-C's conventions** (`~/2068-Leap-C` `CONTRIBUTING.md` and
 `project_plan.md` section 1) for testing, paperwork, code style and RAM layout.
 
-Last updated 2026-10-30. Free bytes: HOME 1,732, EXROM 3,296 (`make budget`: per component, `budget.toml`).
+Last updated 2026-10-31. Free bytes: HOME 2,052, EXROM 3,296 (`make budget`: per component, `budget.toml`;
+`make inventory`: per routine). Dictionary: 16,128 bytes at power-on.
 
 ## Done
 
@@ -23,26 +24,26 @@ Last updated 2026-10-30. Free bytes: HOME 1,732, EXROM 3,296 (`make budget`: per
 | 64-column mode removed | 64COL and its code paths gone (HIRES colour mode kept) |
 | Floats | 5-byte floats, 22 new float words, error messages, faster `*` `/` `MOD`, new RND |
 | FILL and CIRCLE | Rebuilt in the EXROM, much faster, always complete (`milestones/O15.md`) |
+| Simplify | Leap-C's conventions: two images, one test runner, one RAM layout file, budgets (`milestones/Simplify.md`) |
 
-## Now: Simplify to Leap-C's conventions — done (`docs/V2/milestones/Simplify.md`)
+## Now: Space — done (`docs/V2/milestones/Space.md`)
 
-Two images and their `.dck`; one test runner (`make test`, `make test-fast`) with the Forth tests in `tests/`; one RAM
-layout file with its guard; the sources trimmed to Leap-C's style; per-component budgets; CONTRIBUTING.md. Seven
-defects found on the way, all fixed (CLS, CATCH, VAL, SOUND, LEFT/RIGHT, long names, LIST-DEFS).
+`make inventory`; dead code removed; the shrink pass (page zero's gaps, tail and relative jumps); `FIND` about twice
+as fast per header, so compiling is a third faster; `SEARCH`, `UPPER`, `LOWER` on 16-bit lengths; the RAM cells packed,
+so the dictionary starts at `$9100` (1,792 bytes more). HOME 1,732 → 2,052 B free.
+
+**Owner decision pending:** moving cold code to the EXROM. Measured (report section 5): float functions 422 B, float
+printing 561 B, BEEP and the AY words 303 B, most of the printer; tape and the word listings cannot move. The
+recommendation is to move nothing now (no component is over budget; HOME has 2 KB free) and use the list when a
+step runs short.
 
 ## Next, in order
 
-1. **Space** (Leap-C's order when a component is over budget: shrink, move cold code to the EXROM, reallocate, ask).
-   Move large, rarely called code from HOME into the EXROM and bring it back as space is made; the size pass.
-   Candidates to measure: float printing and the transcendentals, tape words, word listings, sound, ULAplus, the
-   printer. Limits: an EXROM call costs about 400 T; EXROM code cannot read the dictionary at `$A000-$BFFF`. Also:
-   compact the RAM cells (`include/forth_layout.inc` keeps the dead cells' space as `DEFS n ; free` so the trim kept
-   every address).
-2. **Words and keys**: `[']`, `[CHAR]`, `\`, `[ ]`; the shared key lookup; the `1`/`l` glyphs; faster text drawing.
-3. **Display speed**, and LINE on 16-bit coordinates with clipping (today it takes bytes: `-10 50 100 50 LINE`
+1. **Words and keys**: `[']`, `[CHAR]`, `\`, `[ ]`; the shared key lookup; the `1`/`l` glyphs; faster text drawing.
+2. **Display speed**, and LINE on 16-bit coordinates with clipping (today it takes bytes: `-10 50 100 50 LINE`
    starts at x 246); it rebuilds `GFX_LINE`, whose cells POLYGON also uses through the EXROM.
-4. **BREAK and timing**: BREAK in the interrupt routine, so long words can be stopped.
-5. **Blackjack** rebuilt from its saved source (`demos/blackjack.fs`) as a program for the finished ROM; the Shooting
+3. **BREAK and timing**: BREAK in the interrupt routine, so long words can be stopped.
+4. **Blackjack** rebuilt from its saved source (`demos/blackjack.fs`) as a program for the finished ROM; the Shooting
    Gallery's source is beside it (`demos/gallery.fs`).
 
 ## Known defects
@@ -50,11 +51,12 @@ defects found on the way, all fixed (CLS, CATCH, VAL, SOUND, LEFT/RIGHT, long na
 | Defect | Found | Fixed in |
 |---|---|---|
 | LINE takes its coordinates as bytes (no 16-bit clipping) | O15 | Display speed (the `GFX_LINE` rebuild) |
-| Integer literals parse 2.5× slower since floats (shared 32-bit digit loop; a 16-bit fast path costs about 40 B) | Floats | Space (it needs the bytes) |
 | The editor's ENTER at the bottom of the view takes 421k T (the store is scanned from the start per key) | Editor | Display speed |
-| `INT_GET_FRAMES` (4 B) may be unreachable | Recover | Space (dead code) |
-| `SEARCH`, `UPPER`, `LOWER` take their lengths as bytes (a string word's lengths are 0-255 by construction; only a hand-made `addr len` over 255 is affected) | Simplify | Space (the bytes) |
 | Nothing checks the machine stack's depth ($F3C8-$FEFF, 2.8 KB) | Simplify | BREAK and timing (with the interrupt-side checks) |
+
+Fixed in Space: `SEARCH`, `UPPER` and `LOWER` used a length's low byte; `INT_GET_FRAMES` was dead code; integer
+literals compiled slowly (the cost was `FIND`, not the number parser: compiling is now a third faster; the 35 B
+parser fast path was measured at 4% and not taken).
 
 Fixed in Simplify: CLS left the print position where it was; a THROW left CATCH's xt cell on the stack; VAL of an
 empty string left a stray cell; SOUND and LEFT/RIGHT read only the low byte of a register number or count; a 32-character
