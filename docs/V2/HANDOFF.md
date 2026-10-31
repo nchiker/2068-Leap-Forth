@@ -5,10 +5,10 @@ reports: `docs/V2/milestones/`.
 
 ## Where things stand (2026-10-31)
 
-- **master** `b748a13` (PR #10, step Simplify, merged 2026-10-31; `make test` passed on it).
-- **`v2/step-space`** (not pushed): step Space complete, `docs/V2/milestones/Space.md`; `make test`, `make check`,
-  `make repro` pass. Open its PR when the owner asks; merge with a merge commit, run `make test` on master.
-- **Owner decision pending:** moving cold code to the EXROM (Space report section 5; recommendation: nothing now).
+- **master:** step Space (`docs/V2/milestones/Space.md`) merged from `v2/step-space` with a merge commit on
+  2026-10-31, after Simplify (PR #10); `make test` run on master after the merge (`git log --merges -2`).
+- **Decided (2026-10-31):** nothing moves to the EXROM now; Space report section 5 is the measured list for when a
+  step runs short.
 - **Free bytes:** HOME 2,052, EXROM 3,296; per component in `budget.toml` (`make budget`), per routine
   `make inventory`. The dictionary starts at `$9100` (`FREE` 16,128 at power-on).
 - **Next:** ROADMAP step 1, *Words and keys*.

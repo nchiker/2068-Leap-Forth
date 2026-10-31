@@ -32,10 +32,9 @@ Last updated 2026-10-31. Free bytes: HOME 2,052, EXROM 3,296 (`make budget`: per
 as fast per header, so compiling is a third faster; `SEARCH`, `UPPER`, `LOWER` on 16-bit lengths; the RAM cells packed,
 so the dictionary starts at `$9100` (1,792 bytes more). HOME 1,732 → 2,052 B free.
 
-**Owner decision pending:** moving cold code to the EXROM. Measured (report section 5): float functions 422 B, float
-printing 561 B, BEEP and the AY words 303 B, most of the printer; tape and the word listings cannot move. The
-recommendation is to move nothing now (no component is over budget; HOME has 2 KB free) and use the list when a
-step runs short.
+**Owner decision (2026-10-31): move nothing to the EXROM now.** The measured list (report section 5: float functions
+422 B, float printing 561 B, BEEP and the AY words 303 B, most of the printer; tape and the word listings cannot move)
+is the plan for when a step runs short.
 
 ## Next, in order
 

@@ -1,7 +1,7 @@
 # Space — shrink, dead code, RAM: milestone report
 
-**Date:** 2026-10-31. **Status: complete**, apart from one owner decision (section 5: moving cold code to the EXROM,
-measured, not done). Branch `v2/step-space` from master `b748a13` (PR #10, step Simplify, merged at the start of the
+**Date:** 2026-10-31. **Status: complete.** Moving cold code to the EXROM was measured and, by the owner's
+decision (2026-10-31), not done (section 5). Branch `v2/step-space` from master `b748a13` (PR #10, step Simplify, merged at the start of the
 session; `make test` passed on it). The order is Leap-C's (`project_plan.md` 1.2): measure, remove dead code, shrink,
 then move cold code to the EXROM only if that is still needed.
 
@@ -87,8 +87,8 @@ unchanged (the benchmarks time mostly the run; their small gains are their own d
 
 Leap-C's order puts this after the shrink, for a component over its budget. None is: HOME has 2,052 B free against a
 200 B floor, more than the next steps are expected to need (Words and keys, a faster text path, LINE's 16-bit rebuild,
-BREAK). A move also has costs: about 400 T per call, and the moved words need the EXROM. **Recommendation: move nothing
-now**; this measured list is the plan for when a step runs short.
+BREAK). A move also has costs: about 400 T per call, and the moved words need the EXROM. **Owner decision (2026-10-31):
+move nothing now**; this measured list is the plan for when a step runs short.
 
 | Candidate | HOME bytes | Can it move? |
 |---|---:|---|
