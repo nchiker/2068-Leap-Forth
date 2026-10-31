@@ -86,83 +86,87 @@ GFX_ROW_BASE_ADDR:
     ret
 
 ; ============================================================================
-; GFX_COPY_ROW_BITMAP -- copy one text row's 8 scanlines (256 bytes) to another row
-; The scanlines of a row are 256 bytes apart, so this is 8 block copies of 32 bytes.
-; In:  GFX_SCROLL_DST_ROW, GFX_SCROLL_SRC_ROW set by the caller
-; Out: none
-; Destroys: AF, BC, DE, HL
-; ============================================================================
-GFX_COPY_ROW_BITMAP:
-    ld   a, (GFX_SCROLL_DST_ROW)
-    call GFX_ROW_BASE_ADDR          ; HL = dst row base
-    push hl
-    ld   a, (GFX_SCROLL_SRC_ROW)
-    call GFX_ROW_BASE_ADDR          ; HL = src row base
-    pop  de                         ; DE = dst row base
-    ld   b, 8                       ; 8 scanlines per text row
-.scanline_loop:
-    push bc
-    push hl
-    push de
-    ld   bc, 32
-    ldir
-    pop  de
-    pop  hl
-    inc  h                          ; both bases += 256 (one scanline), from the
-    inc  d                          ;   pre-ldir values popped above
-    pop  bc
-    djnz .scanline_loop
-    ret
-
-; ============================================================================
 ; GFX_SCROLL_TEXT_UP -- scroll rows 1-22 up one row (row 23 is not touched; row 22 is left as it was)
-; Moves the bitmap and the attributes; the caller draws the new row 22. Rows are copied in
-; ascending destination order, so each source is read before it is overwritten.
+; Moves the bitmap and the attributes; the caller draws the new row 22.
 ; In:  none
 ; Out: none
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 GFX_SCROLL_TEXT_UP:
-    call GFX_SPRITE_INVALIDATE
-    ld   hl, ATTR_ADDR + 32          ; attributes are linear: rows 1-22 move up in one ldir
-    ld   de, ATTR_ADDR
-    ld   bc, 22*32
-    ldir
-
-    xor  a
-    ld   (GFX_SCROLL_DST_ROW), a
-.row_loop:
-    ld   a, (GFX_SCROLL_DST_ROW)
-    inc  a
-    ld   (GFX_SCROLL_SRC_ROW), a
-    call GFX_COPY_ROW_BITMAP
-    ld   a, (GFX_SCROLL_DST_ROW)
-    inc  a
-    ld   (GFX_SCROLL_DST_ROW), a
-    cp   22
-    jr   c, .row_loop
-    ret
+    ld   a, 6                       ; rows 17-22 of the last third
+    jr   GFX_SCROLL_ROWS
 
 ; ============================================================================
 ; GFX_SCROLL_OUTPUT_UP -- scroll all 24 rows up one row and clear the new row 23
-; Rows 0-21 by GFX_SCROLL_TEXT_UP, then row 23 is copied to row 22 and row 23 cleared.
 ; In:  none
 ; Out: none
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 GFX_SCROLL_OUTPUT_UP:
-    call GFX_SCROLL_TEXT_UP
-    ld   a, 22
-    ld   (GFX_SCROLL_DST_ROW), a
-    ld   a, 23
-    ld   (GFX_SCROLL_SRC_ROW), a
-    call GFX_COPY_ROW_BITMAP
-    ld   hl, ATTR_ADDR + 23*32
-    ld   de, ATTR_ADDR + 22*32
-    ld   bc, 32
-    ldir
+    ld   a, 7                       ; rows 17-23 of the last third
+    call GFX_SCROLL_ROWS
     ld   b, 23
     jp   GFX_CLEAR_ROW
+
+; ============================================================================
+; GFX_SCROLL_ROWS -- rows 1 to 16 + A move up one row, bitmap and attributes
+; A scanline of a third holds its 8 rows' bytes in a run, so each scanline of the first two thirds
+; is two copies (rows 1-7 to 0-6, the next third's row 0 to row 7) and of the last third one (its
+; rows 1 to A to 0 to A - 1), in 32-byte blocks (GFX_LDI_BLOCKS).
+; In:  A = the rows moved within the last third (6 or 7)
+; Out: none
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+GFX_SCROLL_ROWS:
+    push af
+    call GFX_SPRITE_INVALIDATE
+    pop  af
+    push af
+    add  a, 16                      ; the attributes: one block a row
+    ld   hl, ATTR_ADDR + 32
+    ld   de, ATTR_ADDR
+    call GFX_LDI_BLOCKS
+    ld   de, SCREEN_ADDR            ; scanline 0 of the first third
+.scanline:
+    ld   h, d
+    ld   l, 32                      ; HL = the same scanline of row 1
+    ld   a, d
+    cp   HIGH SCREEN_ADDR + $10
+    jr   nc, .last
+    ld   a, 7
+    call GFX_LDI_BLOCKS             ; rows 1-7 to 0-6
+    ld   a, h
+    add  a, 7
+    ld   h, a                       ; the next third's row 0
+    ld   a, 1
+    call GFX_LDI_BLOCKS             ; to row 7; DE = the next scanline (or third)
+    jr   .scanline
+.last:
+    pop  af
+    push af
+    call GFX_LDI_BLOCKS
+    ld   e, a                       ; A = 0
+    inc  d                          ; the next scanline
+    ld   a, d
+    cp   HIGH SCREEN_ADDR + $18
+    jr   c, .scanline
+    pop  af
+    ret
+    ASSERT LOW SCREEN_ADDR == 0 && LOW ATTR_ADDR == 0
+
+; ============================================================================
+; GFX_LDI_BLOCKS -- copy A blocks of 32 bytes (unrolled LDI: 16 T a byte, LDIR's 21)
+; In:  HL = source, DE = destination, A = blocks (1-255)
+; Out: HL, DE past the blocks, A = 0
+; Destroys: F, BC
+; ============================================================================
+GFX_LDI_BLOCKS:
+    REPT 32
+    ldi
+    ENDR
+    dec  a
+    jr   nz, GFX_LDI_BLOCKS
+    ret
 
 ; ============================================================================
 ; GFX_SET_BORDER -- set the border colour
@@ -465,20 +469,37 @@ GFX_STATUS_BAR:
 
 ; ============================================================================
 ; GFX_CLEAR_ROW -- clear one text row (bitmap and attributes) to blank / ATTR_DEFAULT
+; The bytes 32 spaces would leave (the space glyph is 8 zero bytes), written directly: Leap V2's
+; GFX_CLEAR_ROW (audit item O4).
 ; In:  B = row (0-23)
 ; Out: none
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 GFX_CLEAR_ROW:
     ld   c, 0
-.loop:
-    ld   a, " "
-    ld   e, ATTR_DEFAULT
-    call GFX_PUTCHAR_ATTR
-    inc  c
-    ld   a, c
-    cp   GFX_COLS
-    jr   c, .loop
+    call GFX_CELL_ATTR_ADDR         ; HL = the row's first attribute (BC kept)
+    ld   a, ATTR_DEFAULT
+    ld   c, GFX_COLS
+.attr:
+    ld   (hl), a
+    inc  l                          ; (a row's 32 attributes never cross a page)
+    dec  c
+    jr   nz, .attr
+    ld   a, b
+    call GFX_ROW_BASE_ADDR          ; HL = scanline 0, column 0
+    ld   e, l
+    xor  a
+    ld   c, 8
+.scan:
+    ld   b, GFX_COLS
+.byte:
+    ld   (hl), a
+    inc  l
+    djnz .byte
+    ld   l, e                       ; column 0,
+    inc  h                          ; the next scanline
+    dec  c
+    jr   nz, .scan
     ret
 
 ; ============================================================================

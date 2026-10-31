@@ -274,3 +274,9 @@ image = "home"
 component = "text"
 delta = -38
 reason = "Display speed: . prints its digits through PRINT_UDEC16 (it held a second copy of that loop and the zero case); returned to the reserve"
+
+[[ledger]]
+image = "home"
+component = "kernel"
+delta = 54
+reason = "Display speed: the console's scroll copies a third's scanline runs in 32-byte unrolled-LDI blocks (GFX_SCROLL_ROWS, GFX_LDI_BLOCKS: +88 B, GFX_COPY_ROW_BITMAP -32 B) and GFX_CLEAR_ROW writes the row's bytes (Leap V2's, audit O4: +2 B); an output line that scrolls 267,678 -> 178,309 T; from the reserve"

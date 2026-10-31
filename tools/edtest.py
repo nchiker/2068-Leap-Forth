@@ -1258,7 +1258,11 @@ def redraw_oracle(env, part):
 # ===================================================================== 19 typing cost
 COST_CASES = [("key-end-short", "a key at the end of a short line"), ("key-mid-100", "a key in the middle of a 100-character line"),
               ("key-3row", "a key at the end of a 3-row wrapped line"), ("delete", "DELETE at the end of a short line"),
-              ("left", "LEFT in the middle of a short line"), ("enter", "ENTER on `1 2 + .`")]
+              ("left", "LEFT in the middle of a short line"), ("enter", "ENTER on `1 2 + .`"),
+              ("enter-scroll", "ENTER on `.( A) CR .( B)` typed on row 22 (the output scrolls)")]
+# Ceilings (T-states) for the figures a step made faster; each fails on the build before it (Display speed: the console's
+# scroll by thirds with unrolled LDI, 267,678 -> 178,309).
+COST_CEIL = {"enter-scroll": 200_000}
 
 
 def cost_once(env, which):
@@ -1289,6 +1293,11 @@ def cost_once(env, which):
         for _ in range(4):
             con.key(LEFT)
         key = LEFT
+    elif which == "enter-scroll":
+        con.type("CLS 0 22 AT-XY")
+        for ch in ".( A) CR .( B)":
+            con.key(ord(ch))
+        key = ENTER
     else:
         for ch in "1 2 + .":
             con.key(ord(ch))
@@ -1300,7 +1309,7 @@ def cost_once(env, which):
 
 @case("typing-cost", "T-states from key delivery (latch write) to the next key wait, interrupts included, for a key at the end of a "
                      "short line, in the middle of a 100-character line, on a 3-row wrapped line, DELETE, LEFT and ENTER on "
-                     "`1 2 + .`; each figure taken twice and equal; the baseline, no threshold",
+                     "`1 2 + .`, ENTER whose output scrolls; each figure taken twice and equal; COST_CEIL's ceilings",
       parts=("32",))
 def typing_cost(env, part):
     ck = Check()
@@ -1311,6 +1320,8 @@ def typing_cost(env, part):
         b = cost_once(env, which)
         table[which] = [a, b]
         ck.eq("%s repeatable" % which, a, b)
+        if which in COST_CEIL:
+            ck.true("%s at most %d T" % (which, COST_CEIL[which]), a <= COST_CEIL[which], "%d T" % a)
     env.boot()
     env.m.tstates_reset()
     env.m.call("KBD_ISR_TICK")
