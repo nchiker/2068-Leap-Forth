@@ -24,6 +24,9 @@ on an unknown word inside LOAD-TEXT's text, so the text (N4_TEXT, whose comment 
 prints 42 there (first, space-separated line) and, on a build with STORE_END (CR is whitespace), 21 as well, from the
 CR-separated lines.  The case passes on the old build; on a new build it also demands the second effect.
 
+Step Words and keys adds case C (comments_in_text): a text tape whose lines end in \\ comments (one right before its CR)
+and whose ( comment runs over two lines, loaded by LOAD-TEXT; it must print 18 with no error (TEXT_COMMENTS says why).
+
 RUN   python3 -I tools/tapetest.py --build DIR [--case N ...] [--selftest] [--out FILE] [--jobs K] [--port P]
       DIR holds forth_boot_rom0.bin + graphics_exrom.bin (booted as one 24K --romfile) and forth_boot.sym.
       One line per case:  `case N <name>: PASS|FAIL <short reason>`,  then  `TAPETEST: PASS a FAIL b`.
@@ -606,6 +609,28 @@ BJ_FS = REPO + "/tests/data/blackjack_rounds.txt"   # demos/blackjack.fs with a 
 BJ_EXPECT = [21, 15, 4, 23, 12, 3, 21, 19, 4, 15, 23, 1]       # the round log at 62120.. (seed 15785)
 
 
+# Step Words and keys: the comments in LOAD-TEXT's CR-ended text.  Line 1 ends in \ right before its CR, which WORD
+# consumes as the delimiter: the comment is empty and line 2 must still run.  ( runs over two lines.  T gives 5 + 6 + 7;
+# a \ that skipped to the next CR would lose line 2 (and stop at the unknown word TWO); an old build has no \ at all.
+TEXT_COMMENTS = b": T 5 \\\r6 + ( a comment\rover two lines ) 7 + ;\rT . \\ prints 18\r"
+
+
+def case_c(ctx):
+    v = Verdict()
+    blocks = gen_tap_tape_gen_forth(ctx.work, [("NOTES", TEXT_COMMENTS)])
+    s, _ = play(ctx, blocks, [], "LOAD-TEXT NOTES")
+    try:
+        r = finish(s)
+        v.check(r["idle"], "no prompt after LOAD-TEXT")
+        rows = s.screen()
+        v.check(screen_has(rows, r"\b18\b"), "screen has no 18: %s" % rows[-3:])
+        v.check(s.err_flag() == 0, "error reported by LOAD-TEXT")
+        v.note("loaded in %.1f s emulated; screen %s" % (r["emu_s"], rows[-2:]))
+    finally:
+        s.stop()
+    return v
+
+
 def case_2(ctx):
     v = Verdict()
     text = open(BJ_FS, "rb").read()
@@ -1144,6 +1169,7 @@ CASES = {
     "1": ("text_doubler", case_1, "pass"),
     "2": ("blackjack_p53", case_2, "pass"),
     "3": ("savetext_roundtrip", case_3, "header param 1 differs"),
+    "C": ("comments_in_text", case_c, "fails: no \\ word"),
     "N4": ("text_tape_roundtrip", case_n4, "passes (42 only: CR is part of a word, the text is built for that)"),
     "4": ("savelib_roundtrip", case_4, "fails the format checks; round trip passes"),
     "5": ("foreign_identity", case_5, "n/a (loads as nothing; type 3 skipped)"),
@@ -1165,7 +1191,7 @@ CASES = {
     "9L": ("legacy_wrong_flag", legacy_9, "reports success"),
     "10L": ("legacy_dropout", legacy_10, "reports success"),
 }
-ORDER = ["1", "2", "3", "N4", "4", "15", "5", "6", "7", "8", "9", "10", "11", "11a", "12", "13", "14"]
+ORDER = ["1", "C", "2", "3", "N4", "4", "15", "5", "6", "7", "8", "9", "10", "11", "11a", "12", "13", "14"]
 EXTRA = ["11L"]                             # judged like the cases, tallied apart
 LEGACY = ["7L", "8L", "8Z", "9L", "10L"]    # old build only (no ROM_IDENTITY): INFO lines, not judged
 

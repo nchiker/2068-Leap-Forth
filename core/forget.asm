@@ -1,8 +1,8 @@
 ; ============================================================================
 ; core/forget.asm -- FORGET, and FORGET_PRINT_MSG
 ;
-; Needs core/dict.asm (LATEST, HERE), core/interp.asm (W_WORD, WORD_SRC_ADDR, the scratch for the
-; parsed name, as CREATE and `:` use it, never concurrently) and core/print.asm (W_EMIT). Link
+; Needs core/dict.asm (LATEST, HERE), core/interp.asm (WORD_NAME, WORD_SRC_ADDR, the scratch for
+; the parsed name) and core/print.asm (W_EMIT). Link
 ; fields: a word's DW is DICT_CHAIN_POINT, which the including ROM sets (DEFL) to the chain the
 ; word extends. Every word here may destroy all registers except IX, IY and SP.
 ;
@@ -44,7 +44,7 @@ H_FORGET:
     DW   DICT_CHAIN_POINT
     DB   6, "F","O","R","G","E","T"
 W_FORGET:
-    call W_WORD
+    call WORD_NAME
     rst RST_DPOP
     ld   (WORD_SRC_ADDR), hl
 

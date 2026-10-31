@@ -181,7 +181,7 @@ BANNER = "2068-FORTH"                   # rom/forth_boot.asm BANNER
 LEFT, DOWN, UP, RIGHT, DELETE, INSERT_LINE, DELETE_LINE, BREAK, ENTER = 1, 2, 3, 4, 8, 0x0B, 0x0F, 0x10, 13
 MAX_LEN, MAX_ROWS = 128, 4              # EDIT_MAX_LEN, FWRAP_MAX_ROWS
 LOADTEXT_BUF = 0xD000                   # LOADTEXT_BUF (checked against the symbol in the cases)
-UNTYPEABLE = "[\\]^`{|}~"               # printable ASCII Forth's keyboard has no key for (audit step K)
+UNTYPEABLE = "`"                         # printable ASCII Forth's keyboard has no key for (step Words and keys)
 GROW = "abcdefghi " * 10                # 100 characters, 4 rows at 32 columns
 GROW97 = "a " + "b" * 64 + "  " + "c" * 29      # 97 characters, 4 rows at 32 columns (a line of the wrap-model set, and the typing cost's)
 
@@ -507,11 +507,11 @@ def _typeable(m):
 
 @case("keys-charset", "every character Forth can type (its key map: letters, digits, space, SYMBOL SHIFT punctuation) pressed on "
                       "the keyboard matrix reaches the edit line and the screen, in batches of 30 on one row; the characters "
-                      "it has no key for are exactly [ \\ ] ^ ` { | } ~", parts=("0", "1", "2"))
+                      "it has no key for is exactly `", parts=("0", "1", "2", "3"))
 def keys_charset(env, part):
     ck, m = Check(), env.m
     chars = _typeable(m)
-    ck.eq("typeable printable characters", len(chars), 86)
+    ck.eq("typeable printable characters", len(chars), 94)
     ck.eq("untypeable printable characters", "".join(chr(c) for c in range(32, 127) if c not in m.keys), UNTYPEABLE)
     k = int(part)
     batch = "".join(chr(c) for c in chars[30 * k:30 * k + 30])
