@@ -50,7 +50,7 @@ REGION_NAMES = {
     "STORE_START": "HX", "LOADTEXT_BUF": "H", "STORE_LIMIT": "HX",
     "SPRITE_SLOT_IMG_BUF": "X", "SPRITE_SLOT_BG_BUF": "X",
     "UDG_TABLE": "H", "COLD_CLEAR_END": "H",
-    "MACHINE_STACK_TOP": "H",
+    "MACHINE_STACK_TOP": "H", "MACHINE_STACK_LIMIT": "H", "MACHINE_STACK_GUARD": "H",   # (STK_GUARD: the recursion line)
 }
 # Names whose value is not a RAM address although it is $4000 or more, with the file that defines them.
 VALUES = {

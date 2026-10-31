@@ -94,6 +94,21 @@ BRK_SECTION_END:
     jr   BRK_STOP
 
 ; ============================================================================
+; STK_GUARD -- is the machine stack above MACHINE_STACK_GUARD? Only recursion can grow it without
+; bound, and recursion is a definition calling itself (COMPILE_CALL_GUARDED compiles this before the
+; call), EXECUTE or CATCH (they call it first); the room below the line is for the ROM's own calls
+; and the interrupt
+; Out: returns if so; else THROW -5 (RETURN STACK FULL)
+; Destroys: F, HL
+; ============================================================================
+STK_GUARD:
+    ld   hl, -MACHINE_STACK_GUARD
+    add  hl, sp
+    ret  c                      ; SP >= MACHINE_STACK_GUARD
+    ld   hl, -5
+    jr   W_THROW_HL
+
+; ============================================================================
 ; THROW ( n -- ) -- n = 0: nothing. Otherwise unwind to the innermost CATCH, which then returns n
 ; (stacks restored to their CATCH-time depth); with none, the uncaught path (file header)
 ; ============================================================================
@@ -160,6 +175,7 @@ H_CATCH:
     DW   H_THROW
     DB   5, "C","A","T","C","H"
 W_CATCH:
+    call STK_GUARD               ; recursion through CATCH stops before the stack runs out
     rst RST_DPOP                ; HL = xt, popped before the frame records IX: a THROW
                                  ; restores the stack without it
     ld   a, (CATCH_DEPTH)

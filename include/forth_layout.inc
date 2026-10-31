@@ -22,7 +22,7 @@
 ;   $F000-$F17F  sprite buffers, then free                        SPRITE_SLOT_IMG_BUF, SPRITE_SLOT_BG_BUF
 ;   $F180-$F227  UDG table                                        UDG_TABLE
 ;   $F228-$F3C7  free
-;   $F3C8-$FEFF  machine stack, top MACHINE_STACK_TOP, grows down (nothing in the ROM checks its depth)
+;   $F3C8-$FEFF  machine stack, top MACHINE_STACK_TOP, grows down (recursion stops at MACHINE_STACK_GUARD)
 ;   $FF00-$FFFF  not used by the ROM (the test harness's return slot)
 ;
 ; Region symbols come first, then the cells block ($8000 up, assembler-computed: a name and
@@ -53,6 +53,7 @@ LOADTEXT_BUF        EQU STORE_START ; LOAD-TEXT receives here
 STORE_LIMIT         EQU $F000       ; the store never writes at or above it
 MACHINE_STACK_LIMIT EQU $F3C8       ; lowest byte the layout leaves the stack
 MACHINE_STACK_TOP   EQU $FF00       ; initial SP
+MACHINE_STACK_GUARD EQU MACHINE_STACK_LIMIT + 256   ; STK_GUARD's line: room below for the ROM's deepest calls and the interrupt
 
 ; ---- sizes the cells are built from ----
 POLY_MAXPTS         EQU 12          ; POLYGON vertices at most
@@ -310,6 +311,7 @@ VERSION_UP:               DEFS 1                        ; 1: the version is on r
 STORE_MARK_N:             DEFS 2                        ; view: the line STORE_LINE found last ...
 STORE_MARK_PTR:           DEFS 2                        ; ... and its address (line 0 at STORE_START: none yet)
 COLON_HDR:                DEFS 2                        ; header of the `:` definition still open (0: none), for COLON_DROP
+COLON_XT:                 DEFS 2                        ; its code address (0: none): a call to it is recursion (STK_GUARD)
 BRK_PEND:                 DEFS 1                        ; nonzero: BREAK was pressed during a section that defers it
 NOBRK:                    DEFS 1                        ; > 0: BREAK waits for the end of the section (core/throwcatch.asm)
     DEFS RAM_CELLS_END - $                              ; free: room for new cells

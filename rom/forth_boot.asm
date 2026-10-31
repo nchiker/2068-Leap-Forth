@@ -311,6 +311,7 @@ RUNTIME_ERROR_PFX: DB "ERROR ", 0
 ; The messages of an uncaught THROW (docs/V2/FLOAT_SPEC.md section 8.4): the code's low byte (all
 ; are -1 to -255), then the text, NUL-ended; a 0 byte ends the table.
 RUNTIME_ERROR_TABLE:
+    DB   -5, "RETURN STACK FULL", 0
     DB   -8, "DICTIONARY FULL", 0
     DB   -13, "UNDEFINED WORD", 0
     DB   -16, "MISSING NAME", 0

@@ -4179,13 +4179,14 @@ that doesn't have it built in, without touching `SQRT` itself:
 
 #### The Messages of an Uncaught Error
 
-The words of the system `THROW` these codes themselves (the first five
-come from the dictionary, the words that take a name, BREAK and the tape words; the last three from
+The words of the system `THROW` these codes themselves (the first six
+come from recursion, the dictionary, the words that take a name, BREAK and the tape words; the last three from
 decimal arithmetic, section 4). With nothing to `CATCH` them, each
 prints its message:
 
 | Code  | Message            | Raised by                                                       |
 | ----- | ------------------ | --------------------------------------------------------------- |
+| `-5`  | `RETURN STACK FULL`| A word that calls itself (directly, or through `EXECUTE` or `CATCH`) too deeply: about 1,300 levels |
 | `-8`  | `DICTIONARY FULL`  | A definition, `ALLOT`, `,` or `SAVE-LIB` that doesn't fit       |
 | `-13` | `UNDEFINED WORD`   | `'` given a name that isn't in the dictionary                   |
 | `-16` | `MISSING NAME`     | `:`, `VARIABLE`, `CONSTANT`, `CREATE`, `'`, `CHAR` or another word that takes a name, with nothing after it on the line |

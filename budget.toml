@@ -382,3 +382,15 @@ image = "home"
 component = "tape"
 delta = -3
 reason = "BREAK and timing: SPACE stopping a transfer goes through BRK_STOP, and STORAGE_THROW enters THROW with HL; returned to the reserve"
+
+[[ledger]]
+image = "home"
+component = "interp"
+delta = 43
+reason = "BREAK and timing: STK_GUARD (THROW -5 below MACHINE_STACK_GUARD, 10 B); COMPILE_CALL_GUARDED compiles it before a definition's call to itself (13 B), : records COLON_XT and ; clears it (+9 B), EXECUTE and CATCH call it (+6 B); runaway recursion ran the machine stack through the line store and the dictionary and reset the machine; from the reserve"
+
+[[ledger]]
+image = "home"
+component = "boot"
+delta = 19
+reason = "BREAK and timing: the message of THROW -5, RETURN STACK FULL; from the reserve"

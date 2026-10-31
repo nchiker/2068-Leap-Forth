@@ -231,11 +231,23 @@ DOLIT:
     ret
 
 ; ============================================================================
+; COMPILE_CALL_GUARDED -- the interpreter compiles a word: COMPILE_CALL, with CALL STK_GUARD in front
+; when the word is the `:` definition being compiled (recursion)
 ; COMPILE_CALL -- compile CALL target (3 bytes) at HERE
 ; In:  HL = the target
-; Out: HERE += 3
-; Destroys: AF, DE
+; Out: HERE += 3 (6 with the guard)
+; Destroys: AF, DE (COMPILE_CALL_GUARDED keeps HL)
 ; ============================================================================
+COMPILE_CALL_GUARDED:
+    ld   de, (COLON_XT)
+    or   a
+    sbc  hl, de
+    add  hl, de                   ; (Z kept)
+    jr   nz, COMPILE_CALL
+    push hl
+    ld   hl, STK_GUARD
+    call COMPILE_CALL
+    pop  hl
 COMPILE_CALL:
     ld   de, (HERE)
     ld   a, $CD
@@ -362,7 +374,9 @@ W_COLON:
     call HEADER_BUILD
     ld   hl, (NEW_HEADER_ADDR)
     ld   (COLON_HDR), hl          ; open until `;` (an error before it: COLON_DROP), before the link:
-    call HEADER_LINK              ;   a BREAK between the two still finds it
+    ld   hl, (HERE)               ;   a BREAK between the two still finds it
+    ld   (COLON_XT), hl           ; a call to it is recursion (COMPILE_CALL_GUARDED)
+    call HEADER_LINK
     jp   W_RBRACKET               ; STATE = 1 (core/tick.asm)
 
 ; ============================================================================
@@ -386,7 +400,7 @@ W_SEMICOLON:
 ; first, then HERE: a BREAK between the two leaves HERE above every linked header.
 ; COLON_CLOSE -- the definition is closed (`;`), or dropped
 ; In:  COLON_HDR = the open definition's header, or 0
-; Out: LEAVE_DEPTH = 0, COLON_HDR = 0; dropped: LATEST = its link, HERE = its header
+; Out: LEAVE_DEPTH = 0, COLON_HDR = COLON_XT = 0; dropped: LATEST = its link, HERE = its header
 ; Destroys: AF, DE, HL
 ; ============================================================================
 COLON_DROP:
@@ -405,6 +419,7 @@ COLON_DROP:
 COLON_CLOSE:
     ld   hl, 0
     ld   (COLON_HDR), hl
+    ld   (COLON_XT), hl
     ret
 
 
@@ -458,7 +473,7 @@ INTERPRET_NESTED:
     ld   a, (INTERP_IMM_FLAG)
     or   a
     jr   nz, .execute               ; compiling, but immediate
-    call COMPILE_CALL
+    call COMPILE_CALL_GUARDED
     jr   .loop
 
 .execute:
