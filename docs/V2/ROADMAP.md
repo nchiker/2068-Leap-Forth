@@ -36,10 +36,17 @@ six defining words share one header builder. HOME 2,052 → 2,226 B free, EXROM 
 
 ## Next, in order
 
-1. **Display speed**, and LINE on 16-bit coordinates with clipping (today it takes bytes: `-10 50 100 50 LINE`
+1. **Display look**: review the screen's appearance and make it match Leap V2 (`~/2068-Leap`), with its startup
+   sound and its version display. Today Forth prints `2068-FORTH` on row 0 and plays its C4/E4/G4 chord (Leap V2's
+   chime was ported from it; Leap V2 builds the `V2_MAINT_CHIME_C` form). Leap V2 shows the ROM's version
+   (`2068 LEAP V2.1`, `include/v2_version.inc`) on the status row, row 23, in the bar's attribute, from power-on
+   while the chime plays until the first key (`rom/v2_version.asm`, `V2_DRAW_STATUS`). Compare the two screens
+   (border, paper and ink, banner, status row, console and editor rows) and list each difference with the owner
+   before changing it.
+2. **Display speed**, and LINE on 16-bit coordinates with clipping (today it takes bytes: `-10 50 100 50 LINE`
    starts at x 246); it rebuilds `GFX_LINE`, whose cells POLYGON also uses through the EXROM.
-2. **BREAK and timing**: BREAK in the interrupt routine, so long words can be stopped.
-3. **Blackjack** rebuilt from its saved source (`demos/blackjack.fs`) as a program for the finished ROM; the Shooting
+3. **BREAK and timing**: BREAK in the interrupt routine, so long words can be stopped.
+4. **Blackjack** rebuilt from its saved source (`demos/blackjack.fs`) as a program for the finished ROM; the Shooting
    Gallery's source is beside it (`demos/gallery.fs`).
 
 ## Known defects

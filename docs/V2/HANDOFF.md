@@ -12,7 +12,8 @@ reports: `docs/V2/milestones/`.
   step runs short.
 - **Free bytes:** HOME 2,226, EXROM 3,272; per component in `budget.toml` (`make budget`), per routine
   `make inventory`. The dictionary starts at `$9100` (`FREE` 16,128 at power-on).
-- **Next:** ROADMAP step 1, *Display speed* (and LINE on 16-bit coordinates).
+- **Next:** ROADMAP step 1, *Display look* (match Leap V2's screen, startup sound and version display), then
+  *Display speed* (and LINE on 16-bit coordinates).
 
 ## How the owner wants the work done
 
