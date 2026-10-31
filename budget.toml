@@ -346,3 +346,9 @@ image = "home"
 component = "console"
 delta = 5
 reason = "BREAK and timing: the console calls COLON_DROP after a line that ended in an error; from the reserve"
+
+[[ledger]]
+image = "home"
+component = "interp"
+delta = -2
+reason = "BREAK and timing: COLON_DROP zeroes LEAVE_DEPTH for every line that ends in an error (+4 B), ABORT and QUIT no longer do (-6 B); returned to the reserve"

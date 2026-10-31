@@ -379,15 +379,18 @@ W_SEMICOLON:
     jr   COLON_CLOSE
 
 ; ============================================================================
-; COLON_DROP -- a line ended in an error (or ABORT, QUIT): remove the `:` definition it left open,
-; so a word with half its code is never found and run. LATEST goes back first, then HERE: a BREAK
-; between the two leaves HERE above every linked header.
+; COLON_DROP -- a line ended in an error (or ABORT, QUIT): close the DO loops it left open
+; (LEAVE_DEPTH: EXIT would compile their frames' POPs into the next definition) and remove the `:`
+; definition it left open, so a word with half its code is never found and run. LATEST goes back
+; first, then HERE: a BREAK between the two leaves HERE above every linked header.
 ; COLON_CLOSE -- the definition is closed (`;`), or dropped
 ; In:  COLON_HDR = the open definition's header, or 0
-; Out: COLON_HDR = 0; dropped: LATEST = its link, HERE = its header
+; Out: LEAVE_DEPTH = 0, COLON_HDR = 0; dropped: LATEST = its link, HERE = its header
 ; Destroys: AF, DE, HL
 ; ============================================================================
 COLON_DROP:
+    xor  a
+    ld   (LEAVE_DEPTH), a
     ld   hl, (COLON_HDR)
     ld   a, h
     or   l
