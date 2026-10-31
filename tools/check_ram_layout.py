@@ -50,7 +50,6 @@ REGION_NAMES = {
     "STORE_START": "HX", "LOADTEXT_BUF": "H", "STORE_LIMIT": "HX",
     "SPRITE_SLOT_IMG_BUF": "X", "SPRITE_SLOT_BG_BUF": "X",
     "UDG_TABLE": "H", "COLD_CLEAR_END": "H",
-    "GFX_LINE_X0": "HX", "GFX_LINE_Y0": "HX", "GFX_LINE_X1": "HX", "GFX_LINE_Y1": "HX",
     "MACHINE_STACK_TOP": "H",
 }
 # Names whose value is not a RAM address although it is $4000 or more, with the file that defines them.
@@ -171,7 +170,7 @@ def check(build, quiet=False, extra=()):
             "ZX_SYSVAR_CHARS", "RAM_CELLS_BASE", "RAM_CELLS_END", "FSTACK_LIMIT", "FSTACK_TOP", "DSTACK_LIMIT",
             "DSTACK_TOP", "FORTH_DICT_RAM", "DICT_RAM_CEILING", "STORE_START", "STORE_LIMIT", "SPRITE_SLOT_IMG_BUF",
             "SPRITE_SLOT_BG_BUF", "SPRITE_SLOT_MAX", "SPRITE_SLOT_BYTES", "UDG_TABLE", "UDG_COUNT", "COLD_CLEAR_END",
-            "GFX_LINE_X0", "GFX_LINE_Y0", "GFX_LINE_X1", "GFX_LINE_Y1", "MACHINE_STACK_LIMIT", "MACHINE_STACK_TOP",
+            "MACHINE_STACK_LIMIT", "MACHINE_STACK_TOP",
             "SCREEN_ADDR", "ATTR_ADDR"]
     gone = [n for n in need if n not in S]
     if gone:
@@ -190,8 +189,7 @@ def check(build, quiet=False, extra=()):
              ("the sprite buffers", g("SPRITE_SLOT_IMG_BUF"), sprite_end),
              ("free space", sprite_end, g("UDG_TABLE")),
              ("the UDG table", g("UDG_TABLE"), g("UDG_TABLE") + g("UDG_COUNT") * 8),
-             ("free space", g("UDG_TABLE") + g("UDG_COUNT") * 8, g("GFX_LINE_X0")),
-             ("LINE's cells", g("GFX_LINE_X0"), g("GFX_LINE_Y1") + 1),
+             ("free space", g("UDG_TABLE") + g("UDG_COUNT") * 8, g("MACHINE_STACK_LIMIT")),
              ("the machine stack", g("MACHINE_STACK_LIMIT"), g("MACHINE_STACK_TOP")),
              ("the unused top", g("MACHINE_STACK_TOP"), 0x10000)]
     if tiles[0][1] != 0x4000:
@@ -204,9 +202,6 @@ def check(build, quiet=False, extra=()):
             errors.append("the map: %s is empty or reversed ($%04X-$%04X)" % (n, b, e - 1))
     if g("GFX_FILL_SHADOW") + 6144 != g("GFX_FILL_STACK"):
         errors.append("the map: FILL's shadow plane is not 6144 bytes")
-    if g("GFX_LINE_Y0") != g("GFX_LINE_X0") + 1 or g("GFX_LINE_X1") != g("GFX_LINE_X0") + 2 or \
-            g("GFX_LINE_Y1") != g("GFX_LINE_X0") + 3:
-        errors.append("the map: GFX_LINE_X0, _Y0, _X1, _Y1 are not four consecutive bytes")
     d2, d2end = g("SECOND_DISPLAY_ADDR"), g("SECOND_DISPLAY_END")
     if not (g("GFX_FILL_SHADOW") <= d2 and d2end <= g("GFX_FILL_STACK_END") and d2end - d2 == 6144):
         errors.append("the map: display file 2 ($%04X-$%04X) is not 6144 bytes inside FILL's areas" % (d2, d2end - 1))

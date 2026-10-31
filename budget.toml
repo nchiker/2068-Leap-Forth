@@ -292,3 +292,33 @@ image = "exrom"
 component = "fill"
 delta = 2
 reason = "Display speed: the ALIGN 8 before CIRCLE_MASK_TABLE (counted in FILL's range) pads 2 B more after view's +94; from the reserve"
+
+[[ledger]]
+image = "home"
+component = "kernel"
+delta = 35
+reason = "Display speed: LINE rebuilt on signed 16-bit ends with clipping (GFX_LINE 188 B, its steps, attribute and Bresenham helpers 142 B, GFX_PIXEL_AT 41 B, GFX_WRITE_PIXEL 19 B) in place of GFX_LINE, GFX_PIXEL_ADDR_SETUP, GFX_WRITE_PIXEL, BIT_MASK_TABLE and MATH_COMPARE16 (362 B); a 256-pixel row 354,524 -> 58,954 T; from the reserve"
+
+[[ledger]]
+image = "home"
+component = "graphics"
+delta = -10
+reason = "Display speed: LINE pops its four cells whole, PLOT and LINE pass no OVER flag (always 0); returned to the reserve"
+
+[[ledger]]
+image = "exrom"
+component = "polygon"
+delta = -25
+reason = "Display speed: POLY_DRAW_IMPL writes LINE's 16-bit cells through one vertex helper, POLY_FILL_IMPL passes no OVER flag; returned to the reserve"
+
+[[ledger]]
+image = "exrom"
+component = "circle"
+delta = -5
+reason = "Display speed: CIRCLE's HIRES point is a tail jump to slot 0 (GFX_WRITE_PIXEL keeps BC now, no OVER flag); returned to the reserve"
+
+[[ledger]]
+image = "exrom"
+component = "fill"
+delta = -2
+reason = "Display speed: the ALIGN 8 before CIRCLE_MASK_TABLE pads 2 B less after polygon's and circle's -30; returned to the reserve"

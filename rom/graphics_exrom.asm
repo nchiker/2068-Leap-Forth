@@ -331,61 +331,46 @@ RECT_RIGHTMASK_TABLE:
 POLY_DRAW_IMPL:
     ld   a, (POLY_COUNT)
     cp   3
-    jp   c, .done                   ; fewer than 3 points: nothing to draw
+    ret  c                          ; fewer than 3 points: nothing to draw
     cp   POLY_MAXPTS + 1
-    jp   nc, .done                  ; too many points: nothing
-
+    ret  nc                         ; too many points: nothing
     xor  a
-    ld   (POLY_IDX), a               ; i = 0
+    ld   (POLY_IDX), a              ; i = 0
 .edge_loop:
-    ; ---- vertex i -> GFX_LINE_X0/Y0 ----
-    ld   a, (POLY_IDX)
-    ld   e, a
-    ld   d, 0
-    ld   hl, POLY_VERTS
-    add  hl, de
-    add  hl, de                      ; hl = POLY_VERTS + 2*i
-    ld   a, (hl)
-    ld   (GFX_LINE_X0), a
-    inc  hl
-    ld   a, (hl)
-    ld   (GFX_LINE_Y0), a
-
-    ; ---- vertex j = (i+1), wrapping to 0 at POLY_COUNT -> GFX_LINE_X1/Y1 ----
+    ld   de, GFX_LINE_X0
+    call .vertex                    ; vertex i -> GFX_LINE_X0, _Y0
     ld   a, (POLY_IDX)
     inc  a
-    ld   b, a
-    ld   a, (POLY_COUNT)
-    cp   b
-    jr   nz, .no_wrap
-    ld   b, 0                        ; i+1 == count: wrap to vertex 0
-.no_wrap:
-    ld   a, b
-    ld   e, a
-    ld   d, 0
-    ld   hl, POLY_VERTS
-    add  hl, de
-    add  hl, de                      ; hl = POLY_VERTS + 2*j
-    ld   a, (hl)
-    ld   (GFX_LINE_X1), a
-    inc  hl
-    ld   a, (hl)
-    ld   (GFX_LINE_Y1), a
-
+    ld   hl, POLY_COUNT
+    cp   (hl)
+    jr   nz, .next
+    xor  a                          ; the last edge goes back to vertex 0
+.next:
+    call .vertex_a                  ; vertex i + 1 -> GFX_LINE_X1, _Y1
     ld   a, (POLY_ATTR)
     ld   (GFX_LINE_ATTR), a
-    xor  a
-    ld   (GFX_LINE_OVER), a
     call GRAPHICS_HOME_LINE
-
-    ld   a, (POLY_IDX)
-    inc  a
-    ld   (POLY_IDX), a
-    ld   b, a
+    ld   hl, POLY_IDX
+    inc  (hl)
     ld   a, (POLY_COUNT)
-    cp   b
-    jr   nz, .edge_loop              ; i < count: draw the next edge
-.done:
+    cp   (hl)
+    jr   nz, .edge_loop             ; i < count: draw the next edge
+    ret
+; .vertex: vertex POLY_IDX (.vertex_a: vertex A) as two 16-bit cells at DE, DE past them
+.vertex:
+    ld   a, (POLY_IDX)
+.vertex_a:
+    add  a, a
+    ld   l, a
+    ld   h, 0
+    ld   bc, POLY_VERTS
+    add  hl, bc
+    call .cell
+.cell:
+    ldi
+    xor  a
+    ld   (de), a
+    inc  de
     ret
 
 ; ============================================================================
@@ -1079,7 +1064,6 @@ POLY_FILL_IMPL:
     ld   b, a                        ; b = cur (x)
     ld   a, (POLY_FILL_Y)
     ld   c, a                        ; c = y
-    ld   d, 0                        ; OVER = 0: always set, never toggle
     ld   a, (POLY_ATTR)
     call GRAPHICS_HOME_WRITE_PIXEL
 
@@ -2934,12 +2918,8 @@ CIRCLE_PLOT:
     ld   a, (GFX_MODE)
     or   a
     jr   z, .normal
-    push bc                          ; HIRES: the slot 0 veneer, which
-    ld   a, (GFX_CIRCLE_ATTR)        ; handles its per-scanline attributes
-    ld   d, 0                        ; D = OVER 0
-    call GRAPHICS_HOME_WRITE_PIXEL
-    pop  bc
-    ret
+    ld   a, (GFX_CIRCLE_ATTR)        ; HIRES: slot 0 (GFX_WRITE_PIXEL keeps BC),
+    jp   GRAPHICS_HOME_WRITE_PIXEL   ; which handles its per-scanline attributes
 .normal:
     ld   a, b
     and  7

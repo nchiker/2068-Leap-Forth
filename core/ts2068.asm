@@ -2,8 +2,8 @@
 ; core/ts2068.asm -- PLOT, LINE, BORDER, CLS: TS2068 screen words
 ;
 ; Thin wrappers over kernel/graphics/graphics.asm (which must be INCLUDEd), chained onto core/control.asm's
-; H_UNTIL. Each argument cell contributes only its low byte (x 0-255, y 0-191, colour 0-7); there is no
-; range checking. PLOT, LINE and the shapes draw with CURRENT_ATTR, which core/color.asm's INK, PAPER,
+; H_UNTIL. PLOT and LINE draw what is on the screen (x 0-255, y 0-191) and nothing else; BORDER takes
+; the colour's low 3 bits. PLOT, LINE and the shapes draw with CURRENT_ATTR, which core/color.asm's INK, PAPER,
 ; BRIGHT and FLASH modify; the cold start sets it to ATTR_DEFAULT (include/hardware.inc). CURRENT_ATTR's
 ; address comes from include/forth_layout.inc; check a new scratch byte there against the other users.
 ; Every word may destroy all registers except IX (the data stack pointer), IY and SP.
@@ -13,7 +13,7 @@
     DEFINE CORE_TS2068_ASM
 
 ; ============================================================================
-; PLOT ( x y -- ) -- set the pixel (GFX_WRITE_PIXEL); nothing if x or y is above 255
+; PLOT ( x y -- ) -- set the pixel (GFX_WRITE_PIXEL); nothing off the screen (x 0-255, y 0-191)
 ; ============================================================================
 H_PLOT:
     DW   H_UNTIL
@@ -27,32 +27,26 @@ W_PLOT:
     ret  nz               ; x or y outside 0-255: nothing (y 192-255: GFX_WRITE_PIXEL)
     ld   b, l
     ld   a, (CURRENT_ATTR)
-    ld   d, 0              ; OVER=0: set the pixel, don't XOR-toggle it
     jp   GFX_WRITE_PIXEL
 
 ; ============================================================================
-; LINE ( x1 y1 x2 y2 -- ) -- draw a line (GFX_LINE, which reads its arguments from the GFX_LINE_* bytes)
+; LINE ( x1 y1 x2 y2 -- ) -- draw the line from (x1, y1) to (x2, y2), signed coordinates; the part on
+; the screen is drawn (GFX_LINE)
 ; ============================================================================
 H_LINE:
     DW   H_PLOT
     DB   4, "L", "I", "N", "E"
 W_LINE:
-    rst RST_DPOP          ; hl = y2
-    ld   a, l
-    ld   (GFX_LINE_Y1), a
-    rst RST_DPOP          ; hl = x2
-    ld   a, l
-    ld   (GFX_LINE_X1), a
-    rst RST_DPOP          ; hl = y1
-    ld   a, l
-    ld   (GFX_LINE_Y0), a
-    rst RST_DPOP          ; hl = x1
-    ld   a, l
-    ld   (GFX_LINE_X0), a
+    rst RST_DPOP
+    ld   (GFX_LINE_Y1), hl
+    rst RST_DPOP
+    ld   (GFX_LINE_X1), hl
+    rst RST_DPOP
+    ld   (GFX_LINE_Y0), hl
+    rst RST_DPOP
+    ld   (GFX_LINE_X0), hl
     ld   a, (CURRENT_ATTR)
     ld   (GFX_LINE_ATTR), a
-    xor  a
-    ld   (GFX_LINE_OVER), a
     jp   GFX_LINE
 
 ; ============================================================================
