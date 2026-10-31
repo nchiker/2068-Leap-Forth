@@ -88,7 +88,8 @@ sprites; without it those words report `NO EXROM` and everything else works.
 fuse --machine ts2068 --rom-ts2068-0 forth_boot_rom0.bin --rom-ts2068-1 graphics_exrom.bin
 ```
 
-It boots to a banner, plays a short startup sound and waits at the prompt. Try:
+It boots to a white screen with its version (`2068 FORTH V2.0`) on the status bar at the bottom, plays a short startup
+chord and waits at the prompt. Try:
 
 | Type | It prints or does |
 |---|---|

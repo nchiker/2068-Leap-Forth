@@ -1116,9 +1116,9 @@ POLY_FILL_IMPL:
 ; header does not list as Out; none touches IX or IY.
 ; ============================================================================
 
-; HOME's values of these two, which tools/check_ram_layout.py compares with HOME's symbols.
+; HOME's value of this one, which tools/check_ram_layout.py compares with HOME's symbol (the colours are
+; include/hardware.inc's).
 EDIT_MAX_LEN       EQU 128      ; core/editor.asm: the edit line's capacity
-ATTR_DEFAULT       EQU $44      ; kernel/graphics/graphics.asm
 
 ; ============================================================================
 ; STORE_NEXT -- the line at HL.
@@ -1689,7 +1689,8 @@ VIEW_DEC:
 
 ; ============================================================================
 ; VIEW_STATUS -- row 23: `LINE n/m` (cursor line, line count), or STORE FULL
-; while VIEW_MSG is set.
+; while VIEW_MSG is set, on the status bar (white on black, the red, green
+; and blue cells at the right).
 ; Destroys: AF, BC, DE, HL, VIEW_T1
 ; ============================================================================
 VIEW_STATUS:
@@ -1716,7 +1717,7 @@ VIEW_STATUS:
     ld   hl, VIEW_TEXT
 .draw:
     ld   b, 23
-    jp   ED_ROW_JP
+    jp   GRAPHICS_HOME_ED_STATUS_ROW    ; the text on the status bar (Leap V2's colours)
 .line:
     DB   "LINE "
 

@@ -3,7 +3,7 @@
 ;
 ; Each word is a read-modify-write of its own bits of CURRENT_ATTR (core/ts2068.asm; must be INCLUDEd,
 ; and initialised at run time), so calling one never undoes another. Attribute layout: bits 0-2 ink,
-; 3-5 paper, 6 bright, 7 flash (DEFAULT_ATTR $38 is paper 7, ink 0). The arguments are masked, not
+; 3-5 paper, 6 bright, 7 flash (ATTR_DEFAULT $38 is paper 7, ink 0). The arguments are masked, not
 ; range-checked. The flashing cursor sets bit 7 of its own screen cell, not of CURRENT_ATTR.
 ; Chained from DICT_CHAIN_POINT (set by the including ROM before the INCLUDE); every word may destroy
 ; all registers except IX (the data stack pointer), IY and SP.

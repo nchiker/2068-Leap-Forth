@@ -15,8 +15,7 @@
     INCLUDE "include/hardware.inc"
 
 ; ---- character grid ----
-GFX_COLS   EQU 32
-ATTR_DEFAULT EQU $44     ; PAPER 0 (black), INK 4 (green), BRIGHT 1: GFX_CLS, GFX_CLEAR_ROW
+GFX_COLS   EQU 32          ; ATTR_DEFAULT (GFX_CLS, GFX_CLEAR_ROW) is in include/hardware.inc
 
 ; ============================================================================
 ; GFX_CLS -- clear the bitmap and paint every attribute ATTR_DEFAULT
@@ -109,12 +108,8 @@ GFX_COPY_ROW_BITMAP:
     ldir
     pop  de
     pop  hl
-    ld   a, h                       ; both bases += 256 (one scanline), from the
-    inc  a                          ;   pre-ldir values popped above
-    ld   h, a
-    ld   a, d
-    inc  a
-    ld   d, a
+    inc  h                          ; both bases += 256 (one scanline), from the
+    inc  d                          ;   pre-ldir values popped above
     pop  bc
     djnz .scanline_loop
     ret
@@ -426,36 +421,46 @@ GFX_SET_MODE:
     call GFX_SPRITE_INVALIDATE
     pop  af
     ld   (GFX_MODE), a
-    cp   1
-    jr   z, .highres
-
-    ; Normal (0, or any value but 1): video mode bits 0-2 clear
-    ld   a, (PORT_FF_SHADOW)
-    and  %11111000
-    jr   .write_port
-
-.highres:
+    ld   c, a
     ld   a, (PORT_FF_SHADOW)
     and  %11111000                 ; keep bits 3-7 (ink/paper select, INTEN, EXROM)
-    or   2
-
+    dec  c
+    jr   nz, .write_port           ; Normal (0, or any value but 1): video mode bits 0-2 clear
+    or   2                         ; High Resolution
 .write_port:
     ld   (PORT_FF_SHADOW), a
     out  (PORT_SCLD), a
-
-    ld   a, (GFX_MODE)
-    cp   1
-    jr   z, .clear_highres
-    ret
-
-.clear_highres:
-    ; first entry: clear the second display file's attributes to ATTR_DEFAULT
+    ld   a, c
+    or   a
+    ret  nz
+    ; High Resolution: clear the second display file's attributes to ATTR_DEFAULT
     ld   hl, SECOND_DISPLAY_ADDR
     ld   de, SECOND_DISPLAY_ADDR + 1
     ld   bc, 6144 - 1
     ld   a, ATTR_DEFAULT
     ld   (hl), a
     ldir
+    ret
+
+; ============================================================================
+; GFX_STATUS_BAR -- paint row 23's attributes as the status bar (Leap V2's): columns 0-28 white on
+; black, then a red, a green and a blue cell; the bitmap is not touched
+; In:  none
+; Out: none
+; Destroys: AF, B, HL
+; ============================================================================
+GFX_STATUS_BAR:
+    ld   hl, ATTR_ADDR + 23 * 32
+    ld   b, 29
+.bar:
+    ld   (hl), ATTR_STATUS_BAR
+    inc  l
+    djnz .bar
+    ld   (hl), ATTR_SWATCH_RED
+    inc  l
+    ld   (hl), ATTR_SWATCH_GREEN
+    inc  l
+    ld   (hl), ATTR_SWATCH_BLUE
     ret
 
 ; ============================================================================
@@ -732,23 +737,22 @@ ROW_BASE_TABLE:
 GFX_CELL_ATTR_ADDR:
     ld   a, b
     cp   24
-    jr   nc, .out_of_range
+    ccf
+    ret  c
     ld   a, c
     cp   32
-    jr   nc, .out_of_range
-    ld   h, 0
-    ld   l, b
-    add  hl, hl
-    add  hl, hl
-    add  hl, hl
-    add  hl, hl
-    add  hl, hl                      ; row * 32
-    ld   de, ATTR_ADDR
-    add  hl, de
-    ld   d, 0
-    ld   e, c
-    add  hl, de                       ; HL = ATTR_ADDR + row*32 + col
-    ret
-.out_of_range:
-    scf
+    ccf
+    ret  c
+    ld   a, b
+    rrca
+    rrca
+    rrca                             ; rrr000tt: row * 32's low byte in bits 5-7, its high byte in 0-1
+    ld   h, a
+    and  $E0
+    or   c
+    ld   l, a                        ; L = (row * 32 + column) & $FF
+    ld   a, h
+    and  $03
+    or   HIGH ATTR_ADDR
+    ld   h, a                        ; HL = ATTR_ADDR + row * 32 + column; carry clear (OR)
     ret

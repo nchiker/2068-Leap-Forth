@@ -22,7 +22,7 @@ reserve_floor = 200
 id = "boot"
 title = "Page zero, cold start, the dictionary's assembly glue"
 budget = 772
-files = ["forth_boot.asm", "rst_vectors.inc", "hardware.inc", "forth_layout.inc", "keys.inc", "graphics_exrom_abi.inc"]
+files = ["forth_boot.asm", "forth_version.inc", "rst_vectors.inc", "hardware.inc", "forth_layout.inc", "keys.inc", "graphics_exrom_abi.inc"]
 
 [[home.component]]
 id = "kernel"

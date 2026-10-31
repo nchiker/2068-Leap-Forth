@@ -5,14 +5,18 @@ reports: `docs/V2/milestones/`.
 
 ## Where things stand (2026-10-31)
 
-- **Branch `v2/step-words-keys`** (from master `a18a66b`, step Space merged): step Words and keys is complete
-  (`docs/V2/milestones/Words_and_keys.md`), `make test` (504 s), `make check` and `make repro` pass on it. Not pushed;
-  no PR yet: push and open it only when the owner asks.
-- **Decided (2026-10-31):** nothing moves to the EXROM now; Space report section 5 is the measured list for when a
-  step runs short.
-- **Free bytes:** HOME 2,226, EXROM 3,272; per component in `budget.toml` (`make budget`), per routine
+- **Branch `v2/step-display-look`** (from master `85d727a`, PR #12 Words and keys merged; `make test` passed on master
+  first): step Display look is complete (`docs/V2/milestones/Display_look.md`); `make test`, `make check` and
+  `make repro` pass on it. PR #13 open; the owner reviews it before the next session (Claude merges on the owner's
+  word, with a merge commit).
+- **Decided (2026-10-31):** the screen follows Leap V2: black on white, white border, no banner, the version
+  `2068 FORTH V2.0` on the status bar of row 23 until the first key (the owner's option A), `EDIT`'s status bar, Leap
+  V2's chime C. Kept as Forth's: errors printed in the console, the colours a program sets survive (no reset on
+  return), no keyword bolding, the chime not stopped by BREAK. Nothing moves to the EXROM now; Space report section 5
+  is the measured list for when a step runs short.
+- **Free bytes:** HOME 2,232, EXROM 3,272; per component in `budget.toml` (`make budget`), per routine
   `make inventory`. The dictionary starts at `$9100` (`FREE` 16,128 at power-on).
-- **Next:** ROADMAP step 1, *Display speed* (and LINE on 16-bit coordinates).
+- **Next:** ROADMAP step 1, *Display speed* (and LINE on 16-bit coordinates), then *BREAK and timing*.
 
 ## How the owner wants the work done
 
@@ -41,6 +45,13 @@ reports: `docs/V2/milestones/`.
   10900-10919, tapetest 10960-10979, tapetol 10980-10999.
 - **Suite times:** `make test` ~9 min (pool ~3, poweron 0.5, tape ~5.5), `make test-fast` ~2 min,
   `python3 tools/forthtest.py` (the Forth tests alone) ~30 s.
+- **The boot screen:** output starts on row 0; row 23 holds the version on the status bar (`fh.STATUS_BAR`, the cursor
+  `$B8` in its column 0) from the boot snapshot until the first key (`VERSION_UP`; `EDITOR_REDRAW` clears it), so a
+  tool that reads row 23 before typing sees `  2068 FORTH V2.0`. Output rows are 0-22 (`floattest.nonblank_rows`). The
+  version text is `include/forth_version.inc` (`fh.version_text()`), edited by hand at each release.
+- **Colours are `include/hardware.inc`'s** (`ATTR_DEFAULT` `$38`, the status bar's), shared by both images; the cursor
+  is `$87`. `Machine.boot_trace()` (fharness) boots again from reset and returns the chime's AY writes with their
+  frames and the screen at the chime's start and at the key wait (`border=` sets the ULA's border before the reset).
 - **The font is printable ASCII in code order** (`FONT_TABLE + (code - 32) * 8`); `PUNCT_CHAR_TABLE` is gone. The screen
   decoders tell an old build by that symbol. Every printable character except the backtick has a key now, so tests can
   type `[ ] \ { } | ~ ^`; a test line that *starts* with `\` is still a harness comment, never typed (put code before

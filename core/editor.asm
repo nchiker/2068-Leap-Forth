@@ -24,6 +24,7 @@ EDIT_ROW       EQU 23      ; the last row of the input line; earlier rows sit ab
 EDIT_COL_START EQU 0
 EDIT_MAX_LEN   EQU 128     ; the buffer's capacity
     ASSERT EDIT_LEN == EDIT_BUF + EDIT_MAX_LEN   ; EDIT_BUF's size in include/forth_layout.inc
+    ASSERT EDIT_CURSOR == EDIT_LEN + 1           ; INSERT_CHAR and DELETE_CHAR_BEFORE_CURSOR step both
 FWRAP_MAX_ROWS  EQU 4      ; the most rows an input line may use: its top row stays at row 20 or below
 
 ; ============================================================================
@@ -69,12 +70,10 @@ INSERT_CHAR:
     add  hl, de
     ld   a, (INS_CHAR_TMP)
     ld   (hl), a
-    ld   a, (EDIT_LEN)
-    inc  a
-    ld   (EDIT_LEN), a
-    ld   a, (EDIT_CURSOR)
-    inc  a
-    ld   (EDIT_CURSOR), a
+    ld   hl, EDIT_LEN
+    inc  (hl)
+    inc  hl                       ; EDIT_CURSOR
+    inc  (hl)
     ret
 
 ; ============================================================================
@@ -112,12 +111,10 @@ DELETE_CHAR_BEFORE_CURSOR:
     ld   (SHIFT_COUNT), a
     jr   nz, .shiftloop
 .no_shift:
-    ld   a, (EDIT_LEN)
-    dec  a
-    ld   (EDIT_LEN), a
-    ld   a, (EDIT_CURSOR)
-    dec  a
-    ld   (EDIT_CURSOR), a
+    ld   hl, EDIT_LEN
+    dec  (hl)
+    inc  hl                       ; EDIT_CURSOR
+    dec  (hl)
     ret
 
 ; ============================================================================
@@ -328,7 +325,7 @@ EDIT_CURSOR_TO_ROWCOL:
 
 ; ============================================================================
 ; EDITOR_REDRAW -- redraw the whole input line: WRAP_CALC, grow or shrink the input area, draw the
-; rows from FWRAP_TOP = EDIT_ROW + 1 - FWRAP_COUNT, then the cursor
+; rows from FWRAP_TOP = EDIT_ROW + 1 - FWRAP_COUNT, then the cursor; VERSION_UP = 0
 ; Destroys: AF, BC, DE, HL
 ;
 ; FWRAP_COUNT is compared with FWRAP_OLD_COUNT (the count at the last redraw) one row at a time,
@@ -340,6 +337,8 @@ EDIT_CURSOR_TO_ROWCOL:
 ;   scrolled back down.
 ; ============================================================================
 EDITOR_REDRAW:
+    xor  a
+    ld   (VERSION_UP), a          ; row 23 is the input line from here on
     call WRAP_CALC
 .resize:
     ld   a, (FWRAP_OLD_COUNT)
@@ -445,6 +444,12 @@ ED_ROW32:                             ; the row drawer behind ED_ROW_JP
     inc  c
     jr   .pad
 
+; ED_STATUS_ROW -- one row drawn as ED_ROW_JP draws it (B = the row, HL = the text, D = the characters),
+; then row 23's attributes as the status bar (GFX_STATUS_BAR): EDIT's status row
+ED_STATUS_ROW:
+    call ED_ROW_JP
+    jp   GFX_STATUS_BAR
+
 ; ED_CELL32 -- A = the character at (B, C) with ATTR_DEFAULT; keeps BC
 ED_CELL32:
     ld   e, ATTR_DEFAULT
@@ -463,8 +468,9 @@ ED_CELL32:
 ; the spaces: if the result would need more than FWRAP_MAX_ROWS rows the insert is undone and the
 ; key ignored ("buffer full").
 ;
-; EDITOR_PROCESS_KEY -- EDITOR_EDIT_KEY and, when something changed, EDITOR_REDRAW. No error is
-; raised here.
+; EDITOR_PROCESS_KEY -- EDITOR_EDIT_KEY and, when something changed, EDITOR_REDRAW; the first key
+; after the cold start redraws even when nothing changed, so it takes the version off row 23
+; (VERSION_UP; ENTER's run ends in EDITOR_LOOP_LIVE's redraw). No error is raised here.
 ; In:  A = the key code
 ; Out: carry set if A was ENTER
 ; ============================================================================
@@ -529,7 +535,11 @@ EDITOR_EDIT_KEY:
 EDITOR_PROCESS_KEY:
     call EDITOR_EDIT_KEY
     ret  c
+    jr   nz, .redraw
+    ld   a, (VERSION_UP)          ; nothing changed: a redraw only to take the version off
+    or   a
     ret  z
+.redraw:
     call EDITOR_REDRAW
     or   a
     ret

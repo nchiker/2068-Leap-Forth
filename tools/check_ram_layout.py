@@ -64,7 +64,7 @@ VALUES = {
 # RAM addresses that are hardware, not layout
 HARDWARE = {"SCREEN_ADDR", "ATTR_ADDR"}
 # constants the EXROM copies from HOME (rom/graphics_exrom.asm): HOME's value must equal the copy
-SHARED = ("EDIT_MAX_LEN", "ATTR_DEFAULT")
+SHARED = ("EDIT_MAX_LEN",)
 # literal values that are not RAM addresses, with the reason; (file, value) or (None, value) for any file
 LITERAL_VALUES = {
     (None, 0xFFFF): "all ones: a 16-bit -1, an 'unknown' marker or a count to the end of the address space",

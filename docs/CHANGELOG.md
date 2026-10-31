@@ -1078,3 +1078,14 @@ this is the condensed one-paragraph-per-phase version.
   earlier ROM do not load; `SAVE-TEXT` source does. HOME free space
   2,052 bytes before, 2,226 after; EXROM 3,296 before, 3,272 after.
   Emulators only; no hardware.
+- V2 step Display look (`docs/V2/milestones/Display_look.md`): the
+  screen looks like 2068-Leap V2's. Black text on a white screen with a
+  white border (it was bright green on black, and the border was never
+  set); no banner. At power-on the ROM's version, `2068 FORTH V2.0`,
+  is on a status bar at the bottom (white on black, with a red, a green
+  and a blue cell at its right end) from before the startup chord until
+  the first key, which takes it away. `EDIT`'s status row uses the same
+  bar. The startup chord sounds the same and takes 23 bytes less.
+  LIB tapes saved by an earlier ROM do not load; `SAVE-TEXT` source
+  does. HOME free space 2,226 bytes before, 2,232 after; EXROM 3,272.
+  Emulators only; no hardware.

@@ -43,8 +43,9 @@ where `kernel/bank/bank.asm` pages the EXROM in, is marked `$02` (ROM present); 
 
 ## Running on Linux via Wine
 
-EightyOne also runs under Wine (`cd ~/EightyOne && wine EightyOne.exe`). The two files above boot to the `2068-FORTH`
-banner:
+EightyOne also runs under Wine (`cd ~/EightyOne && wine EightyOne.exe`). The two files above boot to the prompt (the
+screenshot is of an earlier build, which printed a `2068-FORTH` banner in green on black; the current one shows its
+version, `2068 FORTH V2.0`, on a status bar at the bottom of a white screen):
 
 ![EightyOne under Wine booting 2068-Leap-Forth](images/eightyone_wine_boot.png)
 

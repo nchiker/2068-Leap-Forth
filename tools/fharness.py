@@ -8,7 +8,7 @@ back with the ROM's own font rendered by the real GFX_PUTCHAR, memory compared b
 (docs/V2/FORTH_V2_REUSE_AUDIT.md section 6.3); the base of the editor screen oracle (T12) and the float oracle (T13).
 
 What is real: the assembled images (forth_boot_rom0.bin and graphics_exrom.bin, written as one 24 KB ROM file for
-ZEsarUX's --romfile exactly as tools/tapetol.py does), cold start through the banner to the idle prompt's key wait
+ZEsarUX's --romfile exactly as tools/tapetol.py does), cold start through the version and the chime to the idle prompt's key wait
 (IO_READ_KEY), the interrupt service (KBD_ISR_TICK scanning the keyboard matrix), banking, the editor and the
 interpreter.  What is substituted: the machine is snapshotted at the first IO_READ_KEY and every case restores it
 (RAM, registers and paging come back; the T-state phase within a frame is ZEsarUX's); Console.key() writes the
@@ -358,11 +358,7 @@ class Machine:
             self.c = ZRCP(port=self.port, timeout=60)
             self.c.connect(retries=100)
             self.cmd("enter-cpu-step")
-            self.cmd("reset-cpu")
-            # ZRCP reset-cpu sets PC/SP/AF only: BC, DE, HL, IX, IY, the alternate set and the refresh register R
-            # keep what the free-running boot left (step T found this; RANDOMIZE seeds from R).  Pin them.
-            for r in ("R", "BC", "DE", "HL", "IX", "IY", "AF'", "BC'", "DE'", "HL'"):
-                self.cmd("set-register %s=0H" % r)
+            self.reset()
             if self.power_on:
                 self.power_on(self)
             self.tstates_reset()
@@ -379,6 +375,45 @@ class Machine:
             self.stop()
             raise
         return self
+
+    def reset(self):
+        """Reset the CPU to the cold start (PC 0), the registers pinned; RAM is kept."""
+        self.cmd("reset-cpu")
+        # ZRCP reset-cpu sets PC/SP/AF only: BC, DE, HL, IX, IY, the alternate set and the refresh register R
+        # keep what the free-running boot left (step T found this; RANDOMIZE seeds from R).  Pin them.
+        for r in ("R", "BC", "DE", "HL", "IX", "IY", "AF'", "BC'", "DE'", "HL'"):
+            self.cmd("set-register %s=0H" % r)
+
+    def border(self):
+        """The border colour: the low 3 bits of the last write to port $FE (ZRCP get-io-ports)."""
+        m = re.search(r"Spectrum FE port[^0-9A-Fa-f]*([0-9A-Fa-f]+)", self.cmd("get-io-ports"))
+        return int(m.group(1), 16) & 7
+
+    def boot_trace(self, border=None):
+        """Boot again from reset to the first key wait, then restore() the boot snapshot.  `border`: a colour written to
+        port $FE before the reset (the ULA keeps it over a reset; its power-on value is undefined).  Returns
+        dict(writes=[(register, value, frame)] for every SOUND_WRITE call, the frame counted from the first; end = the
+        frame of the key wait; first, last = (screen $4000-$5AFF, border) at the first SOUND_WRITE and at the key wait)."""
+        S = self.sym
+        if border is not None:
+            self.write(GLYPH_PROG, bytes([0x3E, border, 0xD3, 0xFE, 0xC9]))     # ld a,n; out ($FE),a; ret
+            assert self.call(GLYPH_PROG)["ok"]
+        self.reset()
+        writes, first, f0 = [], None, None
+        while True:
+            pc = self.run_to([S("SOUND_WRITE"), S("IO_READ_KEY")], 20_000_000)
+            frame = self.w16(S("FRAMES"))
+            if pc != S("SOUND_WRITE"):
+                break
+            if first is None:
+                first, f0 = (self.read(0x4000, 6912), self.border()), frame
+            bc = self.regs()["BC"]
+            writes.append((bc >> 8, bc & 0xFF, frame - f0))
+            self.cmd("cpu-step")
+        out = dict(writes=writes, end=None if f0 is None else frame - f0, first=first,
+                   last=(self.read(0x4000, 6912), self.border()), pc=pc)
+        self.restore()
+        return out
 
     def stop(self):
         try:
@@ -777,10 +812,16 @@ def run_pool(build, tasks, fn, workers=None, port0=PORT_LO):
 
 
 # ---------------------------------------------------------------------------------------------------- self-test
-def banner_text():
-    """The banner the ROM prints, from rom/forth_boot.asm (`BANNER: DB "...", 0`)."""
-    src = open(os.path.join(ROOT, "rom", "forth_boot.asm")).read()
-    return re.search(r'^BANNER:\s+DB\s+"([^"]*)"\s*,\s*0', src, re.M).group(1)
+def version_text():
+    """The version the ROM shows on the status bar at power-on, from include/forth_version.inc."""
+    src = open(os.path.join(ROOT, "include", "forth_version.inc")).read()
+    return re.search(r'^FORTH_VERSION_TEXT:\s+DB\s+"([^"]*)"\s*,\s*0', src, re.M).group(1)
+
+
+# Row 23's attributes as the status bar (include/hardware.inc): white on black, then red, green, blue; the cursor
+# on the bar's column 0 is its colours swapped, flashing.
+STATUS_BAR = bytes([0x07] * 29 + [0x10, 0x20, 0x08])
+STATUS_BAR_CURSOR = bytes([0xB8]) + STATUS_BAR[1:]
 
 
 def drawn_chars(m):
@@ -813,10 +854,50 @@ def _check_glyphs(m, _):
                 info="")
 
 
-def _check_banner(m, _):
-    want = banner_text()
+def _check_version(m, _):
+    """At the first key wait: rows 0-22 blank, the version from column 2 of row 23 on the status bar, the cursor in its
+    column 0."""
+    want = "  " + version_text()
     rows = m.screen_rows()
-    return dict(ok=rows[0] == want and not any(rows[1:]), detail="row 0 = %r, rows 1-23 blank" % rows[0])
+    bar = m.read(0x5800 + 23 * 32, 32)
+    ok = rows[23] == want and not any(rows[:23]) and bar == STATUS_BAR_CURSOR
+    return dict(ok=ok, detail="row 23 = %r (want %r) on the bar with the cursor in column 0: %s; rows 0-22 blank: %s" % (
+        rows[23], want, bar == STATUS_BAR_CURSOR, not any(rows[:23])))
+
+
+def _check_screen(m, _):
+    """The boot screen (Leap V2's): the border white from any power-on colour, every cell of rows 0-22 black on white
+    (ATTR_DEFAULT $38), CURRENT_ATTR the same; the version on the status bar from the chime's first note (rows 0-22
+    blank) to the key wait (then with the cursor)."""
+    t = m.boot_trace(border=2)
+    want = "  " + version_text()
+    seen = []
+    for (scr, border), bar in ((t["first"], STATUS_BAR), (t["last"], STATUS_BAR_CURSOR)):
+        rows = m.screen_rows(scr[:6144])
+        seen.append((rows[23] == want and not any(rows[:23]), scr[6144 + 23 * 32:] == bar, border))
+    attrs = set(t["last"][0][6144:6144 + 23 * 32])
+    cur = m.read(m.sym("CURRENT_ATTR"), 1)[0]
+    ok = seen == [(True, True, 7)] * 2 and attrs == {0x38} and cur == 0x38
+    return dict(ok=ok, detail="(version on row 23 alone, bar attributes, border) at the chime's first write and at the key "
+                              "wait: %s (want (True, True, 7), border 2 before the reset); rows 0-22 attributes %s, "
+                              "CURRENT_ATTR $%02X (want $38)" % (seen, " ".join("$%02X" % a for a in sorted(attrs)), cur))
+
+
+def _check_first_key(m, _):
+    """The first key takes the version off: a key that changes nothing (LEFT on the empty line) leaves row 23 the empty
+    input line (ATTR_DEFAULT, the cursor $87); ENTER does too and its OK is on row 0; a typed key shows on row 23."""
+    con = Console(m)
+    out = []
+    for keys in ([0x01], [KEY_ENTER], [ord("7")]):
+        con.boot()
+        for k in keys:
+            con.key(k)
+        rows = con.rows()
+        out.append((rows[0], rows[23], m.read(0x5800 + 23 * 32, 32) == bytes([0x87] + [0x38] * 31)
+                    if keys != [ord("7")] else m.read(0x5800 + 23 * 32, 2) == bytes([0x38, 0x87])))
+    want = [("", "", True), ("OK", "", True), ("", "7", True)]
+    return dict(ok=out == want and con.in_editor(), detail="(row 0, row 23, row 23's attributes the input line's) after LEFT, "
+                "ENTER, 7: %s (want %s)" % (out, want))
 
 
 def _check_restore(m, _):
@@ -847,9 +928,9 @@ def _check_type(m, _):
     con.boot()
     con.type("1 2 + .")
     rows = con.rows()
-    shown = [r for r in rows[1:23] if r]
+    shown = [r for r in rows[:23] if r]
     ok = shown == ["3 OK"] and con.edit_line() == "" and con.in_editor()
-    return dict(ok=ok, detail="rows 1-22 = %r, edit line %r, editor waiting=%s" % (shown, con.edit_line(), con.in_editor()))
+    return dict(ok=ok, detail="rows 0-22 = %r, edit line %r, editor waiting=%s" % (shown, con.edit_line(), con.in_editor()))
 
 
 def _check_press(m, _):
@@ -858,7 +939,7 @@ def _check_press(m, _):
     for ch in "2 3 * .":
         con.press(ch)
     con.press("\r")
-    shown = [r for r in con.rows()[1:23] if r]
+    shown = [r for r in con.rows()[:23] if r]
     line = "Ab:?(+~|\\{}][^"                           # CAPS SHIFT + a letter, SYMBOL SHIFT + Z, C, 8, K, A-G, U, Y, H
     try:
         for ch in line:
@@ -867,7 +948,7 @@ def _check_press(m, _):
         return dict(ok=False, detail=str(e))
     got, last = con.edit_line(), con.rows()[23]
     ok = shown == ["6 OK"] and got == line and last == line and con.in_editor()
-    return dict(ok=ok, detail="matrix: rows 1-22 = %r; edit line %r (row 23 %r)" % (shown, got, last))
+    return dict(ok=ok, detail="matrix: rows 0-22 = %r; edit line %r (row 23 %r)" % (shown, got, last))
 
 
 def _check_checkpoint(m, _):
@@ -907,12 +988,30 @@ def _check_mem(m, _):
     return dict(ok=ok, detail="expect_mem diff names $%04X; ram_diff %s" % (ft + 15, ["$%04X-$%04X" % x for x in d]))
 
 
+# The startup chime (rom/forth_boot.asm STARTUP_CHIME, Leap V2's chime C): R0-R10 (C4/E4/G4, noise period 0, mixer
+# $F8, levels 0) at once; channels A, B, C each up 4, 8, 12, three frames a step; held 22 frames after C's last step;
+# all three down 8, 4, 0, three frames a step; the key wait 3 frames after the last write.
+CHIME = [(r, v, 0) for r, v in enumerate((165, 1, 78, 1, 25, 1, 0, 248, 0, 0, 0))] \
+    + [(8 + ch, 4 * (k + 1), 9 * ch + 3 * k) for ch in range(3) for k in range(3)] \
+    + [(r, v, f) for v, f in ((8, 46), (4, 49), (0, 52)) for r in (8, 9, 10)]
+CHIME_END = 55
+
+
+def _check_chime(m, _):
+    t = m.boot_trace()
+    ok = t["writes"] == CHIME and t["end"] == CHIME_END and t["pc"] == m.sym("IO_READ_KEY")
+    diff = [(i, a, b) for i, (a, b) in enumerate(zip(t["writes"], CHIME)) if a != b][:3]
+    return dict(ok=ok, detail="%d AY writes (want %d), key wait at frame %s (want %d)%s" % (
+        len(t["writes"]), len(CHIME), t["end"], CHIME_END, "; first differences %s" % diff if diff else ""))
+
+
 # (letter i, the 64-column screen, was retired in step M6 with the mode; the letters are not renumbered)
-CHECKS = [("a", "boot", _check_boot), ("b", "glyph table", _check_glyphs), ("c", "banner", _check_banner),
+CHECKS = [("a", "boot", _check_boot), ("b", "glyph table", _check_glyphs), ("c", "version", _check_version),
           ("d", "restore determinism", _check_restore), ("e", "call GFX_CLS", _check_call),
           ("f", "Console.type", _check_type), ("g", "Console.press", _check_press),
           ("j", "memory assertions", _check_mem),
-          ("k", "checkpoint/rollback", _check_checkpoint)]
+          ("k", "checkpoint/rollback", _check_checkpoint), ("l", "startup chime", _check_chime),
+          ("m", "boot screen", _check_screen), ("n", "first key", _check_first_key)]
 
 
 def _run_checks(build, workers, port0):

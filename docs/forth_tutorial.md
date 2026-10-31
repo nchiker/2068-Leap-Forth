@@ -8,7 +8,9 @@ This manual teaches Forth from scratch. It assumes you are comfortable with clas
 
 Every example in this manual can be typed directly into a **2068-Leap-Forth** prompt.
 
-When you turn on the machine, you will immediately be greeted by a startup banner, a brief audio cue, and an active, keyboard-driven prompt waiting for your input.
+When you turn on the machine, the screen turns white with the ROM's version, `2068 FORTH V2.0`, on a black bar at the bottom, a short chord plays, and the cursor flashes at the start of that bar: the keyboard-driven prompt is waiting for your input. The first key you press takes the version away, and what you type appears on that bottom row.
+
+![The screen at power-on: white, with 2068 FORTH V2.0 on the black status bar at the bottom](images/boot_screen.png)
 
 #### How to Read the Examples
 
@@ -675,8 +677,8 @@ for adding something new instead of fixing something old.
 The view fills the screen with the lines of the store. Each line is
 word-wrapped exactly as it is at the prompt, so a long line takes
 several rows. The top 23 rows show the lines; the bottom row is a
-status row, `LINE n/m`, which says which line the cursor is on and how
-many lines there are. The cursor is the same flashing cell you know
+status row, `LINE n/m` on the black bar you saw at power-on, which
+says which line the cursor is on and how many lines there are. The cursor is the same flashing cell you know
 from the prompt.
 
 With `SQURE` and the `5 SQURE .` line above, the status row reads
@@ -2925,7 +2927,7 @@ just the next one, until some later call changes it again. Calling
 `INK` never disturbs whatever `PAPER` was last set to, and vice versa;
 each touches only its own half of the color. `CLS` honors the current
 `PAPER` as well — clearing the screen fills it with whatever
-background color is set, not always black. It also homes the printing
+background color is set, not always white. It also homes the printing
 position to column 0, row 0, so what you print next starts at the top
 left.
 
