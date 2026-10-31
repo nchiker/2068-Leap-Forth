@@ -351,8 +351,8 @@ HEADER_LINK:
 
 ; ============================================================================
 ; : ( "name" -- ) -- build a header at HERE (HEADER_BUILD), link it (LATEST) and set STATE to 1.
-; HERE is left past the name, where the code starts. Not immediate: a `:` inside a definition is
-; not supported.
+; HERE is left past the name, where the code starts; the definition is open (COLON_HDR) until `;`.
+; Not immediate: a `:` inside a definition is not supported.
 ; ============================================================================
 H_COLON:
     DW   H_STORE
@@ -361,11 +361,12 @@ W_COLON:
     call DICT_ROOM0
     call HEADER_BUILD
     call HEADER_LINK
+    ld   (COLON_HDR), hl          ; open until `;` (an error before it: COLON_DROP)
     jp   W_RBRACKET               ; STATE = 1 (core/tick.asm)
 
 ; ============================================================================
-; ; ( -- ) IMMEDIATE -- compile a RET, ending the definition's CALL chain, and set STATE to 0.
-; Immediate so that it runs even while compiling.
+; ; ( -- ) IMMEDIATE -- compile a RET, ending the definition's CALL chain, set STATE to 0 and close
+; the definition (COLON_HDR). Immediate so that it runs even while compiling.
 ; ============================================================================
 H_SEMICOLON:
     DW   H_COLON
@@ -375,6 +376,31 @@ W_SEMICOLON:
     call COMPILE_BYTE
     xor  a
     ld   (STATE), a
+    jr   COLON_CLOSE
+
+; ============================================================================
+; COLON_DROP -- a line ended in an error (or ABORT, QUIT): remove the `:` definition it left open,
+; so a word with half its code is never found and run. LATEST goes back first, then HERE: a BREAK
+; between the two leaves HERE above every linked header.
+; COLON_CLOSE -- the definition is closed (`;`), or dropped
+; In:  COLON_HDR = the open definition's header, or 0
+; Out: COLON_HDR = 0; dropped: LATEST = its link, HERE = its header
+; Destroys: AF, DE, HL
+; ============================================================================
+COLON_DROP:
+    ld   hl, (COLON_HDR)
+    ld   a, h
+    or   l
+    ret  z
+    ld   e, (hl)
+    inc  hl
+    ld   d, (hl)
+    dec  hl
+    ld   (LATEST), de
+    ld   (HERE), hl
+COLON_CLOSE:
+    ld   hl, 0
+    ld   (COLON_HDR), hl
     ret
 
 

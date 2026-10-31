@@ -577,10 +577,11 @@ EDITOR_LOOP_LIVE:
     ld   a, (VIEW_RESULT)           ; EDIT ran, and an error may have left changed-line
     or   a                          ; marks in the store
     call nz, EDIT_CLEAR_MARKS
-    ; an error prints its own message and sets INTERP_ERROR_FLAG: "OK" only without one
+    ; an error prints its own message and sets INTERP_ERROR_FLAG: "OK" only without one, and the
+    ; `:` definition it left open goes (COLON_DROP)
     ld   a, (INTERP_ERROR_FLAG)
     or   a
-    jr   nz, .no_ok
+    jr   nz, .error
     ld   hl, "O"
     rst RST_DPUSH
     call W_EMIT
@@ -590,7 +591,9 @@ EDITOR_LOOP_LIVE:
     ld   hl, 13
     rst RST_DPUSH
     call W_EMIT
-.no_ok:
+    jr   EDITOR_LOOP_LIVE
+.error:
+    call COLON_DROP
     jr   EDITOR_LOOP_LIVE
 
     ENDIF
