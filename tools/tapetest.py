@@ -605,6 +605,28 @@ def case_1(ctx):
     return v
 
 
+# Step BREAK and timing: CATCH puts the input source back.  The text THROWs 5 after printing 3; caught around LOAD-TEXT,
+# the console line goes on (5 then 88).  The old build went on interpreting the loaded text instead (77) and lost the
+# rest of the console line.
+TEXT_THROW = b"3 . 5 THROW 77 .\r"
+
+
+def case_cs(ctx):
+    v = Verdict()
+    blocks = gen_tap_tape_gen_forth(ctx.work, [("THROWER", TEXT_THROW)])
+    s, _ = play(ctx, blocks, [], "' LOAD-TEXT CATCH THROWER . 88 .")
+    try:
+        r = finish(s)
+        v.check(r["idle"], "no prompt after LOAD-TEXT")
+        rows = s.screen()
+        v.check(screen_has(rows, r"\b3 5 88\b"), "screen has no '3 5 88': %s" % rows[-3:])
+        v.check(not screen_has(rows, r"\b77\b"), "the loaded text ran on after the THROW: %s" % rows[-3:])
+        v.note("screen %s" % rows[-2:])
+    finally:
+        s.stop()
+    return v
+
+
 BJ_FS = REPO + "/tests/data/blackjack_rounds.txt"   # demos/blackjack.fs with a log of each round at 62120
 BJ_EXPECT = [21, 15, 4, 23, 12, 3, 21, 19, 4, 15, 23, 1]       # the round log at 62120.. (seed 15785)
 
@@ -1170,6 +1192,7 @@ CASES = {
     "2": ("blackjack_p53", case_2, "pass"),
     "3": ("savetext_roundtrip", case_3, "header param 1 differs"),
     "C": ("comments_in_text", case_c, "fails: no \\ word"),
+    "CS": ("catch_source", case_cs, "prints 3 77: the loaded text runs on, the console line is lost"),
     "N4": ("text_tape_roundtrip", case_n4, "passes (42 only: CR is part of a word, the text is built for that)"),
     "4": ("savelib_roundtrip", case_4, "fails the format checks; round trip passes"),
     "5": ("foreign_identity", case_5, "n/a (loads as nothing; type 3 skipped)"),
@@ -1191,7 +1214,7 @@ CASES = {
     "9L": ("legacy_wrong_flag", legacy_9, "reports success"),
     "10L": ("legacy_dropout", legacy_10, "reports success"),
 }
-ORDER = ["1", "C", "2", "3", "N4", "4", "15", "5", "6", "7", "8", "9", "10", "11", "11a", "12", "13", "14"]
+ORDER = ["1", "C", "CS", "2", "3", "N4", "4", "15", "5", "6", "7", "8", "9", "10", "11", "11a", "12", "13", "14"]
 EXTRA = ["11L"]                             # judged like the cases, tallied apart
 LEGACY = ["7L", "8L", "8Z", "9L", "10L"]    # old build only (no ROM_IDENTITY): INFO lines, not judged
 

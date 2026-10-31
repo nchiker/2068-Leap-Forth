@@ -53,6 +53,7 @@ W_EDIT:
     xor  a
     ld   (PRINT_ROW), a
     ld   (PRINT_COL), a
+    call CATCH_SRC_HERE             ; a THROW caught outside goes on after the name
     ld   hl, (SRC_END)              ; the console line goes on afterwards
     push hl
     ld   hl, (SRC_PTR)

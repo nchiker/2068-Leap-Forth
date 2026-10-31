@@ -6,12 +6,15 @@
 ; is DICT_CHAIN_POINT, which the including ROM sets (DEFL) to the chain the word extends. Every
 ; word here may destroy all registers except IX, IY and SP.
 ;
-; The hardware stack is the return stack, so THROW unwinds SP directly, like longjmp. CATCH saves
-; SP, IX and IY (the data and float stacks) in a frame of the bounded CATCH_STACK, indexed by
-; CATCH_DEPTH, and then calls xt. If xt returns, CATCH drops its frame and pushes 0. THROW with
-; n <> 0 restores SP, IX and IY from the innermost frame, pushes n and RETs: SP is back at CATCH's
-; entry, so the RET goes to CATCH's caller as if xt had returned, and the unwound calls run no
-; cleanup.
+; The hardware stack is the return stack, so THROW unwinds SP directly, like longjmp. CATCH pushes
+; the input source (SRC_END, SRC_PTR), saves SP, IX and IY (the data and float stacks) in a frame of
+; the bounded CATCH_STACK, indexed by CATCH_DEPTH, and then calls xt. If xt returns, CATCH drops its
+; frame and the source cells and pushes 0. THROW with n <> 0 restores SP, IX and IY from the
+; innermost frame, pushes n and RETs: SP is back at CATCH's entry, so the RET goes to CATCH's caller
+; as if xt had returned, and the unwound calls run no cleanup. In the same source interpretation
+; goes on after whatever xt read (`' LOAD-TEXT CATCH name`); if a nested run (LOAD-TEXT, EDIT) had
+; moved the source, THROW puts it back: CATCH_SRC_HERE moved the frame's SRC_PTR past the words read
+; before the run began.
 ;
 ; SP, IX and IY can only be stored to or loaded from fixed addresses, so both words go through the
 ; staging cells CATCH_TMP_SP / _IX / _IY: CATCH stages them and LDIRs them into the frame slot;
@@ -157,6 +160,18 @@ W_THROW_HL:
     ld   sp, (CATCH_TMP_SP)
     ld   ix, (CATCH_TMP_IX)
     ld   iy, (CATCH_TMP_IY)
+    pop  de                     ; the frame's SRC_PTR
+    pop  hl                     ; its SRC_END
+    push de
+    ld   de, (SRC_END)
+    or   a
+    sbc  hl, de
+    add  hl, de
+    pop  de
+    jr   z, .same_source        ; the same source: it goes on where xt left it (after a name it read)
+    ld   (SRC_END), hl          ; a nested run's: back to the source CATCH was taken in (file header)
+    ld   (SRC_PTR), de
+.same_source:
     ld   h, b
     ld   l, c
     rst RST_DPUSH             ; n, onto the restored stack
@@ -167,6 +182,46 @@ W_THROW_HL:
     ld   iy, FSTACK_TOP
     ld   sp, (THROW_ROOT_SP)
     jp   RUNTIME_ERROR_HOOK
+
+; ============================================================================
+; CATCH_SRC_HERE -- a nested run (LOAD-TEXT, EDIT) is about to move the input source: every CATCH
+; frame taken in this source records the position reached, so a THROW caught there goes on after
+; the words already read (a frame's SRC_PTR is at its SP, its SRC_END above it)
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+CATCH_SRC_HERE:
+    ld   a, (CATCH_DEPTH)
+    or   a
+    ret  z
+    ld   b, a
+    ld   hl, CATCH_STACK            ; the frames' SP cells, 6 bytes apart
+.frame:
+    push hl
+    ld   e, (hl)
+    inc  hl
+    ld   d, (hl)
+    ex   de, hl                     ; HL = the frame's SP: its SRC_PTR
+    push hl
+    inc  hl
+    inc  hl
+    ld   e, (hl)
+    inc  hl
+    ld   d, (hl)                    ; DE = its SRC_END
+    ld   hl, (SRC_END)
+    or   a
+    sbc  hl, de
+    pop  hl
+    jr   nz, .next                  ; taken in another source
+    ld   de, (SRC_PTR)
+    ld   (hl), e
+    inc  hl
+    ld   (hl), d
+.next:
+    pop  hl
+    ld   de, 6
+    add  hl, de
+    djnz .frame
+    ret
 
 ; ============================================================================
 ; CATCH ( xt -- 0 | n ) -- execute xt: 0 if it returned, else the n of a THROW inside it
@@ -181,6 +236,10 @@ W_CATCH:
     ld   a, (CATCH_DEPTH)
     cp   CATCH_MAX_DEPTH
     jr   nc, .no_room
+    ld   de, (SRC_END)          ; the input source, for a THROW to put back (file header)
+    push de
+    ld   de, (SRC_PTR)
+    push de
     ld   (CATCH_TMP_SP), sp     ; stage SP, IX, IY (file header)
     ld   (CATCH_TMP_IX), ix
     ld   (CATCH_TMP_IY), iy
@@ -203,6 +262,8 @@ W_CATCH:
     ld   (CATCH_DEPTH), a
     pop  hl                      ; HL = xt
     call JUMP_HL                 ; returns here only if no THROW unwound it
+    pop  de                      ; the source cells
+    pop  de
     ld   a, (CATCH_DEPTH)
     dec  a
     ld   (CATCH_DEPTH), a

@@ -111,6 +111,7 @@ W_LOADTEXT:
     call STORAGE_LOAD_DATA
     jp   c, STORAGE_END
     pop  ix
+    call CATCH_SRC_HERE                 ; a THROW caught outside goes on after the name
     ld   hl, (SRC_END)                  ; the outer run's source pointers survive the nested run
     push hl
     ld   hl, (SRC_PTR)

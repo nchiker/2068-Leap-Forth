@@ -406,3 +406,21 @@ image = "home"
 component = "text"
 delta = 3
 reason = "BREAK and timing: EMIT clears the new output row in CURRENT_ATTR; from the reserve"
+
+[[ledger]]
+image = "home"
+component = "interp"
+delta = 77
+reason = "BREAK and timing: CATCH keeps the input source (SRC_END, SRC_PTR) with its frame and THROW puts it back when a nested run (LOAD-TEXT, EDIT) had moved it (+28 B); CATCH_SRC_HERE moves the frames' SRC_PTR past the words read before the run began, the tape name among them (49 B). A THROW caught around LOAD-TEXT went on with the rest of the loaded text and lost the console line (a BREAK under the tutorial's ' LOAD-TEXT CATCH name ran the rest of the program); from the reserve"
+
+[[ledger]]
+image = "home"
+component = "tape"
+delta = 3
+reason = "BREAK and timing: LOAD-TEXT calls CATCH_SRC_HERE before its nested run; from the reserve"
+
+[[ledger]]
+image = "home"
+component = "console"
+delta = 3
+reason = "BREAK and timing: EDIT calls CATCH_SRC_HERE before it runs the changed lines; from the reserve"

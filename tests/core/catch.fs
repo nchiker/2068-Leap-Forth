@@ -15,3 +15,5 @@
 1.5 7 DEEP1                            \ expect: ERROR 42
 FDEPTH .                               \ expect: 0
 DROP                                   \ expect: STACK?
+\ a word under CATCH that read a name before it threw: the line goes on after the name (the tape words' idiom)
+' ' CATCH NOSUCHWORD . 99 .            \ expect: -13 99
