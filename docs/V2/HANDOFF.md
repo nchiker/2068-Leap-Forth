@@ -7,7 +7,8 @@ reports: `docs/V2/milestones/`.
 
 - **Branch `v2/step-display-speed`** (from master `f7ab173`, PR #13 Display look merged; `make test` passed on master
   first): step Display speed is complete (`docs/V2/milestones/Display_speed.md`); `make test` (497 s), `make check` and
-  `make repro` pass on it. Not pushed: the owner asks for the push and the PR.
+  `make repro` pass on it. PR #14 open; the owner reviews it before the next session (Claude merges on the owner's
+  word, with a merge commit).
 - **Decided (2026-10-31):** all four proposed changes (LINE rebuilt on 16-bit ends, the view's store lookup from the
   line found last, the console scroll, `.` through `PRINT_UDEC16`); POLYGON's vertices stay bytes (option (a), the
   least ROM space; in the roadmap's known defects). The exact off-screen jump for LINE (built: about 130 B) was left
