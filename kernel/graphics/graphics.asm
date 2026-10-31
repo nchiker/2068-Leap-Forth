@@ -15,8 +15,7 @@
     INCLUDE "include/hardware.inc"
 
 ; ---- character grid ----
-GFX_COLS   EQU 32
-ATTR_DEFAULT EQU $44     ; PAPER 0 (black), INK 4 (green), BRIGHT 1: GFX_CLS, GFX_CLEAR_ROW
+GFX_COLS   EQU 32          ; ATTR_DEFAULT (GFX_CLS, GFX_CLEAR_ROW) is in include/hardware.inc
 
 ; ============================================================================
 ; GFX_CLS -- clear the bitmap and paint every attribute ATTR_DEFAULT

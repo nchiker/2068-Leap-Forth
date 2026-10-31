@@ -97,13 +97,15 @@ COLD_START:
     ld   (STATE), a
     ld   (LEAVE_DEPTH), a         ; core/doloop.asm: must start at 0
     ld   (CATCH_DEPTH), a         ; core/throwcatch.asm: must start at 0
-    ld   a, ATTR_DEFAULT          ; the attribute GFX_CLS paints (not core/ts2068.asm's DEFAULT_ATTR):
-    ld   (CURRENT_ATTR), a        ;   EMIT stamps CURRENT_ATTR on every character
+    ld   a, ATTR_DEFAULT          ; the attribute GFX_CLS paints: EMIT stamps CURRENT_ATTR on every
+    ld   (CURRENT_ATTR), a        ;   character
     ld   a, 4
     ld   (F_PLACES), a            ; core/fpprint.asm: F. prints 4 decimals
     ld   a, 1
     ld   (FWRAP_OLD_COUNT), a
 
+    ld   a, BORDER_DEFAULT        ; the border's power-on colour is the ULA's, not defined
+    call GFX_SET_BORDER
     call GFX_CLS
     ld   hl, BANNER
     ld   b, 0

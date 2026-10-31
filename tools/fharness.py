@@ -389,11 +389,15 @@ class Machine:
         m = re.search(r"Spectrum FE port[^0-9A-Fa-f]*([0-9A-Fa-f]+)", self.cmd("get-io-ports"))
         return int(m.group(1), 16) & 7
 
-    def boot_trace(self):
-        """Boot again from reset to the first key wait, then restore() the boot snapshot.  Returns dict(writes=[(register,
-        value, frame)] for every SOUND_WRITE call, the frame counted from the first; end = the frame of the key wait;
-        first, last = (screen $4000-$5AFF, border) at the first SOUND_WRITE and at the key wait)."""
+    def boot_trace(self, border=None):
+        """Boot again from reset to the first key wait, then restore() the boot snapshot.  `border`: a colour written to
+        port $FE before the reset (the ULA keeps it over a reset; its power-on value is undefined).  Returns
+        dict(writes=[(register, value, frame)] for every SOUND_WRITE call, the frame counted from the first; end = the
+        frame of the key wait; first, last = (screen $4000-$5AFF, border) at the first SOUND_WRITE and at the key wait)."""
         S = self.sym
+        if border is not None:
+            self.write(GLYPH_PROG, bytes([0x3E, border, 0xD3, 0xFE, 0xC9]))     # ld a,n; out ($FE),a; ret
+            assert self.call(GLYPH_PROG)["ok"]
         self.reset()
         writes, first, f0 = [], None, None
         while True:
@@ -850,6 +854,18 @@ def _check_banner(m, _):
     return dict(ok=rows[0] == want and not any(rows[1:]), detail="row 0 = %r, rows 1-23 blank" % rows[0])
 
 
+def _check_screen(m, _):
+    """The boot screen's colours (Leap V2's): the border white from any power-on colour, every cell of rows 0-22 black
+    on white (ATTR_DEFAULT $38), CURRENT_ATTR the same."""
+    t = m.boot_trace(border=2)
+    scr, border = t["last"]
+    attrs = set(scr[6144:6144 + 23 * 32])
+    cur = m.read(m.sym("CURRENT_ATTR"), 1)[0]
+    ok = border == 7 and attrs == {0x38} and cur == 0x38
+    return dict(ok=ok, detail="border %d from 2 (want 7); rows 0-22 attributes %s, CURRENT_ATTR $%02X (want $38)" % (
+        border, " ".join("$%02X" % a for a in sorted(attrs)), cur))
+
+
 def _check_restore(m, _):
     snap = m.read(0x4000, 0xC000)
     m.restore()
@@ -960,7 +976,8 @@ CHECKS = [("a", "boot", _check_boot), ("b", "glyph table", _check_glyphs), ("c",
           ("d", "restore determinism", _check_restore), ("e", "call GFX_CLS", _check_call),
           ("f", "Console.type", _check_type), ("g", "Console.press", _check_press),
           ("j", "memory assertions", _check_mem),
-          ("k", "checkpoint/rollback", _check_checkpoint), ("l", "startup chime", _check_chime)]
+          ("k", "checkpoint/rollback", _check_checkpoint), ("l", "startup chime", _check_chime),
+          ("m", "boot screen", _check_screen)]
 
 
 def _run_checks(build, workers, port0):

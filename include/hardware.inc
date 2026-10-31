@@ -39,6 +39,16 @@ ATTR_ADDR           EQU $5800
 SCREEN_WIDTH_CHARS  EQU 32
 SCREEN_HEIGHT_CHARS EQU 24
 
+; ---- The screen's colours (both images: kernel/graphics, the EXROM's view) ----
+; Leap V2's (~/2068-Leap): black on white, and the status bar of row 23 white on black with a red, a
+; green and a blue cell at its right end (the TS2068's own colour logo).
+ATTR_DEFAULT        EQU $38     ; PAPER 7 (white), INK 0 (black): GFX_CLS, GFX_CLEAR_ROW, CURRENT_ATTR's start
+ATTR_STATUS_BAR     EQU $07     ; PAPER 0 (black), INK 7 (white): row 23's columns 0-28
+ATTR_SWATCH_RED     EQU $10     ; PAPER 2: column 29
+ATTR_SWATCH_GREEN   EQU $20     ; PAPER 4: column 30
+ATTR_SWATCH_BLUE    EQU $08     ; PAPER 1: column 31
+BORDER_DEFAULT      EQU 7       ; white: set by the cold start
+
 ; ZX Printer / TS2040 printer port (bit meanings: core/printer.asm)
 PORT_PRINTER        EQU $FB
 

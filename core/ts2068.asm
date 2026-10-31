@@ -4,15 +4,13 @@
 ; Thin wrappers over kernel/graphics/graphics.asm (which must be INCLUDEd), chained onto core/control.asm's
 ; H_UNTIL. Each argument cell contributes only its low byte (x 0-255, y 0-191, colour 0-7); there is no
 ; range checking. PLOT, LINE and the shapes draw with CURRENT_ATTR, which core/color.asm's INK, PAPER,
-; BRIGHT and FLASH modify; the ROM must initialise it to DEFAULT_ATTR at cold start. CURRENT_ATTR's
+; BRIGHT and FLASH modify; the cold start sets it to ATTR_DEFAULT (include/hardware.inc). CURRENT_ATTR's
 ; address comes from include/forth_layout.inc; check a new scratch byte there against the other users.
 ; Every word may destroy all registers except IX (the data stack pointer), IY and SP.
 ; ============================================================================
 
     IFNDEF CORE_TS2068_ASM
     DEFINE CORE_TS2068_ASM
-
-DEFAULT_ATTR EQU $38   ; paper 7 (white), ink 0 (black), no bright/flash; CURRENT_ATTR's start value
 
 ; ============================================================================
 ; PLOT ( x y -- ) -- set the pixel (GFX_WRITE_PIXEL); nothing if x or y is above 255

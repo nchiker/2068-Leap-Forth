@@ -39,7 +39,7 @@ restored machine for every task; a case with several parts (widths, batches, sce
 
 HOW THE CURSOR IS SHOWN  Not in the bitmap.  EDITOR_REDRAW draws the line (GFX_PUTCHAR, then GFX_SET_ATTR
 ATTR_DEFAULT on every cell of every input row, padded to column 31) and then GFX_INVERT_ATTR on the cursor cell: ink and
-paper swapped and FLASH set, so ATTR_DEFAULT $44 (bright, black paper, green ink) becomes $E0; the ULA blinks it.  The cursor
+paper swapped and FLASH set, so ATTR_DEFAULT $38 (white paper, black ink) becomes $87; the ULA blinks it.  The cursor
 column is never W (E10, THE WRAP MODEL below): a cursor cell is always shown.
 `view()` below reads the cursor cell from the FLASH attribute and the plain text from the bitmap.
 
@@ -320,7 +320,7 @@ def view(m):
     inverse or unknown cell would show in them), cursor cells are those with FLASH set (their attribute must be the
     swapped ATTR_DEFAULT; `odd` lists any other attribute that is not ATTR_DEFAULT)."""
     attrs = m.read(0x5800, 768)
-    dflt = m.S.get("ATTR_DEFAULT", 0x44)
+    dflt = m.S["ATTR_DEFAULT"]
     cur = [(i // 32, i % 32) for i, a in enumerate(attrs) if a & 0x80]
     want = ((dflt & 7) << 3 | (dflt >> 3) & 7 | (dflt & 0x40) | 0x80)       # ink and paper swapped, FLASH
     odd = [(i // 32, i % 32, a) for i, a in enumerate(attrs)
@@ -486,7 +486,7 @@ def boot_console(env, part):
     ck.eq("cursor cell", v.cursor, [(23, 0)])
     ck.eq("stray attributes", v.odd, [])
     cur_attr = m.read(0x5800 + 23 * 32, 1)[0]
-    ck.eq("cursor attribute", cur_attr, 0xE0)
+    ck.eq("cursor attribute", cur_attr, 0x87)
     ck.eq("row 23 bitmap", any(any(row_cell(m, 23, c)) for c in range(32)), False)
     ck.eq("edit line, cursor", env.edit_state(), ("", 0))
     ck.eq("in_editor", env.con.in_editor(), True)
@@ -496,7 +496,7 @@ def boot_console(env, part):
     ck.eq("GFX_MODE", env.u8("GFX_MODE"), 0)
     ck.eq(end_name(env), m.w16(env.S(end_name(env))), env.S("LOADTEXT_BUF"))
     ck.note("row 0 %r, rows 1-23 blank, cursor (23, 0) attribute $%02X, other attributes $%02X, PRINT_ROW 1, workspace empty" % (
-        BANNER, cur_attr, m.S.get("ATTR_DEFAULT", 0x44)))
+        BANNER, cur_attr, m.S["ATTR_DEFAULT"]))
     return ck.result()
 
 
@@ -1130,36 +1130,36 @@ def break_running(env, part):
 
 
 # ===================================================================== 17 colour state
-@case("colour-state", "after `2 INK 6 PAPER 1 BORDER`: CURRENT_ATTR is $72 and output (OK) is drawn in it, the border shadow is 1, "
-                      "but the editor draws the edit line and its blank cells in ATTR_DEFAULT $44 (cursor $E0) and the next typed "
+@case("colour-state", "after `2 INK 6 PAPER 1 BORDER`: CURRENT_ATTR is $32 and output (OK) is drawn in it, the border shadow is 1, "
+                      "but the editor draws the edit line and its blank cells in ATTR_DEFAULT $38 (cursor $87) and the next typed "
                       "line still shows")
 def colour_state(env, part):
     ck, m = Check(), env.m
     env.boot()
     con = env.con
-    ck.eq("CURRENT_ATTR before", env.u8("CURRENT_ATTR"), 0x44)
+    ck.eq("CURRENT_ATTR before", env.u8("CURRENT_ATTR"), 0x38)
     con.type("2 INK 6 PAPER 1 BORDER")
-    ck.eq("CURRENT_ATTR", env.u8("CURRENT_ATTR"), 0x72)
+    ck.eq("CURRENT_ATTR", env.u8("CURRENT_ATTR"), 0x32)
     ck.eq("border (PORT_FE_SHADOW & 7)", env.u8("PORT_FE_SHADOW") & 7, 1)
     attrs = m.read(0x5800, 768)
-    ck.eq("OK on row 1 (cells 0-1) and the rest of row 1", (list(attrs[32:34]), set(attrs[34:64])), ([0x72, 0x72], {0x44}))
-    ck.eq("edit row 23 after the command", (attrs[23 * 32], set(attrs[23 * 32 + 1:])), (0xE0, {0x44}))
-    ck.eq("banner row attributes", set(attrs[:32]), {0x44})
+    ck.eq("OK on row 1 (cells 0-1) and the rest of row 1", (list(attrs[32:34]), set(attrs[34:64])), ([0x32, 0x32], {0x38}))
+    ck.eq("edit row 23 after the command", (attrs[23 * 32], set(attrs[23 * 32 + 1:])), (0x87, {0x38}))
+    ck.eq("banner row attributes", set(attrs[:32]), {0x38})
     ed = Ed(32)
     base = view(m).rows
     type_keys(env, ed, "abc")
     attrs = m.read(0x5800, 768)
-    ck.eq("edit row attributes with 'abc'", list(attrs[23 * 32:23 * 32 + 32]), [0x44, 0x44, 0x44, 0xE0] + [0x44] * 28)
+    ck.eq("edit row attributes with 'abc'", list(attrs[23 * 32:23 * 32 + 32]), [0x38, 0x38, 0x38, 0x87] + [0x38] * 28)
     ck.eq("the line shows", view(m).rows[23], "abc")
     con.key(ENTER)
     con.type("1 .")
     attrs = m.read(0x5800, 768)
     ck.eq("rows", view(m).rows[:4], [BANNER, "OK", "ABC ?", "1 OK"])
     ck.eq("output attributes: 'ABC ?' (5 cells), '1 OK' (4 cells)", (list(attrs[64:70]), list(attrs[96:101])),
-          ([0x72] * 5 + [0x44], [0x72] * 4 + [0x44]))
+          ([0x32] * 5 + [0x38], [0x32] * 4 + [0x38]))
     ck.eq("border still", env.u8("PORT_FE_SHADOW") & 7, 1)
-    ck.note("INK/PAPER change CURRENT_ATTR ($44 -> $72) which output (OK, error text) uses; the editor ignores it "
-            "(ATTR_DEFAULT $44, cursor $E0); the border is port $FE bits 0-2 = 1 (shadow)")
+    ck.note("INK/PAPER change CURRENT_ATTR ($38 -> $32) which output (OK, error text) uses; the editor ignores it "
+            "(ATTR_DEFAULT $38, cursor $87); the border is port $FE bits 0-2 = 1 (shadow)")
     return ck.result()
 
 
@@ -1171,7 +1171,7 @@ def blank_rows(m, r0, r1):
         base = 0x4000 + (((y0 & 0xC0) << 5) | ((y0 & 0x38) << 2))
         for k in range(8):
             m.write(base + 0x100 * k, bytes(32))
-        m.write(0x5800 + r * 32, bytes([m.S.get("ATTR_DEFAULT", 0x44)]) * 32)
+        m.write(0x5800 + r * 32, bytes([m.S["ATTR_DEFAULT"]]) * 32)
 
 
 def full_reference(m):
@@ -1226,7 +1226,7 @@ def redraw_oracle(env, part):
         stray[0x1800 + 22 * 32 + 7] |= 0x80
         ck.true("a stray FLASH attribute in row 22 is a difference", first_diff(bytes(stray), ref) is not None)
         stray = bytearray(now)
-        stray[0x1800 + 23 * 32 + 2] = 0x44
+        stray[0x1800 + 23 * 32 + 2] = 0x38
         ck.true("a missing cursor is a difference", first_diff(bytes(stray), ref) is not None)
         ck.note("control: the reference of a clean screen matches; a stray pixel, a stray FLASH cell and a missing cursor each differ")
         return ck.result()
@@ -2490,7 +2490,7 @@ def blank_screen(m):
     """Rows 0-23 of the 32-column screen blank: all pixels zero, every attribute ATTR_DEFAULT."""
     for i in range(3):
         m.write(0x4000 + 2048 * i, bytes(2048))
-    m.write(0x5800, bytes([m.S.get("ATTR_DEFAULT", 0x44)]) * 768)
+    m.write(0x5800, bytes([m.S["ATTR_DEFAULT"]]) * 768)
 
 
 def view_reference(env):
@@ -2559,7 +2559,7 @@ def edit_redraw_oracle(env, part, ck):
         cells = [i for i in range(768) if now[0x1800 + i] & 0x80]
         ck.true("the view shows a cursor cell", len(cells) == 1, str(cells))
         for i in cells:
-            stray[0x1800 + i] = m.S.get("ATTR_DEFAULT", 0x44)
+            stray[0x1800 + i] = m.S["ATTR_DEFAULT"]
         ck.true("a missing cursor is a difference", first_diff(bytes(stray), ref) is not None)
         ck.note("control: a clean view matches; a stray pixel, a stray FLASH cell and a missing cursor each differ")
         return

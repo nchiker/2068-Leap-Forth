@@ -1116,9 +1116,9 @@ POLY_FILL_IMPL:
 ; header does not list as Out; none touches IX or IY.
 ; ============================================================================
 
-; HOME's values of these two, which tools/check_ram_layout.py compares with HOME's symbols.
+; HOME's value of this one, which tools/check_ram_layout.py compares with HOME's symbol (the colours are
+; include/hardware.inc's).
 EDIT_MAX_LEN       EQU 128      ; core/editor.asm: the edit line's capacity
-ATTR_DEFAULT       EQU $44      ; kernel/graphics/graphics.asm
 
 ; ============================================================================
 ; STORE_NEXT -- the line at HL.

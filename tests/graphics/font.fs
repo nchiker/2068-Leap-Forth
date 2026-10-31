@@ -11,5 +11,5 @@
 \ a code with no glyph draws a space: below 32, 127, 165 and up
 CLS 0 0 AT-XY 65 EMIT 1 EMIT 127 EMIT 165 EMIT 255 EMIT 66 EMIT          \ expect: A    B
 \ EMIT keeps the INK and PAPER attribute of each cell it draws, in every third of the screen
-CLS 0 0 AT-XY 2 INK 65 EMIT 0 8 AT-XY 66 EMIT 31 16 AT-XY 67 EMIT 4 INK          \ draws
-22528 C@ . 22784 C@ . 23071 C@ . 22529 C@ .          \ expect: 66 66 66 68
+CLS 0 0 AT-XY 2 INK 65 EMIT 0 8 AT-XY 66 EMIT 31 16 AT-XY 67 EMIT 0 INK          \ draws
+22528 C@ . 22784 C@ . 23071 C@ . 22529 C@ .          \ expect: 58 58 58 56
