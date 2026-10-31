@@ -10,8 +10,9 @@
 ; The keyboard is a stock Spectrum's: 8 rows of 5 bits read through port $FE, active low. CAPS
 ; SHIFT+digit gives the cursor, delete and delete-line codes, CAPS SHIFT+ENTER KEY_INSERT_LINE,
 ; CAPS SHIFT+SPACE KEY_BREAK (include/keys.inc), CAPS SHIFT+letter the uppercase letter. Unshifted
-; letters are lowercase. SYMBOL SHIFT gives the punctuation subset in KEY_ASCII_TABLE_SYMBOL;
-; positions with no single-character meaning (the keyword tokens of rows 1 and 2) are left 0.
+; letters are lowercase. SYMBOL SHIFT gives the punctuation in KEY_ASCII_TABLE_SYMBOL, with
+; 2068-Leap-C's map for ~ | \ { } [ ] ^ (its delta D7); positions with no single-character meaning
+; (the stock keyboard's compound tokens, SYMBOL SHIFT + Q W E X I) are left 0.
 ; ============================================================================
 
     INCLUDE "include/hardware.inc"
@@ -257,6 +258,21 @@ IO_DECODE_KEY:
     ret
 .not_row7_caps:
     ; CAPS SHIFT + anything else: the uppercase table
+    ld   hl, KEY_ASCII_TABLE_UPPER
+    jr   .table_lookup
+
+.check_symshift:
+    ld   a, (IO_SCAN_TABLE+7)        ; row 7: bit1 = SYMBOL SHIFT
+    bit  1, a
+    jr   nz, .no_shift                ; neither shift held
+    ld   hl, KEY_ASCII_TABLE_SYMBOL
+    jr   .table_lookup
+
+.no_shift:
+    ld   hl, KEY_ASCII_TABLE
+
+; the three tables' shared lookup (Leap-C's): HL = the table, A = (HL + row*5 + bit)
+.table_lookup:
     ld   a, b
     add  a, a
     add  a, a
@@ -264,37 +280,6 @@ IO_DECODE_KEY:
     add  a, c                         ; A = row*5 + bit
     ld   e, a
     ld   d, 0
-    ld   hl, KEY_ASCII_TABLE_UPPER
-    add  hl, de
-    ld   a, (hl)
-    ret
-
-.check_symshift:
-    ld   a, (IO_SCAN_TABLE+7)        ; row 7: bit1 = SYMBOL SHIFT
-    bit  1, a
-    jr   nz, .no_shift                ; neither shift held
-
-    ld   a, b
-    add  a, a
-    add  a, a
-    add  a, b
-    add  a, c
-    ld   e, a
-    ld   d, 0
-    ld   hl, KEY_ASCII_TABLE_SYMBOL
-    add  hl, de
-    ld   a, (hl)
-    ret
-
-.no_shift:
-    ld   a, b
-    add  a, a
-    add  a, a
-    add  a, b
-    add  a, c
-    ld   e, a
-    ld   d, 0
-    ld   hl, KEY_ASCII_TABLE
     add  hl, de
     ld   a, (hl)
     ret
@@ -412,13 +397,14 @@ KEY_ASCII_TABLE_UPPER:
     ; row 7: SPACE (CAPS SHIFT+SPACE is KEY_BREAK, taken earlier), SYMBOL SHIFT, M, N, B
     DB   0, 0, "M", "N", "B"
 
-; KEY_ASCII_TABLE_SYMBOL -- SYMBOL SHIFT + key. Row 1 and Q/W/E of row 2 are keyword or two-character
-; tokens on the stock keyboard and stay 0.
+; KEY_ASCII_TABLE_SYMBOL -- SYMBOL SHIFT + key. Q/W/E of row 2 are two-character tokens on the stock
+; keyboard (<= <> >=) and stay 0, as do X and I. Row 1, U, Y and H are 2068-Leap-C's (delta D7):
+; ~ | \ { } on A-G, the Spectrum legends ] [ on U Y and the up arrow ^ on H.
 KEY_ASCII_TABLE_SYMBOL:
     ; row 0: CAPS SHIFT, Z, X, C, V
     DB   0, ":", 0, "?", "/"
     ; row 1: A, S, D, F, G
-    DB   0, 0, 0, 0, 0
+    DB   "~", "|", $5C, "{", "}"
     ; row 2: Q, W, E, R, T
     DB   0, 0, 0, "<", ">"
     ; row 3: 1, 2, 3, 4, 5
@@ -426,9 +412,9 @@ KEY_ASCII_TABLE_SYMBOL:
     ; row 4: 0, 9, 8, 7, 6
     DB   "_", ")", "(", "'", "&"
     ; row 5: P, O, I, U, Y
-    DB   '"', ";", 0, 0, 0
+    DB   '"', ";", 0, "]", "["
     ; row 6: ENTER, L, K, J, H
-    DB   0, "=", "+", "-", 0
+    DB   0, "=", "+", "-", "^"
     ; row 7: SPACE, SYMBOL SHIFT, M, N, B
     DB   0, 0, ".", ",", "*"
 

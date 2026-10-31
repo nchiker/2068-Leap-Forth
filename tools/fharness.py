@@ -859,9 +859,12 @@ def _check_press(m, _):
         con.press(ch)
     con.press("\r")
     shown = [r for r in con.rows()[1:23] if r]
-    line = "Ab:?(+"                                  # CAPS SHIFT + a letter, SYMBOL SHIFT + Z, C, 8, K
-    for ch in line:
-        con.press(ch)
+    line = "Ab:?(+~|\\{}][^"                           # CAPS SHIFT + a letter, SYMBOL SHIFT + Z, C, 8, K, A-G, U, Y, H
+    try:
+        for ch in line:
+            con.press(ch)
+    except KeyError as e:                            # a build without the key
+        return dict(ok=False, detail=str(e))
     got, last = con.edit_line(), con.rows()[23]
     ok = shown == ["6 OK"] and got == line and last == line and con.in_editor()
     return dict(ok=ok, detail="matrix: rows 1-22 = %r; edit line %r (row 23 %r)" % (shown, got, last))
