@@ -7,7 +7,8 @@ reports: `docs/V2/milestones/`.
 
 - **Branch `v2/step-display-look`** (from master `85d727a`, PR #12 Words and keys merged; `make test` passed on master
   first): step Display look is complete (`docs/V2/milestones/Display_look.md`); `make test`, `make check` and
-  `make repro` pass on it. Not pushed; no PR yet: push and open it only when the owner asks.
+  `make repro` pass on it. PR #13 open; the owner reviews it before the next session (Claude merges on the owner's
+  word, with a merge commit).
 - **Decided (2026-10-31):** the screen follows Leap V2: black on white, white border, no banner, the version
   `2068 FORTH V2.0` on the status bar of row 23 until the first key (the owner's option A), `EDIT`'s status bar, Leap
   V2's chime C. Kept as Forth's: errors printed in the console, the colours a program sets survive (no reset on
