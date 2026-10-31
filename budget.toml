@@ -322,3 +322,15 @@ image = "exrom"
 component = "fill"
 delta = -2
 reason = "Display speed: the ALIGN 8 before CIRCLE_MASK_TABLE pads 2 B less after polygon's and circle's -30; returned to the reserve"
+
+[[ledger]]
+image = "home"
+component = "kernel"
+delta = -34
+reason = "BREAK and timing: the idle frame ends after one keyboard read, IO_KEY_SCAN_ALL rotates the row select instead of a table lookup (ROW_TABLE, IO_KEY_SCAN_ROW gone), KBD_ISR_INIT folded into the cold start; the interrupt routine's idle frame 2,010 -> 207 T; returned to the reserve"
+
+[[ledger]]
+image = "home"
+component = "boot"
+delta = -8
+reason = "BREAK and timing: the scan moved into page zero's padding, which counts as boot; returned to the reserve"

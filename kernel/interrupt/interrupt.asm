@@ -1,10 +1,12 @@
 ; ============================================================================
-; kernel/interrupt/interrupt.asm -- the IM 1 handler: frame counter and keyboard scan/debounce/repeat
+; kernel/interrupt/interrupt.asm -- the IM 1 handler: frame counter and keyboard scan/debounce/repeat,
+; and the matrix scan (IO_KEY_SCAN_ALL into IO_SCAN_TABLE), here in page zero's room
 ;
-; KBD_ISR_INIT is called once from COLD_START before EI; KBD_ISR_TICK runs from RST_38 on every
-; frame interrupt (50 or 60 Hz) whatever the foreground is doing. It scans the matrix
-; (IO_KEY_SCAN_ALL), then tracks ONE key: while a key is tracked only that key is checked
-; (IO_KEY_STILL_DOWN), so a second key going down alongside it (two-key rollover) cannot reset its
+; COLD_START sets KBD_CUR_ROW to $FF (no key tracked; its RAM clear zeroes the other cells) before
+; EI; KBD_ISR_TICK runs from RST_38 on every frame interrupt (50 or 60 Hz) whatever the foreground
+; is doing. With no key tracked, one read of all eight rows at once ends an idle frame; otherwise
+; it scans the matrix (IO_KEY_SCAN_ALL), then tracks ONE key: while a key is tracked only that key
+; is checked (IO_KEY_STILL_DOWN), so a second key going down alongside it (two-key rollover) cannot reset its
 ; debounce; only when nothing is tracked does IO_FIND_KEY search for a new one. A new key must hold
 ; for KBD_DEBOUNCE_TICKS ticks before it is decoded (IO_DECODE_KEY) and latched into
 ; KBD_LASTK/KBD_KEYHIT; held further, it repeats after KBD_REPDEL ticks and then every KBD_REPPER.
@@ -22,30 +24,13 @@ KBD_DEBOUNCE_TICKS   EQU 2    ; ticks a new key must hold before it is accepted.
                               ;   settle window is needed, and a membrane's bounce ends within a tick
 KBD_REPDEL           EQU 35   ; ticks held before auto-repeat starts (the stock ROM's REPDEL, $23)
 KBD_REPPER           EQU 5    ; ticks between repeats after that (the stock ROM's REPPER)
-
-; ============================================================================
-; KBD_ISR_INIT -- clear the keyboard state: nothing latched, nothing tracked
-; Power-on RAM cannot be trusted to be zero; KBD_CUR_ROW = $FF (not 0) means no key is tracked.
-; In:  none
-; Out: none
-; Destroys: AF
-; ============================================================================
-KBD_ISR_INIT:
-    xor  a
-    ld   (KBD_LASTK), a
-    ld   (KBD_KEYHIT), a
-    ld   (KBD_CUR_BIT), a
-    ld   (KBD_DEBOUNCE), a
-    ld   (KBD_REPEAT), a
-    ld   a, $FF
-    ld   (KBD_CUR_ROW), a           ; $FF = no key currently tracked
-    ret
+KEY_ROW_FIRST        EQU $FE  ; the first row's select byte; rotated left, it gives the next row
 
 ; ============================================================================
 ; KBD_ISR_TICK -- one interrupt: count the frame, scan the keyboard, run the debounce/repeat machine
-; Per tick: nothing tracked -> IO_FIND_KEY; a key found starts tracking (KBD_DEBOUNCE counts down
-; from KBD_DEBOUNCE_TICKS - 1). Tracked -> only that key is tested: still down continues the
-; debounce or repeat; released clears the tracking and looks for a new key in the same tick.
+; Per tick: nothing tracked -> no key down ends it (one port read), else IO_FIND_KEY; a key found
+; starts tracking (KBD_DEBOUNCE counts down from KBD_DEBOUNCE_TICKS - 1). Tracked -> only that key
+; is tested: still down continues the debounce or repeat; released clears the tracking and looks for a new key in the same tick.
 ; In:  none
 ; Out: FRAMES + 1; KBD_LASTK/KBD_KEYHIT set when a key is accepted or repeats
 ; Destroys: none (all registers preserved)
@@ -60,13 +45,19 @@ KBD_ISR_TICK:
     inc  hl
     ld   (FRAMES), hl
 
-    call IO_KEY_SCAN_ALL
-
     ld   a, (KBD_CUR_ROW)
-    cp   $FF
-    jr   z, .look_for_new           ; nothing currently tracked
+    inc  a
+    jr   nz, .tracked
+    in   a, (PORT_ULA)              ; nothing tracked ($FF + 1 = 0 selects every row at once): bits
+    or   $E0                        ;   0-4 all set = no key down, and the frame ends here
+    inc  a
+    jr   z, .done
+    call IO_KEY_SCAN_ALL
+    jr   .look_for_new
 
-    ; something is tracked: test only that key
+.tracked:                           ; something is tracked: test only that key
+    call IO_KEY_SCAN_ALL
+    ld   a, (KBD_CUR_ROW)
     ld   b, a
     ld   a, (KBD_CUR_BIT)
     ld   c, a
@@ -131,3 +122,19 @@ KBD_ISR_TICK:
     pop  af
     ret
 
+; ============================================================================
+; IO_KEY_SCAN_ALL -- read all 8 rows into IO_SCAN_TABLE, rows $FE ... $7F in that order
+; In:  none
+; Out: IO_SCAN_TABLE filled
+; Destroys: AF, BC, HL
+; ============================================================================
+IO_KEY_SCAN_ALL:
+    ld   hl, IO_SCAN_TABLE
+    ld   bc, KEY_ROW_FIRST << 8 | PORT_ULA     ; B = the row select, rotated left: $FE, $FD ... $7F
+.row:
+    in   a, (c)
+    ld   (hl), a
+    inc  hl
+    rlc  b
+    jr   c, .row                       ; $7F rotates to $FE with no carry: the 8th row was the last
+    ret

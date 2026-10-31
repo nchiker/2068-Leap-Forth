@@ -1,11 +1,11 @@
 ; ============================================================================
 ; kernel/io/io.asm -- keyboard scanning, key decoding and the joystick read
 ;
-; The matrix scan (IO_KEY_SCAN_ROW/ALL into IO_SCAN_TABLE), the single-key finder (IO_FIND_KEY,
-; IO_KEY_STILL_DOWN), the decoder (IO_DECODE_KEY and its three 40-entry tables), and the consumers
-; of the interrupt handler's latched key (IO_READ_KEY, IO_KEY_AVAILABLE). All scanning, debounce and
-; repeat run every frame in KBD_ISR_TICK (kernel/interrupt/interrupt.asm), which calls the scan,
-; find and decode routines here; the foreground only reads KBD_LASTK/KBD_KEYHIT.
+; The single-key finder (IO_FIND_KEY, IO_KEY_STILL_DOWN), the decoder (IO_DECODE_KEY and its three
+; 40-entry tables), and the consumers of the interrupt handler's latched key (IO_READ_KEY,
+; IO_KEY_AVAILABLE). All scanning, debounce and repeat run every frame in KBD_ISR_TICK
+; (kernel/interrupt/interrupt.asm, with the matrix scan IO_KEY_SCAN_ALL), which calls the find and
+; decode routines here; the foreground only reads KBD_LASTK/KBD_KEYHIT.
 ;
 ; The keyboard is a stock Spectrum's: 8 rows of 5 bits read through port $FE, active low. CAPS
 ; SHIFT+digit gives the cursor, delete and delete-line codes, CAPS SHIFT+ENTER KEY_INSERT_LINE,
@@ -28,44 +28,6 @@
 ;   Row $DF: bit0=P bit1=O bit2=I bit3=U bit4=Y
 ;   Row $BF: bit0=ENTER bit1=L bit2=K bit3=J bit4=H
 ;   Row $7F: bit0=SPACE bit1=SYMBOL SHIFT bit2=M bit3=N bit4=B
-KEY_ROW_COUNT   EQU 8
-
-; ============================================================================
-; IO_KEY_SCAN_ROW -- read one keyboard row
-; In:  A = row-select byte (one of the $FE/$FD/.../$7F values above)
-; Out: A = bits 0-4 = key state for that row (0 = pressed), bits 5-7 undefined
-; Destroys: AF
-; ============================================================================
-IO_KEY_SCAN_ROW:
-    in   a, (PORT_ULA)
-    ret
-
-; ============================================================================
-; IO_KEY_SCAN_ALL -- read all 8 rows into IO_SCAN_TABLE (one byte per row, in ROW_TABLE's order)
-; In:  none
-; Out: IO_SCAN_TABLE filled; HL = IO_SCAN_TABLE (start of the table)
-; Destroys: AF, BC, HL
-; ============================================================================
-IO_KEY_SCAN_ALL:
-    ld   hl, IO_SCAN_TABLE
-    ld   b, KEY_ROW_COUNT
-    ld   c, 0                    ; C = row index
-.scan_loop:
-    push bc
-    push hl
-    ld   hl, ROW_TABLE
-    ld   b, 0
-    add  hl, bc                   ; HL -> ROW_TABLE[C]
-    ld   a, (hl)                  ; A = this row's select byte
-    pop  hl
-    call IO_KEY_SCAN_ROW
-    ld   (hl), a
-    inc  hl
-    pop  bc
-    inc  c
-    djnz .scan_loop
-    ld   hl, IO_SCAN_TABLE
-    ret
 
 ; ============================================================================
 ; IO_FIND_KEY -- the one non-modifier key that is down, in a table filled by IO_KEY_SCAN_ALL
@@ -352,11 +314,7 @@ STICK_READ:
     ld   h, 0
     ret
 
-; the row-select bytes, in IO_SCAN_TABLE order
-ROW_TABLE:
-    DB   $FE, $FD, $FB, $F7, $EF, $DF, $BF, $7F
-
-; The three key tables: 40 entries (8 rows x 5 bits), index = row*5 + bit, ROW_TABLE's row order;
+; The three key tables: 40 entries (8 rows x 5 bits), index = row*5 + bit, IO_SCAN_TABLE's row order;
 ; 0 = unmapped.
 ; KEY_ASCII_TABLE -- plain keys; letters are lowercase
 KEY_ASCII_TABLE:

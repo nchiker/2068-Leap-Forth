@@ -114,7 +114,8 @@ COLD_START:
     call GFX_PRINT_STRING
     call GFX_STATUS_BAR
 
-    call KBD_ISR_INIT               ; before EI
+    ld   a, $FF                     ; before EI: no key tracked (the RAM clear zeroed the other
+    ld   (KBD_CUR_ROW), a           ;   keyboard cells: nothing latched)
     im   1
     ei                              ; before the chime: it waits with HALT
 
