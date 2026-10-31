@@ -105,6 +105,7 @@ COLD_START:
     ld   a, 1
     ld   (FWRAP_OLD_COUNT), a
     ld   (VERSION_UP), a          ; core/editor.asm: the first key takes the version off row 23
+    ld   (NOBRK), a               ; core/throwcatch.asm: at the console BREAK is a key
 
     ld   a, BORDER_DEFAULT        ; the border's power-on colour is the ULA's, not defined
     call GFX_SET_BORDER

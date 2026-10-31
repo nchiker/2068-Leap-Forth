@@ -87,6 +87,7 @@ UDG_BASE = 0xE000                   # screen_rows: UDG code 144 + i reads as chr
 UDG_CODE_BASE, UDG_COUNT = 144, 21  # kernel/graphics UDG_CODE_BASE; include/forth_layout.inc UDG_COUNT
 Z_CAPS, Z_SYM, Z_SPACE, Z_ENTER = 135, 138, 128, 129    # ZEsarUX send-keys-event codes (letters and digits: their ASCII)
 KEY_ENTER = 13                      # include/keys.inc
+KEY_BREAK = 0x10                    # include/keys.inc: CAPS SHIFT + SPACE
 # Control codes that IO_DECODE_KEY makes from CAPS SHIFT + a key by code, not through a table (kernel/io/io.asm;
 # values from include/keys.inc): code -> the ZEsarUX key events that produce it.
 CTRL_KEYS = {0x01: [Z_CAPS, ord("5")],     # KEY_CURSOR_LEFT

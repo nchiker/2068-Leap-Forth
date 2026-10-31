@@ -32,7 +32,9 @@ KEY_ROW_FIRST        EQU $FE  ; the first row's select byte; rotated left, it gi
 ; starts tracking (KBD_DEBOUNCE counts down from KBD_DEBOUNCE_TICKS - 1). Tracked -> only that key
 ; is tested: still down continues the debounce or repeat; released clears the tracking and looks for a new key in the same tick.
 ; In:  none
-; Out: FRAMES + 1; KBD_LASTK/KBD_KEYHIT set when a key is accepted or repeats
+; Out: FRAMES + 1; KBD_LASTK/KBD_KEYHIT set when a key is accepted or repeats; BREAK accepted while
+;      a word runs: does not return (BRK_ACCEPTED). Uses no alternate register (LINE keeps its
+;      state there)
 ; Destroys: none (all registers preserved)
 ; ============================================================================
 KBD_ISR_TICK:
@@ -89,6 +91,7 @@ KBD_ISR_TICK:
     ld   (KBD_KEYHIT), a
     ld   a, KBD_REPDEL
     ld   (KBD_REPEAT), a
+    call BRK_ACCEPTED               ; BREAK stops a running word (core/throwcatch.asm), unless deferred
     jr   .done
 
 .already_accepted:

@@ -421,7 +421,9 @@ GFX_SET_ATTR:
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 GFX_SET_MODE:
-    push af
+    ld   hl, NOBRK
+    inc  (hl)                      ; GFX_MODE, PORT_FF_SHADOW and the port change together (BREAK
+    push af                        ;   waits: core/throwcatch.asm)
     call GFX_SPRITE_INVALIDATE
     pop  af
     ld   (GFX_MODE), a
@@ -436,7 +438,7 @@ GFX_SET_MODE:
     out  (PORT_SCLD), a
     ld   a, c
     or   a
-    ret  nz
+    jp   nz, BRK_SECTION_END
     ; High Resolution: clear the second display file's attributes to ATTR_DEFAULT
     ld   hl, SECOND_DISPLAY_ADDR
     ld   de, SECOND_DISPLAY_ADDR + 1
@@ -444,7 +446,7 @@ GFX_SET_MODE:
     ld   a, ATTR_DEFAULT
     ld   (hl), a
     ldir
-    ret
+    jp   BRK_SECTION_END
 
 ; ============================================================================
 ; GFX_STATUS_BAR -- paint row 23's attributes as the status bar (Leap V2's): columns 0-28 white on

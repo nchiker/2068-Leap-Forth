@@ -310,10 +310,13 @@ VERSION_UP:               DEFS 1                        ; 1: the version is on r
 STORE_MARK_N:             DEFS 2                        ; view: the line STORE_LINE found last ...
 STORE_MARK_PTR:           DEFS 2                        ; ... and its address (line 0 at STORE_START: none yet)
 COLON_HDR:                DEFS 2                        ; header of the `:` definition still open (0: none), for COLON_DROP
+BRK_PEND:                 DEFS 1                        ; nonzero: BREAK was pressed during a section that defers it
+NOBRK:                    DEFS 1                        ; > 0: BREAK waits for the end of the section (core/throwcatch.asm)
     DEFS RAM_CELLS_END - $                              ; free: room for new cells
     ASSERT $ == RAM_CELLS_END
     ASSERT FP_RAM + 66 == THROW_CODE && FMT + 24 == FDIG && FDIG + 9 == FSQ_N && FQ + 8 == FFLAGS + 1
     ASSERT GFX_LINE_Y0 == GFX_LINE_X0 + 2 && GFX_LINE_X1 == GFX_LINE_X0 + 4 && GFX_LINE_Y1 == GFX_LINE_X0 + 6
+    ASSERT NOBRK == BRK_PEND + 1
     ASSERT VIEW_SH_END == VIEW_SH + 69 && VIEW_TEXT + 14 <= EDIT_LINE_NO && (VIEW_TEXT & $FF) + 14 < $100
     ORG LAYOUT_RETURN_ORG
 

@@ -360,8 +360,9 @@ H_COLON:
 W_COLON:
     call DICT_ROOM0
     call HEADER_BUILD
-    call HEADER_LINK
-    ld   (COLON_HDR), hl          ; open until `;` (an error before it: COLON_DROP)
+    ld   hl, (NEW_HEADER_ADDR)
+    ld   (COLON_HDR), hl          ; open until `;` (an error before it: COLON_DROP), before the link:
+    call HEADER_LINK              ;   a BREAK between the two still finds it
     jp   W_RBRACKET               ; STATE = 1 (core/tick.asm)
 
 ; ============================================================================
@@ -414,14 +415,17 @@ COLON_CLOSE:
 ; Out: returns when the source is consumed
 ; Destroys: all registers except IX, IY, SP
 ;
-; INTERPRET_NESTED is the same routine entered one instruction later: it does not save
-; THROW_ROOT_SP, which therefore stays the outermost run's SP. An error in a nested run (LOAD-TEXT
+; INTERPRET_NESTED is the same routine entered after the outermost run's setup: it does not save
+; THROW_ROOT_SP, which therefore stays the outermost run's SP, nor release BREAK (NOBRK). An error in a nested run (LOAD-TEXT
 ; interpreting its text) unwinds (REPORT_INTERP_ERROR, THROW, ABORT, QUIT) to the outermost
 ; caller, abandoning the nested text and the rest of the outer line. A nested run that succeeds
 ; returns to its caller, which restores SRC_PTR / SRC_END (core/loadtext.asm).
 ; ============================================================================
 INTERPRET_RUN:
     ld   (THROW_ROOT_SP), sp    ; where an uncaught THROW unwinds to (core/throwcatch.asm)
+    xor  a
+    ld   (BRK_PEND), a          ; a BREAK at the console was its key
+    ld   (NOBRK), a             ; from here BREAK stops what runs (the console sets it back to 1)
 INTERPRET_NESTED:
     ld   (SRC_PTR), hl
     add  hl, de

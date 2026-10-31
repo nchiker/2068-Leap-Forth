@@ -111,7 +111,6 @@ W_LOADTEXT:
     call STORAGE_LOAD_DATA
     jp   c, STORAGE_END
     pop  ix
-    ei
     ld   hl, (SRC_END)                  ; the outer run's source pointers survive the nested run
     push hl
     ld   hl, (SRC_PTR)
@@ -135,7 +134,8 @@ W_LOADTEXT:
     inc  hl
 .store_end:
     ld   (STORE_END), hl
-    pop  hl
+    ei                                  ; interrupts were off from the load to here: a BREAK cannot
+    pop  hl                             ;   leave the store's text without its end
     call INTERPRET_NESTED
     pop  hl
     ld   (SRC_PTR), hl

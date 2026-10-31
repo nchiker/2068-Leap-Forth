@@ -83,11 +83,12 @@ W_FORGET:
     sbc  hl, de
     jr   c, .refuse_rom                   ; below FORTH_DICT_RAM: a ROM word
     ld   hl, (FORGET_TARGET_ADDR)
-    ld   (HERE), hl                        ; HERE rewinds to the target's header
     ld   e, (hl)
     inc  hl
     ld   d, (hl)                            ; DE = its LINK
-    ld   (LATEST), de
+    dec  hl
+    ld   (LATEST), de                       ; LATEST first: a BREAK before HERE leaves HERE above
+    ld   (HERE), hl                         ;   every linked header; HERE rewinds to the header
     ret
 .nomatch:
     ld   hl, (FORGET_TARGET_ADDR)

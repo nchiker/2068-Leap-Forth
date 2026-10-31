@@ -25,11 +25,9 @@ STORAGE_END:
     ret  nc
     ld   hl, -37                        ; file I/O exception
     inc  b
-    jr   nz, STORAGE_THROW
-    ld   hl, -28                        ; user interrupt
+    jp   z, BRK_STOP                    ; SPACE: -28, as BREAK (the AY, paging and key put right)
 STORAGE_THROW:
-    rst RST_DPUSH
-    jp   W_THROW
+    jp   W_THROW_HL
 
 ; ============================================================================
 ; STORAGE_PARSE_NAME -- the next word of the input as the tape name: STORAGE_NAME_BUF, space-

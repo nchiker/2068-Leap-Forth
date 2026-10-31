@@ -42,6 +42,58 @@ JUMP_HL:
     jp   (hl)
 
 ; ============================================================================
+; BREAK (CAPS SHIFT + SPACE) while a word runs throws -28 where the word was interrupted, as if it had
+; run `-28 THROW` there. A section that must finish first holds NOBRK above 0: the console between
+; lines (INTERPRET_RUN releases it), EDIT's view, the SPRITE-* words, a display mode change. BREAK
+; then sets BRK_PEND, and the section's end (BRK_SECTION_END) stops; the console and EDIT discard it
+; (BREAK is their key).
+;
+; BRK_ACCEPTED -- KBD_ISR_TICK accepted a key (interrupts off, the ISR's frame above the return)
+; Out: not BREAK, or a section defers it: returns. Else does not return: the ISR's frame goes with
+;      the interrupted code's (THROW reloads SP)
+; Destroys: AF
+; BRK_STOP -- BREAK now: the EXROM paged out, the AY's three volumes 0 and the latched key used up,
+;      then THROW -28 (CATCH sees it; uncaught, the console prints BREAK). Does not return
+; BRK_SECTION_END -- the end of a section that defers BREAK: NOBRK - 1, and a BREAK pressed during
+;      it stops now (BRK_STOP). Destroys: AF, HL (the carry is kept when it returns)
+; ============================================================================
+BRK_ACCEPTED:
+    ld   a, (KBD_LASTK)
+    cp   KEY_BREAK
+    ret  nz
+    ld   (BRK_PEND), a
+    ld   a, (NOBRK)
+    or   a
+    ret  nz
+    ei                          ; no RETI: the interrupt ends here
+BRK_STOP:
+    xor  a
+    ld   (BRK_PEND), a
+    ld   (KBD_KEYHIT), a
+    inc  a
+    ld   (BANK_EXROM_DEPTH), a  ; whatever the depth was: one page-out restores chunk 5 to RAM
+    call BANK_PAGE_EXROM_OUT
+    ld   bc, $0800              ; AY registers 8, 9, 10: the volumes
+.silence:
+    call SOUND_WRITE
+    inc  b
+    ld   a, b
+    cp   11
+    jr   c, .silence
+    ld   hl, -28
+    jr   W_THROW_HL
+
+BRK_SECTION_END:
+    ld   hl, NOBRK
+    dec  (hl)
+    ret  nz
+    dec  hl                     ; BRK_PEND (include/forth_layout.inc)
+    inc  (hl)
+    dec  (hl)
+    ret  z
+    jr   BRK_STOP
+
+; ============================================================================
 ; THROW ( n -- ) -- n = 0: nothing. Otherwise unwind to the innermost CATCH, which then returns n
 ; (stacks restored to their CATCH-time depth); with none, the uncaught path (file header)
 ; ============================================================================
@@ -50,6 +102,7 @@ H_THROW:
     DB   5, "T","H","R","O","W"
 W_THROW:
     rst RST_DPOP            ; HL = n
+W_THROW_HL:
     ld   a, h
     or   l
     ret  z

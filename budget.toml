@@ -352,3 +352,33 @@ image = "home"
 component = "interp"
 delta = -2
 reason = "BREAK and timing: COLON_DROP zeroes LEAVE_DEPTH for every line that ends in an error (+4 B), ABORT and QUIT no longer do (-6 B); returned to the reserve"
+
+[[ledger]]
+image = "home"
+component = "interp"
+delta = 70
+reason = "BREAK and timing: BREAK stops a running word (BRK_ACCEPTED, BRK_STOP: the EXROM paged out, the AY silenced, THROW -28; BRK_SECTION_END for the sections that defer it, 56 B); INTERPRET_RUN releases BREAK (+7 B); : records its header before linking it, FORGET sets LATEST before HERE, DOES> patches its jump with interrupts off, so a BREAK between two stores leaves nothing half-made (+6 B); from the reserve"
+
+[[ledger]]
+image = "home"
+component = "kernel"
+delta = 11
+reason = "BREAK and timing: the interrupt routine calls BRK_ACCEPTED when it accepts a key (+3 B), a display mode change defers BREAK (+8 B); from the reserve"
+
+[[ledger]]
+image = "home"
+component = "graphics"
+delta = 13
+reason = "BREAK and timing: EXROM_CALL_NOBRK, the SPRITE-* words' EXROM call in a section that defers BREAK; from the reserve"
+
+[[ledger]]
+image = "home"
+component = "console"
+delta = 16
+reason = "BREAK and timing: EDIT's view defers BREAK and discards it (BREAK is its key, +11 B), the console holds BREAK between lines (+5 B); from the reserve"
+
+[[ledger]]
+image = "home"
+component = "tape"
+delta = -3
+reason = "BREAK and timing: SPACE stopping a transfer goes through BRK_STOP, and STORAGE_THROW enters THROW with HL; returned to the reserve"

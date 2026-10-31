@@ -574,6 +574,8 @@ EDITOR_LOOP_LIVE:
     ld   d, 0
     ld   e, a
     call INTERPRET_RUN
+    ld   a, 1
+    ld   (NOBRK), a                 ; the console's own work: BREAK is a key again (core/throwcatch.asm)
     ld   a, (VIEW_RESULT)           ; EDIT ran, and an error may have left changed-line
     or   a                          ; marks in the store
     call nz, EDIT_CLEAR_MARKS
