@@ -6,7 +6,7 @@ the best solution for the language and its users; fix a problem in the session i
 reason not to (the reason is written here); **follow Leap-C's conventions** (`~/2068-Leap-C` `CONTRIBUTING.md` and
 `project_plan.md` section 1) for testing, paperwork, code style and RAM layout.
 
-Last updated 2026-10-31. Free bytes: HOME FREE_AFTER, EXROM 3,208 (`make budget`: per component, `budget.toml`;
+Last updated 2026-10-31. Free bytes: HOME 1,939, EXROM 3,208 (`make budget`: per component, `budget.toml`;
 `make inventory`: per routine). Dictionary: 16,128 bytes at power-on.
 
 ## Done
@@ -37,7 +37,7 @@ the console, EDIT's view, the SPRITE-* words and a display mode change defer it)
 FULL (-5) before the machine stack leaves its area; the interrupt routine's idle frame 2,010 → 207 T (every program
 about 2.6% faster). Fixed on the way: an error left a half-compiled `:` word (running it reset the machine) and
 LEAVE_DEPTH raised; CATCH did not put the input source back; output that scrolled cleared its new rows white.
-HOME 2,188 → FREE_AFTER B free, EXROM 3,208.
+HOME 2,188 → 1,939 B free, EXROM 3,208.
 
 ## Next, in order
 

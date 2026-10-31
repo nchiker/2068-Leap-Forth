@@ -5,17 +5,15 @@ reports: `docs/V2/milestones/`.
 
 ## Where things stand (2026-10-31)
 
-- **Branch `v2/step-display-speed`** (from master `f7ab173`, PR #13 Display look merged; `make test` passed on master
-  first): step Display speed is complete (`docs/V2/milestones/Display_speed.md`); `make test` (497 s), `make check` and
-  `make repro` pass on it. PR #14 open; the owner reviews it before the next session (Claude merges on the owner's
-  word, with a merge commit).
-- **Decided (2026-10-31):** all four proposed changes (LINE rebuilt on 16-bit ends, the view's store lookup from the
-  line found last, the console scroll, `.` through `PRINT_UDEC16`); POLYGON's vertices stay bytes (option (a), the
-  least ROM space; in the roadmap's known defects). The exact off-screen jump for LINE (built: about 130 B) was left
-  out; its walk costs about 270 T a step (roadmap).
-- **Free bytes:** HOME 2,188, EXROM 3,208; per component in `budget.toml` (`make budget`), per routine
+- **Branch `v2/step-break-timing`** (from master `0e9ebd0`, PR #14 Display speed merged; `make test` passed on master
+  first): step BREAK and timing is complete (`docs/V2/milestones/BREAK_and_timing.md`); `make test`, `make check` and
+  `make repro` pass on it. Not pushed; the owner asks for the push and the PR.
+- **Decided (2026-10-31):** the owner approved every recommendation: 2068-Leap-C's BREAK model; the shapes stop at
+  once, the sprites and `EDIT` defer; `KEY`/`ACCEPT` stop rather than return 16; BREAK silences the AY; the recursion
+  guard (-5 `RETURN STACK FULL`); the scan rewrite; an error drops the open `:` definition.
+- **Free bytes:** HOME 1,939, EXROM 3,208; per component in `budget.toml` (`make budget`), per routine
   `make inventory`. The dictionary starts at `$9100` (`FREE` 16,128 at power-on).
-- **Next:** ROADMAP step 1, *BREAK and timing*, then *Blackjack*.
+- **Next:** ROADMAP's *Blackjack*.
 
 ## How the owner wants the work done
 
@@ -49,7 +47,8 @@ reports: `docs/V2/milestones/`.
   tool that reads row 23 before typing sees `  2068 FORTH V2.0`. Output rows are 0-22 (`floattest.nonblank_rows`). The
   version text is `include/forth_version.inc` (`fh.version_text()`), edited by hand at each release.
 - **Colours are `include/hardware.inc`'s** (`ATTR_DEFAULT` `$38`, the status bar's), shared by both images; the cursor
-  is `$87`. `Machine.boot_trace()` (fharness) boots again from reset and returns the chime's AY writes with their
+  is `$87`. Output is drawn in `CURRENT_ATTR` (EMIT's characters, CLS, EMIT's new row when output scrolls); the edit line
+  in `ATTR_DEFAULT` (`GFX_CLEAR_ROW` takes the attribute in A). `Machine.boot_trace()` (fharness) boots again from reset and returns the chime's AY writes with their
   frames and the screen at the chime's start and at the key wait (`border=` sets the ULA's border before the reset).
 - **The font is printable ASCII in code order** (`FONT_TABLE + (code - 32) * 8`); `PUNCT_CHAR_TABLE` is gone. The screen
   decoders tell an old build by that symbol. Every printable character except the backtick has a key now, so tests can
@@ -65,10 +64,26 @@ reports: `docs/V2/milestones/`.
 - **ZEsarUX's tape autoload** types J "" ENTER when the PC reaches `$11F8` with the HOME ROM paged in. Data (the font)
   must cover `$11F8`: `rom/forth_boot.asm` ASSERTs it. When HOME shrinks and the ASSERT fails, move includes ahead of
   the font, never the ASSERT.
-- **LINE uses the alternate registers** (r, dmin, dmaj in HL', DE', BC') and nothing the interrupt runs touches them
-  today. *BREAK and timing* changes the interrupt routine: it must not use EXX or the alternates without saving them.
+- **LINE uses the alternate registers** (r, dmin, dmaj in HL', DE', BC') and nothing the interrupt runs touches them:
+  keep it so (no EXX or AF' in `KBD_ISR_TICK`, `BRK_ACCEPTED`).
   LINE's coordinates are 2-byte cells (`GFX_LINE_X0` .. `_Y1`, consecutive, an `ASSERT` says so); `GFX_WRITE_PIXEL`
   keeps BC and takes no OVER flag.
+- **BREAK is an asynchronous THROW -28** (`core/throwcatch.asm`): the interrupt routine may unwind any running word
+  between two instructions. New code that updates two cells another word depends on must order the stores so either
+  state is valid (as `FORGET`: LATEST before HERE), keep interrupts off for a few instructions (as `DOES>`'s patch;
+  more than about 30 T loses a frame), or be a section: `NOBRK` +1, then `jp BRK_SECTION_END` (as
+  `EXROM_CALL_NOBRK`, `GFX_SET_MODE`). A wait needs nothing: BREAK unwinds it. BREAK at the console and in `EDIT`'s view
+  is their key (`NOBRK` held); anything else that wants BREAK as a key must hold `NOBRK` and clear `BRK_PEND` after.
+- **Recursion stops at `MACHINE_STACK_GUARD`** (`STK_GUARD`, -5): compiled before a definition's call to itself, called
+  by `EXECUTE` and `CATCH`. A new word that runs an xt must call it too. ROM routines use at most 36 B below the prompt
+  in the Forth tests; the guard leaves 256 B.
+- **forthtest's `\ break: at SYMBOL [N]` / `\ break: after N`** hold BREAK on the matrix for the next line (Leap-C's
+  exectest directive); EXROM labels work while the dictionary is small (a breakpoint is by address).
+- **CATCH keeps the input source** with its frame; THROW puts it back only when a nested run (LOAD-TEXT, EDIT) moved it,
+  and `CATCH_SRC_HERE` (called when such a run starts) moves the frames' position past the name. A new word that runs
+  `INTERPRET_NESTED` must call `CATCH_SRC_HERE` first. In the same source a caught THROW goes on after whatever the
+  word read: `' LOAD-TEXT CATCH name` (the tutorial's idiom) depends on it.
+- **Page zero holds 3 free bytes** before `$0100` (the interrupt routine and `IO_KEY_SCAN_ALL`).
 - **The view's store lookup remembers a line** (`STORE_MARK_N`, `STORE_MARK_PTR`): every change to the store during a
   session must go through `STORE_GAP` (which keeps or resets the mark); a session starts it at line 0.
 - **Profiling a ROM routine:** ZEsarUX's ZRCP `cpu-transaction-log` with `tstates yes`, `address yes` (a file of

@@ -36,3 +36,9 @@ NORMAL CLS 0 18 AT-XY
 1 {BRK_PEND} C!  0 10 10 SPRITE-SHOW 6 .                \ expect: BREAK
 {SPRITE_SLOT_SHOWN} C@ 0= 0= .         \ expect: -1
 0 SPRITE-HIDE {SPRITE_SLOT_SHOWN} C@ . \ expect: 0
+\ the tutorial's example (section 13, Catching BREAK): the program tidies up and says why it stopped
+CLS 0 0 AT-XY
+: SPIN   BEGIN 1 BORDER 2 BORDER 0 UNTIL ;
+: RUN    ['] SPIN CATCH  7 BORDER  -28 = IF ." STOPPED" CR THEN ;
+\ break: after 30000
+RUN {PORT_FE_SHADOW} C@ 7 AND .        \ expect: STOPPED|7

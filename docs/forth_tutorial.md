@@ -4201,6 +4201,23 @@ Any other code prints `ERROR` and the number: your own `5 THROW` prints
 overflow found after a word has run is not a `THROW`; it keeps printing
 `STACK?`.
 
+#### Catching BREAK
+
+BREAK is a `THROW` too: pressing CAPS SHIFT + SPACE while a word runs
+throws `-28` wherever that word happens to be. A program that has
+something to put right first — a sound left playing, the border
+colour it changed — catches it, tidies up, and can then stop or carry
+on:
+
+```forth
+: SPIN   BEGIN 1 BORDER 2 BORDER 0 UNTIL ;
+: RUN    ['] SPIN CATCH  7 BORDER  -28 = IF ." STOPPED" CR THEN ;
+```
+
+`RUN` flashes the border until you press BREAK, then sets it back to
+white and prints `STOPPED` instead of `BREAK`. At the prompt and in
+`EDIT`, BREAK is just a key, as before.
+
 ### Giving Up on Purpose: `ABORT` and `QUIT`
 
 That fallback — abandon everything, come back to a fresh prompt — is
