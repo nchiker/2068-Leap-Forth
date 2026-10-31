@@ -1,129 +1,31 @@
 ; ============================================================================
-; core/dict.asm — dictionary header format, data stack, Phase 2 CODE
-; primitives
+; core/dict.asm -- the dictionary format, the data stack and the primitives DROP DUP SWAP OVER + - @ !
 ;
-; NOT a kernel/ module: this is language-layer code (the dictionary and
-; the words that manipulate it), analogous to 2068-Leap's basic/ sitting
-; above its kernel/ — see docs/PROJECT_PLAN.md's Phase 1 architecture
-; decisions. Nothing in this file touches hardware directly; it doesn't
-; INCLUDE anything from kernel/ or include/ on purpose, so it can be
-; assembled and tested (rom/forth_smoke.asm) with zero dependencies,
-; matching the same "smallest provable step" principle rom/main.asm
-; itself was built on.
+; Language-layer code, not a kernel module: nothing here touches hardware or INCLUDEs kernel/ or
+; include/ (but include/rst_vectors.inc must be in page zero: it holds DPOP_HL and DPUSH_HL).
 ;
-; THREADING MODEL: subroutine threading (docs/PROJECT_PLAN.md Phase 1).
-; Every word's code field is plain Z80 code ending in RET. A colon
-; definition (once Phase 3's compiler exists) is just a straight-line
-; list of CALLs to other words' code fields, also ending in RET — there
-; is no NEXT dispatcher and no separate DOCOL/DOES> indirection to write
-; for CODE words. The Z80's own CALL/RET *is* the inner interpreter, and
-; SP is the return stack for free. The cost of that simplicity is that
-; the data stack cannot also live on SP — see DSTACK below.
+; Subroutine threading: a word's code ends in RET, a colon definition is a list of CALLs, the Z80's
+; CALL / RET is the inner interpreter and SP is the return stack. IX is the data stack pointer: it
+; points at the top cell (low byte at (ix+0)), a push decrements IX by 2 first, a pop reads and
+; then increments it. (Kernel calls use HL, DE, BC and AF only, so IX is free.)
 ;
-; DICTIONARY HEADER FORMAT (fixed for the life of this project unless a
-; real need forces a change — Phase 3's CREATE must match this exactly):
-;   LINK     : 2 bytes, address of the previous entry's LINK field, or
-;              0 for the first entry in the dictionary.
-;   LENFLAGS : 1 byte. Bits 0-4 = name length (0-31). Bit 7 = IMMEDIATE
-;              (unused until Phase 3's compiler checks it; must be 0 for
-;              every entry below). Bits 5-6 reserved, must be 0.
-;   NAME     : LENFLAGS & $1F bytes, the word's name, not null-terminated
-;              (length is already known from LENFLAGS), no case folding
-;              done here (Phase 3's FIND decides that policy).
-;   code     : immediately follows NAME, no padding, no alignment. This
-;              address is both the header's "code field" and the actual
-;              CALL target — there's no separate indirection cell the
-;              way indirect-threaded Forths need, because subroutine
-;              threading calls code directly.
-;
-; Each entry below is hand-linked (LINK points at the literal previous
-; header label) rather than built through a defining macro. Eight
-; entries don't justify a macro yet — see this project's own
-; "no premature abstraction" convention — and hand-linking makes the
-; chain trivially readable for the one thing that most needs to be
-; correct on the first attempt: proving the header format actually
-; works end to end. A defining macro is worth writing once Phase 3
-; needs to generate many headers at once (CREATE, or bulk-defining a
-; vocabulary), not before.
+; Dictionary header:
+;   LINK     2 bytes, the previous entry's LINK field address; 0 for the first entry
+;   LENFLAGS 1 byte: bits 0-4 the name length (0-31), bit 7 IMMEDIATE, bits 5-6 reserved (0)
+;   NAME     LENFLAGS & $1F bytes, not terminated, no case folding here (FIND decides)
+;   code     immediately after the name, no padding: the address is also the CALL target
+; The ROM entries are hand-linked: LINK is the literal label of the previous header. LATEST starts at
+; the last ROM entry but HERE at FORTH_DICT_RAM, since new headers are compiled into RAM; the chain
+; crosses the ROM / RAM boundary as a plain address.
 ; ============================================================================
 
     IFNDEF CORE_DICT_ASM
     DEFINE CORE_DICT_ASM
 
-; ============================================================================
-; Data stack (parameter stack)
-;
-; IX is the data stack pointer. It always points at the current
-; top-of-stack cell (low byte at (ix+0), high byte at (ix+1)); pushing
-; decrements IX by 2 first, popping reads then increments IX by 2. This
-; is the standard convention used by other Z80 subroutine-threaded
-; Forths (e.g. CamelForth-Z80) for exactly this reason: IX is otherwise
-; unused by anything in kernel/'s public API, so claiming it here
-; creates no conflict with kernel calls a later phase's words might
-; wrap (kernel/graphics, kernel/io, etc. all use HL/DE/BC/AF).
-;
-; DSTACK_TOP/DSTACK_LIMIT are PROVISIONAL addresses, exactly like
-; rom/main.asm's own placeholder SP value — this project hasn't done
-; its Phase 0 memory-map audit yet (docs/PROJECT_PLAN.md), so these
-; will move once that exists. They're chosen here only to be clearly
-; out of the way of anything else: this file has zero INCLUDEs, so
-; nothing else can claim these addresses out from under it *within
-; this smoke ROM*, but a later phase that also pulls in kernel/io or
-; kernel/graphics (and therefore include/sysvars.inc) MUST re-check
-; these against that file's own address allocation before reuse — see
-; docs/PROJECT_PLAN.md Phase 0, item 2.
-; ============================================================================
-DSTACK_TOP   EQU $9800   ; empty-stack value for IX; first push lands at $97FE
-DSTACK_LIMIT EQU $9000   ; lowest legal stack address — 1024 bytes of stack
-                         ; (512 cells); no overflow check yet (Phase 2 has
-                         ; no recursion or user input that could exhaust it)
+    ASSERT LATEST + 4 <= DSTACK_LIMIT || LATEST >= DSTACK_TOP   ; LATEST stays off the data stack
 
 ; ============================================================================
-; LATEST / HERE — dictionary growth pointers
-;
-; LATEST holds the address of the most recently defined word's LINK
-; field (the head of the linked list; FIND, once Phase 3 writes it,
-; starts searching here). HERE holds the next free byte for a NEW
-; definition.
-;
-; CRITICAL ASYMMETRY: the primitives below are hand-assembled into this
-; ROM image (read-only once burned/loaded). Phase 3's CREATE cannot
-; extend the dictionary into ROM — it must compile new headers into
-; RAM. So LATEST starts by pointing at H_STORE (the last ROM-resident
-; primitive below), but HERE starts at a SEPARATE RAM area
-; (FORTH_DICT_RAM), not at the byte after H_STORE's code. The LINK
-; chain doesn't care that it crosses the ROM/RAM boundary — a 16-bit
-; address is a 16-bit address either way — but HERE must never be
-; computed as "wherever the ROM assembly left off," only ever as
-; FORTH_DICT_RAM the first time and self-updating from there.
-; ============================================================================
-LATEST       EQU $8608   ; 2 bytes: the head-of-dictionary address (outside the data stack's
-HERE         EQU $860A   ; 2 bytes: the next free dictionary byte    range: they were $9002/$9004)
-    ASSERT LATEST + 4 <= DSTACK_LIMIT || LATEST >= DSTACK_TOP
-DICT_RAM_CEILING EQU $D000   ; step E2a: lowered from $F000 so the line store ($D000-$EFFF,
-                             ; core/loadtext.asm) sits above the dictionary. Phase 44: raised from $C000 once FILL's
-                             ; own scratch was relocated out of the way
-                             ; (include/sysvars.inc) — sits with margin
-                             ; below GFX_LINE_X0-Y1 ($F3C4), the one
-                             ; remaining live cell found in this range;
-                             ; see core/free.asm's header for the full
-                             ; writeup
-FORTH_DICT_RAM EQU $9800 ; first free byte of the RAM dictionary area Phase 3's
-                         ; CREATE will compile into. Was $A000 until Phase 43's
-                         ; own FREE audit (see core/free.asm's header) found
-                         ; $9800-$9FFF sitting completely idle: DSTACK_TOP is
-                         ; only a sentinel value for empty IX, not a byte the
-                         ; stack ever occupies (real cells live BELOW it, down
-                         ; to DSTACK_LIMIT) -- confirmed via the real build's
-                         ; own .sym table (no other symbol lands in that
-                         ; range) before reclaiming it, not guessed. Moving
-                         ; this down 2048 bytes recovers that gap for FREE
-                         ; with zero risk (nothing else ever referenced the
-                         ; literal $A000).
-
-; ============================================================================
-; DROP ( n -- )
-; First entry in the dictionary: LINK = 0.
+; DROP ( n -- ) -- the first entry: LINK = 0
 ; ============================================================================
 H_DROP:
     DW   0
@@ -219,7 +121,7 @@ W_MINUS:
     ret
 
 ; ============================================================================
-; @ ( addr -- n )  fetch
+; @ ( addr -- n ) -- fetch
 ; ============================================================================
 H_FETCH:
     DW   H_MINUS
@@ -235,7 +137,7 @@ W_FETCH:
     ret
 
 ; ============================================================================
-; ! ( n addr -- )  store
+; ! ( n addr -- ) -- store
 ; ============================================================================
 H_STORE:
     DW   H_FETCH
@@ -254,28 +156,10 @@ W_STORE:
     ld   (hl), d
     ret
 
-; ---- dictionary boundary, for the smoke test and for Phase 3's CREATE ----
-DICT_LATEST_INIT EQU H_STORE       ; value LATEST must be seeded with at cold start
+DICT_LATEST_INIT EQU H_STORE       ; the value LATEST is seeded with at cold start
 
-; ============================================================================
-; DPUSH_HL / DPOP_HL — shared data-stack plumbing, added for Phase 3.
-;
-; NOT dictionary words themselves (no header, not findable) — just a
-; push/pop pair factored out for core/interp.asm's larger routines
-; (WORD, FIND, NUMBER, the colon compiler), which are text-processing
-; code, not performance-critical hot paths. The eight primitives above
-; predate these and deliberately stay fully inlined instead of calling
-; them: each is only a handful of instructions, and inlining avoids a
-; CALL/RET pair on what real Forth code runs constantly. That tradeoff
-; doesn't apply to WORD/FIND/NUMBER, which are already dozens of
-; instructions each — sharing this pair there is clearer, not slower
-; in any way that matters.
-; ============================================================================
-; O13: the two routines themselves now live in page zero, in
-; include/rst_vectors.inc (DPOP_HL at $0008 = RST_DPOP, DPUSH_HL at $0018
-; = RST_DPUSH). Callers use `rst RST_DPOP` / `rst RST_DPUSH` (1 byte,
-; 11 T instead of 3 bytes, 17 T). The labels still exist, so any
-; reference to DPOP_HL / DPUSH_HL still resolves. Every ROM that includes
-; this file must INCLUDE include/rst_vectors.inc in its page zero.
+; DPUSH_HL and DPOP_HL (the data-stack push and pop for the larger routines: WORD, FIND, NUMBER,
+; the compiler) live in page zero, include/rst_vectors.inc: RST_DPOP ($0008) and RST_DPUSH
+; ($0018); the labels DPOP_HL and DPUSH_HL still resolve. The primitives above stay inlined.
 
     ENDIF

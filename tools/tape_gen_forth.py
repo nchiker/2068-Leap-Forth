@@ -45,10 +45,8 @@ the order given (STORAGE_LOAD searches forward from the tape's current
 position, so multiple named files on one tape load correctly in
 sequence, exactly like a real multi-program cassette).
 
-Example (this project's own real-tape smoke test,
-rom/forth_smoke_p53_realtape.asm):
-    python3 tools/tape_gen_forth.py build/realtape_test.tap \\
-        MINI:/tmp/mini_src.fs BJPROG:rom/forth_smoke_p52_blackjack_test.fs
+Example (what tools/tapetest.py case 2 plays):
+    python3 tools/tape_gen_forth.py build/bj.tap BJPROG:tests/data/blackjack_rounds.txt
 """
 import sys
 

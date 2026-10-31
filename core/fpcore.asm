@@ -1,5 +1,5 @@
 ; ============================================================================
-; core/fpcore.asm — the float engine and F+ F- F* F/ (step F, docs/V2/FLOAT_SPEC.md sections 4, 5, 9)
+; core/fpcore.asm -- the float engine and F+ F- F* F/ (docs/V2/FLOAT_SPEC.md sections 4, 5, 9)
 ;
 ; Floats are the Sinclair 5-byte format: [exponent][sign | mantissa bits 30-24][23-16][15-8][7-0], value
 ; 0.1m x 2^(exponent - 128) (the leading 1 implicit), 0 for exponent 0, always normalised. The float stack is
@@ -23,29 +23,12 @@
 ;
 ; Exports for the other float files: the engine routines below, FPUSH_HL (push the 5 bytes at HL), FPOP_DE (copy the
 ; top to (DE) and drop it), FMULP/FDIVP/FADDP (top op a constant), FPOP_FX, FNEG_TOP, the error entries, POW10.
+; Chained from DICT_CHAIN_POINT (set by the including ROM before the INCLUDE); every word may destroy all
+; registers except IX (the data stack pointer), IY (the float stack pointer) and SP.
 ; ============================================================================
 
     IFNDEF CORE_FPCORE_ASM
     DEFINE CORE_FPCORE_ASM
-
-FSTACK_TOP   EQU $9000   ; empty-stack value of IY; the first push lands at $8FFB
-FSTACK_LIMIT EQU $8C04   ; lowest legal IY: 204 cells ($9000 - 204 * 5) in $8C00-$8FFF
-
-; ---- RAM (docs/V2/FLOAT_SPEC.md section 9): $8594-$85D5, inside the cold start's zero fill ----
-FP_RAM   EQU $8594
-FX       EQU FP_RAM          ; 7 B unpacked: [sign $80/0][exponent][m0 m1 m2 m3][guard]
-FY       EQU FP_RAM + 7      ; 7 B
-FQ       EQU FP_RAM + 14     ; 5 B: a product or quotient being built (big-endian); N in ATOF; scratch elsewhere
-FDEXP    EQU FP_RAM + 19     ; 2 B: ATOF's decimal exponent ...
-FFLAGS   EQU FP_RAM + 21     ; 1 B: ... bit 0 a digit seen, bit 1 after the point, bit 2 a float
-FMT      EQU FP_RAM + 20     ; 24 B: F.'s 128.64 fixed point, 16 integer bytes then 8 fraction bytes, big-endian
-                             ; (overlaps FDEXP's second byte and FFLAGS: ATOF and F. are never live together)
-FDIG     EQU FP_RAM + 44     ; 9 B: F.'s decimals, one digit per byte
-FSQ_N    EQU FP_RAM + 53     ; 5 B: FSQRT's argument; SIN/COS keep k * pi's k and then r here
-FTRIG_R2 EQU FP_RAM + 58     ; 5 B: r squared in the series
-FTRIG_K  EQU FP_RAM + 63     ; 2 B: [k's low byte, its parity is the sign][1 for COS]
-F_PLACES EQU FP_RAM + 65     ; 1 B: decimals F. prints (0-9; the cold start sets 4)
-    ASSERT F_PLACES == $85D5 && FMT + 24 == FDIG && FDIG + 9 == FSQ_N && FQ + 8 == FFLAGS + 1   ; (FQ, FDEXP, FFLAGS: 8 bytes in a row)
 
 U_S EQU 0                    ; offsets in an unpacked float
 U_E EQU 1
@@ -128,7 +111,7 @@ FZEROX:                                ; FX = 0. Destroys: AF, B, HL
     jr   FZERO
 
 ; ============================================================================
-; Errors: one entry, F_THROW, with the ANS code in HL (a ROM without THROW/CATCH stops here)
+; Errors: one entry, F_THROW, with the ANS code in HL; it pushes the code and jumps to W_THROW
 ; ============================================================================
 F_RANGE:                               ; -43 floating-point result out of range
     ld   hl, -43
@@ -139,12 +122,8 @@ F_DIVZERO:                             ; -42 floating-point divide by zero
 F_INVALID:                             ; -46 floating-point invalid argument
     ld   hl, -46
 F_THROW:
-    IFDEF THROW_CATCH_ENABLED
     rst  RST_DPUSH
     jp   W_THROW
-    ELSE
-    jr   $
-    ENDIF
 
 ; ============================================================================
 ; FNORM -- FX normalised: the mantissa shifted left until its top bit is set, the exponent lowered; 0 when the
@@ -308,7 +287,7 @@ FADD:
 .sub:
     call FSUBN
     jp   FNORM
-FSWAP:                                 ; FX <-> FY
+FSWAP:                                 ; FX <-> FY. Destroys: AF, BC, DE, HL
     ld   hl, FX
     ld   de, FY
     ld   b, 7
@@ -385,7 +364,7 @@ FDONE:                                 ; FX's mantissa = FQ, exponent HL + DE
 .out:
     jp   m, FZEROX
     jp   F_RANGE
-; FSIGN -- FX's sign = the product's or quotient's; HL = ex, DE = ey. Destroys: AF, DE, HL
+; FSIGN -- FX's sign = the product's or quotient's sign. Out: HL = ex, DE = ey. Destroys: AF, DE, HL
 FSIGN:
     ld   hl, FX + U_S
     ld   a, (FY + U_S)
@@ -716,7 +695,7 @@ FCONSTX:                               ; FX = the constant at HL, FY = the top c
     jp   FUNPK
 
 ; ============================================================================
-; F+ ( r1 r2 -- r1+r2 )
+; F+ ( r1 r2 -- r1+r2 ) -- float add
 ; ============================================================================
 H_FPLUS:
     DW   DICT_CHAIN_POINT   ; the including ROM sets this (DEFL) to the chain this file extends, just before INCLUDEing it
@@ -727,7 +706,7 @@ W_FPLUS:
     jp   FPACK
 
 ; ============================================================================
-; F- ( r1 r2 -- r1-r2 )
+; F- ( r1 r2 -- r1-r2 ) -- float subtract: FADD with FY's sign flipped
 ; ============================================================================
 H_FMINUS:
     DW   H_FPLUS
@@ -742,7 +721,7 @@ W_FMINUS:
     jp   FPACK
 
 ; ============================================================================
-; F* ( r1 r2 -- r1*r2 )
+; F* ( r1 r2 -- r1*r2 ) -- float multiply
 ; ============================================================================
 H_FSTAR:
     DW   H_FMINUS
@@ -753,7 +732,7 @@ W_FSTAR:
     jp   FPACK
 
 ; ============================================================================
-; F/ ( r1 r2 -- r1/r2 )
+; F/ ( r1 r2 -- r1/r2 ) -- float divide; THROW -42 for r2 = 0
 ; ============================================================================
 H_FSLASH:
     DW   H_FSTAR
@@ -779,8 +758,5 @@ POW10:
     DB   $A8, $68, $D4, $A5, $10
     DB   $AC, $11, $84, $E7, $2A
 
-DICT_LATEST_INIT_P8       EQU H_FMINUS   ; heads of the dictionary once F+ F-, F*, F/ are included
-DICT_LATEST_INIT_FLOATMUL EQU H_FSTAR
-DICT_LATEST_INIT_FLOATDIV EQU H_FSLASH
 
     ENDIF

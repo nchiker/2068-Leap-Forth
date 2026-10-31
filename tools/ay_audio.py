@@ -15,7 +15,7 @@ sound), types a scale of `n 0.3 BEEP` lines at the prompt, and then measures the
     each 1/50 s window, to show a change to the chime's waits left the sound the same.
 
 Notes above about 2.2 kHz are not measurable from a 15.6 kHz capture by edge counting and are left to the register
-check in rom/forth_smoke_p31.asm. Nothing is listened to: this is the emulator's own sound output, as a file.
+check in tests/sound/ay.fs. Nothing is listened to: this is the emulator's own sound output, as a file.
 
 Usage: tools/ay_audio.py [--rom build/forth_boot_rom0.bin] [--sym build/forth_boot.sym] [--port 10880]
                          [--out DIR] [--compare-chime OTHER_ROM.bin]
@@ -146,7 +146,7 @@ def capture(rom_path, sym, port, lines, boot_wait=3.0, gap=0.6):
     """Boot the ROM under ZEsarUX with audio capture, type `lines`, return (samples, boot_len)."""
     tmp = tempfile.mkdtemp(prefix="ay_audio.")
     raw = os.path.join(tmp, "audio.raw")
-    exrom = (ROOT / "build" / "stock_shaped_exrom.bin").read_bytes()
+    exrom = (ROOT / "build" / "graphics_exrom.bin").read_bytes()
     dbg, proc = start_emulator(Path(rom_path).read_bytes(), exrom, sym, port, raw, tmp)
     try:
         time.sleep(boot_wait)                           # boot and the chime (about 1.1 s of emulated time)

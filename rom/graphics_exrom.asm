@@ -1,53 +1,19 @@
 ; ============================================================================
-; rom/graphics_exrom.asm — EXROM-resident graphics services (chunk 5,
-; $A000-$BFFF once paged in — see kernel/bank/bank.asm and this
-; project's own chunk-by-chunk audit, docs/PROJECT_PLAN.md, for why
-; chunk 5 specifically)
+; rom/graphics_exrom.asm -- the EXROM image: graphics, shapes, sprites and the EDIT view
 ;
-; Standalone 8K image, assembled and SAVEBIN'd separately from rom/
-; forth_boot.asm — real hardware only has one physical EXROM socket,
-; so this is the one and only EXROM payload this project builds, not
-; one of several. Reached exclusively through core/*.asm Home-side
-; stubs (core/rectfill.asm today) that page chunk 5 in via kernel/
-; bank/bank.asm, verify this image's own magic+ABI byte pair, dispatch
-; through the service table below, then page back out — never called
-; directly.
+; A standalone 8K image (chunk 5, $A000-$BFFF once paged in), assembled and saved apart from
+; rom/forth_boot.asm. It is reached only through the Home-side stubs in core/*.asm, which page
+; chunk 5 in (kernel/bank/bank.asm), verify the magic+ABI pair after the service table, dispatch
+; through the table, and page out again.
 ;
-; WHY A SERVICE TABLE, not just one fixed entry point: this image is
-; expected to grow (Polygon draw/fill and Sprites are the next planned
-; additions, per this session's own scoping) — a fixed-offset table,
-; append-only, is what lets a Home-side caller built against an OLDER
-; version of this image still find the SAME service at the SAME slot
-; after a REBUILD adds new ones later, matching structured-basic-poc's
-; own proven EXROM_ABI pattern (magic+version, ordered slot table) —
-; read before designing this, not reinvented blind.
+; The service table is append-only and fixed in size (GRAPHICS_EXROM_MAX_SLOTS slots, all
+; reserved up front), so a Home-side caller built against an older image still finds each
+; service at the same slot, and the magic+ABI pair after the table never moves.
 ;
-; THE TABLE'S OWN SIZE IS FIXED UPFRONT (GRAPHICS_EXROM_MAX_SLOTS = 8),
-; not grown one slot at a time — caught before it shipped: adding
-; POLYGON's own slot naively right after RECT's would have shifted the
-; magic+ABI trailer that follows the table, silently breaking core/
-; rectfill.asm's own already-hardcoded offset for it. Reserving all 8
-; slots now, even with only 2 filled, means every future service added
-; here moves nothing that already exists — matches structured-basic-
-; poc's own fixed eleven-slot table for the identical reason.
-;
-; CALLING BACK INTO HOME: this code cannot call GFX_WRITE_PIXEL/
-; GFX_SET_ATTR by their real addresses — those live in rom/
-; forth_boot.asm's own kernel/graphics/graphics.asm inclusion, and
-; move every time that ROM's dictionary grows or shrinks, while this
-; file is assembled completely separately with no visibility into that
-; build. GRAPHICS_HOME_TABLE (rom/forth_boot.asm, fixed at $0100) is
-; the fix — stable, low, append-only JP veneers this file calls
-; through instead. The two files' own copies of that table's layout
-; used to be kept in sync BY HAND — the exact class of bug that
-; shipped twice in this project's own history (a shifted service-table
-; offset, twice) — until tools/export_home_symbols.py (modeled on the
-; sibling structured-basic-poc project's own tool of the same name)
-; started generating build/graphics_home_table.inc directly from rom/
-; forth_boot.asm's own GRAPHICS_HOME_TABLE, INCLUDEd below instead of
-; hand-typed. Regenerated automatically by the Makefile's own
-; graphics-exrom target — never edit build/graphics_home_table.inc by
-; hand, and never hand-copy its constants back into this file.
+; This image cannot call the Home graphics routines by address: they move whenever the Home
+; dictionary changes. It calls them through GRAPHICS_HOME_TABLE (rom/forth_boot.asm, fixed at
+; $0100), whose layout tools/export_home_symbols.py writes to build/graphics_home_table.inc, which
+; is INCLUDEd below. The Makefile's graphics-exrom target regenerates it; never edit it.
 ; ============================================================================
 
     INCLUDE "include/hardware.inc"
@@ -55,23 +21,15 @@
     DEVICE NOSLOT64K
     ORG $A000
 
-    INCLUDE "include/sysvars.inc"
+    INCLUDE "include/forth_layout.inc"
     INCLUDE "include/graphics_exrom_abi.inc"
-    INCLUDE "include/exrom_home_ram.inc"
 
-; ---- Home-side stable call targets (rom/forth_boot.asm, $0100) ----
-; Generated, not hand-typed — see this file's own header above.
+; ---- Home-side stable call targets (rom/forth_boot.asm, $0100), generated ----
     INCLUDE "build/graphics_home_table.inc"
 
 ; ============================================================================
-; Service table — FIXED SIZE (GRAPHICS_EXROM_MAX_SLOTS slots, see this
-; file's own header on why), each slot exactly one JP instruction (3
-; bytes). Unfilled slots point at GRAPHICS_EXROM_UNIMPLEMENTED — a
-; defensive stub, not expected to ever actually be reached, since a
-; Home-side caller only ever calls a slot number it was built knowing
-; about.
-; GRAPHICS_EXROM_MAX_SLOTS itself lives in include/graphics_exrom_abi.inc
-; now (INCLUDEd above) — see that file's own header for why.
+; Service table -- GRAPHICS_EXROM_MAX_SLOTS slots, each one JP (3 bytes). Unfilled slots point
+; at GRAPHICS_EXROM_UNIMPLEMENTED, which a Home-side caller never reaches
 ; ============================================================================
 GRAPHICS_EXROM_TABLE:
     jp   RECT_FILL_IMPL              ; slot 0 ($A000) — RECT
@@ -81,12 +39,12 @@ GRAPHICS_EXROM_TABLE:
     jp   SPRITE_HIDE_IMPL            ; slot 4 ($A00C) — SPRITE-HIDE
     jp   POLY_FILL_IMPL               ; slot 5 ($A00F) — POLYGON-FILL
     jp   VIEW_SESSION                ; slot 6 ($A012) — VIEW_SESSION (EDIT's full-screen view)
-    jp   FILL_IMPL                   ; slot 7 ($A015) — FILL (step O15)
-    jp   CIRCLE_IMPL                 ; slot 8 ($A018) — CIRCLE (step O15)
-    jp   GRAPHICS_EXROM_UNIMPLEMENTED ; slots 9-15 — reserved (16 slots
-    jp   GRAPHICS_EXROM_UNIMPLEMENTED ; since ABI 2, step O15:
-    jp   GRAPHICS_EXROM_UNIMPLEMENTED ; docs/V2/FILL_CIRCLE_SPEC.md
-    jp   GRAPHICS_EXROM_UNIMPLEMENTED ; decision O15-1)
+    jp   FILL_IMPL                   ; slot 7 ($A015) -- FILL
+    jp   CIRCLE_IMPL                 ; slot 8 ($A018) -- CIRCLE
+    jp   GRAPHICS_EXROM_UNIMPLEMENTED ; slots 9-15 reserved
+    jp   GRAPHICS_EXROM_UNIMPLEMENTED
+    jp   GRAPHICS_EXROM_UNIMPLEMENTED
+    jp   GRAPHICS_EXROM_UNIMPLEMENTED
     jp   GRAPHICS_EXROM_UNIMPLEMENTED
     jp   GRAPHICS_EXROM_UNIMPLEMENTED
     jp   GRAPHICS_EXROM_UNIMPLEMENTED
@@ -96,83 +54,31 @@ GRAPHICS_EXROM_UNIMPLEMENTED:
     ret
 
 ; ============================================================================
-; Magic + ABI version, immediately after the FIXED-SIZE table above —
-; verified by the Home-side caller (core/rectfill.asm's EXROM_CALL_
-; RECT_FILL, core/polygon.asm's own equivalent) right after paging in,
-; before trusting any slot in the table. A mismatch (no cartridge, or
-; a different one) means the caller pages back out without calling
-; anything, matching this project's own established "silently do
-; nothing" convention for out-of-range/unavailable input (SOUND/
-; STICK/FILL's own HIRES guard).
+; The magic + ABI version pair, right after the fixed-size table. The Home-side caller
+; (EXROM_CALL_SLOT, core/rectfill.asm) verifies it after paging in; a mismatch (no cartridge, or
+; another one) makes it page out without calling anything.
 ; ============================================================================
     DB   GRAPHICS_EXROM_MAGIC
     DB   GRAPHICS_EXROM_ABI
 
 ; ============================================================================
-; RECT_FILL_IMPL
-; Fills the rectangle spanned by (RECT_X0,RECT_Y0)-(RECT_X1,RECT_Y1),
-; corners inclusive, with RECT_ATTR — RECT's actual mechanism. Always
-; OR/set, never XOR (a clean repaint, not a toggle — same convention
-; GFX_FILL's own header documents and for the same reason).
-;
-; Corners are normalized first (RECT_X0<=RECT_X1, RECT_Y0<=RECT_Y1) so
-; the caller doesn't have to sort them — same convention this
-; project's own GFX_LINE leaves to ITS caller today, but RECT's whole
-; point is being the easy/fast primitive, so sorting here costs nothing
-; and removes a footgun a caller would otherwise hit silently.
-;
-; BULK ROW + ATTRIBUTE-CELL FILL, not one GFX_WRITE_PIXEL call per
-; pixel — a real cycle-count optimization found and measured (not
-; guessed) during a raw-cycle-count audit pass: GFX_WRITE_PIXEL
-; recomputes the full ZX screen-address bit-twiddling formula AND
-; restamps the covering 8x8 attribute cell from scratch on EVERY
-; pixel, even adjacent ones sharing the same bitmap byte or the same
-; attribute cell. For a representative 40x20 fill (800 pixels), the
-; old per-pixel loop cost an estimated ~480,000 T-states (roughly
-; 600/pixel: ~300 for GFX_PIXEL_ADDR_SETUP's own address/mask
-; recomputation, ~100 for GFX_SET_ATTR's own address recomputation,
-; plus loop overhead) — REDUNDANT work, since the same 800 pixels only
-; span 5 bitmap bytes/row x 20 rows = 100 byte-writes and just 5x3=15
-; unique attribute cells. This routine now:
-;   1. Computes each scanline's own row-base address ONCE per row
-;      (GRAPHICS_HOME_ROW_BASE_ADDR, the same veneer GFX_PIXEL_ADDR_
-;      SETUP itself is built on), then fills that row's own span with
-;      at most 3 byte-writes: a partial mask at the left edge, a
-;      straight $FF write (propagated across any further whole bytes
-;      via LDIR, not a per-byte OR — safe because OR-ing $FF into
-;      anything already yields $FF, so a direct SET is equivalent and
-;      faster) in the middle, and a partial mask at the right edge —
-;      collapsing to a single masked byte when the whole span fits in
-;      one byte.
-;   2. Stamps each COVERED ATTRIBUTE CELL exactly once (GRAPHICS_HOME_
-;      CELL_ATTR_ADDR), in a separate pass over the covered (char row,
-;      column) rectangle — ceil(height/8) x ceil(width/8) cells, not
-;      height x width pixels.
-; Bitmap-fill correctness verified against the OLD per-pixel algorithm
-; bit-for-bit in Python (2000 random rectangles, every byte in the
-; resulting bitmap identical) before any of this was written — the
-; left/right partial-byte masks are LEFTMASK_TABLE[bit]=$FF>>bit and
-; RIGHTMASK_TABLE[bit]=($FF<<(7-bit))&$FF, matching BIT_MASK_TABLE's
-; own $80>>n single-bit convention exactly (kernel/graphics/
-; graphics.asm's own table GFX_PIXEL_ADDR_SETUP indexes the same way).
-; Confirmed under real ZEsarUX afterward too (rom/test_rect.asm),
-; not just Python and a clean assemble.
-;
-; Y is NOT bounds-checked here (0-191), matching the OLD per-pixel
-; version's own behavior exactly (GFX_PIXEL_ADDR_SETUP/GFX_ROW_BASE_
-; ADDR never bounds-checked row either) — not a new gap this
-; optimization introduces. The attribute pass IS defensively guarded
-; against GRAPHICS_HOME_CELL_ATTR_ADDR's own out-of-range carry (that
-; routine does bounds-check), skipping a would-be out-of-range cell
-; rather than writing through an undefined HL — strictly safer than
-; the old path for invalid input, never less safe for valid input.
-; In:  RECT_X0/Y0/X1/Y1 (0-255/0-191), RECT_ATTR — all pre-set by the
-;      Home-side RECT word before paging this image in
+; RECT_FILL_IMPL -- fill the rectangle (RECT_X0,RECT_Y0)-(RECT_X1,RECT_Y1), corners inclusive,
+; with RECT_ATTR
+; In:  RECT_X0/Y0/X1/Y1 (0-255 / 0-191), RECT_ATTR, staged by the Home-side RECT word
 ; Out: none
 ; Destroys: AF, BC, DE, HL
+; The corners are sorted first. The pixels are always set (OR), never toggled. Each scanline's
+; row base comes from one GRAPHICS_HOME_ROW_BASE_ADDR call and the span is written as at most
+; three byte writes: a left partial mask, $FF for the middle bytes (propagated with LDIR;
+; setting is equivalent to OR-ing $FF), and a right partial mask, or one masked byte if the span
+; fits in a byte. The attribute pass then stamps each covered attribute cell once
+; (GRAPHICS_HOME_CELL_ATTR_ADDR). The masks are RECT_LEFTMASK_TABLE[bit] = $FF >> bit and
+; RECT_RIGHTMASK_TABLE[bit] = ($FF << (7 - bit)) & $FF.
+; Y is not bounds-checked (0-191); the attribute pass skips a cell GRAPHICS_HOME_CELL_ATTR_ADDR
+; reports out of range.
 ; ============================================================================
 RECT_FILL_IMPL:
-    ; ---- normalize X: RECT_X0 <= RECT_X1 ----
+    ; ---- sort X: RECT_X0 <= RECT_X1 ----
     ld   a, (RECT_X0)
     ld   b, a
     ld   a, (RECT_X1)
@@ -183,7 +89,7 @@ RECT_FILL_IMPL:
     ld   (RECT_X1), a
 .x_ok:
 
-    ; ---- normalize Y: RECT_Y0 <= RECT_Y1 ----
+    ; ---- sort Y: RECT_Y0 <= RECT_Y1 ----
     ld   a, (RECT_Y0)
     ld   b, a
     ld   a, (RECT_Y1)
@@ -194,7 +100,7 @@ RECT_FILL_IMPL:
     ld   (RECT_Y1), a
 .y_ok:
 
-    ; ---- col0/bit0, col1/bit1 from the now-normalized X0/X1 ----
+    ; ---- col0/bit0, col1/bit1 from the sorted X0/X1 ----
     ld   a, (RECT_X0)
     ld   b, a
     and  %00000111
@@ -224,25 +130,16 @@ RECT_FILL_IMPL:
     ld   a, (RECT_CUR_Y)
     ld   b, a
     and  %00000111
-    ld   c, a                        ; c = scanline (0-7) within its
-                                     ; own char row — survives the
-                                     ; GRAPHICS_HOME_ROW_BASE_ADDR call
-                                     ; below (that veneer never touches
-                                     ; BC, only AF/DE/HL)
+    ld   c, a                        ; C = scanline (0-7) in its char row; the call keeps BC
     ld   a, b
     rrca
     rrca
     rrca
     and  %00011111                   ; a = char_row (0-23)
-    call GRAPHICS_HOME_ROW_BASE_ADDR ; hl = this char row's own bitmap
-                                     ; base address, AT SCANLINE 0
+    call GRAPHICS_HOME_ROW_BASE_ADDR ; HL = the char row's bitmap base, at scanline 0
     ld   a, h
-    add  a, c                        ; +scanline*256 — one scanline
-                                     ; down is exactly +256, the same
-                                     ; fact GFX_PIXEL_ADDR_SETUP's own
-                                     ; header already documents
-    ld   h, a                        ; hl = ROWBASE (this scanline's
-                                     ; own column-0 byte address)
+    add  a, c                        ; a scanline down is +256
+    ld   h, a                        ; HL = ROWBASE, this scanline's column-0 byte
     ld   (RECT_ROWBASE), hl
 
     ; ---- first (possibly only) byte: ROWBASE + col0 ----
@@ -260,11 +157,7 @@ RECT_FILL_IMPL:
     jr   nz, .multi_byte
 
     ; ---- single byte: mask = LEFTMASK[bit0] & RIGHTMASK[bit1] ----
-    push hl                          ; RECT_LEFTMASK/RECT_RIGHTMASK both
-                                     ; destroy HL for their own table
-                                     ; lookup -- hl here is the target
-                                     ; byte's own address, computed just
-                                     ; above, and must survive both calls
+    push hl                          ; HL = the target byte; the mask lookups destroy HL
     ld   a, (RECT_BIT0)
     call RECT_LEFTMASK
     ld   b, a
@@ -280,8 +173,7 @@ RECT_FILL_IMPL:
 
 .multi_byte:
     ; ---- left partial byte: OR LEFTMASK[bit0] into (hl) ----
-    push hl                          ; same HL-survives-the-call reasoning
-                                     ; as the single-byte case above
+    push hl
     ld   a, (RECT_BIT0)
     call RECT_LEFTMASK
     ld   b, a
@@ -295,52 +187,34 @@ RECT_FILL_IMPL:
     ld   b, a
     ld   a, (RECT_COL0)
     neg
-    add  a, b                        ; a = col1 - col0 -- always >= 1
-                                     ; here (this branch only runs when
-                                     ; col1 != col0, and RECT_X0<=
-                                     ; RECT_X1 was already normalized
-                                     ; above, so col1 > col0)
-    dec  a                           ; a = full-middle-byte count
-                                     ; (col1-col0-1); 0 means col1 is
-                                     ; col0's immediate neighbor —
-                                     ; no middle bytes at all
+    add  a, b                        ; A = col1 - col0, >= 1 here (X0 <= X1 and col1 != col0)
+    dec  a                           ; A = the full middle bytes, col1 - col0 - 1; 0: none
     ld   b, a
     or   a
     jr   z, .no_middle
 
     ld   hl, (RECT_ROWBASE)
-    ld   b, a                        ; stash full-middle count in b —
-                                     ; a is about to be reused for the
-                                     ; address arithmetic below
+    ld   b, a                        ; B = the middle count (A is reused below)
     ld   a, (RECT_COL0)
     inc  a
-    add  a, l                        ; hl = ROWBASE + col0+1 (first
-    ld   l, a                        ; middle byte)
+    add  a, l                        ; HL = ROWBASE + col0 + 1, the first middle byte
+    ld   l, a
     jr   nc, .no_carry_mid
     inc  h
 .no_carry_mid:
     ld   (hl), $FF                   ; seed the first middle byte
     ld   a, b
     dec  a
-    jr   z, .no_middle                ; only one middle byte total —
-                                     ; nothing left to LDIR-propagate
+    jr   z, .no_middle                ; one middle byte only: nothing to propagate
     ld   c, a
-    ld   b, 0                        ; bc = remaining middle bytes
+    ld   b, 0                        ; BC = the remaining middle bytes
     push hl
     pop  de
-    inc  de                          ; de = hl+1 — the classic Z80
-                                     ; "clone forward" LDIR idiom: each
-                                     ; copy writes the byte this same
-                                     ; instruction just wrote one
-                                     ; position earlier, propagating
-                                     ; the seeded $FF the rest of the
-                                     ; way without a per-byte loop
+    inc  de                          ; DE = HL + 1: LDIR copies the seeded $FF forward
     ldir
 .no_middle:
 
-    ; ---- right partial byte: ROWBASE + col1, fresh (not tracked
-    ; through the middle-byte pointer above — simpler and safer than
-    ; trying to reuse HL/DE after LDIR leaves them one past the end) ----
+    ; ---- right partial byte: ROWBASE + col1, recomputed (HL/DE are past the LDIR) ----
     ld   hl, (RECT_ROWBASE)
     ld   a, (RECT_COL1)
     add  a, l
@@ -348,8 +222,7 @@ RECT_FILL_IMPL:
     jr   nc, .no_carry_last
     inc  h
 .no_carry_last:
-    push hl                          ; same HL-survives-the-call reasoning
-                                     ; as the single-byte case above
+    push hl
     ld   a, (RECT_BIT1)
     call RECT_RIGHTMASK
     ld   b, a
@@ -369,8 +242,7 @@ RECT_FILL_IMPL:
     ld   (RECT_CUR_Y), a
     jp   .bmp_row_loop
 
-    ; ---- attribute pass: each COVERED CELL exactly once, not once
-    ; per pixel — char rows Y0>>3..Y1>>3, columns RECT_COL0..RECT_COL1 ----
+    ; ---- attribute pass: each covered cell once; char rows Y0>>3..Y1>>3, columns COL0..COL1 ----
 .attr_pass:
     ld   a, (RECT_Y0)
     rrca
@@ -392,12 +264,7 @@ RECT_FILL_IMPL:
     ld   b, a
     ld   a, (RECT_ATTR_COL)
     ld   c, a
-    call GRAPHICS_HOME_CELL_ATTR_ADDR  ; hl = attr address; carry SET
-                                       ; if out of range (row>=24 or
-                                       ; col>=32) — see this routine's
-                                       ; own header on why this is
-                                       ; checked here even though the
-                                       ; bitmap pass above doesn't
+    call GRAPHICS_HOME_CELL_ATTR_ADDR  ; HL = the attribute address; carry: out of range
     jr   c, .attr_col_next
     ld   a, (RECT_ATTR)
     ld   (hl), a
@@ -425,19 +292,10 @@ RECT_FILL_IMPL:
     ret
 
 ; ============================================================================
-; RECT_LEFTMASK / RECT_RIGHTMASK (internal — not service-table slots)
-; RECT_FILL_IMPL's own partial-byte masks: LEFTMASK[bit] covers pixel
-; positions bit..7 (the byte's own right portion, x&7==bit through the
-; last pixel in that byte); RIGHTMASK[bit] covers positions 0..bit (the
-; byte's own left portion). Table-driven, not shifted at call time —
-; a single lookup is faster than a variable-count shift loop, and
-; there are only 8 entries each either way. Values match BIT_MASK_
-; TABLE's own $80>>n single-bit convention exactly (verified in Python
-; against the OLD per-pixel algorithm before either table was written
-; in Z80 — see RECT_FILL_IMPL's own header).
+; RECT_LEFTMASK / RECT_RIGHTMASK -- the partial-byte masks of RECT_FILL_IMPL, by table lookup
 ; In:  A = bit position (0-7)
-; Out: A = the mask
-; Destroys: DE, HL (not AF's own flags meaningfully — caller only uses A)
+; Out: A = RECT_LEFTMASK_TABLE[A] (the pixels A..7) / RECT_RIGHTMASK_TABLE[A] (the pixels 0..A)
+; Destroys: AF, DE, HL
 ; ============================================================================
 RECT_LEFTMASK:
     ld   e, a
@@ -463,32 +321,19 @@ RECT_RIGHTMASK_TABLE:
     DB   %11111000, %11111100, %11111110, %11111111
 
 ; ============================================================================
-; POLY_DRAW_IMPL
-; Draws the closed outline through POLY_COUNT vertices (POLY_VERTS) —
-; POLYGON's own mechanism. Draws one GFX_LINE (via GRAPHICS_HOME_LINE)
-; per edge, vertex i to vertex (i+1), wrapping the last edge back to
-; vertex 0 to close the shape — no new drawing logic at all, this is
-; entirely a loop over an already-proven primitive, the same "reuse,
-; don't reimplement" reasoning this project's own GFX_SCROLL_OUTPUT_UP
-; already applies to GFX_SCROLL_TEXT_UP.
-;
-; Fewer than 3 points or more than POLY_MAXPTS silently draws nothing
-; — same "silently do nothing on invalid input" convention every other
-; word in this project already uses (SOUND/STICK/FILL's own HIRES
-; guard, RECT_FILL_IMPL's own out-of-range handling).
-; In:  POLY_COUNT (3-POLY_MAXPTS), POLY_VERTS (that many (x,y) pairs),
-;      POLY_ATTR — all pre-set by the Home-side POLYGON word
-; Out: none
+; POLY_DRAW_IMPL -- draw the closed outline through the POLY_COUNT vertices of POLY_VERTS
+; In:  POLY_COUNT (3-POLY_MAXPTS), POLY_VERTS (that many (x,y) pairs), POLY_ATTR, staged by the
+;      Home-side POLYGON word
+; Out: none; a POLY_COUNT out of range draws nothing
 ; Destroys: AF, BC, DE, HL
+; One GFX_LINE (GRAPHICS_HOME_LINE) per edge, vertex i to i+1, the last back to vertex 0.
 ; ============================================================================
 POLY_DRAW_IMPL:
     ld   a, (POLY_COUNT)
     cp   3
     jp   c, .done                   ; fewer than 3 points: nothing to draw
     cp   POLY_MAXPTS + 1
-    jp   nc, .done                  ; too many points: nothing (same
-                                    ; convention as RECT_FILL_IMPL's
-                                    ; own out-of-range handling)
+    jp   nc, .done                  ; too many points: nothing
 
     xor  a
     ld   (POLY_IDX), a               ; i = 0
@@ -544,32 +389,15 @@ POLY_DRAW_IMPL:
     ret
 
 ; ============================================================================
-; SPRITE_TRANSFER_IMPL (internal — not a service-table slot itself)
-; Shared core behind SPRITE_DEFINE_IMPL/SPRITE_SHOW_IMPL/SPRITE_HIDE_
-; IMPL below: copies all SPRITE_CELLS*SPRITE_CELLS cells of an exact,
-; direct byte-for-byte cell image (8 bitmap scanlines + 1 attribute
-; byte per cell, 9 bytes — see include/sysvars.inc's own SPRITE_SLOT_
-; BYTES header for why a raw copy, not a per-pixel OR/AND, is the
-; right shape here) between the screen at (SPRITE_OP_ROW,SPRITE_OP_
-; COL) and SPRITE_OP_BUF, direction set by SPRITE_OP_DIR.
-;
-; Cell (row,col) offsets come from a small fixed table
-; (SPRITE_CELL_OFFSETS) rather than computed via div/mod on SPRITE_
-; CELLS — clearer to read and just as cheap for a 2x2 grid.
-;
-; GFX_ROW_BASE_ADDR/GFX_CELL_ATTR_ADDR (via their own Home veneers)
-; both destroy DE per their own documented contracts, so SPRITE_OP_PTR
-; is always reloaded fresh from memory immediately after either call,
-; never held across one — same "value must survive a call -> use
-; memory, not a register" pattern this file's own RECT/POLYGON code
-; already established.
-; In:  SPRITE_OP_ROW/COL (top-left character position, 0-23/0-31 —
-;      caller's responsibility that +1 stays in range, no bounds
-;      check here, matching this project's established scope), SPRITE_
-;      OP_BUF (buffer base address), SPRITE_OP_DIR (0 = capture screen
-;      -> buffer, nonzero = blit buffer -> screen)
+; SPRITE_TRANSFER_IMPL -- copy the SPRITE_CELLS x SPRITE_CELLS cells between the screen and a buffer
+; In:  SPRITE_OP_ROW/COL (the top-left character position, 0-23 / 0-31; the caller keeps +1 in
+;      range, nothing is checked), SPRITE_OP_BUF (the buffer), SPRITE_OP_DIR (0 = screen ->
+;      buffer, nonzero = buffer -> screen)
 ; Out: none
-; Destroys: AF, BC, DE, HL
+; Destroys: AF, BC, DE, HL (writes SPRITE_OP_PTR/CELL, SPRITE_CELL_ROW/COL)
+; Each cell is a raw copy of 9 bytes (8 bitmap scanlines + the attribute byte; see
+; SPRITE_SLOT_BYTES in include/forth_layout.inc). The cell offsets come from SPRITE_CELL_OFFSETS. The
+; Home veneers destroy DE, so SPRITE_OP_PTR is reloaded from memory after each call.
 ; ============================================================================
 SPRITE_TRANSFER_IMPL:
     ld   hl, (SPRITE_OP_BUF)
@@ -619,10 +447,7 @@ SPRITE_TRANSFER_IMPL:
 .scan_done:
     inc  de
     ld   (SPRITE_OP_PTR), de
-    inc  h                           ; next scanline: +256 (high byte
-                                     ; only — see this file's own RECT/
-                                     ; POLYGON header precedent citing
-                                     ; the same convention)
+    inc  h                           ; next scanline: +256
     djnz .scan_loop
 
     ; ---- attribute byte, 9th byte of this cell ----
@@ -631,7 +456,7 @@ SPRITE_TRANSFER_IMPL:
     ld   a, (SPRITE_CELL_COL)
     ld   c, a
     call GRAPHICS_HOME_CELL_ATTR_ADDR ; hl = attr address (destroys DE)
-    ld   de, (SPRITE_OP_PTR)          ; reloaded fresh, see header
+    ld   de, (SPRITE_OP_PTR)          ; reloaded: the call destroyed DE
     ld   a, (SPRITE_OP_DIR)
     or   a
     jr   nz, .blit_attr
@@ -655,22 +480,16 @@ SPRITE_TRANSFER_IMPL:
 SPRITE_CELL_OFFSETS: DB 0,0, 0,1, 1,0, 1,1
 
 ; ============================================================================
-; SPRITE_DEFINE_IMPL
-; Captures the SPRITE_CELLS x SPRITE_CELLS screen area at (SPRITE_OP_
-; ROW,SPRITE_OP_COL) into slot SPRITE_OP_SLOT's own image buffer —
-; SPRITE-DEFINE's actual mechanism.
-; In:  SPRITE_OP_SLOT (0-SPRITE_SLOT_MAX-1), SPRITE_OP_ROW/COL — all
-;      pre-set by the Home-side SPRITE-DEFINE word
-; Out: none
+; SPRITE_DEFINE_IMPL -- capture the screen area at (SPRITE_OP_ROW, SPRITE_OP_COL) into the
+; slot's image buffer
+; In:  SPRITE_OP_SLOT (0-SPRITE_SLOT_MAX-1), SPRITE_OP_ROW/COL, staged by the Home-side word
+; Out: the slot's SPRITE_SLOT_DEFINED flag set; an out-of-range slot does nothing
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 SPRITE_DEFINE_IMPL:
     ld   a, (SPRITE_OP_SLOT)
     cp   SPRITE_SLOT_MAX
-    ret  nc                          ; out-of-range slot: silently do
-                                     ; nothing, same convention as
-                                     ; RECT/POLYGON's own out-of-range
-                                     ; handling
+    ret  nc                          ; out-of-range slot: nothing
     call SPRITE_BUF_ADDR_IMG         ; hl = this slot's own image buffer
     ld   (SPRITE_OP_BUF), hl
     xor  a
@@ -686,16 +505,11 @@ SPRITE_DEFINE_IMPL:
     ret
 
 ; ============================================================================
-; SPRITE_SHOW_IMPL
-; Saves the current screen content at (SPRITE_OP_ROW,SPRITE_OP_COL)
-; into slot SPRITE_OP_SLOT's own background buffer, then blits that
-; slot's image over it — SPRITE-SHOW's actual mechanism. Refuses (does
-; nothing) if the slot was never DEFINEd, or is already SHOWN — same
-; "HIDE then SHOW to reposition" convention include/sysvars.inc's own
-; SPRITE_SLOT_SHOWN header already documents.
-; In:  SPRITE_OP_SLOT, SPRITE_OP_ROW/COL — pre-set by the Home-side
-;      SPRITE-SHOW word
-; Out: none
+; SPRITE_SHOW_IMPL -- save the screen at (SPRITE_OP_ROW, SPRITE_OP_COL) as the slot's background,
+; then draw the slot's image over it
+; In:  SPRITE_OP_SLOT, SPRITE_OP_ROW/COL, staged by the Home-side word
+; Out: the slot's position recorded, its SPRITE_SLOT_SHOWN flag set. Nothing happens for an
+;      out-of-range slot, one never defined, or one already shown (HIDE then SHOW to move it)
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 SPRITE_SHOW_IMPL:
@@ -748,15 +562,10 @@ SPRITE_SHOW_IMPL:
     ret
 
 ; ============================================================================
-; SPRITE_HIDE_IMPL
-; Restores slot SPRITE_OP_SLOT's own saved background over wherever it
-; was last SHOWN — SPRITE-HIDE's actual mechanism. Refuses (does
-; nothing) if the slot isn't currently SHOWN.
-; In:  SPRITE_OP_SLOT — pre-set by the Home-side SPRITE-HIDE word
-;      (SPRITE_OP_ROW/COL are NOT inputs here — HIDE recalls the
-;      position SHOW itself recorded, so a caller only ever needs to
-;      name the slot)
-; Out: none
+; SPRITE_HIDE_IMPL -- restore the slot's saved background over where it was shown
+; In:  SPRITE_OP_SLOT, staged by the Home-side word (the position is the one SHOW recorded)
+; Out: the slot's SPRITE_SLOT_SHOWN flag cleared. Nothing happens for an out-of-range slot or one
+;      not shown
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 SPRITE_HIDE_IMPL:
@@ -797,9 +606,8 @@ SPRITE_HIDE_IMPL:
 
 ; ============================================================================
 ; SPRITE_BUF_ADDR_IMG / SPRITE_BUF_ADDR_BG / SPRITE_FLAG_ADDR_DEFINED /
-; SPRITE_FLAG_ADDR_SHOWN (internal — not service-table slots)
-; Small address helpers shared by the three services above — SPRITE_
-; OP_SLOT's own offset into whichever fixed array/buffer is needed.
+; SPRITE_FLAG_ADDR_SHOWN -- the address of SPRITE_OP_SLOT's image buffer, background buffer,
+; defined flag, shown flag
 ; In:  SPRITE_OP_SLOT
 ; Out: HL = the address
 ; Destroys: AF, DE, HL
@@ -837,22 +645,17 @@ SPRITE_FLAG_ADDR_SHOWN:
     ret
 
 ; ============================================================================
-; SPRITE_MUL_A_HL (internal — not a service-table slot)
-; HL = A * HL — a plain repeated-add multiply, not a shift-based one:
-; A is always SPRITE_OP_SLOT (0 to SPRITE_SLOT_MAX-1, at most 3 today),
-; so the loop runs at most 3 times and clarity wins over a shift/add
-; sequence that would only pay for itself at much larger A.
-; In:  A = multiplier (small), HL = multiplicand (SPRITE_SLOT_BYTES)
+; SPRITE_MUL_A_HL -- HL = A * HL, by repeated addition (A is a slot number, at most 3)
+; In:  A = the multiplier, HL = the multiplicand (SPRITE_SLOT_BYTES)
 ; Out: HL = A * HL
 ; Destroys: AF, DE
 ; ============================================================================
 SPRITE_MUL_A_HL:
     ld   e, l
-    ld   d, h                        ; DE = the original multiplicand
-    ld   hl, 0                       ; HL = running total, starts at 0
+    ld   d, h                        ; DE = the multiplicand
+    ld   hl, 0                       ; HL = the running total
     or   a
-    ret  z                           ; A=0: HL is already the correct
-                                     ; 0*multiplicand, nothing to add
+    ret  z                           ; A = 0: HL = 0
 .loop:
     add  hl, de
     dec  a
@@ -860,49 +663,18 @@ SPRITE_MUL_A_HL:
     ret
 
 ; ============================================================================
-; POLY_FILL_IMPL
-; Fills the interior of the polygon (POLY_VERTS/POLY_COUNT) using the
-; even-odd rule — POLYGON-FILL's actual mechanism. Active-edge scanline
-; fill: build a table of non-horizontal edges, then for each scanline,
-; collect every active edge's current x as a crossing, sort the
-; crossings, and fill between each pair (1st-2nd, 3rd-4th, ...).
-;
-; Genuinely algebraic, NOT a flood fill: crossings come straight from
-; the vertex coordinates, never from reading back already-drawn
-; pixels, so — unlike GFX_FILL bounded by a hand-drawn outline — this
-; can't leak through a diagonal single-pixel gap in a Bresenham-drawn
-; boundary line. That gap is a real, separate property of 4-connected
-; flood fill this project already accepts for ordinary FILL; POLYGON-
-; FILL never has it, a genuine advantage of computing crossings
-; directly instead of exploring pixels.
-;
-; PRECISION: verified in Python against an exact (real-number) even-
-; odd reference across 6 shapes (see this session's own working
-; verification, not preserved in-tree) before any Z80 was written.
-; Convex shapes with integer-ratio edges (a right triangle, an axis-
-; aligned square) matched EXACTLY. Concave shapes with non-integer-
-; ratio edges can be off by a single pixel at specific scanlines near
-; a concave vertex (~3% of filled pixels in the worst tested case) —
-; the Bresenham error accumulator doesn't round every row's crossing
-; the same way (floor some rows, the true nearest-integer on others),
-; the same class of approximation GFX_LINE/GFX_CIRCLE already accept
-; throughout this project rather than a bug specific to this routine.
-; Confirmed in that same verification: every such discrepancy is a
-; single pixel immediately adjacent to correctly-filled area — never
-; a leak far outside the shape, never a real gap inside it. Also
-; masked in practice whenever POLYGON-FILL is used together with
-; POLYGON's own outline (the normal case): the outline is drawn with
-; the same GFX_LINE Bresenham stepping, directly over these same
-; boundary pixels.
-;
-; EDGE TABLE IS GENUINE RAM (POLY_FILL_EDGE_*, include/sysvars.inc),
-; not scratch inside this EXROM image: chunk 5 IS this ROM image while
-; paged in for this very call, so state that must be written and
-; persist across the whole fill can't live here.
-; In:  POLY_VERTS/POLY_COUNT/POLY_ATTR — pre-set by the Home-side
-;      POLYGON-FILL word
+; POLY_FILL_IMPL -- fill the interior of the polygon (POLY_VERTS / POLY_COUNT), even-odd rule
+; In:  POLY_VERTS, POLY_COUNT, POLY_ATTR, staged by the Home-side POLYGON-FILL word
 ; Out: none
 ; Destroys: AF, BC, DE, HL
+; An active-edge scanline fill: a table of the non-horizontal edges is built, then for each
+; scanline every active edge's current x is a crossing, the crossings are sorted, and the span
+; between each pair (1st-2nd, 3rd-4th, ...) is filled. The crossings come from the vertex
+; coordinates, not from reading drawn pixels, so the fill cannot leak through a diagonal gap in
+; a Bresenham outline. Concave shapes with non-integer edge ratios can be a pixel off near a
+; concave vertex (the error accumulator rounds rows differently); the outline hides it.
+; The edge table (POLY_FILL_EDGE_*, include/forth_layout.inc) is RAM, not scratch inside this image:
+; chunk 5 is this ROM while it is paged in.
 ; ============================================================================
 POLY_FILL_IMPL:
     ; ---- build the edge table ----
@@ -915,8 +687,7 @@ POLY_FILL_IMPL:
     ld   (POLY_IDX), a               ; i = 0 (vertex loop index)
 
 .build_loop:
-    ; ---- vertex i -> RECT_X0/RECT_Y0 (reused as scratch — RECT and
-    ; POLYGON-FILL never run at the same time) ----
+    ; ---- vertex i -> RECT_X0/RECT_Y0 (scratch: RECT never runs with POLYGON-FILL) ----
     ld   a, (POLY_IDX)
     ld   e, a
     ld   d, 0
@@ -1020,10 +791,10 @@ POLY_FILL_IMPL:
     ld   a, (RECT_X0)
     ld   c, a
     ld   a, b
-    sub  c                           ; a = X1-X0 (signed result in A)
-    jr   nc, .dx_pos                 ; X1>=X0: already positive (or zero)
-    neg                              ; X1<X0: negate to get |dx|
-    ld   b, a                        ; b = dx
+    sub  c                           ; A = X1 - X0
+    jr   nc, .dx_pos                 ; X1 >= X0
+    neg                              ; |dx|
+    ld   b, a                        ; B = dx
     ld   a, (POLY_FILL_NEDGES)
     ld   e, a
     ld   d, 0
@@ -1032,7 +803,7 @@ POLY_FILL_IMPL:
     ld   (hl), $FF                   ; sx = -1
     jr   .dx_store
 .dx_pos:
-    ld   b, a                        ; b = dx
+    ld   b, a                        ; B = dx
     ld   a, (POLY_FILL_NEDGES)
     ld   e, a
     ld   d, 0
@@ -1049,7 +820,7 @@ POLY_FILL_IMPL:
 
     ; err = 0 (2 bytes)
     ld   a, (POLY_FILL_NEDGES)
-    add  a, a                        ; *2 -- ERR is 2 bytes/entry
+    add  a, a                        ; ERR is 2 bytes per entry
     ld   e, a
     ld   d, 0
     ld   hl, POLY_FILL_EDGE_ERR
@@ -1139,15 +910,15 @@ POLY_FILL_IMPL:
     inc  a
     ld   (POLY_FILL_NCROSS), a
 
-    ; ---- advance this edge's own x for the NEXT scanline (Bresenham
-    ; y-major step): err += dx; while 2*err >= dy: x += sx; err -= dy ----
+    ; ---- advance this edge's x for the next scanline (Bresenham, y-major):
+    ; err += dx; while 2*err >= dy: x += sx, err -= dy ----
     ld   a, (POLY_FILL_I)
-    add  a, a                        ; *2 -- ERR is 2 bytes/entry
+    add  a, a                        ; ERR is 2 bytes per entry
     ld   e, a
     ld   d, 0
     ld   hl, POLY_FILL_EDGE_ERR
-    add  hl, de                      ; hl = &ERR[i]
-    ld   (POLY_FILL_ERR_ADDR), hl    ; stash for the write-back below
+    add  hl, de                      ; HL = &ERR[i]
+    ld   (POLY_FILL_ERR_ADDR), hl    ; kept for the write-back
     ld   e, (hl)
     inc  hl
     ld   d, (hl)                     ; de = err (16-bit)
@@ -1160,13 +931,8 @@ POLY_FILL_IMPL:
     ld   a, (hl)                     ; a = dx
     ld   l, a
     ld   h, 0                        ; hl = dx, zero-extended
-    add  hl, de                      ; hl = err + dx (new running error —
-                                     ; genuinely needs all 16 bits: dy up
-                                     ; to 191 plus dx up to 255 can reach
-                                     ; 446 before normalization brings it
-                                     ; back down, caught by checking the
-                                     ; real worst case before writing any
-                                     ; of this, not assumed to fit a byte
+    add  hl, de                      ; HL = err + dx: all 16 bits (up to 191 + 255 before it is
+                                     ; normalized back down)
 
     ld   a, (POLY_FILL_I)
     ld   e, a
@@ -1181,31 +947,14 @@ POLY_FILL_IMPL:
 
 .step_loop:
     push hl                          ; save err
-    add  hl, hl                      ; hl = 2*err -- SIGNED: err legitimately
-                                     ; goes negative whenever dx isn't an
-                                     ; exact multiple of dy (the normal
-                                     ; case), so 2*err can be negative too.
-                                     ; A negative 2*err, read as a two's-
-                                     ; complement 16-bit value, LOOKS like
-                                     ; a huge unsigned number -- an
-                                     ; unsigned-only carry check below
-                                     ; would then wrongly see it as
-                                     ; ">= dy" and keep stepping (this
-                                     ; exact bug shipped once already,
-                                     ; caught via a real-hardware screen-
-                                     ; shot showing spans running off the
-                                     ; edge of the canvas, root-caused via
-                                     ; a temporary per-row debug log
-                                     ; before this fix was written). Test
-                                     ; the sign bit FIRST: negative always
-                                     ; means "stop", since dy is always
-                                     ; >=1 (positive) so a negative 2*err
-                                     ; can never be >= dy.
+    add  hl, hl                      ; HL = 2*err, SIGNED: err goes negative whenever dx is not a
+                                     ; multiple of dy, and a negative 2*err would read as a huge
+                                     ; unsigned value in the carry test below. So test the sign
+                                     ; first: negative always means stop (dy >= 1)
     bit  7, h
     jr   nz, .step_stop              ; 2*err negative: definitely < dy
     or   a
-    sbc  hl, bc                      ; carry set iff 2*err < dy (safe now:
-                                     ; both operands are non-negative)
+    sbc  hl, bc                      ; carry iff 2*err < dy (both operands non-negative here)
     pop  hl                          ; restore err (un-doubled) either way
     jr   c, .step_done               ; 2*err < dy: normalization complete
 
@@ -1216,10 +965,7 @@ POLY_FILL_IMPL:
     ld   d, 0
     ld   hl, POLY_FILL_EDGE_SX
     add  hl, de
-    ld   a, (hl)                     ; a = sx (+1 or -1, a real signed
-                                     ; byte — the add below wraps
-                                     ; correctly via two's complement,
-                                     ; no branch needed for the sign)
+    ld   a, (hl)                     ; A = sx, +1 or -1: the add below wraps correctly
     ld   c, a
     ld   a, (POLY_FILL_I)
     ld   e, a
@@ -1237,11 +983,7 @@ POLY_FILL_IMPL:
     jr   .step_loop
 
 .step_stop:
-    pop  hl                          ; restore err (un-doubled) -- same
-                                     ; "either way" restore .step_done
-                                     ; below expects, just reached from
-                                     ; the negative-sign short-circuit
-                                     ; instead of the carry check
+    pop  hl                          ; restore err, as on the carry path
 .step_done:
     ld   a, l
     ld   de, (POLY_FILL_ERR_ADDR)
@@ -1259,14 +1001,11 @@ POLY_FILL_IMPL:
     cp   b
     jp   nz, .edge_loop
 
-    ; ---- every edge checked for this row -- sort the crossings
-    ; (bubble sort: NCROSS is at most POLY_MAXPTS=12, so simplicity
-    ; wins over a fancier sort with the same worst-case behavior at
-    ; this size) ----
+    ; ---- every edge checked for this row: sort the crossings (bubble sort; at most
+    ; POLY_MAXPTS of them) ----
     ld   a, (POLY_FILL_NCROSS)
     cp   2
-    jp   c, .row_done                ; fewer than 2 crossings: nothing
-                                     ; to sort or fill this row
+    jp   c, .row_done                ; fewer than 2 crossings: nothing to fill
     dec  a
     ld   (POLY_FILL_PASS), a         ; passes remaining = NCROSS-1
 .sort_pass:
@@ -1278,14 +1017,10 @@ POLY_FILL_IMPL:
 .sort_inner:
     ld   a, (POLY_FILL_NCROSS)
     dec  a
-    ld   b, a                        ; b = last valid j (NCROSS-1 - 1
-                                     ; would leave no j+1 in range, so
-                                     ; the last valid j is NCROSS-2;
-                                     ; comparing against NCROSS-1 below
-                                     ; and using strict `nc` catches it)
+    ld   b, a                        ; B = NCROSS - 1: j runs 0 .. NCROSS - 2
     ld   a, (POLY_FILL_J)
     cp   b
-    jp   nc, .sort_inner_done        ; j >= NCROSS-1: no j+1 left, pass over
+    jp   nc, .sort_inner_done        ; j >= NCROSS - 1: no j+1 left
 
     ld   e, a
     ld   d, 0
@@ -1312,10 +1047,7 @@ POLY_FILL_IMPL:
     jp   .sort_pass
 .sort_done:
 
-    ; ---- fill spans: pairs (crossings[0],crossings[1]), (crossings[2],
-    ; crossings[3]), ... — half-open [x0,x1) per span, same convention
-    ; verified against a reference even-odd fill before any of this was
-    ; written (see this routine's own header) ----
+    ; ---- fill spans: the pairs (crossings[0], [1]), ([2], [3]), ..., each half-open [x0, x1) ----
     xor  a
     ld   (POLY_FILL_I), a
 .span_loop:
@@ -1332,15 +1064,10 @@ POLY_FILL_IMPL:
     ld   hl, POLY_FILL_CROSSINGS
     add  hl, de
     ld   a, (hl)
-    ld   (RECT_CUR_X), a             ; reuse RECT_CUR_X as the span-fill
-                                     ; cursor — RECT is idle whenever
-                                     ; POLYGON-FILL runs, same "shared
-                                     ; scratch" reasoning already used
-                                     ; for RECT_X0/Y0 above
+    ld   (RECT_CUR_X), a             ; RECT_CUR_X: the span-fill cursor (RECT is idle here)
     inc  hl
     ld   a, (hl)
-    ld   (RECT_X1), a                ; reuse RECT_X1 as this span's own
-                                     ; exclusive right bound
+    ld   (RECT_X1), a                ; RECT_X1: the span's exclusive right bound
 
 .pixel_loop:
     ld   a, (RECT_X1)
@@ -1352,9 +1079,7 @@ POLY_FILL_IMPL:
     ld   b, a                        ; b = cur (x)
     ld   a, (POLY_FILL_Y)
     ld   c, a                        ; c = y
-    ld   d, 0                        ; OVER=0 — always OR/set, see
-                                     ; RECT_FILL_IMPL's own header for
-                                     ; why (a clean repaint, not a toggle)
+    ld   d, 0                        ; OVER = 0: always set, never toggle
     ld   a, (POLY_ATTR)
     call GRAPHICS_HOME_WRITE_PIXEL
 
@@ -1383,7 +1108,7 @@ POLY_FILL_IMPL:
     ret
 
 ; ============================================================================
-; The line store for the full-screen view (step E, docs/V2/EDITOR_SPEC.md
+; The line store for the full-screen view (docs/V2/EDITOR_SPEC.md
 ; sections 3 and 5.1). Lines are text + one terminator, STORE_START up to
 ; STORE_END (HOME cell); a terminator is $0D, or $8D for a line changed in
 ; the view (bit 7 is ignored when scanning). Lines are numbered from 0 here
@@ -1391,42 +1116,9 @@ POLY_FILL_IMPL:
 ; header does not list as Out; none touches IX or IY.
 ; ============================================================================
 
-; ---- the view's RAM, $8AC0 up (free: $8ABD-$8BFF; VIEW_RESULT at $8AC0 is
-; in include/exrom_home_ram.inc) ----
-VIEW_CUR           EQU $8AC1    ; 2: the cursor line (its text is in EDIT_BUF)
-VIEW_TOP           EQU $8AC3    ; 2: the first line on screen
-VIEW_COUNT         EQU $8AC5    ; 2: lines in the store
-VIEW_OLDCUR        EQU $8AC7    ; 2: VIEW_CUR / VIEW_TOP / VIEW_CROW before the key
-VIEW_OLDTOP        EQU $8AC9    ; 2
-VIEW_PTR           EQU $8ACB    ; 2: a line's address, walking the store
-VIEW_IDX           EQU $8ACD    ; 2: its index
-VIEW_CELL          EQU $8ACF    ; 2: the cursor cell last drawn: column, row
-VIEW_MSG           EQU $8AD1    ; 1: STORE FULL is on the status row
-VIEW_OLDMSG        EQU $8AD2    ; 1: VIEW_MSG before the key
-VIEW_CROW          EQU $8AD3    ; 1: screen row of the cursor line's first row
-VIEW_CROWS         EQU $8AD4    ; 1: its rows (the wrap table's count)
-VIEW_OLDROW        EQU $8AD5    ; 1
-VIEW_ROW           EQU $8AD6    ; 1: the screen row a walk has reached
-VIEW_LEVEL         EQU $8AD7    ; 1: what the key changed: 0 nothing, 1 the
-                                ;    cursor, 2 the cursor line's text, 3 lines
-VIEW_COL           EQU $8AD8    ; 1: the column UP/DOWN carries to a line
-VIEW_KEYCODE       EQU $8AD9    ; 1
-VIEW_EXTRA         EQU $8ADA    ; 1: bytes a caller adds right after VIEW_LEAVE
-VIEW_FOUND         EQU $8ADB    ; 2: 1 + the last line the name matched, or 0
-VIEW_T1            EQU $8ADD    ; 2: scratch
-VIEW_T2            EQU $8ADF    ; 2: scratch
-VIEW_FLAG          EQU $8AE1    ; 1: scratch
-VIEW_TEXT          EQU $8AE2    ; 14: the status row's text
-                                ; $8AF1-$8AF2: EDIT_LINE_NO (core/edit.asm)
-VIEW_SH            EQU $8AF3    ; 69: the row shadow, 23 records (rows 0-22) of 3 bytes: the
-                                ;    line index shown there (2; $FFFF a blank row, $FFFE
-                                ;    unknown) and the row within that line (1)
-VIEW_SH_END        EQU $8B38
-VIEW_STOP          EQU $8B38    ; 2: VIEW_RENDER may stop after this line once the shadow agrees
-    ASSERT (VIEW_TEXT & $FF) + 14 < $100
-    ASSERT VIEW_TEXT + 14 <= $8AF1
-    ASSERT VIEW_SH_END == VIEW_SH + 69
-    ASSERT VIEW_STOP + 2 <= $8C00
+; HOME's values of these two, which tools/check_ram_layout.py compares with HOME's symbols.
+EDIT_MAX_LEN       EQU 128      ; core/editor.asm: the edit line's capacity
+ATTR_DEFAULT       EQU $44      ; kernel/graphics/graphics.asm
 
 ; ============================================================================
 ; STORE_NEXT -- the line at HL.
@@ -1621,7 +1313,7 @@ STORE_DELETE:
     jp   STORE_GAP
 
 ; ============================================================================
-; The full-screen view (step E item 6, docs/V2/EDITOR_SPEC.md section 5.1).
+; The full-screen view (docs/V2/EDITOR_SPEC.md section 5.1).
 ; Home's EDIT (core/edit.asm) calls VIEW_SESSION through service slot 6; the
 ; session runs here, with this image paged in, until BREAK. The cursor line is
 ; copied to EDIT_BUF and edited by the console's own engine (Home, through the
@@ -3023,7 +2715,7 @@ VIEW_POST:
     jp   VIEW_STATUS
 
 ; ============================================================================
-; CIRCLE_IMPL (slot 8, step O15 item 4; docs/V2/FILL_CIRCLE_SPEC.md section 5)
+; CIRCLE_IMPL (slot 8; docs/V2/FILL_CIRCLE_SPEC.md section 5)
 ; Draws the outline of the circle of radius GFX_CIRCLE_R about
 ; (GFX_CIRCLE_XC, GFX_CIRCLE_YC) in attribute GFX_CIRCLE_ATTR. The three
 ; numbers are signed 16-bit, staged by core/shapes.asm's CIRCLE.
@@ -3209,7 +2901,7 @@ CIRCLE_PLOT:
     ret
 
 ; ============================================================================
-; FILL_IMPL (slot 7, step O15 item 5; docs/V2/FILL_CIRCLE_SPEC.md section 4)
+; FILL_IMPL (slot 7; docs/V2/FILL_CIRCLE_SPEC.md section 4)
 ; Flood fill from the seed (GFX_FILL_X, GFX_FILL_Y: signed 16-bit) with
 ; attribute GFX_FILL_ATTR, 4-connected, through pixels equal to the seed pixel.
 ; Does nothing in HIRES (the planes overlap its attribute file) or for a seed
@@ -3264,7 +2956,7 @@ FILL_IMPL:
     ld   d, high CIRCLE_MASK_TABLE
     ld   a, (de)
     and  (hl)                        ; nonzero: the seed pixel is set
-    ld   hl, $4000
+    ld   hl, SCREEN_ADDR
     ld   de, GFX_FILL_SHADOW
     jr   nz, .set
     xor  a

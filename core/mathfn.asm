@@ -1,60 +1,23 @@
 ; ============================================================================
-; core/mathfn.asm — Phase 25: integer math functions (ABS, SGN, MOD,
-; SQRT, RND, RANDOMIZE); Phase 54 added *, / (plain integer multiply
-; and divide)
+; core/mathfn.asm -- ABS, SGN, MOD, SQRT, RND, RANDOMIZE, *, /: integer math words
 ;
-; Builds on core/dict.asm and core/interp.asm (both must be INCLUDEd
-; first — this file's own first header chains through DICT_CHAIN_POINT,
-; same convention as every other core/ file) AND kernel/math/math.asm
-; (already INCLUDEd by every ROM in this project for other reasons —
-; see rom/forth_boot.asm's own INCLUDE list).
-;
-; WHAT THIS ADDS — a real gap found by a direct audit of 2068-Leap's own
-; BASIC ROM (`~/ts2068rom`) against this project's dictionary: BASIC's
-; ABS/SGN/MOD/SQR/RND/RANDOMISE had no Forth equivalent at all. Every
-; one of these is a THIN WRAPPER around an already-existing,
-; already-verified kernel/math/math.asm routine — no new algorithm
-; written here, matching this project's own established practice of
-; reusing kernel/ primitives rather than reinventing them (core/
-; ts2068.asm's own PLOT/LINE/CIRCLE/BEEP do the identical thing for
-; kernel/graphics/kernel/sound). See each kernel routine's own header
-; in kernel/math/math.asm for the real algorithm, verification history,
-; and edge-case behavior (e.g. ABS(-32768) stays -32768; MOD's
-; remainder takes the DIVIDEND's sign; RND(x) seeds itself from the Z80
-; R register the first time it's ever called; divide/mod-by-zero
-; return 0, no error signal) — none of that is repeated here.
-;
-;   ABS        ( n -- |n| )              MATH_ABS16
-;   SGN        ( n -- -1|0|1 )           MATH_SGN16
-;   MOD        ( a b -- a mod b )        MATH_MOD16
-;   SQRT       ( n -- isqrt(n) )         MATH_SQRT16 (integer square
-;              root, truncating; BASIC's own SQR operates on its float
-;              type instead — see core/floatsqrt.asm, a later phase,
-;              for the float version)
-;   RND        ( x -- n )                MATH_RND16 -- n in [0, x-1]
-;              for a positive x, matching BASIC's own RND(x) convention
-;   RANDOMIZE  ( n -- )                  MATH_RND_SEED -- n=0 resets to
-;              "reseed from R on next RND", matching BASIC's own
-;              RANDOMISE 0
-;
-; All six operate on the plain INTEGER data stack (IX) — this project's
-; float stack (IY) has its own, separate `F+`/`F-`/`F*`/`F/` words
-; (core/float.asm etc.) by deliberate design (see docs/numeric_model.md);
-; these six mirror kernel/math's own integer-only scope, not an
-; oversight.
+; Each word is a thin wrapper that pops its operands from the integer data stack (IX), calls the matching
+; kernel/math/math.asm routine and pushes the result; that file's headers give the algorithms and edge
+; cases (ABS of -32768 stays -32768, the MOD remainder takes the dividend's sign, RND(x) seeds itself
+; from the Z80 R register on first use, division or MOD by zero gives 0). Needs kernel/math/math.asm.
+; The float words (F+ F- F* F/ ...) work on the separate float stack (IY).
+; Chained from DICT_CHAIN_POINT (set by the including ROM before the INCLUDE); every word may destroy
+; all registers except IX (the data stack pointer), IY and SP.
 ; ============================================================================
 
     IFNDEF CORE_MATHFN_ASM
     DEFINE CORE_MATHFN_ASM
 
 ; ============================================================================
-; ABS ( n -- |n| )
+; ABS ( n -- |n| ) -- MATH_ABS16
 ; ============================================================================
 H_ABS:
-    DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL,
-                            ; not EQU) to whatever word chain this
-                            ; file should extend, immediately before
-                            ; INCLUDEing this file
+    DW   DICT_CHAIN_POINT
     DB   3, "A", "B", "S"
 W_ABS:
     rst RST_DPOP
@@ -63,7 +26,7 @@ W_ABS:
     ret
 
 ; ============================================================================
-; SGN ( n -- -1|0|1 )
+; SGN ( n -- -1|0|1 ) -- MATH_SGN16
 ; ============================================================================
 H_SGN:
     DW   H_ABS
@@ -75,7 +38,7 @@ W_SGN:
     ret
 
 ; ============================================================================
-; MOD ( a b -- a-mod-b )
+; MOD ( a b -- a-mod-b ) -- MATH_MOD16
 ; ============================================================================
 H_MOD:
     DW   H_SGN
@@ -89,7 +52,7 @@ W_MOD:
     ret
 
 ; ============================================================================
-; SQRT ( n -- isqrt(n) )
+; SQRT ( n -- isqrt(n) ) -- MATH_SQRT16, the truncated integer square root
 ; ============================================================================
 H_SQRT:
     DW   H_MOD
@@ -101,7 +64,7 @@ W_SQRT:
     ret
 
 ; ============================================================================
-; RND ( x -- n )
+; RND ( x -- n ) -- MATH_RND16, n in [0, x-1] for a positive x
 ; ============================================================================
 H_RND:
     DW   H_SQRT
@@ -113,7 +76,7 @@ W_RND:
     ret
 
 ; ============================================================================
-; RANDOMIZE ( n -- )
+; RANDOMIZE ( n -- ) -- MATH_RND_SEED; 0 reseeds from R on the next RND
 ; ============================================================================
 H_RANDOMIZE:
     DW   H_RND
@@ -124,11 +87,7 @@ W_RANDOMIZE:
     ret
 
 ; ============================================================================
-; * ( a b -- a*b )  Phase 54: thin wrapper around
-; kernel/math/math.asm's own MATH_MULTIPLY16 — same signed,
-; 16-bit-truncated-result contract as that routine's own header
-; documents (verified there via 32,720 Python-simulated cases, not
-; re-verified here).
+; * ( a b -- a*b ) -- MATH_MULTIPLY16, signed, the result truncated to 16 bits
 ; ============================================================================
 H_STAR:
     DW   H_RANDOMIZE
@@ -142,10 +101,7 @@ W_STAR:
     ret
 
 ; ============================================================================
-; / ( a b -- a/b )  Phase 54: thin wrapper around
-; kernel/math/math.asm's own MATH_DIVIDE16 — truncates toward zero;
-; b=0 returns 0 (no error signal), matching MOD's own divide-by-zero
-; behavior above since both share the same underlying MATH_UDIV16.
+; / ( a b -- a/b ) -- MATH_DIVIDE16, truncated toward zero; b = 0 gives 0
 ; ============================================================================
 H_SLASH:
     DW   H_STAR
@@ -158,8 +114,5 @@ W_SLASH:
     rst RST_DPUSH
     ret
 
-DICT_LATEST_INIT_MATHFN EQU H_SLASH       ; head of the dictionary once
-                                           ; this file's own words are
-                                           ; included
 
     ENDIF

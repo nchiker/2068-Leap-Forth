@@ -1,32 +1,10 @@
 ; ============================================================================
-; core/stackops.asm — Phase 46: ROT, 2DUP, 2DROP, ?DUP, PICK
+; core/stackops.asm -- ROT, 2DUP, 2DROP, ?DUP, PICK: more stack words
 ;
-; Builds on core/dict.asm (DPUSH_HL/DPOP_HL, W_DROP, W_DUP) only — no
-; kernel INCLUDE needed.
-;
-; WHAT THIS ADDS: the rest of the standard stack-shuffling vocabulary
-; Phase 2 didn't cover (that phase only needed DROP/DUP/SWAP/OVER for
-; its own bring-up). Real, idiomatic Forth code leans on these
-; constantly; their total absence was a genuine gap, not a deliberate
-; scope cut — flagged directly by the user after a fresh audit of
-; what's actually in the dictionary today.
-;   ROT   ( a b c -- b c a )
-;   2DUP  ( a b -- a b a b )
-;   2DROP ( a b -- )            reuses W_DROP twice rather than
-;                                reimplementing the same effect
-;   ?DUP  ( x -- 0 | x x )      duplicates only if x is nonzero,
-;                                matching the real ANS Forth contract
-;                                exactly (a bare `0=`-then-`IF` guard
-;                                this project already has doesn't
-;                                replace this — ?DUP is about NOT
-;                                consuming x yet, common right before
-;                                an IF that wants to test and keep it)
-;   PICK  ( x_u ... x_0 u -- x_u ... x_0 x_u )
-;                                0 PICK = DUP, 1 PICK = OVER. NO bounds
-;                                checking on u, matching this project's
-;                                established SOUND/STICK convention —
-;                                an out-of-range u reads whatever
-;                                memory that computes to, not guarded.
+; Needs core/dict.asm (W_DROP, W_DUP). PICK does not bounds-check u: an out-of-range u reads whatever
+; memory that address is.
+; Chained from DICT_CHAIN_POINT (set by the including ROM before the INCLUDE); every word may destroy
+; all registers except IX (the data stack pointer), IY and SP.
 ; ============================================================================
 
     IFNDEF CORE_STACKOPS_ASM
@@ -36,10 +14,7 @@
 ; ROT ( a b c -- b c a )
 ; ============================================================================
 H_ROT:
-    DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL,
-                            ; not EQU) to whatever word chain this
-                            ; file should extend, immediately before
-                            ; INCLUDEing this file
+    DW   DICT_CHAIN_POINT
     DB   3, "R","O","T"
 W_ROT:
     ld   c, (ix+4)
@@ -73,7 +48,7 @@ W_2DUP:
     ret
 
 ; ============================================================================
-; 2DROP ( a b -- )
+; 2DROP ( a b -- ) -- W_DROP twice
 ; ============================================================================
 H_2DROP:
     DW   H_2DUP
@@ -84,7 +59,7 @@ W_2DROP:
     ret
 
 ; ============================================================================
-; ?DUP ( x -- 0 | x x )
+; ?DUP ( x -- 0 | x x ) -- duplicate x only if it is nonzero
 ; ============================================================================
 H_QDUP:
     DW   H_2DROP
@@ -99,7 +74,7 @@ W_QDUP:
     ret
 
 ; ============================================================================
-; PICK ( x_u ... x_0 u -- x_u ... x_0 x_u )
+; PICK ( x_u ... x_0 u -- x_u ... x_0 x_u ) -- copy the u-th item to the top (0 PICK = DUP, 1 PICK = OVER)
 ; ============================================================================
 H_PICK:
     DW   H_QDUP
@@ -117,8 +92,5 @@ W_PICK:
     rst RST_DPUSH
     ret
 
-DICT_LATEST_INIT_STACKOPS EQU H_PICK   ; head of the dictionary once
-                                        ; this file's own words are
-                                        ; included
 
     ENDIF

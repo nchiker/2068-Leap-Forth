@@ -1,23 +1,10 @@
 # ZEsarUX TS2068 EXROM-mirroring patch
 
-`0001-zesarux-mirror-ts2068-exrom.patch` fixes a real TS2068 emulation gap
-in ZEsarUX: stock ZEsarUX only mirrors the 8K EXROM image into memory
-chunks 0 and 1. Real TS2068/TC2068 hardware doesn't decode EXROM's
-address lines A13-A15, so the physical ROM actually repeats across
-**all eight** 8K chunks (0-7) of the EXROM bank. This project's own
-graphics extension (`RECT`/`POLYGON`/`POLYGON-FILL`/`SPRITE-DEFINE`/
-`SPRITE-SHOW`/`SPRITE-HIDE`, Phase 65) pages its EXROM code into chunk 5
-(`$A000-$BFFF`) — invisible to stock ZEsarUX, correctly visible once
-this patch is applied. See
-[`../docs/zesarux_setup.md`](../docs/zesarux_setup.md) for the full
-picture, including which parts of 2068-Leap-Forth need this patch and
-which don't.
-
-Confirmed by direct A/B test in this project's own development
-environment: `rom/test_rect.asm` + `build/graphics_exrom.bin` reports
-GREEN (pass) under a ZEsarUX build with this patch applied, and BLUE
-(checkpoint 1 fail — EXROM not visible) under a stock build from the
-immediate parent commit.
+`0001-zesarux-mirror-ts2068-exrom.patch` fixes a TS2068 emulation gap in ZEsarUX: stock ZEsarUX mirrors the 8 KB
+EXROM image into chunks 0 and 1 only. The real TS2068 does not decode the EXROM's address lines A13-A15, so the ROM
+repeats across all eight chunks. Leap-Forth pages its EXROM into chunk 5 (`$A000-$BFFF`): without the patch the EXROM
+words (`EDIT`, `FILL`, `CIRCLE`, `RECT`, `POLYGON`, `POLYGON-FILL`, the sprites) report `NO EXROM`, and `make test`
+(which uses the EXROM) needs the patched build. See [`../docs/zesarux_setup.md`](../docs/zesarux_setup.md).
 
 Applies cleanly to upstream tag `ZEsarUX-13.0`
 (`https://github.com/chernandezba/zesarux`, commit `0bb4277`):

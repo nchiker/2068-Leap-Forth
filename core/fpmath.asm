@@ -1,8 +1,10 @@
 ; ============================================================================
-; core/fpmath.asm — FSQRT, PI, SIN, COS, TAN, RAD, DEG (step F, docs/V2/FLOAT_SPEC.md sections 8.1, 8.2)
+; core/fpmath.asm -- FSQRT, PI, SIN, COS, TAN, RAD, DEG (docs/V2/FLOAT_SPEC.md sections 8.1, 8.2)
 ;
-; Builds on core/fpcore.asm and core/dict.asm (this file's first header chains through DICT_CHAIN_POINT). Every word
-; is a sequence of fpcore operations in the order tools/fpforth.py follows, so the ROM matches it byte for byte.
+; Needs core/fpcore.asm and core/dict.asm. Every word is a sequence of fpcore operations in the order
+; tools/fpforth.py follows, so the ROM matches it byte for byte. Chained from DICT_CHAIN_POINT (set by the
+; including ROM before the INCLUDE); every word may destroy all registers except IX (the data stack pointer), IY
+; (the float stack pointer) and SP.
 ;
 ;   FSQRT ( r -- sqrt r )  Newton's method as Leap V2's SQR (rom/exrom_v2_vm_core.asm, MIT, same copyright holder):
 ;           5 steps of x = (x + n / x) / 2, the halving done by decrementing the exponent byte (exact: x is far above
@@ -37,17 +39,21 @@ K_SERIES:  DB $67, $CC, $FD, $BB, $92   ; c11   (Leap V2 SIN_COEFFS, the highest
            DB $7A, $08, $88, $86, $4C   ; c5
            DB $7E, $AA, $AA, $AA, $A5   ; c3 (about 1/6)
 
-; FDUP -- push a copy of the top cell. Destroys: AF, BC, DE, HL
+; ============================================================================
+; FDUP -- push a copy of the top float (not a dictionary word)
+; Out: the float stack one cell deeper
+; Destroys: AF, BC, DE, HL
+; ============================================================================
 FDUP:
     push iy
     pop  hl
     jp   FPUSH_HL
 
 ; ============================================================================
-; FSQRT ( r -- sqrt r )
+; FSQRT ( r -- sqrt r ) -- square root by Newton's method (see the header); 0 gives 0, a negative number THROW -46
 ; ============================================================================
 H_FSQRT:
-    DW   DICT_CHAIN_POINT   ; the including ROM sets this (DEFL) to the chain this file extends, just before INCLUDEing it
+    DW   DICT_CHAIN_POINT
     DB   5, "F", "S", "Q", "R", "T"
 W_FSQRT:
     ld   a, (iy+0)
@@ -85,10 +91,9 @@ W_FSQRT:
     djnz .step
     ret
 
-DICT_LATEST_INIT_FLOATSQRT EQU H_FSQRT   ; head of the dictionary once FSQRT is included
 
 ; ============================================================================
-; PI ( -- r )
+; PI ( -- r ) -- the 5-byte pi
 ; ============================================================================
 H_PI:
     DW   H_FSQRT
@@ -98,7 +103,11 @@ W_PI:
     jp   FPUSH_HL
 
 ; ============================================================================
-; FSINCOS -- the shared body of SIN and COS: A = 0 for SIN, 1 for COS
+; FSINCOS -- the shared body of SIN and COS (not a dictionary word)
+; In:  A = 0 for SIN, 1 for COS; the angle in radians on the float stack
+; Out: the result replaces it; FTRIG_K holds k, FTRIG_R2 r^2 and FSQ_N r as scratch
+; Errors: THROW -43 when |k| > 32767
+; Destroys: AF, BC, DE, HL, BC', DE', HL'
 ; ============================================================================
 FSINCOS:
     ld   (FTRIG_K + 1), a
@@ -173,7 +182,7 @@ FSINCOS:
     jp   FNEG_TOP
 
 ; ============================================================================
-; SIN ( r -- r ) radians
+; SIN ( r -- r ) -- sine of an angle in radians
 ; ============================================================================
 H_SIN:
     DW   H_PI
@@ -183,7 +192,7 @@ W_SIN:
     jp   FSINCOS
 
 ; ============================================================================
-; COS ( r -- r ) radians
+; COS ( r -- r ) -- cosine of an angle in radians
 ; ============================================================================
 H_COS:
     DW   H_SIN
@@ -192,10 +201,10 @@ W_COS:
     ld   a, 1
     jp   FSINCOS
 
-DICT_LATEST_INIT_FLOATTRIG EQU H_COS   ; head of the dictionary as of PI, SIN, COS
 
 ; ============================================================================
-; TAN ( r -- r ) radians: SIN x / COS x, the sine kept in FMT (F.'s buffer, free here) while COS runs
+; TAN ( r -- r ) -- tangent of an angle in radians: SIN x / COS x, the sine kept in FMT (F.'s buffer, free here)
+; while COS runs
 ; Errors: THROW -42 for a cosine of exactly 0 (FDIV's), -43 as SIN's
 ; ============================================================================
 H_TAN:
@@ -213,7 +222,7 @@ W_TAN:
     jp   FPACK
 
 ; ============================================================================
-; RAD ( degrees -- radians ) x pi/180
+; RAD ( degrees -- radians ) -- x pi/180
 ; ============================================================================
 H_RAD:
     DW   H_TAN
@@ -223,7 +232,7 @@ W_RAD:
     jp   FMULP
 
 ; ============================================================================
-; DEG ( radians -- degrees ) x 180/pi
+; DEG ( radians -- degrees ) -- x 180/pi
 ; ============================================================================
 H_DEG:
     DW   H_RAD
@@ -232,6 +241,5 @@ W_DEG:
     ld   hl, K_DEG
     jp   FMULP
 
-DICT_LATEST_INIT_RADDEG EQU H_DEG   ; head of the dictionary once this file is included
 
     ENDIF

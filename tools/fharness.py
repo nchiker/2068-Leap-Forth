@@ -27,9 +27,9 @@ The API (a library; `python3 -I tools/fharness.py --selftest` is its self-test):
 `build` is a directory that holds forth_boot_rom0.bin (DIR or DIR/build, as tools/tapetol.py), so the images of an
 older build in a git worktree work.  Symbols come from forth_boot.sym and, when the build has it, graphics_exrom.sym.
 
-Ports: base 10900, allowed 10900-10919, 10840-10859 and 10860-10879 (PORT_RANGES; the second is tools/floattest.py's, the
-third tools/shapetest.py's; worker k uses base + k, all of a pool's ports in one range); other harnesses own 10760-10839,
-10880-10899 and 10930-10999.
+Ports: base 10900, allowed 10900-10919, 10840-10859, 10860-10879 and 10760-10779 (PORT_RANGES: this harness's own,
+floattest's, shapetest's and tools/run_tests.py's; worker k uses base + k, all of a pool's ports in one range); other
+harnesses own 10820-10839, 10880-10899 and 10960-10999.
 A port outside the ranges, or one that something already listens on, is refused.  Needs ts2068-debug ($TS2068_DEBUG_DIR,
 default ~/ts2068-debug; the ZRCP client and the process control), ZEsarUX 13.0 ($TS2068_DEBUG_ZESARUX_DIR, default
 ~/Applications/ZEsarUX-13.0) and sjasmplus (the glyph program).  ts2068-debug now acknowledges every segment at once
@@ -38,7 +38,7 @@ behaves the same) and FORTH_REALTIME=1 runs at real speed.  Neither changes the 
 frame, interrupts), so every T-state figure is unchanged.
 
 Memory the harness uses: $FF00 RET_SLOT, $FF02 STOP_ADDR, $FF10 GLYPH_PROG.  Forth's machine stack starts at
-SP = $FF00 and grows down (rom/forth_boot.asm COLD_START `ld sp,$FF00`; include/sysvars.inc asserts that
+SP = $FF00 and grows down (rom/forth_boot.asm COLD_START `ld sp,$FF00`; include/forth_layout.inc asserts that
 everything else it places ends at or below $FF00), so $FF00-$FFFF is not used by the ROM.  The restore puts them
 back to the snapshot's contents.
 
@@ -74,17 +74,17 @@ from ts2068_debug.process import ZEsarUXProcess as _ZProcess, terminate_emulator
 # ZEsarUX's own speed settings: --emulatorspeed shortens the real-time wait after each frame (10-1000 %) and
 # --frameskip skips drawing frames; neither changes the emulated machine.  FORTH_REALTIME=1 runs at real speed.
 FAST_ARGS = [] if os.environ.get("FORTH_REALTIME") else ["--emulatorspeed", "1000", "--frameskip", "49"]
-PORT_LO, PORT_HI = 10900, 10919     # this harness's ports (make test 10760 up, bench 10780, poweron 10820-10839,
-                                    # ay_audio 10880-10899, cart_diff 10930-10949, tapetest 10960-10979, tapetol 10980-10999)
-PORT_RANGES = ((10900, 10919), (10840, 10859), (10860, 10879))  # every range a Machine / run_pool accepts (tools/floattest.py: the second;
-                                    # tools/shapetest.py: the third)
+PORT_LO, PORT_HI = 10900, 10919     # this harness's ports (run_tests 10760-10779, poweron 10820-10839,
+                                    # ay_audio 10880-10899, tapetest 10960-10979, tapetol 10980-10999)
+PORT_RANGES = ((10900, 10919), (10840, 10859), (10860, 10879), (10760, 10779))  # every range a Machine / run_pool accepts
+                                    # (tools/floattest.py: the second; tools/shapetest.py: the third; tools/run_tests.py: the fourth)
 RET_SLOT = 0xFF00                   # return address slot for routine calls (unused by the ROM: the header)
 STOP_ADDR = 0xFF02                  # `jr $` written here; routine calls return to it
 GLYPH_PROG = 0xFF10                 # the glyph rendering program and its code list
 UNKNOWN = "░"                  # screen_rows: a cell that is no glyph
 INVERSE_MARK = "\u2022"             # screen_rows: the next character is drawn inverse (every pixel flipped)
 UDG_BASE = 0xE000                   # screen_rows: UDG code 144 + i reads as chr(UDG_BASE + i) (private use area)
-UDG_CODE_BASE, UDG_COUNT = 144, 21  # kernel/graphics UDG_CODE_BASE; include/sysvars.inc UDG_COUNT
+UDG_CODE_BASE, UDG_COUNT = 144, 21  # kernel/graphics UDG_CODE_BASE; include/forth_layout.inc UDG_COUNT
 Z_CAPS, Z_SYM, Z_SPACE, Z_ENTER = 135, 138, 128, 129    # ZEsarUX send-keys-event codes (letters and digits: their ASCII)
 KEY_ENTER = 13                      # include/keys.inc
 # Control codes that IO_DECODE_KEY makes from CAPS SHIFT + a key by code, not through a table (kernel/io/io.asm;
@@ -653,6 +653,58 @@ def _worker(build, port, tq, rq, fn, tasks, restore):
         if m is not None:
             m.stop()
         rq.put(("exit", port, None))
+
+
+class Suite:
+    """A suite's tasks and how to report their results: tools/run_tests.py runs every suite's tasks on one pool.
+    run(machine, task) -> dict(ok, detail, ...) as run_pool's fn; report(results, wall) prints the suite's lines and
+    returns 0 (pass), 1 (a check failed) or 2 (harness error).  stock: indices of the tasks that need the stock-shaped
+    EXROM (8 KB of $00; run on a copy of the build, stock_build)."""
+
+    def __init__(self, name, tasks, run, report, stock=()):
+        self.name, self.tasks, self.run, self.report, self.stock = name, list(tasks), run, report, set(stock)
+
+    def run_alone(self, build, workers=None, port0=PORT_LO):
+        """The suite on its own pools (the standalone tools)."""
+        t0 = time.time()
+        res = run_suites([self], build, workers, port0)[0]
+        return self.report(res, time.time() - t0)
+
+
+def stock_build(build):
+    """A temporary copy of the build (the files the harness reads) whose graphics_exrom.bin is 8 KB of $00: what a Home
+    ROM fitted alone sees at the EXROM address.  Returns the directory (the caller removes it)."""
+    d = tempfile.mkdtemp(prefix="forth-stock-")
+    for f in ("forth_boot_rom0.bin", "forth_boot.sym"):
+        shutil.copy(os.path.join(build, f), d)
+    with open(os.path.join(d, "graphics_exrom.bin"), "wb") as f:
+        f.write(bytes(os.path.getsize(os.path.join(build, "graphics_exrom.bin"))))
+    return d
+
+
+def run_suites(suites, build, workers=None, port0=PORT_LO):
+    """Every suite's tasks on one pool (long tasks first), the stock-EXROM tasks on a second pool after it.  Returns
+    each suite's results in its task order."""
+    build = resolve_build(build)
+    main, stock = [], []
+    for si, s in enumerate(suites):
+        for ti, t in enumerate(s.tasks):
+            (stock if ti in s.stock else main).append((si, ti))
+    weight = lambda k: -(suites[k[0]].tasks[k[1]].get("weight", 1) if isinstance(suites[k[0]].tasks[k[1]], dict) else 1)
+    main.sort(key=weight)
+    fn = lambda m, k: suites[k[0]].run(m, suites[k[0]].tasks[k[1]])
+    out = [[None] * len(s.tasks) for s in suites]
+    if main:
+        for k, r in zip(main, run_pool(build, main, fn, workers, port0)):
+            out[k[0]][k[1]] = r
+    if stock:
+        d = stock_build(build)
+        try:
+            for k, r in zip(stock, run_pool(d, stock, fn, min(workers or default_workers(), 2), port0)):
+                out[k[0]][k[1]] = r
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+    return out
 
 
 def default_workers():

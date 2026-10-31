@@ -1,48 +1,20 @@
 ; ============================================================================
-; core/portio.asm — Phase 50: IN and OUT
+; core/portio.asm -- IN and OUT: raw Z80 port access
 ;
-; Builds on core/dict.asm (DPUSH_HL, DPOP_HL) only — no other core/
-; dependency.
-;
-; WHAT THIS ADDS — raw Z80 hardware port I/O, matching the sibling
-; ts2068rom BASIC clone's own IN/OUT convention (read-only reference,
-; ~/ts2068rom/docs/user_manual.md and hardware_notes.md: "OUT
-; port,data... performing native Z80 output to a 16-bit port with byte
-; data") and the Jupiter Ace manual's own stack order (cached docs text,
-; Appendix B: "IN (address -- byte)... OUT (byte, address -- )"):
-;   IN  ( port -- value )   reads one byte from the given 16-bit port.
-;   OUT ( value port -- )    writes one byte to the given 16-bit port.
-;
-; FULL 16-BIT PORT FORM, NOT THE 8-BIT `IN A,(n)`/`OUT (n),A` FORM: both
-; words load the port number into BC and use `IN r,(C)`/`OUT (C),r`, so
-; the entire 65536-port space is reachable, not just the low 256 -- this
-; matters concretely on this hardware, since e.g. the AY sound chip's
-; own two ports (core/sound.asm's own PORT_AY_REG=$F5/PORT_AY_DATA=$F6)
-; happen to fit in 8 bits here, but there is no reason a future port
-; this project doesn't already know about would, and the task's own
-; spec calls for the full form regardless.
-;
-; A GENUINE "THE USER CAN DO DANGEROUS THINGS WITH IT" WORD BY DESIGN,
-; same as real hardware BASIC's own IN/OUT on this same machine
-; (~/ts2068rom's own docs say so explicitly: "OUT is shipped as a
-; loadable extension because direct port access is powerful... A BASIC
-; error cannot undo a hardware write") -- no range checking, no
-; forbidden-port list, matching every other memory- or hardware-facing
-; word already in this project (@, !, core/bytemem.asm's C@/C!). This is
-; intentional, not a bug to fix.
+; Both words load the port number into BC and use IN r,(C) / OUT (C),r, so the whole 16-bit port space is
+; reachable, not just the low 256. Nothing is checked: the program can write any port, as in BASIC.
+; Chained from DICT_CHAIN_POINT (set by the including ROM before the INCLUDE); every word may destroy
+; all registers except IX (the data stack pointer), IY and SP.
 ; ============================================================================
 
     IFNDEF CORE_PORTIO_ASM
     DEFINE CORE_PORTIO_ASM
 
 ; ============================================================================
-; IN ( port -- value )
+; IN ( port -- value ) -- read one byte from a 16-bit port
 ; ============================================================================
 H_IN:
-    DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL,
-                            ; not EQU) to whatever word chain this
-                            ; file should extend, immediately before
-                            ; INCLUDEing this file
+    DW   DICT_CHAIN_POINT
     DB   2, "I","N"
 W_IN:
     rst RST_DPOP            ; hl = port
@@ -55,7 +27,7 @@ W_IN:
     ret
 
 ; ============================================================================
-; OUT ( value port -- )
+; OUT ( value port -- ) -- write the low byte of value to a 16-bit port
 ; ============================================================================
 H_OUT:
     DW   H_IN
@@ -69,7 +41,5 @@ W_OUT:
     out  (c), a
     ret
 
-DICT_LATEST_INIT_PORTIO EQU H_OUT   ; head of the dictionary once this
-                                     ; file's own words are included
 
     ENDIF

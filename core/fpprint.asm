@@ -1,7 +1,9 @@
 ; ============================================================================
-; core/fpprint.asm — F. (step F, docs/V2/FLOAT_SPEC.md section 7)
+; core/fpprint.asm -- F., PLACES, FS.: printing floats (docs/V2/FLOAT_SPEC.md section 7)
 ;
-; Builds on core/fpcore.asm, core/print.asm (EMIT) and core/dict.asm.
+; Needs core/fpcore.asm, core/print.asm (EMIT) and core/dict.asm. Chained from DICT_CHAIN_POINT (set by the
+; including ROM before the INCLUDE); every word may destroy all registers except IX (the data stack pointer), IY
+; (the float stack pointer) and SP.
 ;
 ;   F. ( r -- )   prints every integer digit, then "." and F_PLACES decimals (none and no point when F_PLACES is 0;
 ;                 the cold start sets 4), a "-" for a negative value unless every printed digit is 0, then a space.
@@ -21,8 +23,10 @@
     DEFINE CORE_FPPRINT_ASM
 
 ; ============================================================================
-; FDIV10 -- the B bytes big-endian from (HL) divided by 10 (Leap-C's)
-; Out: A = the remainder. Destroys: AF, BC, HL
+; FDIV10 -- divide the B bytes big-endian from (HL) by 10 in place (Leap-C's)
+; In:  HL -> the bytes, B = their count
+; Out: A = the remainder
+; Destroys: AF, BC, HL
 ; ============================================================================
 FDIV10:
     xor  a
@@ -45,7 +49,11 @@ FDIV10:
     djnz .byte
     ret
 
-; FEMIT -- print the character A, keeping BC and HL
+; ============================================================================
+; FEMIT -- print the character A through W_EMIT, keeping BC and HL
+; In:  A = the character
+; Destroys: AF, DE
+; ============================================================================
 FEMIT:
     push bc
     push hl
@@ -58,10 +66,10 @@ FEMIT:
     ret
 
 ; ============================================================================
-; F. ( r -- )
+; F. ( r -- ) -- print r with PLACES decimals and a space
 ; ============================================================================
 H_FDOT:
-    DW   DICT_CHAIN_POINT   ; the including ROM sets this (DEFL) to the chain this file extends, just before INCLUDEing it
+    DW   DICT_CHAIN_POINT
     DB   2, "F", "."
 W_FDOT:
     call FPOP_FX
@@ -70,8 +78,13 @@ W_FDOT:
     ld   a, " "
     jp   FEMIT
 
-; FDCALC -- FX (unpacked, a sign and a value) as 128.64 fixed point in FMT, the PLACES decimals in FDIG, rounded
+; ============================================================================
+; FDCALC -- lay FX out as 128.64 fixed point in FMT and the PLACES decimals in FDIG, rounded (not a
+; dictionary word)
+; In:  FX = an unpacked float
+; Out: FMT, FDIG
 ; Destroys: AF, BC, DE, HL
+; ============================================================================
 FDCALC:
     ld   hl, FMT
     ld   b, 24
@@ -192,9 +205,12 @@ FDCALC:
 .rounded:
     ret
 
-; FDPRINT -- prints FDCALC's result: "-" for a negative FX unless every printed digit is 0, the integer digits, and
+; ============================================================================
+; FDPRINT -- print FDCALC's result: "-" for a negative FX unless every printed digit is 0, the integer digits, and
 ; "." and the decimals (none and no point when PLACES is 0)
+; In:  FX (its sign), FMT, FDIG from FDCALC
 ; Destroys: AF, BC, DE, HL
+; ============================================================================
 FDPRINT:
     ld   a, (FX + U_S)                 ; "-" for a negative value unless every printed digit is 0
     or   a
@@ -271,7 +287,7 @@ FDPRINT:
     ret
 
 ; ============================================================================
-; PLACES ( n -- )  the decimals F. and FS. print, 0-9; another n: THROW -43
+; PLACES ( n -- ) -- set the decimals F. and FS. print, 0-9; another n: THROW -43
 ; ============================================================================
 H_PLACES:
     DW   H_FDOT
@@ -288,14 +304,14 @@ W_PLACES:
     ret
 
 ; ============================================================================
-; FS. ( r -- )  scientific notation: [-]d.ddddEn and a space (PLACES decimals, n in decimal, no "+").
+; FS. ( r -- ) -- print r in scientific notation: [-]d.ddddEn and a space (PLACES decimals, n in decimal, no "+")
 ; tools/fpforth.py's fsdot, step for step (FLOAT_SPEC section 7): a = |x|; n = ((e - 129) x 77) >> 8 (arithmetic) from
 ; the exponent byte e; a = a / 10^n in steps of POW10 entries of at most 13 (n > 0 divides, n < 0 multiplies); one
 ; more step if a >= 10 (a / 10, n + 1) or a < 1 (a x 10, n - 1); the digits are F.'s for a; a rounding carry makes
 ; the integer part 10, which is printed as 1 with n + 1 (the decimals are all 0 then). 0 prints 0, the decimals, E0.
-; READING: the "-" is printed first, before the scaling (nothing between can fail or print); FDEXP's first byte, free
-; (ATOF is not live), holds the exponent still to be scaled; n waits on the machine stack as a 16-bit number and
-; the E and n are printed by W_DOT (which adds the space).
+; The "-" is printed first, before the scaling (nothing between can fail or print); FDEXP's first byte, free here,
+; holds the exponent still to be scaled; n waits on the machine stack as a 16-bit number and the E and n are
+; printed by W_DOT (which adds the space).
 ; ============================================================================
 H_FSDOT:
     DW   H_PLACES
@@ -419,6 +435,5 @@ W_FSDOT:
     rst  RST_DPUSH
     jp   W_DOT
 
-DICT_LATEST_INIT_FLOATPRINT EQU H_FSDOT   ; head of the dictionary once this file is included
 
     ENDIF

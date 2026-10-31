@@ -12,14 +12,7 @@ tree) and are never stored in this repository: 48.rom (the Spectrum 48K), tc2068
 TS2068's HOME ROM and EXROM). Only offsets and lengths are reported, never the stock bytes.
 
 Address bases (what the listing's addresses mean for each image):
-  * *_rom0.bin     HOME ROM image, assembled at ORG $0000: image offset == CPU address == listing address.
-  * *_cart.bin     DOCK cartridge (-DCARTRIDGE) image: DOCK chunks 0-1, mapped at CPU $0000-$3FFF
-                   (tools/make_dck.py wraps it as a .dck with header 00 02 02 00..., i.e. chunks 0 and 1).
-                   The same source is assembled at the same ORG $0000 (rom/forth_boot.asm: "RST/NMI vectors
-                   and COLD_START are at the same addresses in both builds"), so the base is $0000 too and
-                   the listing's addresses are image offsets. The .lst used is the *_cart.lst, never the
-                   HOME one (the two differ in the first 5 bytes, the LROS header, and in what -DCARTRIDGE
-                   leaves out).
+  * forth_boot_rom0.bin   HOME ROM image, assembled at ORG $0000: image offset == CPU address == listing address.
   * graphics_exrom.bin   EXROM image, assembled at ORG $A000 (its own listing); base $A000.
 
 Exit status 0 when every run is accepted (or with --list-only), 1 otherwise, 2 when the stock ROMs are not
@@ -42,11 +35,7 @@ STOCK = ("48.rom", "tc2068-0.rom", "tc2068-1.rom")
 # (image, listing, base address of image offset 0, required)
 IMAGES = (
     ("forth_boot_rom0.bin",             "forth_boot.lst",                0x0000, True),
-    ("forth_boot_cart.bin",             "forth_boot_cart.lst",           0x0000, True),
     ("graphics_exrom.bin",              "graphics_exrom.lst",            0xA000, True),
-    ("forth_demo_blackjack_rom0.bin",   "forth_demo_blackjack.lst",      0x0000, False),
-    ("forth_demo_blackjack_cart.bin",   "forth_demo_blackjack_cart.lst", 0x0000, False),
-    ("forth_demo_gallery_rom0.bin",     "forth_demo_gallery.lst",        0x0000, False),
 )
 
 # (top-level routine containing the run's first byte, length) -> {'reason': ..., 'owner': ...}

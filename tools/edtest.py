@@ -141,8 +141,8 @@ the text allows several outcomes the case accepts exactly those and reports whic
                      same state (called at the key wait from a checkpoint onto a blank screen, as the redraw-oracle case does with
                      EDITOR_REDRAW), and the oracle sees a stray pixel, a stray FLASH cell and a missing cursor.  Fails with
                      `no VIEW_REDRAW_ALL` when the symbol is absent.
-  N10 edit-refusals  NO EXROM (the stock-shaped EXROM, build/stock_shaped_exrom.bin: a temporary copy of the build directory is made
-                     for it and removed afterwards), LONG LINE (a 199-character line in the store), `NOSUCH ?`: one message, nothing changed
+  N10 edit-refusals  NO EXROM (an EXROM of 8 KB of $00: fharness.stock_build makes a temporary copy of the build directory
+                     for it), LONG LINE (a 199-character line in the store), `NOSUCH ?`: one message, nothing changed
                      (the store may gain the typed line), console still works.
   N11                retired in step M6 (`EDIT` in 64-column mode printed 32COL FIRST: there is no 64-column mode).
   N12 edit-typing-cost  T-states per key in the view (same method as typing-cost), 11 scenarios, each taken twice from a restored
@@ -2868,50 +2868,27 @@ def select(only, group="both"):
             and (not only or any(o in c[0] or o == GROUPS[c[0]][1] for o in only))]
 
 
-def make_stock_build(build):
-    """A temporary copy of the build (the files the harness reads) whose graphics_exrom.bin is build/stock_shaped_exrom.bin,
-    8 KB of $00: what a Home ROM fitted alone sees at the EXROM address.  Returns the directory (the caller removes it)."""
-    d = tempfile.mkdtemp(prefix="edtest-stock-")
-    try:
-        for f in ("forth_boot_rom0.bin", "forth_boot.sym"):
-            shutil.copy(os.path.join(build, f), d)
-        stock = os.path.join(build, "stock_shaped_exrom.bin")
-        if not os.path.isfile(stock):
-            stock = os.path.join(ROOT, "build", "stock_shaped_exrom.bin")
-        data = open(stock, "rb").read() if os.path.isfile(stock) else bytes(8192)
-        exrom = os.path.getsize(os.path.join(build, "graphics_exrom.bin"))
-        with open(os.path.join(d, "graphics_exrom.bin"), "wb") as f:
-            f.write(data[:exrom].ljust(exrom, b"\x00"))
-    except BaseException:
-        shutil.rmtree(d, ignore_errors=True)
-        raise
-    return d
-
-
 def _cut(text, n):
     return text if len(text) <= n else text[:n - 3] + "..."
 
 
-def run_all(build, workers, port0, only, json_out, verbose=False, group="both"):
+def suite(build, only=(), json_out=None, verbose=False, group="both", workers=None):
+    """The cases as one fharness.Suite (tools/run_tests.py; run_all runs it alone).  The ALT_BUILD parts run on the
+    stock-shaped EXROM."""
     cases = select(only, group)
     if not cases:
         raise ValueError("no case matches %r in group %s" % (only, group))
     tasks = [(c[0], p) for c in cases for p in c[3]]
-    t0 = time.time()
-    res = [None] * len(tasks)
-    plain = [i for i, t in enumerate(tasks) if t not in ALT_BUILD]
-    alt = [i for i, t in enumerate(tasks) if t in ALT_BUILD]
-    if plain:
-        for i, r in zip(plain, fh.run_pool(build, [tasks[i] for i in plain], run_task, workers, port0)):
-            res[i] = r
-    if alt:                                         # the stock-shaped EXROM parts, on a temporary copy of the build
-        d = make_stock_build(build)
-        try:
-            for i, r in zip(alt, fh.run_pool(d, [tasks[i] for i in alt], run_task, 1, port0)):
-                res[i] = r
-        finally:
-            shutil.rmtree(d, ignore_errors=True)
-    wall = time.time() - t0
+    return fh.Suite("editor", tasks, run_task,
+                    lambda res, wall: report(cases, tasks, res, wall, build, json_out, verbose, group, workers),
+                    stock=[i for i, t in enumerate(tasks) if t in ALT_BUILD])
+
+
+def run_all(build, workers, port0, only, json_out, verbose=False, group="both"):
+    return suite(build, only, json_out, verbose, group, workers).run_alone(build, workers, port0)
+
+
+def report(cases, tasks, res, wall, build, json_out, verbose, group, workers):
     out, failed = [], 0
     by = {}
     for (name, part), r in zip(tasks, res):

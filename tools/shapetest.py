@@ -625,9 +625,9 @@ def speed_checks():
 
 def build_checks(group, only):
     L = []
-    if group in ("old", "all"):
+    if group in ("old", "gated", "all"):
         L += old_checks()
-    if group in ("new", "all"):
+    if group in ("new", "gated", "all"):
         L += new_checks()
     if group in ("speed", "all"):
         L += speed_checks()
@@ -658,22 +658,27 @@ def print_speed(speed, old):
             print("  %-28s %14s" % (name, "%d" % t if t is not None else "failed"))
 
 
-def run_all(build, workers, port0, only, json_out, verbose, group, compare):
+def suite(build, only=(), json_out=None, verbose=False, group="all", compare=None):
+    """The checks as one fharness.Suite (tools/run_tests.py; run_all runs it alone)."""
     checks = build_checks(group, only)
     if not checks:
-        print("shapetest: no check matches", file=sys.stderr)
-        return 2
+        raise ValueError("shapetest: no check matches %r" % (only,))
     old = None
     if compare:
         data = json.load(open(compare))
         old = {k: v.get("tstates") for k, v in data.get("speed", {}).items()}
         old["_file"] = compare
-    t0 = time.time()
-    flat = [(ci, t) for ci, c in enumerate(checks) for t in c.tasks]
-    order = sorted(range(len(flat)), key=lambda i: -flat[i][1]["weight"])      # long tasks first
-    res = fh.run_pool(build, [flat[i][1] for i in order], run_task, workers, port0)
-    results = {i: r for i, r in zip(order, res)}
-    wall = time.time() - t0
+    flat = [t for c in checks for t in c.tasks]
+    return fh.Suite("shape", flat, run_task, lambda res, wall: report(checks, res, wall, build, json_out, verbose, group,
+                                                                       compare, old))
+
+
+def run_all(build, workers, port0, only, json_out, verbose, group, compare):
+    return suite(build, only, json_out, verbose, group, compare).run_alone(build, workers, port0)
+
+
+def report(checks, res, wall, build, json_out, verbose, group, compare, old):
+    results = dict(enumerate(res))
     out, tally, speed = [], {}, {}
     pos = 0
     for c in checks:
@@ -772,7 +777,7 @@ def selftest():
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--build", default=os.path.join(ROOT, "build"), help="directory with forth_boot_rom0.bin (DIR or DIR/build)")
-    ap.add_argument("--group", choices=("old", "new", "speed", "all"), default="all", help="old: kept behaviour; new: the spec; speed: T-states; all (default)")
+    ap.add_argument("--group", choices=("old", "new", "speed", "gated", "all"), default="all", help="old: kept behaviour; new: the spec; speed: T-states; gated: old and new; all (default)")
     ap.add_argument("--workers", type=int, default=None, help="emulators in parallel (default: fharness.default_workers())")
     ap.add_argument("--port", type=int, default=PORT0, help="first ZRCP port (default %d; 10860-10879)" % PORT0)
     ap.add_argument("--json", default=os.path.join(ROOT, "build", "shapetest.json"), help="write the results here (default build/shapetest.json)")

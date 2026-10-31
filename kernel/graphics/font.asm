@@ -1,12 +1,11 @@
 ; ============================================================================
-; kernel/graphics/font.asm -- the font (FONT_TABLE), split out of kernel/graphics/graphics.asm so a ROM can place it
-; elsewhere: graphics.asm includes it unless the ROM defines FONT_PLACED_LATER and includes this file itself.
-; rom/forth_boot.asm does, after kernel/storage, so that the font covers $11F8 (see the ASSERT there).
+; kernel/graphics/font.asm -- the font (FONT_TABLE)
+;
+; Space, 0-9, A-Z, a-z and the punctuation of the SYMBOL SHIFT table: 8 bytes per glyph, top row
+; first. The glyphs are original designs, not a copy of any ROM's font. rom/forth_boot.asm includes
+; this file itself, after kernel/storage, so that the font covers $11F8 (see the ASSERT there).
 ; ============================================================================
 
-; ---- font: space, 0-9, A-Z (37 glyphs, 8 bytes each). See file header
-; re: confidence level — designed and visually reviewed, not from a
-; recalled ROM dump, needs YOUR visual confirmation once assembled. ----
 FONT_TABLE:
     ; ' '
     DB   $00, $00, $00, $00, $00, $00, $00, $00
@@ -82,8 +81,6 @@ FONT_TABLE:
     DB   $88, $50, $20, $20, $20, $20, $20, $00
     ; 'Z'
     DB   $F8, $08, $10, $20, $40, $80, $F8, $00
-    ; ---- lowercase a-z appended below, same design/review discipline
-    ; as the uppercase set above ----
     ; 'a'
     DB   $00, $00, $70, $08, $78, $88, $78, $00
     ; 'b'
@@ -136,17 +133,8 @@ FONT_TABLE:
     DB   $00, $00, $88, $88, $88, $78, $08, $70
     ; 'z'
     DB   $00, $00, $F8, $10, $20, $40, $F8, $00
-    ; ---- punctuation, added as needed rather than up front — '"' was
-    ; needed the moment PRINT "..." string literals became typeable,
-    ; see kernel/io's SYMBOL SHIFT+P addition ----
     ; '"'
     DB   $50, $50, $00, $00, $00, $00, $00, $00
-    ; ---- more punctuation: the confirmed-confidence subset of
-    ; SYMBOL SHIFT's table (see kernel/io.asm's header — the real
-    ; table is more complex than this, some keys give BASIC keyword
-    ; tokens rather than symbols, some differ between plain SYMBOL
-    ; SHIFT and a separate "extended mode"; only what's independently
-    ; confirmed is implemented) ----
     ; '!'
     DB   $20, $20, $20, $20, $20, $00, $20, $00
     ; '@'
@@ -181,41 +169,15 @@ FONT_TABLE:
     DB   $00, $00, $00, $F8, $00, $00, $00, $00
     ; ';'
     DB   $00, $20, $00, $00, $20, $20, $40, $00
-    ; '/' — diagonal stroke, lower-left to upper-right. Designed and
-    ; visually reviewed as ASCII art before committing (see this
-    ; project's established discipline for glyphs — needed once V=/
-    ; was added for basic/'s division operator)
+    ; '/'
     DB   $00, $04, $08, $10, $20, $40, $00, $00
-    ; '*' — vertical spine + diagonal rays converging at center,
-    ; six-pointed asterisk. Same review discipline (needed once B=*
-    ; was added for basic/'s multiplication operator)
+    ; '*'
     DB   $00, $10, $54, $38, $54, $10, $00, $00
-    ; '<' — simple angle-bracket chevron, apex pointing left, single-
-    ; pixel diagonal strokes converging on the left edge (column 0)
-    ; and opening back out to column 3 top/bottom — stays within the
-    ; same column range ($80-$08) every letter/digit glyph already
-    ; uses, unlike '/' which intentionally reaches further right.
-    ; Needed once basic/'s new IF condition relational operators
-    ; (kernel/io's SYMBOL SHIFT+R) made '<' a real, typeable character
-    ; rather than only usable via LOAD/hand-edited program text.
-    ; Visually reviewed as ASCII art before committing, same discipline
-    ; as every other glyph here.
+    ; '<'
     DB   $10, $20, $40, $80, $40, $20, $10, $00
-    ; '>' — exact horizontal mirror of '<' within the same column
-    ; range, apex pointing right toward column 4 instead of column 0.
-    ; Needed alongside '<' for the same reason (kernel/io's SYMBOL
-    ; SHIFT+T).
+    ; '>'
     DB   $40, $20, $10, $08, $10, $20, $40, $00
-    ; '?' — top hook reuses '2''s exact top-curve shape (rows 0-2:
-    ; arc, then right-hand downstroke), tapering to a single point at
-    ; row 4 instead of '2''s full-width bottom bar, then a blank row
-    ; and a centered dot — same gap-then-dot closing shape already
-    ; established by '!' elsewhere in this table. Designed and
-    ; visually reviewed as ASCII art before committing, same
-    ; discipline as every other glyph here — not transcribed from any
-    ; real ROM's font. Needed once kernel/io's SYMBOL SHIFT+C mapping
-    ; was added (see that table's header) — mapping and glyph always
-    ; ship together per this project's established rule.
+    ; '?'
     DB   $70, $88, $08, $10, $20, $00, $20, $00
 
 FONT_TABLE_END:

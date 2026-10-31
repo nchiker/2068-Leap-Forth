@@ -1,126 +1,30 @@
 ; ============================================================================
-; core/sound.asm — Phase 32: SOUND (real AY-3-8912 register access).
-; See core/soundext.asm (Phase 63) for a channel-aware convenience
-; layer on top of it (TONE, VOLUME, MIXER, NOISE, ENVELOPE) — kept in
-; a SEPARATE file deliberately, not appended here: rom/
-; forth_smoke_p52.asm's own embedded Blackjack test payload calls
-; `SOUND` but none of those five, and that one ROM was already down to
-; a single byte of headroom (see its own header) before Phase 63
-; existed — same reasoning core/floatmul.asm/core/floatdiv.asm are
-; already split from core/float.asm rather than folded in, so a ROM
-; that needs the base capability isn't forced to pay for a layer on
-; top of it it never calls.
+; core/sound.asm -- SOUND: write an AY-3-8912 register
 ;
-; Builds on core/dict.asm and core/interp.asm (both must be INCLUDEd
-; first — chains its own dictionary entry onto whatever
-; DICT_CHAIN_POINT the including ROM sets). Needs only
-; include/hardware.inc (PORT_AY_REG/PORT_AY_DATA), already INCLUDEd by
-; every ROM in this project before `DEVICE`/`ORG $0000` — no kernel/
-; dependency at all, unlike BEEP.
+; core/soundext.asm is the channel-aware layer on top (TONE, VOLUME, MIXER, NOISE, ENVELOPE); it is a
+; separate file so a ROM that only needs SOUND does not pay for it.
+; SOUND ( register data -- ) writes data straight into a chip register: the register number goes to
+; PORT_AY_REG unchanged (the real ROM's SOUND does no DEC A) and the data to PORT_AY_DATA. Registers 0-16
+; are accepted (the chip has 0-15; 16 selects none, and is still accepted); 17 and above are ignored
+; silently, with nothing written to either port. The semicolon-chained pair list of the BASIC SOUND is
+; not supported. Needs include/hardware.inc only. Chained from DICT_CHAIN_POINT (set by the including ROM
+; before the INCLUDE); every word may destroy all registers except IX (the data stack pointer), IY and SP.
 ;
-; WHAT THIS ADDS: `SOUND ( register data -- )`, the AUTHENTIC
-; register-level AY-3-8912 command — tracked since the original
-; BASIC-gap audit as its own future phase (docs/PROJECT_PLAN.md, "AY-
-; 3-8912 SOUND (real register-level sound access, distinct from the
-; existing simple BEEP... never ported here)"), and DISTINCT from
-; core/beep.asm's own musical-note `BEEP`: `SOUND` writes whatever byte
-; you give it directly into a PSG register — tone period, volume,
-; envelope shape, noise, mixer routing, any of the chip's 16 registers
-; — not a computed note. Confirmed directly from the real TS2068 ROM
-; disassembly's own `SOUND` routine (also independently confirmed
-; already working in the sibling `~/ts2068rom` BASIC project's own
-; `rom/exrom_sound.asm`, ported from the SAME disassembly source): the
-; register number is written to port `$F5` (`PORT_AY_REG`) UNCHANGED —
-; no subtraction, confirmed both from the real ROM disassembly's own
-; `SOUND` routine (M2127: `OUT ($F5),A` uses the register value
-; straight off the calculator stack, no `DEC A` before the `OUT`) and
-; from the sibling project's own already-verified `SOUND_EXROM`, which
-; matches — and the data byte to port `$F6` (`PORT_AY_DATA`). The range
-; accepted is 0-16: 17 and above are rejected. Until step R0 (audit
-; O9) register 0 was rejected too, which made chip register 0 (Channel
-; A's tone-period FINE byte) unreachable through SOUND: this file's
-; first version took the real ROM to validate 1-16, and the sibling
-; 2068-Leap V2 maintenance line (6493615) later found the real ROM's
-; test accepts 0 and changed its own SOUND the same way. The AY-3-8912
-; has chip registers 0-15 only, so 16 selects no chip register; it is
-; still accepted, unchanged. rom/test_sound_reg0.asm reads the chip back
-; to show register 0 is written.
-;
-; ERROR HANDLING: the real ROM raises a genuine BASIC error
-; ("INVALID SOUND REGISTER") for an out-of-range register — this
-; project has no general error-reporting mechanism yet (every other
-; word with an out-of-range input, e.g. `SOUND_BEEP`'s own zero-
-; duration case or `MATH_UDIV16`'s divide-by-zero, silently no-ops on
-; bad input instead of raising anything), so `SOUND` follows the SAME
-; established convention here: an out-of-range register is silently
-; ignored — nothing is written to EITHER port, not even a wrong
-; register selection — rather than inventing a one-off error scheme
-; for this single word.
-;
-; NOT REPLICATED: the real ROM's own `SOUND` also accepts a semicolon-
-; chained list of register,data pairs on one line
-; (`SOUND 8,15;0,200;...`) — not implemented, matching
-; core/rawbeep.asm's own header note on the same scope cut (this
-; dialect's `:`  statement separator already gives the same effect,
-; `8 15 SOUND 0 200 SOUND`, and semicolon isn't recognized syntax
-; anywhere else here).
-;
-; AUTOMATED VERIFICATION LIMIT, STATED HONESTLY: like `BEEP`, there is
-; no way for a smoke ROM's own border-color pass/fail signal to confirm
-; the AY-3-8912 chip actually PRODUCES the requested sound — this
-; project's own `hardware_notes.md` (inherited from the sibling
-; ts2068rom project) marks the AY port pair's own read-back behavior as
-; "still open," unconfirmed even there. `rom/forth_smoke_p32.asm`
-; verifies the same way the sibling project verified its own `SOUND`:
-; valid register/data pairs (0-16) run to completion without hanging,
-; and a sentinel value on the data stack survives a call untouched
-; (proving `SOUND` consumes exactly its own two arguments and nothing
-; else) — the same data-stack-hygiene proof shape `core/rawbeep.asm`'s
-; own original `BEEP` checkpoint used. Unlike `BORDER`/`BEEP`, this
-; project keeps no software shadow of the AY ports, so there is nothing
-; else to check for the out-of-range (silently-ignored) case beyond
-; that same stack-hygiene proof.
-;
-; REAL AUDIO CONFIRMED, LIVE, BY THE USER (something no automated
-; check in this project can do) — and it took a real, corrected
-; understanding of the AY chip to get there. The first live attempt
-; (`8 15 SOUND` alone — the real ROM's own documented example, and this
-; file's own original smoke-test choice) produced audible STATIC, not a
-; tone. Not a bug in `SOUND` itself: register 8 only sets Channel A's
-; volume — with the mixer register (7) and a tone period left at
-; whatever the emulator's own AY starts them at, the chip has no reason
-; to output a clean tone at all (most likely: noise routed to that
-; channel, or a tone period near zero). A clean tone needs THREE
-; coordinated writes, not one: a tone period, the mixer enabling that
-; channel's tone (and disabling everything else), and the volume. Using
-; Channel B specifically (its own tone-period registers, 2 and 3, are
-; both directly reachable — Channel A's own fine-period register, chip
-; register 0, never is; see this file's own note above) with the
-; TS2068's own real AY clock (1,764,000 Hz — `libspectrum`'s own
-; `timings.c`, the SAME source `core/beep.asm`'s own header already
-; cites for the CPU clock) and the standard `period = clock/(16*freq)`
-; formula for a ~439 Hz tone (period 251 — an exact fit is impossible,
-; the period register is an integer):
-;   2 251 SOUND   ( Channel B tone period, fine byte )
-;   3   0 SOUND   ( Channel B tone period, coarse byte )
-;   7 253 SOUND   ( mixer: only Channel B's tone enabled, everything
-;                   else — both other tones, all three noise
-;                   generators — disabled: $FF with bit 1 cleared )
-;   9  15 SOUND   ( Channel B volume, fixed, maximum )
-; Confirmed by the user, live, over real speakers: a real, steady,
-; recognizable tone — not static, and not silence. To stop it:
-; `9 0 SOUND` (volume back to zero; the AY holds its register state
-; indefinitely, unlike `BEEP`'s own fixed-duration, self-terminating
-; loop — nothing else stops a `SOUND`-driven tone automatically).
+; A clean tone needs three writes, not one (register 8 alone gave static: the mixer and period were left
+; at the emulator's start values). Channel B at about 439 Hz (the AY clock is 1,764,000 Hz, period =
+; clock / (16 * freq)):
+;   2 251 SOUND   3 0 SOUND   7 253 SOUND   9 15 SOUND
+; (B's period fine and coarse bytes; the mixer with only B's tone enabled; B's volume). The AY holds its
+; registers indefinitely, so the tone goes on until `9 0 SOUND`.
 ; ============================================================================
 
     IFNDEF CORE_SOUND_ASM
     DEFINE CORE_SOUND_ASM
 
 ; ============================================================================
-; SOUND_WRITE (internal, not a dictionary word) — B = register (0-16),
-; C = data (0-255). Silently does nothing if the register is out of
-; range (see this file's own header on why silent, not an error).
+; SOUND_WRITE -- write one AY register (not a dictionary word)
+; In:  B = register (0-16), C = data
+; Out: nothing written if B >= 17
 ; Destroys: AF
 ; ============================================================================
 SOUND_WRITE:
@@ -133,28 +37,20 @@ SOUND_WRITE:
     ret
 
 ; ============================================================================
-; SOUND ( register data -- )
+; SOUND ( register data -- ) -- write data to AY register 0-16; any other register number is ignored
 ; ============================================================================
 H_SOUND:
-    DW   DICT_CHAIN_POINT   ; the including ROM must set this (DEFL,
-                            ; not EQU) to whatever word chain this file
-                            ; should extend, immediately before
-                            ; INCLUDEing this file
+    DW   DICT_CHAIN_POINT
     DB   5, "S", "O", "U", "N", "D"
 W_SOUND:
     rst RST_DPOP          ; hl = data
     ld   c, l
     rst RST_DPOP          ; hl = register
+    ld   a, h
+    or   a
+    ret  nz               ; 256 and up: ignored
     ld   b, l
-    call SOUND_WRITE
-    ret
+    jp   SOUND_WRITE
 
-DICT_LATEST_INIT_SOUND EQU H_SOUND   ; head of the dictionary once this
-                                      ; file's own word is included --
-                                      ; see core/soundext.asm for the
-                                      ; five-word convenience layer
-                                      ; some ROMs INCLUDE right after
-                                      ; this file, extending the chain
-                                      ; from here
 
     ENDIF

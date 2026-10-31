@@ -2850,7 +2850,7 @@ beyond what each word's own arguments say.
 | `LINE`     | `( x1 y1 x2 y2 -- )`           | Draw a line from `(x1, y1)` to `(x2, y2)`                                                                                                |
 | `CIRCLE`   | `( xc yc r -- )`               | Draw a circle outline centered at `(xc, yc)` with radius `r`; any centre and radius, the part off the screen is left out; `r` < 0 draws nothing (second ROM) |
 | `FILL`     | `( x y -- )`                   | Flood-fill the enclosed area touching `(x, y)` with the current color; a seed off the screen does nothing (second ROM)                  |
-| `CLS`      | `( -- )`                       | Clear the whole screen                                                                                                                   |
+| `CLS`      | `( -- )`                       | Clear the whole screen and home the print position to column 0, row 0                                                                    |
 | `BORDER`   | `( color -- )`                 | Set the screen border to `color` (0-7, same numbering as BASIC's `BORDER`)                                                               |
 | `INK`      | `( color -- )`                 | Set the foreground color `PLOT`/`LINE`/`CIRCLE`/`FILL` draw with, and printed text (`EMIT`/`.`/`."`/`TYPE`) prints in, from now on (0-7) |
 | `PAPER`    | `( color -- )`                 | Set the background color the same way                                                                                                    |
@@ -2892,7 +2892,9 @@ just the next one, until some later call changes it again. Calling
 `INK` never disturbs whatever `PAPER` was last set to, and vice versa;
 each touches only its own half of the color. `CLS` honors the current
 `PAPER` as well — clearing the screen fills it with whatever
-background color is set, not always black.
+background color is set, not always black. It also homes the printing
+position to column 0, row 0, so what you print next starts at the top
+left.
 
 - **Text Shares the Same State:** This isn't limited to graphics.
   `EMIT` (and everything built on it — `.`, `."`, `TYPE`) stamps the
@@ -2999,14 +3001,13 @@ tutorial. `CIRCLE` and `FILL` above, and three more shape words — `RECT`,
 `POLYGON`, and `POLYGON-FILL` — are dispatched through a SECOND, separate
 8K ROM plugged into the TS2068's own EXROM socket, not the Home ROM.
 
-- **This Matters Practically:** The placeholder EXROM most setups boot
-  with has no real code in it, so these five words will each just
-  silently do nothing (the same "refuse quietly rather than crash"
-  behavior every word in this project already uses when something's
-  missing) unless you've built and loaded the real `graphics_exrom.bin`
-  image instead — see the main [README](../README.md)'s own "Try it"
-  section for exactly how, or [`docs/eightyone_setup.md`](eightyone_setup.md)
-  if you're running on EightyOne or TS-Pico.
+- **This Matters Practically:** These words live in the graphics EXROM,
+  `graphics_exrom.bin`. Without it the Home ROM still runs, but each of
+  them prints `NO EXROM` and does nothing (so do `FILL`, `CIRCLE`, the
+  `SPRITE` words and `EDIT`). See the main [README](../README.md)'s own
+  "Try it" section for how to load both images, or
+  [`docs/eightyone_setup.md`](eightyone_setup.md) and
+  [`docs/ts_pico_setup.md`](ts_pico_setup.md) for EightyOne and TS-Pico.
 
 | Word           | Stack effect                     | What it does                                                     |
 | -------------- | ---------------------------------- | ----------------------------------------------------------------- |
@@ -3813,15 +3814,14 @@ SAVE-LIB MYWORDS
 - **Tied to One ROM:** A compiled image holds the actual addresses of
   the ROM's own routines, so it only makes sense for the exact ROM that
   saved it. Every `SAVE-LIB` tape is stamped with an identity derived
-  from the ROM image, and `LOAD-LIB` and `VERIFY-LIB` refuse a tape
+  from the Home ROM image, and `LOAD-LIB` and `VERIFY-LIB` refuse a tape
   stamped by any other ROM before reading a single byte of data: the
   dictionary is left untouched and the error below is thrown. In
   practice that means every new release of the ROM makes older
-  `SAVE-LIB` tapes unloadable. The two editions of one release, the
-  replacement HOME ROM and the DOCK cartridge, count as the same ROM:
-  a tape saved on either loads on the other. Tapes saved by the very first
-  versions of `SAVE-LIB` (before the tape storage rebuild) are not
-  loaded either. If you need a tape to outlive a ROM upgrade, use
+  `SAVE-LIB` tapes unloadable. Only the exact same Home ROM image
+  loads a tape (the EXROM is not part of the identity). Tapes saved by
+  the very first versions of `SAVE-LIB` (before the tape storage
+  rebuild) are not loaded either. If you need a tape to outlive a ROM upgrade, use
   `SAVE-TEXT`, below.
 
 - **If a Load Fails Part-Way:** If `LOAD-LIB` refuses before it reads
@@ -4817,17 +4817,11 @@ This composition is not new material. The value of examining the demo now is see
 
 #### Real-World Testing: The `LOAD-TEXT` Test Payload
 
-The game's source code also doubles as the real test payload for **`LOAD-TEXT`** (and `SAVE-TEXT`). Rather than a toy string, it is a full, real-world program round-tripped over the standard tape protocol used by `SAVE-LIB`/`LOAD-LIB` — including verification via a real cassette-tape round trip in the Fuse emulator (distinct from the automated fake-tape hooks used by the test suite; see `tools/run_realtape_test.sh` if you wish to reproduce that proof yourself).
+The game's source code also doubles as the real test payload for **`LOAD-TEXT`** (and `SAVE-TEXT`). Rather than a toy string, it is a full, real-world program round-tripped over the standard tape protocol used by `SAVE-LIB`/`LOAD-LIB` — including verification via a real cassette-tape round trip in the Fuse emulator (distinct from the automated fake-tape hooks used by the test suite; `make fusesave` reproduces that proof).
 
-To build the demo and review its instructions:
+Here is how to load and play the real game from a live prompt:
 
-- **Build Command:** `make forth-demo-blackjack`
-
-- **Execution:** Refer to the header comment inside `demos/blackjack.fs` for step-by-step instructions on running it in the Fuse emulator.
-
-Here is how to load and play the real game directly from a live prompt, bypassing the standalone boot-straight-into-the-game shortcut:
-
-1. Build the real product ROM (`make forth-boot`) and a real tape file
+1. Build the ROM images (`make`) and a real tape file
    containing `demos/blackjack.fs` under the name `BLACKJACK`:
    
    ```
@@ -4839,7 +4833,7 @@ Here is how to load and play the real game directly from a live prompt, bypassin
    ```
    fuse --machine ts2068 --detect-loader \
         --rom-ts2068-0 build/forth_boot_rom0.bin \
-        --rom-ts2068-1 build/stock_shaped_exrom.bin \
+        --rom-ts2068-1 build/graphics_exrom.bin \
         --tape build/blackjack.tap
    ```
    
@@ -5118,8 +5112,8 @@ the same convention applied to the full ANS Forth standard.
 | `PALETTE`         | `( index value -- )` — see [section 15](#15-ulaplus-a-bigger-color-palette) |
 
 **EXROM graphics (RECT, POLYGON, sprites)** — see [section
-10](#10-drawing-and-sound); needs the real `graphics_exrom.bin`
-loaded, not the placeholder EXROM
+10](#10-drawing-and-sound); needs `graphics_exrom.bin`
+loaded; without it these words report `NO EXROM`
 
 | Word            | Stack effect                     |
 | --------------- | --------------------------------- |
