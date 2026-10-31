@@ -358,11 +358,7 @@ class Machine:
             self.c = ZRCP(port=self.port, timeout=60)
             self.c.connect(retries=100)
             self.cmd("enter-cpu-step")
-            self.cmd("reset-cpu")
-            # ZRCP reset-cpu sets PC/SP/AF only: BC, DE, HL, IX, IY, the alternate set and the refresh register R
-            # keep what the free-running boot left (step T found this; RANDOMIZE seeds from R).  Pin them.
-            for r in ("R", "BC", "DE", "HL", "IX", "IY", "AF'", "BC'", "DE'", "HL'"):
-                self.cmd("set-register %s=0H" % r)
+            self.reset()
             if self.power_on:
                 self.power_on(self)
             self.tstates_reset()
@@ -379,6 +375,41 @@ class Machine:
             self.stop()
             raise
         return self
+
+    def reset(self):
+        """Reset the CPU to the cold start (PC 0), the registers pinned; RAM is kept."""
+        self.cmd("reset-cpu")
+        # ZRCP reset-cpu sets PC/SP/AF only: BC, DE, HL, IX, IY, the alternate set and the refresh register R
+        # keep what the free-running boot left (step T found this; RANDOMIZE seeds from R).  Pin them.
+        for r in ("R", "BC", "DE", "HL", "IX", "IY", "AF'", "BC'", "DE'", "HL'"):
+            self.cmd("set-register %s=0H" % r)
+
+    def border(self):
+        """The border colour: the low 3 bits of the last write to port $FE (ZRCP get-io-ports)."""
+        m = re.search(r"Spectrum FE port[^0-9A-Fa-f]*([0-9A-Fa-f]+)", self.cmd("get-io-ports"))
+        return int(m.group(1), 16) & 7
+
+    def boot_trace(self):
+        """Boot again from reset to the first key wait, then restore() the boot snapshot.  Returns dict(writes=[(register,
+        value, frame)] for every SOUND_WRITE call, the frame counted from the first; end = the frame of the key wait;
+        first, last = (screen $4000-$5AFF, border) at the first SOUND_WRITE and at the key wait)."""
+        S = self.sym
+        self.reset()
+        writes, first, f0 = [], None, None
+        while True:
+            pc = self.run_to([S("SOUND_WRITE"), S("IO_READ_KEY")], 20_000_000)
+            frame = self.w16(S("FRAMES"))
+            if pc != S("SOUND_WRITE"):
+                break
+            if first is None:
+                first, f0 = (self.read(0x4000, 6912), self.border()), frame
+            bc = self.regs()["BC"]
+            writes.append((bc >> 8, bc & 0xFF, frame - f0))
+            self.cmd("cpu-step")
+        out = dict(writes=writes, end=None if f0 is None else frame - f0, first=first,
+                   last=(self.read(0x4000, 6912), self.border()), pc=pc)
+        self.restore()
+        return out
 
     def stop(self):
         try:
@@ -907,12 +938,29 @@ def _check_mem(m, _):
     return dict(ok=ok, detail="expect_mem diff names $%04X; ram_diff %s" % (ft + 15, ["$%04X-$%04X" % x for x in d]))
 
 
+# The startup chime (rom/forth_boot.asm STARTUP_CHIME, Leap V2's chime C): R0-R10 (C4/E4/G4, noise period 0, mixer
+# $F8, levels 0) at once; channels A, B, C each up 4, 8, 12, three frames a step; held 22 frames after C's last step;
+# all three down 8, 4, 0, three frames a step; the key wait 3 frames after the last write.
+CHIME = [(r, v, 0) for r, v in enumerate((165, 1, 78, 1, 25, 1, 0, 248, 0, 0, 0))] \
+    + [(8 + ch, 4 * (k + 1), 9 * ch + 3 * k) for ch in range(3) for k in range(3)] \
+    + [(r, v, f) for v, f in ((8, 46), (4, 49), (0, 52)) for r in (8, 9, 10)]
+CHIME_END = 55
+
+
+def _check_chime(m, _):
+    t = m.boot_trace()
+    ok = t["writes"] == CHIME and t["end"] == CHIME_END and t["pc"] == m.sym("IO_READ_KEY")
+    diff = [(i, a, b) for i, (a, b) in enumerate(zip(t["writes"], CHIME)) if a != b][:3]
+    return dict(ok=ok, detail="%d AY writes (want %d), key wait at frame %s (want %d)%s" % (
+        len(t["writes"]), len(CHIME), t["end"], CHIME_END, "; first differences %s" % diff if diff else ""))
+
+
 # (letter i, the 64-column screen, was retired in step M6 with the mode; the letters are not renumbered)
 CHECKS = [("a", "boot", _check_boot), ("b", "glyph table", _check_glyphs), ("c", "banner", _check_banner),
           ("d", "restore determinism", _check_restore), ("e", "call GFX_CLS", _check_call),
           ("f", "Console.type", _check_type), ("g", "Console.press", _check_press),
           ("j", "memory assertions", _check_mem),
-          ("k", "checkpoint/rollback", _check_checkpoint)]
+          ("k", "checkpoint/rollback", _check_checkpoint), ("l", "startup chime", _check_chime)]
 
 
 def _run_checks(build, workers, port0):
