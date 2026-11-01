@@ -463,3 +463,9 @@ image = "exrom"
 component = "sprites"
 delta = 17
 reason = "Manual: SPRITE-DEFINE and SPRITE-SHOW refuse a position whose 2x2 cells are off the screen (SPRITE_ARGS_BAD; row 23 or col 31 read and wrote past the screen); from the EXROM reserve"
+
+[[ledger]]
+image = "home"
+component = "graphics"
+delta = 11
+reason = "Polygon edges: POLY_POP_VERTICES moves a vertex off the screen to its nearest edge, as 2068-Leap-C's draw() and box() do (+26 B: the low byte was taken, so -20 was x 236), and refuses n > 255; the pop loop rewritten on a pointer and DJNZ (-15 B); from the reserve"

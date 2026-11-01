@@ -8,57 +8,69 @@
 ; n is validated before any vertex is popped: the argument count depends on n, so for an
 ; out-of-range n (below 3 or above POLY_MAXPTS) the word cannot know how many cells were meant
 ; for it. It refuses and leaves the rest of the stack as it found it. POLY_POP_VERTICES does the
-; validation and the pop for both words.
+; validation and the pop for both words. A vertex off the screen is moved to its nearest edge (x 0-255, y 0-191),
+; as 2068-Leap-C's draw() and box() treat an off-screen coordinate: nothing wraps or is drawn off the screen, and
+; a polygon with a corner off the screen is drawn through the moved corner.
 ; ============================================================================
 
     IFNDEF CORE_POLYGON_ASM
     DEFINE CORE_POLYGON_ASM
 
 ; ============================================================================
-; POLY_POP_VERTICES -- pop n, validate it, pop that many (x,y) pairs into POLY_VERTS
-; In:  data stack ( x1 y1 x2 y2 ... xn yn n -- )
+; POLY_POP_VERTICES -- pop n, validate it, pop that many (x,y) pairs into POLY_VERTS, each moved onto the screen
+; In:  data stack ( x1 y1 x2 y2 ... xn yn n -- ), signed cells
 ; Out: carry set if n was out of range (only n popped); carry clear with POLY_COUNT and
-;      POLY_VERTS staged if n was 3..POLY_MAXPTS
-; Destroys: AF, BC, DE, HL (writes POLY_IDX too)
+;      POLY_VERTS staged (bytes, x 0-255, y 0-191) if n was 3..POLY_MAXPTS
+; Destroys: AF, BC, DE, HL
 ; ============================================================================
 POLY_POP_VERTICES:
     rst RST_DPOP            ; hl = n
+    ld   a, h
+    or   a
+    jr   nz, .invalid         ; n > 255
     ld   a, l
     cp   3
     jr   c, .invalid          ; n < 3
     cp   POLY_MAXPTS + 1
     jr   nc, .invalid         ; n > POLY_MAXPTS
     ld   (POLY_COUNT), a
-
-    dec  a
-    ld   (POLY_IDX), a        ; i = n-1, counting down as we pop
-.pop_loop:
-    rst RST_DPOP             ; hl = y_i
-    ld   d, l                 ; stash y_i (DPOP_HL never touches D)
-    rst RST_DPOP             ; hl = x_i
-    ld   e, l                 ; E = x_i, D = y_i
-
-    ld   a, (POLY_IDX)
+    ld   b, a                  ; B = n, the vertices to pop, last first
+    add  a, a
     ld   l, a
     ld   h, 0
-    add  hl, hl                ; hl = 2*i
-    ld   bc, POLY_VERTS
-    add  hl, bc                ; hl = POLY_VERTS + 2*i
-    ld   (hl), e                ; store x_i
-    inc  hl
-    ld   (hl), d                ; store y_i
-
-    ld   a, (POLY_IDX)
-    or   a
-    jr   z, .pop_done          ; i reached 0: every vertex staged
-    dec  a
-    ld   (POLY_IDX), a
-    jr   .pop_loop
-.pop_done:
-    or   a                     ; carry clear: success
+    ld   de, POLY_VERTS - 1
+    add  hl, de                ; HL = the last vertex's y byte
+.pop_loop:
+    push hl
+    rst RST_DPOP               ; hl = y_i
+    ld   c, 191
+    call .edge
+    ld   d, a                  ; D = y_i (DPOP_HL and .edge never touch D or B)
+    rst RST_DPOP               ; hl = x_i
+    ld   c, 255
+    call .edge                 ; A = x_i
+    pop  hl
+    ld   (hl), d               ; store y_i, then x_i below it
+    dec  hl
+    ld   (hl), a
+    dec  hl
+    djnz .pop_loop
+    or   a                     ; carry clear: success (.edge's compare may have set it)
     ret
 .invalid:
     scf
+    ret
+.edge:                         ; A = HL (signed) moved into 0..C
+    xor  a
+    bit  7, h
+    ret  nz                    ; negative: 0
+    or   h
+    ld   a, c
+    ret  nz                    ; 256 or more: C
+    ld   a, l
+    cp   c
+    ret  c                     ; below C: as it is
+    ld   a, c
     ret
 
 ; ============================================================================

@@ -161,8 +161,8 @@ never round. Use decimals where you need fractions, and whole numbers everywhere
 The screen is 256 pixels across and 192 down. Pixel coordinates count from the **top left**: *x* from 0 at the left,
 *y* from 0 at the top, as text rows do (Sinclair BASIC counts *y* up from the bottom). Coordinates are signed numbers:
 a point, line, rectangle or circle partly off the screen is drawn as far as it is on it, and the part off it is
-skipped without an error. `POLYGON` and `POLYGON-FILL` are the exception: their corners must be on the screen (a
-corner off it is taken modulo 256, so the shape is drawn wrongly).
+skipped without an error. `POLYGON` and `POLYGON-FILL` move a corner off the screen to the nearest edge instead, so
+the shape is drawn through the moved corner.
 
 `PLOT` sets a pixel, `LINE` draws a line, `RECT` fills a rectangle, `CIRCLE` draws a circle, `FILL` floods an area,
 `POLYGON` and `POLYGON-FILL` draw a shape of up to 12 corners. They draw in the current ink, and a pixel's colour is
