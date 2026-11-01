@@ -1101,3 +1101,19 @@ this is the condensed one-paragraph-per-phase version.
   points as 0-255. LIB tapes saved by an earlier ROM do not load;
   `SAVE-TEXT` source does. HOME free space 2,229 bytes before, 2,188
   after; EXROM 3,272 before, 3,208 after. Emulators only; no hardware.
+- V2 step BREAK and timing (`docs/V2/milestones/BREAK_and_timing.md`):
+  BREAK (CAPS SHIFT + SPACE) stops any running word: a loop, a `BEEP`,
+  a `FILL`, a word waiting in `KEY` or `ACCEPT`. The screen says
+  `BREAK`, the sound chip goes quiet, and definitions and the line store
+  are kept; a program can catch it as `THROW -28`. At the prompt and in
+  `EDIT` BREAK does what it did. A word that calls itself without end
+  stops with `RETURN STACK FULL` (it used to run through memory and
+  restart the machine, losing the line store). Fixed: running a word
+  whose definition ended in an error restarted the machine; after an
+  error inside `DO`, `EXIT` in the next definition crashed; an error
+  caught around `LOAD-TEXT` went on with the rest of the loaded text;
+  after `3 PAPER CLS`, output that scrolled left white rows. Every
+  program runs about 2.6% faster (the keyboard interrupt takes a tenth
+  of the time). LIB tapes saved by an earlier ROM do not load;
+  `SAVE-TEXT` source does. HOME free space 2,188 bytes before, 1,939
+  after; EXROM 3,208. Emulators only; no hardware.

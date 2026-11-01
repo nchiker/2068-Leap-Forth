@@ -40,9 +40,11 @@ W_DOES:
     add  hl, de                   ; HL = the code address
     ld   de, 4
     add  hl, de                   ; the JP's operand
-    ld   (hl), c
+    di                            ; both bytes or neither (a BREAK between would leave a JP to
+    ld   (hl), c                  ;   half an address; core/throwcatch.asm)
     inc  hl
     ld   (hl), b
+    ei
     pop  hl                       ; HL = the defining word's return address
     jp   (hl)
 

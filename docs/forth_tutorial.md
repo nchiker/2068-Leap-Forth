@@ -2419,7 +2419,7 @@ Something to actually watch happen, built the same way section 2 built
   against a limit of `0` and doesn't match. It won't match again until
   the index has wrapped all the way around through 65536 values. In
   practice this produces a near-infinite loop that looks like the
-  machine has hung.
+  machine has hung. Press BREAK (CAPS SHIFT + SPACE) to stop it.
 
 - **The Fix:** Never write a `DO` where `start` and `limit` might
   already be equal. If a count could legitimately be zero, guard it
@@ -3413,21 +3413,27 @@ KEY .     \ waits for a keypress, then prints its character code
   one's waiting" — `KEY?` genuinely just peeks, so a key you check for
   is still there for `KEY` to read afterward.
 
-`BREAK? ( -- flag )` checks for one specific combination instead of
-any key: the real Sinclair CAPS SHIFT+SPACE BREAK keys. It's completely
-independent of `KEY`/`KEY?` — checking it never consumes or disturbs
-whatever those are tracking — so it's meant for a different job:
-making your own long-running loop abortable, the same way pressing
-BREAK stops a running BASIC program.
+BREAK (CAPS SHIFT + SPACE) stops any word that is running, the way it
+stops a running BASIC program: a loop, a `BEEP`, a `FILL`, a word
+waiting in `KEY` or `ACCEPT`. The screen says `BREAK` and the prompt
+comes back; your definitions and the line store are untouched, and the
+sound chip is silenced. (So `KEY` never gives your program the BREAK
+key.) A program that wants to tidy up first can catch it: BREAK is
+`THROW -28`, see [section 13](#13-error-handling-throw-and-catch).
+
+`BREAK? ( -- flag )` checks for that combination without stopping
+anything. It's completely independent of `KEY`/`KEY?` — checking it
+never consumes or disturbs whatever those are tracking — so a loop can
+use it to end itself cleanly at a point of its own choosing:
 
 ```forth
 : COUNT-FOREVER  0 BEGIN 1+ DUP . BREAK? UNTIL ;
 ```
 
-- **Why `BREAK?` Belongs in the Test:** Without the `BREAK?` in its
-  `UNTIL` test, that loop would never stop on its own. With it,
-  holding CAPS SHIFT+SPACE ends it on the next pass — the loop keeps
-  counting exactly as before, and now has a way out.
+- **Why `BREAK?` Is in the Test:** `BREAK?` sees the keys the moment
+  they go down, before BREAK itself acts (that takes two frames), so
+  holding CAPS SHIFT+SPACE ends this loop at the end of a pass, with
+  `OK` rather than `BREAK`.
 
 Combine plain `KEY` with [section 8](#8-repeating-yourself)'s
 `BEGIN`/`UNTIL` and you get the standard "wait for a specific key"
@@ -4173,17 +4179,18 @@ that doesn't have it built in, without touching `SQRT` itself:
 
 #### The Messages of an Uncaught Error
 
-The words of the system `THROW` these codes themselves (the first five
-come from the dictionary, the words that take a name and the tape words; the last three from
+The words of the system `THROW` these codes themselves (the first six
+come from recursion, the dictionary, the words that take a name, BREAK and the tape words; the last three from
 decimal arithmetic, section 4). With nothing to `CATCH` them, each
 prints its message:
 
 | Code  | Message            | Raised by                                                       |
 | ----- | ------------------ | --------------------------------------------------------------- |
+| `-5`  | `RETURN STACK FULL`| A word that calls itself (directly, or through `EXECUTE` or `CATCH`) too deeply: about 1,300 levels |
 | `-8`  | `DICTIONARY FULL`  | A definition, `ALLOT`, `,` or `SAVE-LIB` that doesn't fit       |
 | `-13` | `UNDEFINED WORD`   | `'` given a name that isn't in the dictionary                   |
 | `-16` | `MISSING NAME`     | `:`, `VARIABLE`, `CONSTANT`, `CREATE`, `'`, `CHAR` or another word that takes a name, with nothing after it on the line |
-| `-28` | `BREAK`            | A tape word stopped with SPACE                                  |
+| `-28` | `BREAK`            | BREAK pressed while a word runs; a tape word stopped with SPACE |
 | `-37` | `TAPE ERROR`       | Any other tape failure                                          |
 | `-42` | `DIVISION BY ZERO` | `F/` by zero; `TAN` where the cosine is zero                    |
 | `-43` | `OUT OF RANGE`     | A decimal result, literal or `PLACES` outside its range; a whole-number literal outside `-32768` to `65535`; `F>S` of a number that won't fit |
@@ -4193,6 +4200,23 @@ Any other code prints `ERROR` and the number: your own `5 THROW` prints
 `ERROR 5`, and `1 THROW` prints `ERROR 1`. A stack underflow or
 overflow found after a word has run is not a `THROW`; it keeps printing
 `STACK?`.
+
+#### Catching BREAK
+
+BREAK is a `THROW` too: pressing CAPS SHIFT + SPACE while a word runs
+throws `-28` wherever that word happens to be. A program that has
+something to put right first — a sound left playing, the border
+colour it changed — catches it, tidies up, and can then stop or carry
+on:
+
+```forth
+: SPIN   BEGIN 1 BORDER 2 BORDER 0 UNTIL ;
+: RUN    ['] SPIN CATCH  7 BORDER  -28 = IF ." STOPPED" CR THEN ;
+```
+
+`RUN` flashes the border until you press BREAK, then sets it back to
+white and prints `STOPPED` instead of `BREAK`. At the prompt and in
+`EDIT`, BREAK is just a key, as before.
 
 ### Giving Up on Purpose: `ABORT` and `QUIT`
 

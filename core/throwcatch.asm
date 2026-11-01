@@ -6,12 +6,15 @@
 ; is DICT_CHAIN_POINT, which the including ROM sets (DEFL) to the chain the word extends. Every
 ; word here may destroy all registers except IX, IY and SP.
 ;
-; The hardware stack is the return stack, so THROW unwinds SP directly, like longjmp. CATCH saves
-; SP, IX and IY (the data and float stacks) in a frame of the bounded CATCH_STACK, indexed by
-; CATCH_DEPTH, and then calls xt. If xt returns, CATCH drops its frame and pushes 0. THROW with
-; n <> 0 restores SP, IX and IY from the innermost frame, pushes n and RETs: SP is back at CATCH's
-; entry, so the RET goes to CATCH's caller as if xt had returned, and the unwound calls run no
-; cleanup.
+; The hardware stack is the return stack, so THROW unwinds SP directly, like longjmp. CATCH pushes
+; the input source (SRC_END, SRC_PTR), saves SP, IX and IY (the data and float stacks) in a frame of
+; the bounded CATCH_STACK, indexed by CATCH_DEPTH, and then calls xt. If xt returns, CATCH drops its
+; frame and the source cells and pushes 0. THROW with n <> 0 restores SP, IX and IY from the
+; innermost frame, pushes n and RETs: SP is back at CATCH's entry, so the RET goes to CATCH's caller
+; as if xt had returned, and the unwound calls run no cleanup. In the same source interpretation
+; goes on after whatever xt read (`' LOAD-TEXT CATCH name`); if a nested run (LOAD-TEXT, EDIT) had
+; moved the source, THROW puts it back: CATCH_SRC_HERE moved the frame's SRC_PTR past the words read
+; before the run began.
 ;
 ; SP, IX and IY can only be stored to or loaded from fixed addresses, so both words go through the
 ; staging cells CATCH_TMP_SP / _IX / _IY: CATCH stages them and LDIRs them into the frame slot;
@@ -42,6 +45,73 @@ JUMP_HL:
     jp   (hl)
 
 ; ============================================================================
+; BREAK (CAPS SHIFT + SPACE) while a word runs throws -28 where the word was interrupted, as if it had
+; run `-28 THROW` there. A section that must finish first holds NOBRK above 0: the console between
+; lines (INTERPRET_RUN releases it), EDIT's view, the SPRITE-* words, a display mode change. BREAK
+; then sets BRK_PEND, and the section's end (BRK_SECTION_END) stops; the console and EDIT discard it
+; (BREAK is their key).
+;
+; BRK_ACCEPTED -- KBD_ISR_TICK accepted a key (interrupts off, the ISR's frame above the return)
+; Out: not BREAK, or a section defers it: returns. Else does not return: the ISR's frame goes with
+;      the interrupted code's (THROW reloads SP)
+; Destroys: AF
+; BRK_STOP -- BREAK now: the EXROM paged out, the AY's three volumes 0 and the latched key used up,
+;      then THROW -28 (CATCH sees it; uncaught, the console prints BREAK). Does not return
+; BRK_SECTION_END -- the end of a section that defers BREAK: NOBRK - 1, and a BREAK pressed during
+;      it stops now (BRK_STOP). Destroys: AF, HL (the carry is kept when it returns)
+; ============================================================================
+BRK_ACCEPTED:
+    ld   a, (KBD_LASTK)
+    cp   KEY_BREAK
+    ret  nz
+    ld   (BRK_PEND), a
+    ld   a, (NOBRK)
+    or   a
+    ret  nz
+    ei                          ; no RETI: the interrupt ends here
+BRK_STOP:
+    xor  a
+    ld   (BRK_PEND), a
+    ld   (KBD_KEYHIT), a
+    inc  a
+    ld   (BANK_EXROM_DEPTH), a  ; whatever the depth was: one page-out restores chunk 5 to RAM
+    call BANK_PAGE_EXROM_OUT
+    ld   bc, $0800              ; AY registers 8, 9, 10: the volumes
+.silence:
+    call SOUND_WRITE
+    inc  b
+    ld   a, b
+    cp   11
+    jr   c, .silence
+    ld   hl, -28
+    jr   W_THROW_HL
+
+BRK_SECTION_END:
+    ld   hl, NOBRK
+    dec  (hl)
+    ret  nz
+    dec  hl                     ; BRK_PEND (include/forth_layout.inc)
+    inc  (hl)
+    dec  (hl)
+    ret  z
+    jr   BRK_STOP
+
+; ============================================================================
+; STK_GUARD -- is the machine stack above MACHINE_STACK_GUARD? Only recursion can grow it without
+; bound, and recursion is a definition calling itself (COMPILE_CALL_GUARDED compiles this before the
+; call), EXECUTE or CATCH (they call it first); the room below the line is for the ROM's own calls
+; and the interrupt
+; Out: returns if so; else THROW -5 (RETURN STACK FULL)
+; Destroys: F, HL
+; ============================================================================
+STK_GUARD:
+    ld   hl, -MACHINE_STACK_GUARD
+    add  hl, sp
+    ret  c                      ; SP >= MACHINE_STACK_GUARD
+    ld   hl, -5
+    jr   W_THROW_HL
+
+; ============================================================================
 ; THROW ( n -- ) -- n = 0: nothing. Otherwise unwind to the innermost CATCH, which then returns n
 ; (stacks restored to their CATCH-time depth); with none, the uncaught path (file header)
 ; ============================================================================
@@ -50,6 +120,7 @@ H_THROW:
     DB   5, "T","H","R","O","W"
 W_THROW:
     rst RST_DPOP            ; HL = n
+W_THROW_HL:
     ld   a, h
     or   l
     ret  z
@@ -89,6 +160,18 @@ W_THROW:
     ld   sp, (CATCH_TMP_SP)
     ld   ix, (CATCH_TMP_IX)
     ld   iy, (CATCH_TMP_IY)
+    pop  de                     ; the frame's SRC_PTR
+    pop  hl                     ; its SRC_END
+    push de
+    ld   de, (SRC_END)
+    or   a
+    sbc  hl, de
+    add  hl, de
+    pop  de
+    jr   z, .same_source        ; the same source: it goes on where xt left it (after a name it read)
+    ld   (SRC_END), hl          ; a nested run's: back to the source CATCH was taken in (file header)
+    ld   (SRC_PTR), de
+.same_source:
     ld   h, b
     ld   l, c
     rst RST_DPUSH             ; n, onto the restored stack
@@ -101,17 +184,62 @@ W_THROW:
     jp   RUNTIME_ERROR_HOOK
 
 ; ============================================================================
+; CATCH_SRC_HERE -- a nested run (LOAD-TEXT, EDIT) is about to move the input source: every CATCH
+; frame taken in this source records the position reached, so a THROW caught there goes on after
+; the words already read (a frame's SRC_PTR is at its SP, its SRC_END above it)
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+CATCH_SRC_HERE:
+    ld   a, (CATCH_DEPTH)
+    or   a
+    ret  z
+    ld   b, a
+    ld   hl, CATCH_STACK            ; the frames' SP cells, 6 bytes apart
+.frame:
+    push hl
+    ld   e, (hl)
+    inc  hl
+    ld   d, (hl)
+    ex   de, hl                     ; HL = the frame's SP: its SRC_PTR
+    push hl
+    inc  hl
+    inc  hl
+    ld   e, (hl)
+    inc  hl
+    ld   d, (hl)                    ; DE = its SRC_END
+    ld   hl, (SRC_END)
+    or   a
+    sbc  hl, de
+    pop  hl
+    jr   nz, .next                  ; taken in another source
+    ld   de, (SRC_PTR)
+    ld   (hl), e
+    inc  hl
+    ld   (hl), d
+.next:
+    pop  hl
+    ld   de, 6
+    add  hl, de
+    djnz .frame
+    ret
+
+; ============================================================================
 ; CATCH ( xt -- 0 | n ) -- execute xt: 0 if it returned, else the n of a THROW inside it
 ; ============================================================================
 H_CATCH:
     DW   H_THROW
     DB   5, "C","A","T","C","H"
 W_CATCH:
+    call STK_GUARD               ; recursion through CATCH stops before the stack runs out
     rst RST_DPOP                ; HL = xt, popped before the frame records IX: a THROW
                                  ; restores the stack without it
     ld   a, (CATCH_DEPTH)
     cp   CATCH_MAX_DEPTH
     jr   nc, .no_room
+    ld   de, (SRC_END)          ; the input source, for a THROW to put back (file header)
+    push de
+    ld   de, (SRC_PTR)
+    push de
     ld   (CATCH_TMP_SP), sp     ; stage SP, IX, IY (file header)
     ld   (CATCH_TMP_IX), ix
     ld   (CATCH_TMP_IY), iy
@@ -134,6 +262,8 @@ W_CATCH:
     ld   (CATCH_DEPTH), a
     pop  hl                      ; HL = xt
     call JUMP_HL                 ; returns here only if no THROW unwound it
+    pop  de                      ; the source cells
+    pop  de
     ld   a, (CATCH_DEPTH)
     dec  a
     ld   (CATCH_DEPTH), a

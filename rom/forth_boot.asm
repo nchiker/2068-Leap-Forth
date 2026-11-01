@@ -105,6 +105,7 @@ COLD_START:
     ld   a, 1
     ld   (FWRAP_OLD_COUNT), a
     ld   (VERSION_UP), a          ; core/editor.asm: the first key takes the version off row 23
+    ld   (NOBRK), a               ; core/throwcatch.asm: at the console BREAK is a key
 
     ld   a, BORDER_DEFAULT        ; the border's power-on colour is the ULA's, not defined
     call GFX_SET_BORDER
@@ -114,7 +115,8 @@ COLD_START:
     call GFX_PRINT_STRING
     call GFX_STATUS_BAR
 
-    call KBD_ISR_INIT               ; before EI
+    ld   a, $FF                     ; before EI: no key tracked (the RAM clear zeroed the other
+    ld   (KBD_CUR_ROW), a           ;   keyboard cells: nothing latched)
     im   1
     ei                              ; before the chime: it waits with HALT
 
@@ -309,6 +311,7 @@ RUNTIME_ERROR_PFX: DB "ERROR ", 0
 ; The messages of an uncaught THROW (docs/V2/FLOAT_SPEC.md section 8.4): the code's low byte (all
 ; are -1 to -255), then the text, NUL-ended; a 0 byte ends the table.
 RUNTIME_ERROR_TABLE:
+    DB   -5, "RETURN STACK FULL", 0
     DB   -8, "DICTIONARY FULL", 0
     DB   -13, "UNDEFINED WORD", 0
     DB   -16, "MISSING NAME", 0

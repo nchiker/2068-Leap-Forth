@@ -100,7 +100,7 @@ defects of E10 died with the mode in step M6)
     [line-full hard, wrap-model].
   * WORKSPACE_APPEND tests the high byte of the new length against LOADTEXT_MAX_LEN / 256 + 1, so it writes up to 255 bytes
     past LOADTEXT_BUF + 8192 [workspace-append limit]; an empty line appends a separator space each time [workspace-append].
-  * Forth has no BREAK check in the interpreter: only the word BREAK? sees the key [break-running].
+  * [fixed, BREAK and timing] Forth had no BREAK check in the interpreter: only the word BREAK? saw the key [break-running].
   * After a refused key the wrap table keeps the refused line (FWRAP_OVERFLOW stays 1) and the
     screen is not redrawn until the next accepted key; harmless as far as seen [line-full].
 
@@ -1084,9 +1084,9 @@ def _hold_break(m, on):
         m.cmd("send-keys-event %d %d" % (e, 1 if on else 0))
 
 
-@case("break-running", "a running loop `: L BEGIN 0 UNTIL ; L` is NOT stopped by BREAK held on the matrix (the interpreter never "
-                       "polls it: the ISR latches $10 and nothing reads it); a loop that polls `BREAK?` ends and returns to the "
-                       "prompt with OK; the editor is intact afterwards", parts=("plain", "polled"))
+@case("break-running", "a running loop `: L BEGIN 0 UNTIL ; L` is stopped by BREAK held on the matrix (the ISR throws -28: "
+                       "BREAK is printed, the latch used up); a loop that polls `BREAK?` sees the key first, ends and returns "
+                       "to the prompt with OK; the editor is intact afterwards", parts=("plain", "polled"))
 def break_running(env, part):
     ck, m = Check(), env.m
     S = env.S
@@ -1103,13 +1103,12 @@ def break_running(env, part):
             latch = (m.read(S("KBD_LASTK"), 1)[0], m.read(S("KBD_KEYHIT"), 1)[0])
         finally:
             _hold_break(m, False)
-        ck.true("BREAK held for 3M instructions: still looping", pc != S("IO_READ_KEY"), "PC=%04X" % pc)
-        ck.eq("ISR latch (KBD_LASTK, KBD_KEYHIT)", latch, (BREAK, 0xFF))
-        pc = m.run_to([S("IO_READ_KEY")], 2_000_000)
-        ck.true("BREAK released: still looping", pc != S("IO_READ_KEY"), "PC=%04X" % pc)
-        ck.eq("screen: the typed L is still on row 23", view(m).rows[:2] + view(m).rows[23:], ["OK", "", "L"])
-        ck.note("the loop was never broken: Forth has no BREAK check in the interpreter (only the word BREAK?); the key stays "
-                "latched (KBD_LASTK $10, KBD_KEYHIT $FF) and would reach the editor after a loop that ends")
+        ck.eq("BREAK held: back at the key wait", pc, S("IO_READ_KEY"))
+        ck.eq("ISR latch (KBD_LASTK, KBD_KEYHIT): used up", latch, (BREAK, 0))
+        con.wait()
+        ck.true("editor waiting", con.in_editor())
+        ck.eq("rows 0-2", view(m).rows[:3], ["OK", "BREAK", ""])
+        ck.note("the loop was stopped by THROW -28 from the interrupt routine; the latched BREAK did not reach the editor")
     else:
         con.type(": L BEGIN BREAK? UNTIL ;")
         _go(env, "L")

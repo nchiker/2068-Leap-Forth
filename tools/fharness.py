@@ -87,6 +87,7 @@ UDG_BASE = 0xE000                   # screen_rows: UDG code 144 + i reads as chr
 UDG_CODE_BASE, UDG_COUNT = 144, 21  # kernel/graphics UDG_CODE_BASE; include/forth_layout.inc UDG_COUNT
 Z_CAPS, Z_SYM, Z_SPACE, Z_ENTER = 135, 138, 128, 129    # ZEsarUX send-keys-event codes (letters and digits: their ASCII)
 KEY_ENTER = 13                      # include/keys.inc
+KEY_BREAK = 0x10                    # include/keys.inc: CAPS SHIFT + SPACE
 # Control codes that IO_DECODE_KEY makes from CAPS SHIFT + a key by code, not through a table (kernel/io/io.asm;
 # values from include/keys.inc): code -> the ZEsarUX key events that produce it.
 CTRL_KEYS = {0x01: [Z_CAPS, ord("5")],     # KEY_CURSOR_LEFT
@@ -1005,13 +1006,47 @@ def _check_chime(m, _):
         len(t["writes"]), len(CHIME), t["end"], CHIME_END, "; first differences %s" % diff if diff else ""))
 
 
+# The interrupt routine's cost per frame (step BREAK and timing): T-states from RST 38's entry to its EI (the call of
+# KBD_ISR_TICK), on idle frames and with a key held (the frames after its acceptance).  The ceilings fail the build
+# before that step (2,010 and 1,685 T); raise one only with the reason in the commit.
+ISR_IDLE_CEIL = 300
+ISR_HELD_CEIL = 1000
+
+
+def isr_costs(m, frames, events=()):
+    """T-states of KBD_ISR_TICK's call on each of the next `frames` frames, with the ZEsarUX key `events` held."""
+    for e in events:
+        m.cmd("send-keys-event %d 1" % e)
+    out = []
+    try:
+        for _ in range(frames):
+            m.run_to([m.sym("RST_38")], 5_000_000)
+            m.tstates_reset()
+            m.run_to([m.sym("RST_38") + 3], 100_000)
+            out.append(m.tstates())
+    finally:
+        for e in events:
+            m.cmd("send-keys-event %d 0" % e)
+    return out
+
+
+def _check_isr_cost(m, _):
+    Console(m).boot()
+    idle = isr_costs(m, 10)
+    held = isr_costs(m, 20, m.keys[ord("x")])[5:]      # past the debounce and the acceptance
+    ok = max(idle) <= ISR_IDLE_CEIL and max(held) <= ISR_HELD_CEIL
+    return dict(ok=ok, detail="idle frame %d T (ceiling %d), a key held %d T (ceiling %d)" % (
+        max(idle), ISR_IDLE_CEIL, max(held), ISR_HELD_CEIL))
+
+
 # (letter i, the 64-column screen, was retired in step M6 with the mode; the letters are not renumbered)
 CHECKS = [("a", "boot", _check_boot), ("b", "glyph table", _check_glyphs), ("c", "version", _check_version),
           ("d", "restore determinism", _check_restore), ("e", "call GFX_CLS", _check_call),
           ("f", "Console.type", _check_type), ("g", "Console.press", _check_press),
           ("j", "memory assertions", _check_mem),
           ("k", "checkpoint/rollback", _check_checkpoint), ("l", "startup chime", _check_chime),
-          ("m", "boot screen", _check_screen), ("n", "first key", _check_first_key)]
+          ("m", "boot screen", _check_screen), ("n", "first key", _check_first_key),
+          ("o", "interrupt cost", _check_isr_cost)]
 
 
 def _run_checks(build, workers, port0):

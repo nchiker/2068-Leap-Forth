@@ -1,18 +1,18 @@
 ; ============================================================================
 ; core/abortquit.asm -- ABORT and QUIT
 ;
-; Needs core/dict.asm (DSTACK_TOP), core/interp.asm (THROW_ROOT_SP,
-; INTERP_ERROR_FLAG), the float stack (FSTACK_TOP), core/doloop.asm (LEAVE_DEPTH) and
-; core/throwcatch.asm (CATCH_DEPTH). Link fields: a word's DW is DICT_CHAIN_POINT, which the
-; including ROM sets (DEFL) to the chain the word extends. Every word here may destroy all
-; registers except IX, IY and SP.
+; Needs core/dict.asm (DSTACK_TOP), core/interp.asm (THROW_ROOT_SP, INTERP_ERROR_FLAG), the float
+; stack (FSTACK_TOP) and core/throwcatch.asm (CATCH_DEPTH). Link fields: a word's DW is
+; DICT_CHAIN_POINT, which the including ROM sets (DEFL) to the chain the word extends. Every word
+; here may destroy all registers except IX, IY and SP.
 ;
 ; Both return to a fresh prompt the way an uncaught THROW does: SP is reloaded from
 ; THROW_ROOT_SP, which INTERPRET_RUN saved on entry, discarding every nested call, and the final
-; RET returns to INTERPRET_RUN's caller. Neither prints anything. They also zero CATCH_DEPTH and
-; LEAVE_DEPTH, whose frames the SP reload has discarded (stale counts would put the next CATCH or
-; DO loop in the wrong frame slot), and set INTERP_ERROR_FLAG, so the line that ran them prints no
-; "OK". They differ only in the stacks: ABORT empties the data and float stacks, QUIT leaves them.
+; RET returns to INTERPRET_RUN's caller. Neither prints anything. They also zero CATCH_DEPTH, whose
+; frames the SP reload has discarded (a stale count would put the next CATCH in the wrong frame
+; slot), and set INTERP_ERROR_FLAG, so the line that ran them prints no "OK" and the console closes
+; what it left open (COLON_DROP: LEAVE_DEPTH, the `:` definition). They differ only in the stacks:
+; ABORT empties the data and float stacks, QUIT leaves them.
 ; ============================================================================
 
     IFNDEF CORE_ABORTQUIT_ASM
@@ -30,7 +30,6 @@ W_ABORT:
     xor  a
     ld   (STATE), a
     ld   (CATCH_DEPTH), a
-    ld   (LEAVE_DEPTH), a
     ld   a, 1
     ld   (INTERP_ERROR_FLAG), a
     ld   sp, (THROW_ROOT_SP)           ; the last change before the RET
@@ -46,7 +45,6 @@ W_QUIT:
     xor  a
     ld   (STATE), a
     ld   (CATCH_DEPTH), a
-    ld   (LEAVE_DEPTH), a
     ld   a, 1
     ld   (INTERP_ERROR_FLAG), a
     ld   sp, (THROW_ROOT_SP)

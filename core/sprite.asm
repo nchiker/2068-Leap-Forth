@@ -3,7 +3,7 @@
 ;
 ; A small sprite system: four numbered slots (0-3) of 16x16 pixels (2x2 character cells),
 ; backed by the EXROM's service slots 2-4 (rom/graphics_exrom.asm). Needs core/dict.asm,
-; core/interp.asm, kernel/bank/bank.asm and core/rectfill.asm (EXROM_CALL_SLOT) INCLUDEd first.
+; core/interp.asm, kernel/bank/bank.asm and core/rectfill.asm (EXROM_CALL_NOBRK) INCLUDEd first.
 ; The including ROM sets DICT_CHAIN_POINT (DEFL). Dictionary words destroy every register
 ; except IX/IY/SP.
 ;
@@ -32,7 +32,7 @@ W_SPRITEDEFINE:
     ld   a, l
     ld   (SPRITE_OP_SLOT), a
     ld   hl, GRAPHICS_EXROM_BASE + (2 * 3)   ; slot 2 = SPRITE_DEFINE_IMPL
-    jp   EXROM_CALL_SLOT
+    jp   EXROM_CALL_NOBRK
 
 ; ============================================================================
 ; SPRITE-SHOW ( slot row col -- ) -- save the screen at (row, col) as the slot's background,
@@ -52,7 +52,7 @@ W_SPRITESHOW:
     ld   a, l
     ld   (SPRITE_OP_SLOT), a
     ld   hl, GRAPHICS_EXROM_BASE + (3 * 3)   ; slot 3 = SPRITE_SHOW_IMPL
-    jp   EXROM_CALL_SLOT
+    jp   EXROM_CALL_NOBRK
 
 ; ============================================================================
 ; SPRITE-HIDE ( slot -- ) -- restore the slot's saved background over where it was shown;
@@ -66,7 +66,7 @@ W_SPRITEHIDE:
     ld   a, l
     ld   (SPRITE_OP_SLOT), a
     ld   hl, GRAPHICS_EXROM_BASE + (4 * 3)   ; slot 4 = SPRITE_HIDE_IMPL
-    jp   EXROM_CALL_SLOT
+    jp   EXROM_CALL_NOBRK
 
 
     ENDIF

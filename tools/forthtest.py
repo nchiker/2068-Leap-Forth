@@ -14,6 +14,9 @@ dropped) must be what the line expects (the text after `expect: `, leading blank
     \\ bench: NAME             (tests/bench) the next typed line is timed: T-states from ENTER to the next key wait
     \\ keys: TEXT             the next typed line reads keys (KEY, ACCEPT, INPUT): TEXT is given one key at a time
                               whenever it waits outside the editor; \\r is ENTER, \\b DELETE, \\xNN any code
+    \\ break: at SYMBOL [N]  the next typed line: BREAK (CAPS SHIFT + SPACE) pressed on the keyboard matrix and held
+    \\ break: after N         when its run reaches SYMBOL the N-th time (default 1), or after N instructions of it;
+                              released when the console waits for a key again (after 2068-Leap-C's exectest)
 
 {NAME} in a typed line is replaced by the decimal value of the ROM symbol NAME (build/forth_boot.sym, then
 graphics_exrom.sym), so a test reads a ROM cell by name: `{CATCH_DEPTH} C@ .`.  Screen and attribute addresses are
@@ -41,8 +44,8 @@ DRAWS = object()
 
 
 def parse(path):
-    """-> dict(lines=[(lineno, text, expect or None, bench name or None, keys)], stock=bool)."""
-    lines, stock, bench, keys = [], False, None, ""
+    """-> dict(lines=[(lineno, text, expect or None, bench name or None, keys, break or None)], stock=bool)."""
+    lines, stock, bench, keys, brk = [], False, None, "", None
     for n, raw in enumerate(open(path, encoding="latin-1").read().splitlines(), 1):
         s = raw.strip()
         if not s:
@@ -54,6 +57,9 @@ def parse(path):
                 bench = s.split(":", 1)[1].strip()
             elif s.startswith("\\ keys: "):
                 keys = s[len("\\ keys: "):].encode("latin-1").decode("unicode_escape")
+            elif s.startswith("\\ break: "):
+                w = s.split()[2:]
+                brk = ("after", int(w[1])) if w[0] == "after" else ("at", w[1], int(w[2]) if len(w) > 2 else 1)
             continue
         exp = None
         if EXPECT_END in raw:
@@ -64,8 +70,8 @@ def parse(path):
             exp = exp[1:].rstrip() if exp.startswith(" ") else exp.rstrip()
         elif raw.rstrip().endswith("\\ draws"):
             raw, exp = raw.rstrip()[:-len("\\ draws")], DRAWS
-        lines.append((n, raw.rstrip(), exp, bench, keys))
-        bench, keys = None, ""
+        lines.append((n, raw.rstrip(), exp, bench, keys, brk))
+        bench, keys, brk = None, "", None
     return dict(lines=lines, stock=stock)
 
 
@@ -80,7 +86,32 @@ def cases(area=None, only=None):
     return paths
 
 
-def typed(m, c, text, timed=False, keys=""):
+def press_break(m, c, brk):
+    """The line's ENTER was latched: run to the `break:` point, hold BREAK, run to the console's next key wait (not a
+    program's: IO_READ_KEY's wait loop is its entry), release BREAK."""
+    S = m.sym
+    m.cmd("cpu-step")
+    if brk[0] == "after":
+        m.run(brk[1])
+    else:
+        for _ in range(brk[2]):
+            if m.run_to([S(brk[1])], MAXI) != S(brk[1]):
+                raise RuntimeError("break: the run never reached %s" % brk[1])
+            m.cmd("cpu-step")
+    events = m.keys[fh.KEY_BREAK]
+    for e in events:
+        m.cmd("send-keys-event %d 1" % e)
+    try:
+        keyloop = S("EDITOR_LOOP_LIVE.keyloop")
+        if m.run_to([keyloop], MAXI) != keyloop:
+            raise RuntimeError("BREAK held: the console never waited for a key again")
+    finally:
+        for e in reversed(events):
+            m.cmd("send-keys-event %d 0" % e)
+    c.wait(MAXI)
+
+
+def typed(m, c, text, timed=False, keys="", brk=None):
     """Type one line and ENTER; what it printed (see the header) and the T-states when timed."""
     S = m.sym
     text = re.sub(r"\{([A-Za-z_][A-Za-z0-9_.]*)\}", lambda mm: str(m.sym(mm.group(1))), text)
@@ -88,7 +119,12 @@ def typed(m, c, text, timed=False, keys=""):
     r0 = m.read(S("PRINT_ROW"), 1)[0]
     for ch in text:
         c.key(ord(ch), MAXI)
-    if timed:
+    if brk:
+        m.write(S("KBD_LASTK"), fh.KEY_ENTER)
+        m.write(S("KBD_KEYHIT"), 0xFF)
+        press_break(m, c, brk)
+        t = None
+    elif timed:
         m.write(S("KBD_LASTK"), fh.KEY_ENTER)
         m.write(S("KBD_KEYHIT"), 0xFF)
         m.tstates_reset()
@@ -127,9 +163,9 @@ def run_case(m, path):
     c = fh.Console(m)
     c.boot()
     bench = {}
-    for n, text, exp, name, keys in case["lines"]:
+    for n, text, exp, name, keys, brk in case["lines"]:
         try:
-            got, t = typed(m, c, text, timed=bool(name), keys=keys)
+            got, t = typed(m, c, text, timed=bool(name), keys=keys, brk=brk)
         except RuntimeError as e:
             return dict(ok=False, detail="%s:%d %r: %s" % (path, n, text, e))
         if name:

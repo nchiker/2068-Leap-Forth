@@ -30,8 +30,8 @@ GROUPS (FLOAT_SPEC section 13)
 HOW A WORD IS CALLED (white box).  The dictionary chain is walked from the value in LATEST (link, length/flags, name, code)
 for the code address of a word, so words the symbol file does not name work too.  A case restores the booted machine,
 writes the float cells (5 bytes each, the top at IY, growing down from FSTACK_TOP) and the integer arguments (2-byte cells
-below DSTACK_TOP, IX), sets one CATCH frame (CATCH_DEPTH 1, frame 0 = SP at a slot that holds STOP_ADDR, IX, IY as set) so a
-THROW lands at the harness's stop with the code on the data stack, calls the word with SP = $FF00 and reads IY, the
+below DSTACK_TOP, IX), sets one CATCH frame (CATCH_DEPTH 1, frame 0 = SP at the input source as CATCH pushes it, then a
+slot that holds STOP_ADDR; IX, IY as set) so a THROW lands at the harness's stop with the code on the data stack, calls the word with SP = $FF00 and reads IY, the
 cells, IX, the data stack and SP.  SP tells a normal return ($FF02) from a THROW ($FF40).  Printed text (F., FS.):
 CLS, PRINT_ROW/PRINT_COL = 0, call, the screen read back with the ROM's own font (fharness.screen_rows); the cursor
 must have advanced over the trailing space.  Console-level checks (the old group, literals, uncaught THROW messages, the
@@ -70,7 +70,8 @@ PORT0 = 10840
 # READING: FLOAT_SPEC section 13 says the CATCH frame's SP "points at a slot that holds STOP_ADDR, e.g. $FF04 containing
 # $FF02".  THROW then does `rst RST_DPUSH` with SP at the slot, which pushes a return address at slot - 2: with the slot
 # at $FF04 that overwrites the stop instruction at $FF02 and the THROW would not land.  The slot is at THROW_SLOT, well
-# above the stop and clear of the strings; the stack below it ($FF3C, $FF3D...) is scratch.
+# above the stop and clear of the strings; the frame's input source is below it ($FF3A-$FF3D, as CATCH pushes it since
+# step BREAK and timing); the stack below that is scratch.
 STOP_ADDR, RET_SLOT = fh.STOP_ADDR, fh.RET_SLOT
 THROW_SLOT = 0xFF3E                     # [THROW_SLOT] = STOP_ADDR; after THROW's `ret`, SP = THROW_SLOT + 2
 NORMAL_SP, THROWN_SP = RET_SLOT + 2, THROW_SLOT + 2
@@ -331,8 +332,9 @@ class Fw:
             m.write(TEXT, bytes([len(text)]) + text.encode("latin-1"))
         if catch:
             m.write(m.sym("CATCH_DEPTH"), bytes([1]))
-            m.write(m.sym("CATCH_STACK"), struct.pack("<HHH", THROW_SLOT, ix0, iy0))   # frame 0 (not next to the depth)
-            m.write(THROW_SLOT, struct.pack("<H", STOP_ADDR))
+            m.write(m.sym("CATCH_STACK"), struct.pack("<HHH", THROW_SLOT - 4, ix0, iy0))   # frame 0 (not next to the depth)
+            src = m.read(m.sym("SRC_PTR"), 2) + m.read(m.sym("SRC_END"), 2)        # the frame's input source as CATCH
+            m.write(THROW_SLOT - 4, src + struct.pack("<H", STOP_ADDR))            #   pushes it, then the return address
         m.write(STOP_ADDR, b"\x18\xFE")
         m.write(RET_SLOT, struct.pack("<H", STOP_ADDR))
         m.setreg("IX", ix0)

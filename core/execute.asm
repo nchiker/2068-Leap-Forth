@@ -19,6 +19,7 @@ H_EXECUTE:
     DW   DICT_CHAIN_POINT
     DB   7, "E", "X", "E", "C", "U", "T", "E"
 W_EXECUTE:
+    call STK_GUARD                     ; recursion through EXECUTE stops before the stack runs out
     rst RST_DPOP                       ; HL = xt
     jp   (hl)                          ; a jump, not a call: its RET returns to EXECUTE's caller
 

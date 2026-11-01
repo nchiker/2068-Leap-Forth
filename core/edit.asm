@@ -33,8 +33,14 @@ W_EDIT:
                                     ; position before the session moves lines
     xor  a
     ld   (VIEW_RESULT), a           ; 0: no view, until the EXROM says otherwise
+    ld   hl, NOBRK
+    inc  (hl)                       ; the view: BREAK is its key, and it moves the store's lines
     ld   hl, GRAPHICS_EXROM_BASE + (6 * 3)        ; slot 6 = VIEW_SESSION
     call EXROM_CALL_SLOT
+    ld   hl, BRK_PEND               ; (the carry is the call's)
+    ld   (hl), 0                    ; the view's BREAK was its key
+    inc  hl
+    dec  (hl)                       ; NOBRK
     jr   c, .noexrom
     ld   a, (VIEW_RESULT)
     or   a
@@ -47,6 +53,7 @@ W_EDIT:
     xor  a
     ld   (PRINT_ROW), a
     ld   (PRINT_COL), a
+    call CATCH_SRC_HERE             ; a THROW caught outside goes on after the name
     ld   hl, (SRC_END)              ; the console line goes on afterwards
     push hl
     ld   hl, (SRC_PTR)

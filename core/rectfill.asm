@@ -48,6 +48,19 @@ EXROM_CALL_SLOT:
     ret
 
 ; ============================================================================
+; EXROM_CALL_NOBRK -- EXROM_CALL_SLOT in a section that defers BREAK (the SPRITE-* words: a slot's
+; background, image and shown flag change together; core/throwcatch.asm)
+; In, Out: as EXROM_CALL_SLOT; a BREAK pressed during it stops when it ends
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+EXROM_CALL_NOBRK:
+    ld   a, (NOBRK)
+    inc  a
+    ld   (NOBRK), a
+    call EXROM_CALL_SLOT
+    jp   BRK_SECTION_END
+
+; ============================================================================
 ; CALL_HL -- call the code at HL (there is no `call (hl)`)
 ; In:  HL = address to call
 ; Out: whatever the called code returns

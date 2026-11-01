@@ -231,11 +231,23 @@ DOLIT:
     ret
 
 ; ============================================================================
+; COMPILE_CALL_GUARDED -- the interpreter compiles a word: COMPILE_CALL, with CALL STK_GUARD in front
+; when the word is the `:` definition being compiled (recursion)
 ; COMPILE_CALL -- compile CALL target (3 bytes) at HERE
 ; In:  HL = the target
-; Out: HERE += 3
-; Destroys: AF, DE
+; Out: HERE += 3 (6 with the guard)
+; Destroys: AF, DE (COMPILE_CALL_GUARDED keeps HL)
 ; ============================================================================
+COMPILE_CALL_GUARDED:
+    ld   de, (COLON_XT)
+    or   a
+    sbc  hl, de
+    add  hl, de                   ; (Z kept)
+    jr   nz, COMPILE_CALL
+    push hl
+    ld   hl, STK_GUARD
+    call COMPILE_CALL
+    pop  hl
 COMPILE_CALL:
     ld   de, (HERE)
     ld   a, $CD
@@ -351,8 +363,8 @@ HEADER_LINK:
 
 ; ============================================================================
 ; : ( "name" -- ) -- build a header at HERE (HEADER_BUILD), link it (LATEST) and set STATE to 1.
-; HERE is left past the name, where the code starts. Not immediate: a `:` inside a definition is
-; not supported.
+; HERE is left past the name, where the code starts; the definition is open (COLON_HDR) until `;`.
+; Not immediate: a `:` inside a definition is not supported.
 ; ============================================================================
 H_COLON:
     DW   H_STORE
@@ -360,12 +372,16 @@ H_COLON:
 W_COLON:
     call DICT_ROOM0
     call HEADER_BUILD
+    ld   hl, (NEW_HEADER_ADDR)
+    ld   (COLON_HDR), hl          ; open until `;` (an error before it: COLON_DROP), before the link:
+    ld   hl, (HERE)               ;   a BREAK between the two still finds it
+    ld   (COLON_XT), hl           ; a call to it is recursion (COMPILE_CALL_GUARDED)
     call HEADER_LINK
     jp   W_RBRACKET               ; STATE = 1 (core/tick.asm)
 
 ; ============================================================================
-; ; ( -- ) IMMEDIATE -- compile a RET, ending the definition's CALL chain, and set STATE to 0.
-; Immediate so that it runs even while compiling.
+; ; ( -- ) IMMEDIATE -- compile a RET, ending the definition's CALL chain, set STATE to 0 and close
+; the definition (COLON_HDR). Immediate so that it runs even while compiling.
 ; ============================================================================
 H_SEMICOLON:
     DW   H_COLON
@@ -375,6 +391,35 @@ W_SEMICOLON:
     call COMPILE_BYTE
     xor  a
     ld   (STATE), a
+    jr   COLON_CLOSE
+
+; ============================================================================
+; COLON_DROP -- a line ended in an error (or ABORT, QUIT): close the DO loops it left open
+; (LEAVE_DEPTH: EXIT would compile their frames' POPs into the next definition) and remove the `:`
+; definition it left open, so a word with half its code is never found and run. LATEST goes back
+; first, then HERE: a BREAK between the two leaves HERE above every linked header.
+; COLON_CLOSE -- the definition is closed (`;`), or dropped
+; In:  COLON_HDR = the open definition's header, or 0
+; Out: LEAVE_DEPTH = 0, COLON_HDR = COLON_XT = 0; dropped: LATEST = its link, HERE = its header
+; Destroys: AF, DE, HL
+; ============================================================================
+COLON_DROP:
+    xor  a
+    ld   (LEAVE_DEPTH), a
+    ld   hl, (COLON_HDR)
+    ld   a, h
+    or   l
+    ret  z
+    ld   e, (hl)
+    inc  hl
+    ld   d, (hl)
+    dec  hl
+    ld   (LATEST), de
+    ld   (HERE), hl
+COLON_CLOSE:
+    ld   hl, 0
+    ld   (COLON_HDR), hl
+    ld   (COLON_XT), hl
     ret
 
 
@@ -385,14 +430,17 @@ W_SEMICOLON:
 ; Out: returns when the source is consumed
 ; Destroys: all registers except IX, IY, SP
 ;
-; INTERPRET_NESTED is the same routine entered one instruction later: it does not save
-; THROW_ROOT_SP, which therefore stays the outermost run's SP. An error in a nested run (LOAD-TEXT
+; INTERPRET_NESTED is the same routine entered after the outermost run's setup: it does not save
+; THROW_ROOT_SP, which therefore stays the outermost run's SP, nor release BREAK (NOBRK). An error in a nested run (LOAD-TEXT
 ; interpreting its text) unwinds (REPORT_INTERP_ERROR, THROW, ABORT, QUIT) to the outermost
 ; caller, abandoning the nested text and the rest of the outer line. A nested run that succeeds
 ; returns to its caller, which restores SRC_PTR / SRC_END (core/loadtext.asm).
 ; ============================================================================
 INTERPRET_RUN:
     ld   (THROW_ROOT_SP), sp    ; where an uncaught THROW unwinds to (core/throwcatch.asm)
+    xor  a
+    ld   (BRK_PEND), a          ; a BREAK at the console was its key
+    ld   (NOBRK), a             ; from here BREAK stops what runs (the console sets it back to 1)
 INTERPRET_NESTED:
     ld   (SRC_PTR), hl
     add  hl, de
@@ -425,7 +473,7 @@ INTERPRET_NESTED:
     ld   a, (INTERP_IMM_FLAG)
     or   a
     jr   nz, .execute               ; compiling, but immediate
-    call COMPILE_CALL
+    call COMPILE_CALL_GUARDED
     jr   .loop
 
 .execute:
