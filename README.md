@@ -2,7 +2,7 @@
 
 ### ▶ [Try it now, live in your browser — no install](https://nchiker.github.io/TSRun/?rom=leapforth)
 
-### 📖 Learn the language — the [Forth tutorial](docs/forth_tutorial.md) ([Word/DOCX version](docs/forth_tutorial.docx))
+### 📖 Learn the language — the [user's manual](docs/manual/01_introduction.md): start with its [beginner's guide](docs/manual/02_beginners_guide.md) ([Word/DOCX version](docs/2068_Leap-Forth_Users_Manual.docx))
 
 A from-scratch Forth for the Timex Sinclair 2068, built on the hardware
 kernel proven out by **2068-Leap** (structured-BASIC ROM, same author,
@@ -69,7 +69,7 @@ Highlights:
   `VARIABLE`/`CONSTANT`, decimal literals, and joystick input
   (`STICK`).
 
-See the [Forth tutorial](docs/forth_tutorial.md) linked at the top to
+See the [user's manual](docs/manual/01_introduction.md) linked at the top to
 actually learn the language, or jump straight to "Try it" below for a
 hands-on tour — or [try it live in your browser](https://nchiker.github.io/TSRun/?rom=leapforth)
 right now, no download required.
