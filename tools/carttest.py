@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The DOCK cartridge on the stock TS2068 ROMs (make cart; docs/cartridge.md; kernel/bank/cart.asm): make test's
+"""The DOCK cartridge on the stock TS2068 ROMs (make cart; CONTRIBUTING.md "The cartridge build"; kernel/bank/cart.asm): make test's
 `cart` suite.
 
 Programs are compiled on the release ROMs in ZEsarUX (lines run the IDE's way, Console.host_line), their dictionary,

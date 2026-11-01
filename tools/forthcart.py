@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pack a Forth program into a DOCK cartridge for a stock TS2068 (docs/cartridge.md; kernel/bank/cart.asm).
+"""Pack a Forth program into a DOCK cartridge for a stock TS2068 (the manual's Part 6; CONTRIBUTING.md; kernel/bank/cart.asm).
 
 The program is a SAVE-LIB tape (.tap or .tzx) made on the release ROMs, or on the cartridge. The cartridge carries the
 cartridge build's HOME image (DOCK chunks 0-1), the program image (chunks 2-3) and the EXROM (chunk 5); at power-on it

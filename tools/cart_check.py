@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the cartridge build against the release build (kernel/bank/cart.asm, docs/cartridge.md); `make cart`.
+"""Check the cartridge build against the release build (kernel/bank/cart.asm, CONTRIBUTING.md "The cartridge build"); `make cart`.
 
 The cartridge's HOME image (assembled with -DCARTRIDGE) must keep every label of the release image at its address, so
 a dictionary compiled on the release ROMs runs on the cartridge and LIB tapes go both ways. This checks, on every

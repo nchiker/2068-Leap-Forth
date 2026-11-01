@@ -24,7 +24,7 @@ date=$(git log -1 --format=%cI)
 name="2068-Forth-$VERSION"
 stage="dist/$name"
 rm -rf "$stage" "dist/$name.zip" "dist/$name.zip.sha256"
-mkdir -p "$stage/roms" "$stage/symbols" "$stage/docs/images" "$stage/demos"
+mkdir -p "$stage/roms" "$stage/symbols" "$stage/docs/images" "$stage/docs/manual" "$stage/demos"
 
 # --- ROMs ---------------------------------------------------------------
 for f in forth_boot_rom0.bin graphics_exrom.bin forth_zesarux.bin graphics_exrom.dck SHA256SUMS; do
@@ -37,9 +37,11 @@ cp build/forth_boot.sym build/forth_boot.lst build/graphics_exrom.sym build/grap
 cp demos/*.fs "$stage/demos/"
 
 # --- docs ---------------------------------------------------------------
-cp README.md docs/forth_tutorial.md docs/hardware_notes.md docs/numeric_model.md docs/cartridge.md "$stage/docs/"
+cp README.md docs/zesarux_setup.md docs/eightyone_setup.md docs/ts_pico_setup.md "$stage/docs/"
+cp docs/manual/*.md "$stage/docs/manual/"
+cp docs/2068_Leap-Forth_Users_Manual.docx "$stage/docs/"
 cp docs/images/*.png "$stage/docs/images/"
-for f in forth_tutorial.pdf forth_tutorial.docx README.pdf; do
+for f in leap_forth_manual.pdf README.pdf; do
   if [ -f "build/docs/$f" ]; then
     cp "build/docs/$f" "$stage/docs/"
   else
@@ -83,15 +85,16 @@ roms/forth_zesarux.bin      The two as one 24 KB file, for ZEsarUX --romfile.
 roms/graphics_exrom.dck     The EXROM as a cartridge for EightyOne and TS-Pico (bank \$FE, chunk 5);
                             see docs/eightyone_setup.md.
 roms/forth_cart.dck         Forth as a DOCK cartridge for a stock TS2068 (the stock ROMs stay in);
-                            docs/cartridge.md, also for making a cartridge of your own program.
+                            the manual's Part 6, also for making a cartridge of your own program.
 roms/SHA256SUMS             The images' hashes.
 symbols/                    Assembler .sym/.lst listings.
 demos/                      Forth programs (Blackjack, Shooting Gallery) as source text.
-docs/forth_tutorial.{md,pdf,docx}  Learning Forth on 2068-Forth -- start here.
+docs/manual/                The user's manual, in eight parts -- start with 01_introduction.md;
+                            Part 2 is the beginner's guide.
+docs/leap_forth_manual.pdf  The manual as one PDF.
+docs/2068_Leap-Forth_Users_Manual.docx  The manual for Word.
 docs/README.{md,pdf}        The project README.
-docs/hardware_notes.md      TS2068 hardware facts.
-docs/numeric_model.md       Integers and floats.
-docs/cartridge.md           Forth and Forth programs as cartridges.
+docs/*_setup.md             ZEsarUX, EightyOne and TS-Pico.
 
 Running it in Fuse
 ------------------
@@ -108,8 +111,7 @@ Running it in ZEsarUX
 ZEsarUX runs from its own folder, so give the ROM's full path:
     FORTH="\$PWD/roms"
     cd <ZEsarUX's folder> && ./zesarux --noconfigfile --machine TS2068 --romfile "\$FORTH/forth_zesarux.bin"
-The EXROM words need ZEsarUX built with the EXROM patch (docs/zesarux_setup.md
-in the source repository).
+The EXROM words need ZEsarUX built with the EXROM patch (docs/zesarux_setup.md).
 
 roms/forth_boot_rom0.bin is a raw 16384-byte image for the TS2068's HOME ROM
 slot and roms/graphics_exrom.bin an 8192-byte image for the EXROM slot (checked
