@@ -6,7 +6,7 @@ the best solution for the language and its users; fix a problem in the session i
 reason not to (the reason is written here); **follow Leap-C's conventions** (`~/2068-Leap-C` `CONTRIBUTING.md` and
 `project_plan.md` section 1) for testing, paperwork, code style and RAM layout.
 
-Last updated 2026-11-01. Free bytes: HOME 1,936, EXROM 3,136, the cartridge's HOME image 1,741 (`make budget`: per
+Last updated 2026-11-01. Free bytes: HOME 1,924, EXROM 3,136, the cartridge's HOME image 1,730 (`make budget`: per
 component, `budget.toml`; `make inventory`: per routine). Dictionary: 16,128 bytes at power-on.
 
 ## Done
@@ -32,17 +32,13 @@ component, `budget.toml`; `make inventory`: per routine). Dictionary: 16,128 byt
 | BREAK and timing | BREAK stops a running word (THROW -28 from the interrupt routine); recursion stops with RETURN STACK FULL; the interrupt routine's idle frame 2,010 → 207 T (`milestones/BREAK_and_timing.md`) |
 | IDE hooks | The Leap IDE's questions answered; labels a host drives the prompt by and `LAST_ERROR` (`milestones/IDE_hooks.md`) |
 | Cartridge | `make cart`: Forth, and a program saved with `SAVE-LIB`, as a DOCK cartridge for a stock TS2068 (`milestones/Cartridge.md`) |
+| Manual | The user's manual in Leap-C's shape, every example a test, its entries held to the ROM's words; five defects fixed (`milestones/Manual.md`) |
 
-## Now: Manual — done (`docs/V2/milestones/Manual.md`)
+## Now: Polygon edges — done (`docs/V2/milestones/Polygon_edges.md`)
 
-The user's manual is rewritten in Leap-C's shape: `docs/manual/`, eight parts (introduction, beginner's guide, the
-words of the language, the words of the machine, concepts, libraries and cartridges, examples, appendices), one
-entry per ROM word in the shape the Leap IDE generates its help from. Every ```forth block is a test
-(`tools/docexamples.py`); `tools/manualcheck.py` (in `make check`) holds the manual's entries to the ROM's dictionary.
-The tutorial (folded in as Part 2), the cartridge guide (Part 6), `numeric_model.md` and `hardware_notes.md` are gone.
-Defects found while writing it are fixed: the EXROM words said nothing without the EXROM, an underflow wrote over
-the dictionary, `RECT` took its corners' low bytes, the sprite words did not check their position, and the `g` `p` `q`
-glyphs (from Leap-C).
+POLYGON and POLYGON-FILL move a corner off the screen to the nearest edge, as Leap-C's `draw()` and `box()` do, so
+nothing wraps (the last of the shape words that wrapped); +11 B HOME. Step Manual (PR #19) is complete
+(`docs/V2/milestones/Manual.md`): the user's manual in Leap-C's shape, five defects fixed.
 
 ## Next, in order
 
@@ -54,9 +50,11 @@ glyphs (from Leap-C).
 
 | Defect | Found | Fixed in |
 |---|---|---|
-| POLYGON and POLYGON-FILL take their vertices as bytes (an off-screen vertex wraps, as LINE's ends did) | Display speed | Not scheduled: the owner chose the least ROM space (2026-10-31); a fix is about +15 B and 48 B RAM for the outline, +100-150 B EXROM for POLYGON-FILL's clipping |
-| A program cartridge's load checks the image with the ROM's CRC: about 0.15 s per 1,000 bytes of dictionary (2.7 s for the largest, 16,128 B) | Cartridge | Not scheduled: an unrolled CRC is about +60 B, over the 200 B the cartridge's own code is held to (it must fit whenever the release does); a sum would catch less. Spent once, at power-on |
-| LINE with an end far off the screen walks to it at about 270 T a step (ends near ±32,768: about 10M T, 3 s) | Display speed | Not scheduled: an exact jump over the off-screen part (32-bit multiply and divide) was built: its routines 70 B, about 130 B with the code around them |
+| A program cartridge's load checks the image with the ROM's CRC: about 0.15 s per 1,000 bytes of dictionary (2.7 s for the largest, 16,128 B) | Cartridge | Not scheduled: an unrolled CRC is about +60 B, over the 200 B the cartridge's own code is held to (it must fit whenever the release does); a sum would catch less. Spent once, at power-on. 2068-Leap-C's cartridge plan checks the ROM identity and leaves the image's check to the packer (`tools/forthcart.py` already checks the CRC): dropping the power-on CRC would save the time and bytes; the owner's call |
+| LINE with an end far off the screen walks to it at about 270 T a step (ends near ±32,768: about 10M T, 3 s) | Display speed | Not scheduled: an exact jump over the off-screen part (32-bit multiply and divide) was built: its routines 70 B, about 130 B with the code around them. 2068-Leap-C's `draw()` moves an off-screen end to the edge (fast, but not the line meant); Forth keeps the exact line |
+
+Fixed in Polygon edges: POLYGON and POLYGON-FILL kept each corner's low byte (a corner off the screen wrapped); a
+corner off the screen now moves to the nearest edge, as Leap-C's `draw()` and `box()` do (+11 B HOME).
 
 Fixed in Manual: `RECT`, `FILL`, `CIRCLE`, `POLYGON`, `POLYGON-FILL` and the sprite words printed nothing with another
 EXROM (the docs said `NO EXROM`); a word that took more than the data stack held (`.`, `SWAP` on an empty stack) wrote

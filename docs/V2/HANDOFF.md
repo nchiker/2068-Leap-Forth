@@ -10,11 +10,16 @@ reports: `docs/V2/milestones/`.
   user's manual is `docs/manual/`, eight parts in Leap-C's shape, one entry per ROM word; every ```forth block is a
   test and `tools/manualcheck.py` holds the entries to the ROM. The tutorial, `cartridge.md`, `numeric_model.md` and
   `hardware_notes.md` are gone into it. Five defects found while writing it are fixed (`NO EXROM`, the data stack's
-  guard, `RECT` clipping, the sprite range checks, the `g p q` glyphs). Not pushed; no PR yet (the owner asks).
+  guard, `RECT` clipping, the sprite range checks, the `g p q` glyphs). PR #19 open; the owner reviews it.
+- **Branch `v2/step-polygon-edges`** (from `v2/step-manual`): POLYGON and POLYGON-FILL move a corner off the screen to
+  the nearest edge, as Leap-C's `draw()`/`box()` (`docs/V2/milestones/Polygon_edges.md`). Its PR follows #19.
+- **The owner (2026-11-01):** for a remaining defect, look first at how Leap-C handled the same problem. The two left
+  (a cartridge's power-on CRC; LINE far off the screen) are compared in the Polygon edges report: dropping the CRC
+  as Leap-C's plan does is the owner's call.
 - **Decided (2026-11-01):** the manual has Leap-C's eight parts, the words split into Part 3 (the language) and Part 4
   (the machine) by the IDE's groups; the tutorial is folded in as Part 2 (the owner). Earlier: after the cartridge's
   start word, the `OK` prompt; Blackjack (a demo) is one of the last steps.
-- **Free bytes:** HOME 1,936, EXROM 3,136, the cartridge's HOME image 1,741; per component in `budget.toml`
+- **Free bytes:** HOME 1,924, EXROM 3,136, the cartridge's HOME image 1,730; per component in `budget.toml`
   (`make budget`), per routine `make inventory`. The dictionary starts at `$9100` (`FREE` 16,128 at power-on); the data
   stack is 896 cells under a 256-byte guard (`$9000-$90FF`).
 - **Next:** ROADMAP's *Blackjack*.

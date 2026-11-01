@@ -880,7 +880,7 @@ The triangle's top edge runs along row 40, from x = 100 to 140; 16559 is the byt
 
 **Notes.**
 
-* Each corner is a pair of bytes, kept as the low 8 bits of its numbers: a number above 255 or below 0 wraps (300 is 44), where `LINE` clips.
+* A corner off the screen is moved to the nearest edge (*x* to 0 or 255, *y* to 0 or 191), as Leap-C's `draw()` and `box()` do, and the shape is drawn through the moved corner. So nothing wraps or is drawn off the screen, but a shape with a corner off the screen is not cut off as `LINE` cuts a line: keep the corners on the screen if the shape matters.
 * Each edge is drawn as `LINE` draws it.
 * With another EXROM in the machine in place of the graphics one, the word prints `NO EXROM` and draws nothing. That is a message, not an error: the line goes on, `OK` follows, and the numbers are taken from the stack as usual.
 
@@ -912,7 +912,7 @@ The triangle is 41 pixels wide at row 40 and narrows to a point at row 80. At ro
 
 **Notes.**
 
-* Corners are bytes, as for `POLYGON`. An *n* outside 3 to 12 draws nothing and takes only *n* from the stack.
+* A corner off the screen is moved to the nearest edge, as for `POLYGON`. An *n* outside 3 to 12 draws nothing and takes only *n* from the stack.
 * A shape with an angle that is not convex may be a pixel out near that angle.
 * With another EXROM in the machine in place of the graphics one, the word prints `NO EXROM` and draws nothing. That is a message, not an error: the line goes on, `OK` follows, and the numbers are taken from the stack as usual.
 
