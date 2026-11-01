@@ -9,8 +9,7 @@ reports: `docs/V2/milestones/`.
 - **Branch `v2/step-ide-hooks`** (from master `7b39732`): step IDE hooks is complete
   (`docs/V2/milestones/IDE_hooks.md`): the Leap IDE's questions answered in
   `~/Projects/Leap-IDE/docs/requests/LEAP_FORTH_ANSWERS.md` (written there, not committed in that repository), the
-  labels and `LAST_ERROR` the answers promise, a stale CATCH frame fixed. Not pushed; the owner asks for the push
-  and the PR.
+  labels and `LAST_ERROR` the answers promise, a stale CATCH frame fixed. Pushed; PR #16 open.
 - **Decided (2026-11-01):** the owner approved the answers' recommendations; the V2 manual is rewritten in the style
   of the Leap-C and Leap V2 manuals (a roadmap step); the cartridge build comes before Blackjack, and Blackjack (a
   demo) is one of the last steps.
