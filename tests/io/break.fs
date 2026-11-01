@@ -7,6 +7,7 @@ BREAK? .                               \ expect: 0
 : L BEGIN 0 UNTIL ;
 \ break: after 30000
 L 1 .                                  \ expect: BREAK
+{LAST_ERROR} @ .                       \ expect: -28
 1 .                                    \ expect: 1
 : C ['] L CATCH . 2 . ;
 \ break: after 30000

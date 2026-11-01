@@ -424,3 +424,21 @@ image = "home"
 component = "console"
 delta = 3
 reason = "BREAK and timing: EDIT calls CATCH_SRC_HERE before it runs the changed lines; from the reserve"
+
+[[ledger]]
+image = "home"
+component = "interp"
+delta = -11
+reason = "IDE hooks: ABORT and QUIT end in REPORT_INTERP_ERROR (-22 B); STACK_CHECK sets THROW_CODE -3 (overflow) or -4 (underflow) for LAST_ERROR (+11 B); to boot and console"
+
+[[ledger]]
+image = "home"
+component = "boot"
+delta = 7
+reason = "IDE hooks: REPORT_INTERP_ERROR stores LAST_ERROR (the Leap IDE and the test tools read a line's error code) and zeroes CATCH_DEPTH (an unknown word or STACK? under CATCH left a dead frame that caught the next THROW); RUNTIME_ERROR_HOOK passes the code and prints STACK? for -3 and -4 (THROW_CODE no longer cleared: -2 B); from interp"
+
+[[ledger]]
+image = "home"
+component = "console"
+delta = 5
+reason = "IDE hooks: the console sets LAST_ERROR to 0 after a line that ends in OK; 4 B from interp, 1 B from the reserve"

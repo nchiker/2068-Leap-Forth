@@ -546,7 +546,7 @@ EDITOR_PROCESS_KEY:
 
 ; ============================================================================
 ; EDITOR_LOOP_LIVE -- the interactive shell: read a line, append it to the store, run it, print "OK"
-; unless it raised an error, repeat forever
+; unless it raised an error, repeat forever. LAST_ERROR is the code the last line ended with (0: OK)
 ;
 ; Precondition (not set up here): IO_READ_KEY only consumes a key latched by kernel/interrupt's
 ; KBD_ISR_TICK, so interrupts must be enabled with RST $0038 vectoring to KBD_ISR_TICK (IM 1),
@@ -561,9 +561,14 @@ EDITOR_LOOP_LIVE:
     call EDITOR_REDRAW
 .keyloop:
     call IO_READ_KEY
+.key_ret:                           ; the prompt's key wait returns here: a host (tools/fharness.py,
+                                    ; the Leap IDE) at IO_READ_KEY.wait_hit with this address at SP
+                                    ; is at the prompt, not in a running word's KEY or ACCEPT
     call EDITOR_PROCESS_KEY
     jr   nc, .keyloop
     ; the line goes to the store before it runs, so it is kept even if the run never returns
+.enter:                             ; ENTER: EDIT_BUF / EDIT_LEN hold the line (a host may write them,
+                                    ; drop the key wait's return address and jump here)
     ld   hl, EDIT_BUF
     ld   a, (EDIT_LEN)
     ld   b, a
@@ -584,6 +589,9 @@ EDITOR_LOOP_LIVE:
     ld   a, (INTERP_ERROR_FLAG)
     or   a
     jr   nz, .error
+    ld   h, a
+    ld   l, a
+    ld   (LAST_ERROR), hl           ; the line ended in OK (an error's REPORT_INTERP_ERROR set it)
     ld   hl, "O"
     rst RST_DPUSH
     call W_EMIT

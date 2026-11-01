@@ -204,8 +204,7 @@ CHIME_REGS:
 ; Resets both stacks, prints the word and "?", and returns to EDITOR_LOOP_LIVE with the rest of the
 ; line abandoned (through REPORT_INTERP_ERROR).
 ; In:  WORD_BUF = the token
-; Out: STATE = 0, INTERP_ERROR_FLAG = 1, both stacks empty; returns to the outermost INTERPRET_RUN's
-;      caller
+; Out: as REPORT_INTERP_ERROR with LAST_ERROR = -13; both stacks empty
 ; Destroys: all registers
 ; ============================================================================
 INTERPRET_UNKNOWN_WORD:
@@ -237,17 +236,22 @@ INTERPRET_UNKNOWN_WORD:
     ld   hl, 13
     rst RST_DPUSH
     call W_EMIT
+    ld   hl, -13                  ; UNDEFINED WORD's code
 
 ; ============================================================================
-; REPORT_INTERP_ERROR -- the shared tail of INTERPRET_UNKNOWN_WORD and RUNTIME_ERROR_HOOK
-; In:  none
-; Out: STATE = 0, INTERP_ERROR_FLAG = 1 (EDITOR_LOOP_LIVE prints no OK); SP = THROW_ROOT_SP, then
-;      `ret` to that frame's return address
+; REPORT_INTERP_ERROR -- the shared tail of INTERPRET_UNKNOWN_WORD, RUNTIME_ERROR_HOOK, ABORT and QUIT
+; In:  HL = the error's code (ANS: -1 ABORT, -56 QUIT, else as the messages below)
+; Out: LAST_ERROR = HL (the console sets it to 0 after a line that ends in OK), STATE = 0,
+;      CATCH_DEPTH = 0 (the SP reload drops every frame: a stale count would let the next THROW
+;      "catch" in a dead frame), INTERP_ERROR_FLAG = 1 (EDITOR_LOOP_LIVE prints no OK); SP =
+;      THROW_ROOT_SP, then `ret` to that frame's return address
 ; Destroys: AF
 ; ============================================================================
 REPORT_INTERP_ERROR:
+    ld   (LAST_ERROR), hl
     xor  a
     ld   (STATE), a
+    ld   (CATCH_DEPTH), a
     ld   a, 1
     ld   (INTERP_ERROR_FLAG), a   ; EDITOR_LOOP_LIVE prints no OK for this line
     ld   sp, (THROW_ROOT_SP)      ; back to the outermost INTERPRET_RUN's caller, even from a nested
@@ -255,26 +259,26 @@ REPORT_INTERP_ERROR:
 
 ; ============================================================================
 ; RUNTIME_ERROR_HOOK -- core/interp.asm's STACK_CHECK error hook, and the report of an uncaught THROW
-; Reached like INTERPRET_UNKNOWN_WORD (a bare `jp`; both stacks already empty). Prints the message of
-; THROW_CODE from RUNTIME_ERROR_TABLE, `ERROR n` for a code not in it, or `STACK?` when THROW_CODE
-; is 0 (STACK_CHECK), then a newline, and ends through REPORT_INTERP_ERROR.
-; In:  THROW_CODE (cleared here)
-; Out: as REPORT_INTERP_ERROR
+; Reached like INTERPRET_UNKNOWN_WORD (a bare `jp`; both stacks already empty). Prints `STACK?` for
+; -3 and -4 (STACK_CHECK's overflow and underflow), the message of THROW_CODE from
+; RUNTIME_ERROR_TABLE, or `ERROR n` for a code not in it, then a newline, and ends through
+; REPORT_INTERP_ERROR.
+; In:  THROW_CODE (every jump here sets it)
+; Out: as REPORT_INTERP_ERROR with LAST_ERROR = the code
 ; Destroys: all registers
 ; ============================================================================
 RUNTIME_ERROR_HOOK:
     call EDIT_ERR_PREFIX          ; core/edit.asm: `LINE n ` while EDIT commits line n
-    ld   hl, (THROW_CODE)         ; core/throwcatch.asm: the code of an uncaught THROW; 0 from STACK_CHECK
-    ld   de, 0
-    ld   (THROW_CODE), de         ; used up
-    ld   a, h
-    or   l
-    ex   de, hl                   ; DE = the code
-    ld   hl, RUNTIME_ERROR_MSG
-    jr   z, .msg                  ; no THROW: STACK?
+    ld   de, (THROW_CODE)         ; the code: core/throwcatch.asm, core/interp.asm's STACK_CHECK
+    push de                       ; for REPORT_INTERP_ERROR
     ld   a, d
     inc  a
     jr   nz, .other               ; the table's codes are -1 to -255
+    ld   a, e
+    or   1
+    cp   -3
+    ld   hl, RUNTIME_ERROR_MSG
+    jr   z, .msg                  ; -3 or -4: STACK?
     ld   hl, RUNTIME_ERROR_TABLE
 .find:
     ld   a, (hl)
@@ -303,6 +307,7 @@ RUNTIME_ERROR_HOOK:
     ld   hl, 13
     rst RST_DPUSH
     call W_EMIT
+    pop  hl                       ; the code
     jr   REPORT_INTERP_ERROR
 
 RUNTIME_ERROR_MSG: DB "STACK?", 0
