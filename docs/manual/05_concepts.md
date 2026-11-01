@@ -16,8 +16,8 @@ stops it, with the same code.
 
 A few things are not stopped half-way, because stopping them there would leave memory half changed: the sprite words
 and the switch between display modes finish first, and BREAK takes effect as they end. At the prompt and in `EDIT`'s
-view BREAK is a key: at the prompt it does nothing, and in the view it leaves the view. `BREAK?` lets a program look at
-the key without being stopped.
+view BREAK is a key: at the prompt it does nothing, and in the view it leaves the view. `BREAK?` reads the keys
+themselves, about two frames before BREAK is acted on, so a loop that tests it can end on its own first.
 
 A word that calls itself without end is stopped too, before it fills memory: `RETURN STACK FULL` (code -5).
 
