@@ -22,7 +22,8 @@ PORT_AY_DATA        EQU $F6     ; write/read AY register data
 ; Horizontal Select Register: one bit per 8K chunk of the 64K address space (chunk N =
 ; N * $2000; A13-A15 decode). 0 = the chunk comes from Home, 1 = from the alternate bank that
 ; PORT_SCLD bit 7 selects (EXROM or Dock). Only chunk 5 ($A000-$BFFF) is ever paged; the only
-; writers are BANK_PAGE_EXROM_IN/OUT (kernel/bank/bank.asm).
+; writers are BANK_PAGE_EXROM_IN/OUT (kernel/bank/bank.asm), and in the cartridge build
+; (-DCARTRIDGE) kernel/bank/cart.asm, which keeps chunks 0-1 Dock.
 PORT_BANK_HOME      EQU $F4
 
 ; ---- SCLD Display Enhancement Control (port $FF) ----

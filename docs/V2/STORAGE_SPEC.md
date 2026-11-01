@@ -97,6 +97,11 @@ and carry the same identity, and `make check` runs both.
 
   A skipped byte is code a LIB image cannot call into: the reset stub, the cartridge entry, and the inside of two
   routines whose entry points stay inside the CRC.
+- **The cartridge build of step Cartridge (2026-11-01, `make cart`, `docs/cartridge.md`)** keeps the same rule without
+  skip ranges in `rom_identity.py`: `tools/cart_check.py` checks that every release label keeps its address and the bytes
+  differ only in the LROS header, COLD_START's call at `COLD_START.chime`, the two paging routines' insides, and the
+  release's free space, then writes the release's `ROM_IDENTITY` into the cartridge image. LIB tapes and cartridge
+  program images go both ways.
 - **Exact ROM kept (owner, 2026-10-28)**, after these other options were weighed:
   - Relink on load: the compiler marks ROM addresses in a RAM bitmap, and SAVE-LIB writes them as names.
     Estimated [E] 250-350 B HOME and about 2.7 KB RAM, and ROM addresses stored as data would still crash after

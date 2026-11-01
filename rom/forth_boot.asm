@@ -17,10 +17,17 @@
 
     INCLUDE "include/forth_layout.inc"
 
-; RST 00: cold start
+; RST 00: cold start. The cartridge build (kernel/bank/cart.asm) has the LROS header here instead: the
+; stock ROM reads it from the DOCK and jumps to CART_ENTRY; nothing jumps to $0000 on a cartridge
 RST_00:
+    IFDEF CARTRIDGE
+    DB   0, 1                     ; unused, cartridge type 1 (LROS)
+    DW   CART_ENTRY
+    DB   CART_CHUNK_SPEC          ; the chunks it uses (0 = used): 0, 1 and 5
+    ELSE
     di
     jp   COLD_START
+    ENDIF
 
     INCLUDE "include/rst_vectors.inc"
 ; RST 38: the IM 1 interrupt
@@ -120,7 +127,12 @@ COLD_START:
     im   1
     ei                              ; before the chime: it waits with HALT
 
+.chime:                           ; tools/cart_check.py: the cartridge's call differs here
+    IFDEF CARTRIDGE
+    call CART_START_PROGRAM       ; kernel/bank/cart.asm: runs the program; without one, the chime
+    ELSE
     call STARTUP_CHIME
+    ENDIF
 
     ; the empty input line as EDITOR_LOOP_LIVE's redraw leaves it, but row 23 not redrawn: the cursor
     ; flashes in the bar's column 0 and the first key's redraw (EDITOR_PROCESS_KEY) clears the version
@@ -457,6 +469,10 @@ DICT_LATEST_COLD EQU DICT_LATEST_INIT_LISTDEFS ; LATEST of an empty user diction
                                               ;   core/storage.asm's LOAD-LIB after a failure)
 DICT_CHAIN_POINT DEFL H_LISTDEFS
     INCLUDE "core/editor.asm"
+
+    IFDEF CARTRIDGE                     ; the cartridge's own code goes in the release's free space
+    INCLUDE "kernel/bank/cart.asm"
+    ENDIF
 
     IFDEF LAYOUT_NEGCTL                 ; the RAM layout guard's negative controls (nothing is saved)
     INCLUDE "tests/layout_negctl.asm"
