@@ -4198,8 +4198,9 @@ prints its message:
 
 Any other code prints `ERROR` and the number: your own `5 THROW` prints
 `ERROR 5`, and `1 THROW` prints `ERROR 1`. A stack underflow or
-overflow found after a word has run is not a `THROW`; it keeps printing
-`STACK?`.
+overflow found after a word has run is not a `THROW` (`CATCH` cannot
+catch it); it prints `STACK?`, as `-4 THROW` (underflow) and
+`-3 THROW` (overflow) do.
 
 #### Catching BREAK
 

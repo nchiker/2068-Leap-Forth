@@ -1117,3 +1117,17 @@ this is the condensed one-paragraph-per-phase version.
   of the time). LIB tapes saved by an earlier ROM do not load;
   `SAVE-TEXT` source does. HOME free space 2,188 bytes before, 1,939
   after; EXROM 3,208. Emulators only; no hardware.
+- V2 step IDE hooks (`docs/V2/milestones/IDE_hooks.md`): the Leap IDE's
+  questions answered (`LEAP_FORTH_ANSWERS.md` in the IDE's
+  `docs/requests/`). A host can run a line through the console's own
+  ENTER path and tell the prompt from a program waiting for a key
+  (labels `EDITOR_LOOP_LIVE.enter` and `.key_ret`), map a definition's
+  code to its source (`INTERPRET_NESTED.token`), and read the code the
+  last line ended with (`LAST_ERROR`: 0 after `OK`, -13 for an unknown
+  word, -4 or -3 for `STACK?`, -1 `ABORT`, -56 `QUIT`, else the THROW's
+  code). `-3 THROW` and `-4 THROW` print `STACK?`. Fixed: after an
+  unknown word or `STACK?` inside `CATCH`, the next uncaught `THROW`
+  went back into the dead `CATCH` and ran junk. LIB tapes saved by an
+  earlier ROM do not load; `SAVE-TEXT` source does. HOME free space
+  1,939 bytes before, 1,938 after; EXROM 3,208. Emulators only; no
+  hardware.

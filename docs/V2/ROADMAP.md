@@ -6,7 +6,7 @@ the best solution for the language and its users; fix a problem in the session i
 reason not to (the reason is written here); **follow Leap-C's conventions** (`~/2068-Leap-C` `CONTRIBUTING.md` and
 `project_plan.md` section 1) for testing, paperwork, code style and RAM layout.
 
-Last updated 2026-10-31. Free bytes: HOME 1,939, EXROM 3,208 (`make budget`: per component, `budget.toml`;
+Last updated 2026-11-01. Free bytes: HOME 1,938, EXROM 3,208 (`make budget`: per component, `budget.toml`;
 `make inventory`: per routine). Dictionary: 16,128 bytes at power-on.
 
 ## Done
@@ -29,20 +29,29 @@ Last updated 2026-10-31. Free bytes: HOME 1,939, EXROM 3,208 (`make budget`: per
 | Words and keys | Comments, `[ ] LITERAL ['] CHAR [CHAR]`, Leap-C's keys, the font in ASCII order, text twice as fast (`milestones/Words_and_keys.md`) |
 | Display look | Leap V2's screen: black on white, the version on the status bar, `EDIT`'s bar, Leap V2's chime (`milestones/Display_look.md`) |
 | Display speed | LINE on signed 16-bit ends, about 5× faster; the view's store lookup from the line found last; a faster console scroll (`milestones/Display_speed.md`) |
+| BREAK and timing | BREAK stops a running word (THROW -28 from the interrupt routine); recursion stops with RETURN STACK FULL; the interrupt routine's idle frame 2,010 → 207 T (`milestones/BREAK_and_timing.md`) |
 
-## Now: BREAK and timing — done (`docs/V2/milestones/BREAK_and_timing.md`)
+## Now: IDE hooks — done (`docs/V2/milestones/IDE_hooks.md`)
 
-BREAK (CAPS SHIFT + SPACE) stops any running word with THROW -28 from the interrupt routine (2068-Leap-C's model:
-the console, EDIT's view, the SPRITE-* words and a display mode change defer it); recursion stops with RETURN STACK
-FULL (-5) before the machine stack leaves its area; the interrupt routine's idle frame 2,010 → 207 T (every program
-about 2.6% faster). Fixed on the way: an error left a half-compiled `:` word (running it reset the machine) and
-LEAVE_DEPTH raised; CATCH did not put the input source back; output that scrolled cleared its new rows white.
-HOME 2,188 → 1,939 B free, EXROM 3,208.
+The Leap IDE's questions (`~/Projects/Leap-IDE/docs/requests/LEAP_FORTH_QUESTIONS.md`) answered in
+`LEAP_FORTH_ANSWERS.md` beside them. Labels a host drives the prompt by (`EDITOR_LOOP_LIVE.key_ret`, `.enter`,
+`INTERPRET_NESTED.token`) and the cell `LAST_ERROR` (the code the last console line ended with); `STACK?` is -4 or -3,
+ABORT -1, QUIT -56. Fixed on the way: an unknown word or `STACK?` under CATCH left a dead frame that caught the next
+THROW; `STORAGE_SPEC.md` gave the text words' old stack effects. HOME 1,939 → 1,938 B free.
 
 ## Next, in order
 
-1. **Blackjack** rebuilt from its saved source (`demos/blackjack.fs`) as a program for the finished ROM; the Shooting
-   Gallery's source is beside it (`demos/gallery.fs`).
+1. **Cartridge build** (the owner's decision, 2026-10-31; the IDE's question Q7): `make cart` builds a cartridge that
+   runs a Forth program on a stock TS2068: the Forth HOME in DOCK chunks 0-1 with an LROS header in `RST_00`'s bytes,
+   the EXROM in DOCK chunk 5, the paging routines under a build flag (port `$F4` keeps chunks 0-1 DOCK, port `$FF`
+   bit 7 stays 0), the program a `SAVE-LIB` image with its start word and the UDG table in DOCK chunks 2-3, copied to
+   `$9100` at the start. The release ROMs do not change. The design is in the answers (Q7); the owner chooses what
+   happens after the start word returns.
+2. **Manual**: the V2 manual rewritten in the style of the Leap-C manual (`~/2068-Leap-C/docs/manual`) and the Leap V2
+   manual: `docs/manual/` parts, one entry per word in the shape the Leap IDE generates its help from (the answers,
+   Q5), every example run by the build, and a check that the manual and the ROM's headers name the same words.
+3. **Blackjack** rebuilt from its saved source (`demos/blackjack.fs`) as a program for the finished ROM; the Shooting
+   Gallery's source is beside it (`demos/gallery.fs`). A demo: one of the last steps.
 
 ## Known defects
 
@@ -50,6 +59,10 @@ HOME 2,188 → 1,939 B free, EXROM 3,208.
 |---|---|---|
 | POLYGON and POLYGON-FILL take their vertices as bytes (an off-screen vertex wraps, as LINE's ends did) | Display speed | Not scheduled: the owner chose the least ROM space (2026-10-31); a fix is about +15 B and 48 B RAM for the outline, +100-150 B EXROM for POLYGON-FILL's clipping |
 | LINE with an end far off the screen walks to it at about 270 T a step (ends near ±32,768: about 10M T, 3 s) | Display speed | Not scheduled: an exact jump over the off-screen part (32-bit multiply and divide) was built: its routines 70 B, about 130 B with the code around them |
+
+Fixed in IDE hooks: an error that is not a THROW (an unknown word, `STACK?`) under CATCH left `CATCH_DEPTH` counting a
+frame the SP reload had dropped, and the next uncaught THROW went back into it (`-1 THROW` printed `THROW  ?`);
+`STORAGE_SPEC.md` section 6 gave `SAVE-TEXT` and `VERIFY-TEXT` as `( addr len "name" -- )`.
 
 Fixed in BREAK and timing: nothing checked the machine stack's depth (runaway recursion reset the machine); no running
 word could be stopped (KEY returned BREAK as 16, ACCEPT stored it); a line that ended in an error left its `:` word
