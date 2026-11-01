@@ -6,9 +6,9 @@ DROP                                     \ expect: STACK?
 FDROP                                    \ expect: STACK?
 1.5 F. FDEPTH .                          \ expect: 1.5000 0
 CLS 0 0 AT-XY
-: D1 1024 0 DO I LOOP ;
-: U 1024 0 DO DROP LOOP ;
-: D2 1025 0 DO I LOOP ;
+: D1 896 0 DO I LOOP ;
+: U 896 0 DO DROP LOOP ;
+: D2 897 0 DO I LOOP ;
 D1
 U
 D2                                       \ expect: STACK?

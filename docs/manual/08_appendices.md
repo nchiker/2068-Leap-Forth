@@ -100,7 +100,7 @@ The editing keys:
 |---|---|
 | a number (a cell) | -32,768 to 32,767; typed numbers may go to 65,535, read as unsigned (65,535 is -1) |
 | a decimal | about ±1.7 × 10^38, about 9 significant digits; the smallest is about 2.9 × 10^-39 |
-| the data stack | 1,024 cells |
+| the data stack | 896 cells |
 | the float stack | 204 decimals |
 | the dictionary (your words) | 16,128 bytes |
 | the line store (your source) | 8,192 bytes |
@@ -123,7 +123,8 @@ The editing keys:
 | `$5B00-$7FFF` | working space for `FILL`; in `HIRES`, the second display file at `$6000-$77FF` (where `FILL` does nothing) |
 | `$8000-$8503` | the ROM's variables |
 | `$8504-$88FF` | the float stack |
-| `$8900-$90FF` | the data stack |
+| `$8900-$8FFF` | the data stack |
+| `$9000-$90FF` | a guard: a word that takes more from the data stack than it holds writes here, not over your words |
 | `$9100-$CFFF` | the dictionary: your words, from `$9100` up (`HERE` is the next free byte) |
 | `$D000-$EFFF` | the line store |
 | `$F000-$F17F` | the sprites' images and backgrounds |

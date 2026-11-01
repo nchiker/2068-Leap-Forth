@@ -184,6 +184,7 @@ def check(build, quiet=False, extra=()):
              ("the cells block", g("RAM_CELLS_BASE"), g("RAM_CELLS_END")),
              ("the float stack", g("FSTACK_LIMIT"), g("FSTACK_TOP")),
              ("the data stack", g("DSTACK_LIMIT"), g("DSTACK_TOP")),
+             ("the data stack's guard", g("DSTACK_TOP"), g("FORTH_DICT_RAM")),
              ("the dictionary", g("FORTH_DICT_RAM"), g("DICT_RAM_CEILING")),
              ("the line store", g("STORE_START"), g("STORE_LIMIT")),
              ("the sprite buffers", g("SPRITE_SLOT_IMG_BUF"), sprite_end),
@@ -209,8 +210,9 @@ def check(build, quiet=False, extra=()):
         errors.append("the map: ZX_SYSVAR_CHARS is not inside FILL's shadow plane")
     if g("STORE_LIMIT") & 0xFF:
         errors.append("STORE_LIMIT $%04X is not page aligned (LOAD-TEXT compares the high byte)" % g("STORE_LIMIT"))
-    if g("COLD_CLEAR_END") != tiles[10][2]:
-        errors.append("COLD_CLEAR_END is $%04X, the UDG table ends at $%04X" % (g("COLD_CLEAR_END"), tiles[10][2]))
+    udg_end = next(e for n, b, e in tiles if n == "the UDG table")
+    if g("COLD_CLEAR_END") != udg_end:
+        errors.append("COLD_CLEAR_END is $%04X, the UDG table ends at $%04X" % (g("COLD_CLEAR_END"), udg_end))
     where = lambda v: next((n for n, b, e in tiles if b <= v < e), "?")
     # ---- (s) the constants the EXROM copies
     for n in SHARED:
