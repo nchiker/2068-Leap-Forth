@@ -41,7 +41,8 @@ Other messages:
 | `NO EXROM` | `EDIT`, `RECT`, `FILL`, `CIRCLE`, `POLYGON`, `POLYGON-FILL` or a sprite word, with no Leap-Forth EXROM in the machine. The word takes its arguments and does nothing; the line goes on |
 | `STORE FULL` | the line store has no room for the line you typed (it still runs), or for a line changed in `EDIT` |
 | `LONG LINE` | `EDIT` refused: a line in the store is too long for its view |
-| `FORGET: NOT FOUND` | `FORGET` with a name that is not a word you defined |
+| `FORGET: NOT FOUND` | `FORGET` with a name that is not in the dictionary |
+| `FORGET: BUILT-IN, REFUSED` | `FORGET` with the name of one of the ROM's words |
 | `BAD PROGRAM` | a cartridge's program failed its check at switch-on (see [Part 6](06_libraries.md#at-switch-on)) |
 
 ## Appendix B: The character set and keys

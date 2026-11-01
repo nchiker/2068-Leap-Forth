@@ -110,7 +110,9 @@ def entries(path, groups, errs):
 def summary(lines, path, part, errs):
     """The Summary table: | **group** | `A` `B` ... | lists every entry of the part under its group."""
     listed = {}
-    for l in lines:
+    start = lines.index("## Summary") if "## Summary" in lines else len(lines)
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
+    for l in lines[start:end]:
         m = re.match(r"^\| \*\*([^*]+)\*\* \| (.*) \|$", l)
         if m:
             for w in re.findall(r"`([^`]+)`", m.group(2)):

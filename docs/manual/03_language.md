@@ -72,6 +72,78 @@ Every example begins on a machine just switched on, so it defines whatever it us
 
 ---
 
+## !
+
+`( x addr -- )` -- **word**, memory
+
+Stores the cell *x* at *addr*: the low byte at *addr*, the high byte at *addr*+1. The address is not checked. A store into the ROM (addresses below 16,384) is ignored; anywhere else it overwrites whatever is there, the dictionary and the system variables included.
+
+```forth
+VARIABLE V
+1234 V !
+V @ .                      \ expect: 1234
+258 V !  V C@ . V 1+ C@ .  \ expect: 2 1
+```
+
+**Notes.**
+
+* The low byte comes first in memory: after `258 V !`, `V C@` is 2 and `V 1+ C@` is 1.
+* *addr* may be odd. To store one byte use `C!`.
+
+**See also** `@`, `C!`, `VARIABLE`, [Memory](05_concepts.md#memory).
+
+---
+
+## '
+
+`( "name" -- xt )` -- **word**, dictionary
+
+Reads the next word from the line and leaves its execution token *xt*, the address of its code, without running it. `EXECUTE` runs an *xt*. Upper and lower case do not matter. It finds immediate words (`' IF`) as well as ordinary ones.
+
+```forth
+: SQ DUP * ;
+5 ' SQ EXECUTE .         \ expect: 25
+' NOSUCH                 \ expect: UNDEFINED WORD
+```
+
+**Notes.**
+
+* Inside a definition `'` is compiled like any word and reads its name each time the definition runs, from whatever is typed then. To look the word up while compiling, use `[']`.
+* A word that is not in the dictionary throws -13 (`UNDEFINED WORD`), so `CATCH` can catch it.
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| a name that is not a word | `UNDEFINED WORD` |
+| nothing after `'` on the line | `MISSING NAME` |
+
+**See also** `[']`, `EXECUTE`, `CATCH`, [The dictionary](05_concepts.md#the-dictionary).
+
+---
+
+## (
+
+`( -- )` -- **immediate word**, dictionary
+
+Starts a comment that ends at the next `)`. If there is no `)` on the line, the rest of the line is the comment. It works at the prompt and inside a definition. Put a space after `(`: `(x` is not a comment.
+
+```forth
+1 ( the first ) 2 + .    \ expect: 3
+: SHOW 5 ( a note ) . ;
+SHOW                     \ expect: 5
+```
+
+**Notes.**
+
+* A comment does not go on to the next line.
+* The comment cannot contain a `)`. For a comment to the end of the line use `\`.
+* By custom a comment after a word's name gives its stack effect: `: SQ ( n -- n*n ) DUP * ;`.
+
+**See also** `\`.
+
+---
+
 ## *
 
 `( n1 n2 -- n3 )` -- **word**, arithmetic
@@ -122,6 +194,59 @@ Adds *n1* and *n2*. The sum wraps around if it does not fit in a cell.
 | fewer than two numbers on the stack | `STACK?`, after `+` or after the next word that takes a number |
 
 **See also** `-`, `1+`, `F+`, [Numbers](05_concepts.md#numbers).
+
+---
+
+## +LOOP
+
+`( step -- )` -- **compile-only word**, control
+
+Closes a `DO` loop like `LOOP`, but adds *step* to the index instead of 1. Counting up, the loop ends when the index reaches or passes the limit. Counting down (a negative *step*), it ends when the index goes below the limit, so the last pass has the index equal to the limit. At run time `+LOOP` takes *step* from the stack.
+
+```forth
+: UP 10 0 DO I . 3 +LOOP ;
+: DOWN 0 10 DO I . -4 +LOOP ;
+: ZERO 0 10 DO I . -5 +LOOP ;
+UP                       \ expect: 0 3 6 9
+DOWN                     \ expect: 10 6 2
+ZERO                     \ expect: 10 5 0
+```
+
+**Notes.**
+
+* The end is found when the sign of *index* minus *limit* changes, so a step larger than the distance to the limit simply ends the loop.
+* A step of 0 never ends the loop.
+* The body always runs once before the first test, as for `LOOP`.
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| typed at the prompt | `+LOOP ?` |
+
+**See also** `DO`, `LOOP`, `LEAVE`, `I`.
+
+---
+
+## ,
+
+`( x -- )` -- **word**, memory
+
+Compiles the cell *x* at `HERE` and moves `HERE` on by 2. The value is stored as it is, not as a literal. Use it after `CREATE` to fill a table.
+
+```forth
+CREATE TBL 10 , 20 , 30 ,
+TBL @ .                  \ expect: 10
+TBL 2 CELLS + @ .        \ expect: 30
+```
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| less than 2 bytes of room (see `FREE`) | `DICTIONARY FULL`, nothing is stored |
+
+**See also** `C,`, `ALLOT`, `HERE`, `CREATE`, [Memory](05_concepts.md#memory).
 
 ---
 
@@ -260,6 +385,62 @@ Copies the top two numbers, as a pair.
 
 ---
 
+## :
+
+`( "name" -- )` -- **defining word**, dictionary
+
+Starts a definition: reads *name* and makes it a new word, then compiles the words that follow instead of running them, until `;`. The name is known as soon as it is read, so a definition can call itself. Only the first 31 characters of a name count, and lower case is folded to upper.
+
+```forth
+: SQUARE DUP * ;
+5 SQUARE .               \ expect: 25
+: SUM DUP 0= IF EXIT THEN
+DUP 1- SUM + ;
+5 SUM .                  \ expect: 15
+: BAD 1 NOSUCH ;         \ expect: NOSUCH ?
+BAD                      \ expect: BAD ?
+```
+
+**Notes.**
+
+* A definition can run over several lines; the console goes on compiling until it meets `;`.
+* A line that ends in an error removes the definition it left open (the last two lines above): a word with half its code is never found.
+* A name already in use is not changed. Definitions made afterwards use the new word; those made before keep calling the old one.
+* A number can be a name (`: 7 ... ;`) and then takes the place of the number.
+* A word that calls itself without end stops with `RETURN STACK FULL` before the machine runs out of stack.
+* `:` inside a definition is not supported.
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| no name after `:` | `MISSING NAME` |
+| an unknown word in the definition | `NOSUCH ?` (the word's name); the definition is dropped |
+| no room | `DICTIONARY FULL` |
+
+**See also** `;`, `CREATE`, `FORGET`, `IMMEDIATE`, [Defining words](05_concepts.md#defining-words), [Compiling and interpreting](05_concepts.md#compiling-and-interpreting).
+
+---
+
+## ;
+
+`( -- )` -- **immediate word**, dictionary
+
+Ends the definition that `:` began: compiles a return, makes the word complete and goes back to running what you type. It is immediate, so it runs even while a definition is being compiled.
+
+```forth
+: TWICE DUP + ;
+4 TWICE .                \ expect: 8
+```
+
+**Notes.**
+
+* `;` typed with no definition open compiles one stray return byte at `HERE` and does nothing else.
+
+**See also** `:`, `EXIT`, `IMMEDIATE`.
+
+---
+
 ## <
 
 `( n1 n2 -- flag )` -- **word**, arithmetic
@@ -352,6 +533,50 @@ to use up and a copy for the code after it, but only when the number is not 0, s
 
 ---
 
+## @
+
+`( addr -- x )` -- **word**, memory
+
+Leaves the cell stored at *addr*: the byte at *addr* is the low half, the byte at *addr*+1 the high half. The cell is signed, so a stored 65535 is fetched as -1.
+
+```forth
+VARIABLE V
+99 V !
+V @ .                    \ expect: 99
+65535 V !  V @ .         \ expect: -1
+```
+
+**Notes.**
+
+* The address is not checked: any 16-bit number is read, the ROM included. To fetch one byte use `C@`.
+
+**See also** `!`, `C@`, `VARIABLE`, [Memory](05_concepts.md#memory).
+
+---
+
+## ABORT
+
+`( -- )` -- **word**, errors
+
+Gives up: empties both stacks, stops everything that is running, however deep, and returns to the prompt. Nothing after it on the line runs, and no `OK` is printed. Nothing is printed by `ABORT` itself; print your reason first.
+
+```forth
+1.5 42 ABORT 99 .
+FDEPTH .                 \ expect: 0
+DROP                     \ expect: STACK?
+```
+
+**Notes.**
+
+* The number stack and the float stack are both emptied; after `ABORT` both are empty, which `FDEPTH` and the `DROP` show.
+* `ABORT` goes past every `CATCH`: nothing can catch it. (Standard Forth defines `ABORT` as `-1 THROW`; here `-1 THROW` is a different thing, an ordinary throw that prints `ERROR -1` if nothing catches it.)
+* If a definition is open when it runs (inside `[` and `]`), the definition is dropped.
+* To stop but keep the stacks, use `QUIT`.
+
+**See also** `QUIT`, `THROW`, `CATCH`, [Errors](05_concepts.md#errors).
+
+---
+
 ## ABS
 
 `( n1 -- n2 )` -- **word**, arithmetic
@@ -364,6 +589,34 @@ Leaves the size of *n1* without its sign. `-32768` has no positive partner in a 
 ```
 
 **See also** `SGN`, `NEGATE`, `FABS`.
+
+---
+
+## ALLOT
+
+`( n -- )` -- **word**, memory
+
+Moves `HERE` by *n* bytes and writes nothing. A positive *n* reserves room, usually for the data field of a word just made with `CREATE`; a negative *n* gives room back. The reserved bytes are not cleared.
+
+```forth
+CREATE BUF 10 ALLOT
+HERE BUF - .             \ expect: 10
+-4 ALLOT
+HERE BUF - .             \ expect: 6
+```
+
+**Notes.**
+
+* The most you can reserve is `FREE` minus 256: the last 256 bytes are kept so that a definition in progress can finish.
+* A negative *n* is not checked. Taking back more than you reserved moves `HERE` into words already defined.
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| a positive *n* larger than `FREE` minus 256 | `DICTIONARY FULL`, `HERE` does not move |
+
+**See also** `HERE`, `FREE`, `CREATE`, `,`, [Memory](05_concepts.md#memory).
 
 ---
 
@@ -387,6 +640,263 @@ bit set) and a false flag is 0, `AND` also joins two flags.
 | fewer than two numbers on the stack | `STACK?`, after `AND` or after the next word that takes a number |
 
 **See also** `OR`, `XOR`, `INVERT`, [Flags](05_concepts.md#flags).
+
+---
+
+## ARRAY
+
+`( n "name" -- )` -- **defining word**, memory
+
+Defines *name* as an array of *n* cells, all 0. Executing *name* leaves the address of its first cell; the address of element *i*, counting from 0, is `i CELLS name +`. Nothing checks the index.
+
+```forth
+5 ARRAY NUMS
+99 3 CELLS NUMS + !
+3 CELLS NUMS + @ .       \ expect: 99
+0 CELLS NUMS + @ .       \ expect: 0
+```
+
+**Notes.**
+
+* The array takes 2*n* bytes, after the word's header and code.
+* A negative *n*, or one too large to fit, is `DICTIONARY FULL`.
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| no name after `ARRAY` | `MISSING NAME` |
+| not enough room for the elements | `DICTIONARY FULL`, nothing is defined |
+| an index outside 0 to *n*-1 | nothing: it reads or overwrites the memory beside the array |
+
+**See also** `CELLS`, `VARIABLE`, `STRING`, [Memory](05_concepts.md#memory).
+
+---
+
+## BEGIN
+
+`( -- )` -- **compile-only word**, control
+
+Marks the start of a loop that `UNTIL` or `REPEAT` closes. It compiles nothing and does nothing when the loop runs.
+
+```forth
+: COUNTDOWN 3 BEGIN DUP .
+1- DUP 0= UNTIL DROP ;
+COUNTDOWN                \ expect: 3 2 1
+```
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| typed at the prompt | `BEGIN ?` |
+| no `UNTIL` or `REPEAT` to close it | nothing is noticed; see `IF` |
+
+**See also** `UNTIL`, `WHILE`, `REPEAT`, [Compiling and interpreting](05_concepts.md#compiling-and-interpreting).
+
+---
+
+## C!
+
+`( c addr -- )` -- **word**, memory
+
+Stores the low byte of *c* at *addr*. The high byte of *c* is dropped.
+
+```forth
+VARIABLE V
+-1 V !
+0 V C!
+V @ .                    \ expect: -256
+300 V C!  V C@ .         \ expect: 44
+```
+
+**Notes.**
+
+* `-1 V !` sets both bytes to 255; `0 V C!` clears the low one, which leaves 65280, printed as -256. 300 is 256 + 44, so only 44 is stored.
+* A store into the ROM is ignored.
+
+**See also** `C@`, `C,`, `!`, [Memory](05_concepts.md#memory).
+
+---
+
+## C,
+
+`( c -- )` -- **word**, memory
+
+Compiles the low byte of *c* at `HERE` and moves `HERE` on by 1.
+
+```forth
+CREATE B 3 C, 4 C, 5 C,
+B C@ .                   \ expect: 3
+B 2 + C@ .               \ expect: 5
+```
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| no room (see `FREE`) | `DICTIONARY FULL`, nothing is stored |
+
+**See also** `,`, `C!`, `ALLOT`, [Memory](05_concepts.md#memory).
+
+---
+
+## C@
+
+`( addr -- c )` -- **word**, memory
+
+Leaves the byte at *addr*, 0 to 255. It is never negative.
+
+```forth
+VARIABLE V
+200 V C!
+V C@ .                   \ expect: 200
+```
+
+**Notes.**
+
+* The address is not checked.
+
+**See also** `C!`, `@`, [Memory](05_concepts.md#memory).
+
+---
+
+## CATCH
+
+`( xt -- 0 | n )` -- **word**, errors
+
+Runs the word whose execution token is *xt*. If it finishes, `CATCH` leaves what it left and then 0. If a `THROW` happens inside it, however deep, the stacks go back to the depth they had when `CATCH` began (less *xt*) and `CATCH` leaves the thrown number *n*. Nothing in between runs.
+
+```forth
+: SAFE 5 3 + ;
+: RISKY 42 THROW ;
+' SAFE CATCH . .         \ expect: 0 8
+' RISKY CATCH .          \ expect: 42
+1 2 ' RISKY CATCH . . .  \ expect: 42 2 1
+```
+
+**Notes.**
+
+* `CATCH` catches only a `THROW`: the ones you write, `BREAK` (-28), and those the ROM raises itself, such as `DICTIONARY FULL` and `UNDEFINED WORD`. It cannot catch `STACK?`, which is found after the word has finished, nor `ABORT` and `QUIT`.
+* `CATCH` can be nested 8 deep. A ninth `CATCH` runs its word without a net: a `THROW` inside goes to the next one out.
+* After a caught throw the line goes on. Use `0=` or `IF` on the result.
+* *xt* comes from `'` or `[']`. Inside a definition write `['] WORD CATCH`; `' WORD` there would look for the name in the line when it runs.
+* The float stack is restored as well as the number stack.
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| a word that recurses too deep inside `CATCH` | `RETURN STACK FULL`, which `CATCH` catches as -5 |
+
+**See also** `THROW`, `'`, `[']`, `ABORT`, [Errors](05_concepts.md#errors), [BREAK](05_concepts.md#break).
+
+---
+
+## CELLS
+
+`( n1 -- n2 )` -- **word**, memory
+
+Leaves *n2*, twice *n1*: the number of bytes in *n1* cells. Use it to turn an element number into an offset: `3 CELLS ARR +` is the address of element 3.
+
+```forth
+3 CELLS .                \ expect: 6
+40000 CELLS .            \ expect: 14464
+```
+
+**Notes.**
+
+* It is a multiplication by 2 and wraps like any other: 80,000 does not fit in 16 bits, and 14,464 is what is left.
+
+**See also** `ARRAY`, `!`, `@`, [Memory](05_concepts.md#memory).
+
+---
+
+## CHAR
+
+`( "name" -- c )` -- **word**, strings
+
+Reads the next word from the line and leaves the code of its first character, exactly as typed: `CHAR a` is 97 and `CHAR A` is 65.
+
+```forth
+CHAR A .                 \ expect: 65
+CHAR a .                 \ expect: 97
+CHAR hello .             \ expect: 104
+```
+
+**Notes.**
+
+* Inside a definition `CHAR` is compiled like any word and reads its character each time the definition runs, from whatever is typed then. To fix the character while compiling, use `[CHAR]`.
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| nothing after `CHAR` on the line | `MISSING NAME` |
+
+**See also** `[CHAR]`, `CHR`, `CODE`, [Characters and keys](05_concepts.md#characters-and-keys).
+
+---
+
+## CHR
+
+`( c -- addr len )` -- **word**, strings
+
+Makes a string of one character, the low byte of *c*, and leaves its address and length (always 1). The character is kept in a single buffer that every `CHR` uses, so the string lasts only until the next `CHR`.
+
+```forth
+65 CHR TYPE              \ expect: A
+321 CHR TYPE             \ expect: A
+```
+
+**Notes.**
+
+* Only the low byte counts: 321 is 256 + 65.
+* This is BASIC's `CHR$`. To build a longer string, copy the character with `PLACE` before the next `CHR`.
+
+**See also** `CODE`, `STR`, `CHAR`, [Strings](05_concepts.md#strings).
+
+---
+
+## CODE
+
+`( addr len -- c )` -- **word**, strings
+
+Leaves the code of the first character of the string. It is `DROP C@`: the length is not looked at, so for an empty string it is the byte at *addr*.
+
+```forth
+S" A" CODE .             \ expect: 65
+S" ABC" CODE .           \ expect: 65
+```
+
+**Notes.**
+
+* This is BASIC's `CODE`. Test the length first if the string may be empty.
+
+**See also** `CHR`, `CHAR`, `C@`, [Strings](05_concepts.md#strings).
+
+---
+
+## CONSTANT
+
+`( x "name" -- )` -- **defining word**, memory
+
+Defines *name* as a word that leaves *x*. The value is fixed when *name* is made; to keep a number that changes use `VARIABLE`.
+
+```forth
+100 CONSTANT LIMIT
+LIMIT .                  \ expect: 100
+LIMIT 1+ .               \ expect: 101
+```
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| no name after `CONSTANT` | `MISSING NAME` |
+| no room | `DICTIONARY FULL` |
+
+**See also** `VARIABLE`, `ARRAY`, `FCONSTANT`, [Defining words](05_concepts.md#defining-words).
 
 ---
 
@@ -417,6 +927,51 @@ Leaves the cosine of the angle *f1*, given in radians. It is accurate to about 9
 
 ---
 
+## COUNT
+
+`( caddr -- addr len )` -- **word**, strings
+
+Turns a counted string into an address and a length. A counted string is a length byte followed by the characters, as `STRING` makes and `PLACE` fills; *caddr* is the address of the length byte. *addr* is *caddr*+1 and *len* is the length byte.
+
+```forth
+10 STRING NAME
+S" ADA" NAME PLACE
+NAME COUNT TYPE          \ expect: ADA
+NAME COUNT . DROP        \ expect: 3
+```
+
+**See also** `STRING`, `PLACE`, `LEN`, [Strings](05_concepts.md#strings).
+
+---
+
+## CREATE
+
+`( "name" -- )` -- **defining word**, dictionary
+
+Defines *name* as a word that leaves the address of its data field, the first byte after the word, which is where `HERE` stands just after `CREATE`. It reserves nothing: follow it with `,` `C,` or `ALLOT` to fill or reserve the data. With `DOES>` a defining word can give its words behaviour of their own.
+
+```forth
+CREATE PRIMES 2 , 3 , 5 , 7 ,
+PRIMES 2 CELLS + @ .     \ expect: 5
+CREATE FLAGS 8 ALLOT
+HERE FLAGS - .           \ expect: 8
+```
+
+**Notes.**
+
+* `VARIABLE`, `ARRAY` and `STRING` are `CREATE` and a reservation in one word, and zero what they reserve. `CREATE` does not.
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| no name after `CREATE` | `MISSING NAME` |
+| no room | `DICTIONARY FULL` |
+
+**See also** `DOES>`, `,`, `ALLOT`, `HERE`, [Defining words](05_concepts.md#defining-words).
+
+---
+
 ## DEG
 
 `( F: f1 -- f2 )` -- **word**, float
@@ -429,6 +984,63 @@ PI 2.0 F/ DEG F.         \ expect: 90.0000
 ```
 
 **See also** `RAD`, `PI`.
+
+---
+
+## DO
+
+`( limit start -- )` -- **compile-only word**, control
+
+Starts a counted loop that `LOOP` or `+LOOP` closes. When the loop runs, `DO` takes *limit* and *start* from the stack; the body runs with the index at *start*, then *start*+1, and so on, until the index reaches *limit*. `I` gives the index.
+
+```forth
+: FIVE 5 0 DO I . LOOP ;
+FIVE                     \ expect: 0 1 2 3 4
+: ONCE 3 3 DO I . LEAVE LOOP ;
+ONCE                     \ expect: 3
+```
+
+**Notes.**
+
+* The body always runs at least once: *start* is not compared with *limit* first. When they are equal the body runs 65,536 times, the index going all the way round before it meets the limit again, and a *start* above *limit* counts up through 65,535 to 0 and on to the limit. Check before `DO`, or end the loop with `LEAVE`.
+* The index and limit are kept on the machine stack, below anything the body calls. Inside the body `I` and `J` read them; a word called from the body cannot see them.
+* Loops can be nested 8 deep in one definition (the table `LEAVE` uses has 8 slots). A deeper nesting is not checked.
+* Standard Forth has `?DO`, which skips the loop when *start* equals *limit*. This Forth does not.
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| typed at the prompt | `DO ?` |
+| no `LOOP` to close it | nothing is noticed; see `IF` |
+
+**See also** `LOOP`, `+LOOP`, `LEAVE`, `I`, `J`, `EXIT`.
+
+---
+
+## DOES>
+
+`( -- )` -- **word**, dictionary
+
+Used in a defining word, after `CREATE`. When the defining word runs, `DOES>` changes the word `CREATE` just made, so that when *it* runs it first leaves its data-field address and then runs the words that follow `DOES>`. `DOES>` also ends the defining word's own run there: the words after it belong to the new words only.
+
+```forth
+: CONST CREATE , DOES> @ ;
+5 CONST FIVE
+FIVE .                   \ expect: 5
+: TABLE CREATE 10 , 20 , 30 ,
+DOES> SWAP CELLS + @ ;
+TABLE NUMS
+1 NUMS .                 \ expect: 20
+```
+
+**Notes.**
+
+* `DOES>` changes the newest word in the dictionary, so use it right after `CREATE`, with no other definition between.
+* The words after `DOES>` start with the data-field address on the stack, under whatever the caller pushed: in `TABLE`, `1 NUMS` is `1 addr`.
+* There is no `;CODE` or other way to give the new words machine code.
+
+**See also** `CREATE`, `:`, `IMMEDIATE`, [Defining words](05_concepts.md#defining-words).
 
 ---
 
@@ -470,6 +1082,128 @@ Copies the top number, so that the stack holds it twice.
 | the stack is empty | nothing is reported: `DUP` copies the cell beneath the bottom of the stack and leaves one meaningless number |
 
 **See also** `?DUP`, `2DUP`, `OVER`, `PICK`.
+
+---
+
+## EDIT
+
+`( "name" -- )` -- **EXROM word**, dictionary
+
+Opens the full-screen editor on the line store, the lines you have typed. `EDIT name` puts the cursor on the newest line in which `:` is followed directly by *name*; a bare `EDIT` opens a new empty line at the end. BREAK (CAPS SHIFT + SPACE) leaves the editor, clears the screen and runs the lines you changed or added, in order.
+
+```forth
+: SQ DUP + ;
+\ keys: \x04\x04\x04\x04\x04\x04\x04\x04\x04\x04\x08*\x10
+EDIT SQ
+5 SQ .                   \ expect: 25
+```
+
+The `\ keys:` line stands for the keys pressed in the editor: RIGHT ten times, to just after the `+`; DELETE, to remove it; `*`; then BREAK. (The test writes keys as `\xNN` codes: `\x04` is RIGHT, `\x08` DELETE, `\x10` BREAK.) The line becomes `: SQ DUP * ;`, runs on leaving, and defines `SQ` again.
+
+**Keys.**
+
+| Key | What it does |
+|---|---|
+| characters, LEFT, RIGHT | edit the cursor line, as at the prompt |
+| UP, DOWN | to the previous or next row of a wrapped line, then to the previous or next line, at the same column |
+| DELETE | deletes the character left of the cursor; at column 0 of an empty line, deletes the line |
+| ENTER | keeps the line and opens a new empty line after it; nothing runs yet |
+| CAPS SHIFT + 1 | deletes the cursor line |
+| CAPS SHIFT + ENTER | inserts an empty line above the cursor line |
+| BREAK | leaves the editor |
+
+**Notes.**
+
+* The editor shows the store 32 columns wide: rows 0 to 22 hold the lines, each wrapped as at the prompt, and row 23 shows `LINE n/m`, the cursor line and the number of lines.
+* Only lines you changed or added in the visit run. If one raises an error the message is printed after `LINE n`, and the changed lines after it do not run.
+* A line is at most 128 characters and 4 rows. The store holds 8,192 characters: a change that would overflow it is refused and `STORE FULL` shows on row 23 until the next key.
+* The `EDIT` line itself is not kept in the store.
+* Editing a definition defines the word again; it does not remove the old one (see `FORGET`).
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| no line with `:` and that name | `name ?`, as for an unknown word |
+| a line in the store has more than 128 characters or needs more than 4 rows | `LONG LINE`, the editor does not open |
+| no graphics EXROM fitted | `NO EXROM` |
+
+**See also** `LIST-DEFS`, `FORGET`, [The editor and the line store](05_concepts.md#the-editor-and-the-line-store).
+
+---
+
+## ELSE
+
+`( -- )` -- **compile-only word**, control
+
+Used between `IF` and `THEN`. The words before it run if the flag given to `IF` was true; the words after it run if it was false. At run time, `ELSE` jumps over the words that follow it, to `THEN`.
+
+```forth
+: SIGN? 0 < IF 1 ELSE 2
+THEN . ;
+-5 SIGN?                 \ expect: 1
+5 SIGN?                  \ expect: 2
+```
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| typed at the prompt | `ELSE ?` |
+| no `IF` before it, or no `THEN` after | nothing is noticed; see `IF` |
+
+**See also** `IF`, `THEN`.
+
+---
+
+## EXECUTE
+
+`( xt -- )` -- **word**, control
+
+Runs the word whose execution token *xt* is on the stack. `'` and `[']` give an *xt*. `EXECUTE` is the same as naming the word, except that the word is chosen while the program runs.
+
+```forth
+: SQ DUP * ;
+5 ' SQ EXECUTE .         \ expect: 25
+3 4 ' + EXECUTE .        \ expect: 7
+```
+
+**Notes.**
+
+* *xt* is not checked. A number that is not the code address of a word runs whatever is at that address, and that can crash the machine.
+* Recursion through `EXECUTE` is guarded: a word that keeps executing itself ends with `RETURN STACK FULL`.
+
+**See also** `'`, `[']`, `CATCH`.
+
+---
+
+## EXIT
+
+`( -- )` -- **compile-only word**, control
+
+Leaves the definition at once: the rest of the word after `EXIT` is not run, and control returns to the caller. It compiles a return in place. Inside a `DO` loop the loop is discarded properly, so `EXIT` is safe there.
+
+```forth
+: FIRST5 10 0 DO I 5 = IF
+I EXIT THEN LOOP -1 ;
+FIRST5 .                 \ expect: 5
+: SUM DUP 0= IF EXIT THEN
+DUP 1- SUM + ;
+5 SUM .                  \ expect: 15
+```
+
+**Notes.**
+
+* `EXIT` does not end the definition; the `;` still has to come.
+* Unlike `LEAVE`, it leaves the whole word, not just the loop.
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| typed at the prompt | `EXIT ?` |
+
+**See also** `LEAVE`, `;`.
 
 ---
 
@@ -986,6 +1720,41 @@ Changes the sign of the decimal *f1*. Zero stays zero.
 
 ---
 
+## FORGET
+
+`( "name" -- )` -- **word**, dictionary
+
+Removes the word *name* and every word defined after it, and gives their memory back: `HERE` goes back to where *name* began. Words defined before it are untouched.
+
+```forth
+: A 1 ;  : B 2 ;  : C 3 ;
+FORGET B
+A .                      \ expect: 1
+B                        \ expect: B ?
+C                        \ expect: C ?
+FORGET DUP               \ expect: FORGET: BUILT-IN, REFUSED
+FORGET NOSUCH            \ expect: FORGET: NOT FOUND
+```
+
+**Notes.**
+
+* The words of the ROM cannot be forgotten.
+* The two messages are printed, not thrown: they are not errors, and the rest of the line goes on.
+* The line store is not changed, so `LIST-DEFS` still lists the lines of forgotten words.
+* Addresses you kept from the forgotten words (an *xt* from `'`, the address of a variable) point at memory that new definitions will reuse.
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| no name after `FORGET` | `MISSING NAME` |
+| *name* is not in the dictionary | `FORGET: NOT FOUND` |
+| *name* is a ROM word | `FORGET: BUILT-IN, REFUSED` |
+
+**See also** `:`, `FREE`, `HERE`, [The dictionary](05_concepts.md#the-dictionary).
+
+---
+
 ## FOVER
 
 `( F: f1 f2 -- f1 f2 f1 )` -- **word**, float
@@ -997,6 +1766,25 @@ Copies the second decimal from the top onto the top.
 ```
 
 **See also** `FDUP`, `FSWAP`, `OVER`.
+
+---
+
+## FREE
+
+`( -- n )` -- **word**, memory
+
+Leaves the number of bytes between `HERE` and the top of the dictionary (address 53,248). It shrinks as you define words and use `,` `C,` and `ALLOT`.
+
+```forth
+FREE 100 ALLOT FREE - .  \ expect: 100
+```
+
+**Notes.**
+
+* The last 256 bytes are kept so that a definition in progress can finish: a definition, `,`, `C,` or `ALLOT` that would reach them stops with `DICTIONARY FULL`. The most you can reserve with `ALLOT` is `FREE` minus 256.
+* The line store (where `EDIT` keeps your typed lines) is above the dictionary and not counted.
+
+**See also** `HERE`, `ALLOT`, [The dictionary](05_concepts.md#the-dictionary), [Memory](05_concepts.md#memory).
 
 ---
 
@@ -1122,6 +1910,102 @@ TOTAL F@ F.              \ expect: 3.7500
 
 ---
 
+## HERE
+
+`( -- addr )` -- **word**, memory
+
+Leaves the address of the next free byte of the dictionary. Every new word, and every `,` `C,` and `ALLOT`, moves it up.
+
+```forth
+HERE 2 ALLOT HERE SWAP - .  \ expect: 2
+CREATE PT 7 ,
+HERE PT - .                 \ expect: 2
+```
+
+**Notes.**
+
+* `HERE` is the address a `CREATE`d word gives, until you reserve something after it.
+
+**See also** `ALLOT`, `,`, `FREE`, `CREATE`, [The dictionary](05_concepts.md#the-dictionary).
+
+---
+
+## I
+
+`( -- n )` -- **word**, control
+
+Leaves the index of the innermost `DO` loop.
+
+```forth
+: THREE 3 0 DO I . LOOP ;
+THREE                    \ expect: 0 1 2
+: FROM2 4 2 DO I . LOOP ;
+FROM2                    \ expect: 2 3
+```
+
+**Notes.**
+
+* `I` reads the loop's values from the machine stack right under its own return address, so it works only in the word that holds the `DO`. In a word called from the loop body it gives a meaningless number.
+* Outside any loop `I` also gives a meaningless number, and no error.
+
+**See also** `J`, `DO`, `LOOP`.
+
+---
+
+## IF
+
+`( flag -- )` -- **compile-only word**, control
+
+Takes a flag. If it is not 0, the words up to `ELSE` or `THEN` run; if it is 0 they are skipped (and the words after `ELSE` run instead). Any number but 0 counts as true.
+
+```forth
+: TEST IF 1 ELSE 2 THEN . ;
+5 TEST                   \ expect: 1
+0 TEST                   \ expect: 2
+: AFTER IF 11 . THEN 12 . ;
+0 AFTER                  \ expect: 12
+-1 AFTER                 \ expect: 11 12
+```
+
+**Notes.**
+
+* `IF` structures can be nested.
+* Control words are not checked against each other. An `IF` with no `THEN`, a `THEN` with no `IF`, or a `BEGIN` closed by a `THEN` is compiled without complaint and does something strange when it runs.
+* A flag from `=` `<` `>` `0=` is -1 or 0; any other number works as well.
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| typed at the prompt | `IF ?`, and nothing is compiled |
+| no flag on the stack | `STACK?`, after the word or after the next word that takes a number |
+
+**See also** `ELSE`, `THEN`, `0=`, [Flags](05_concepts.md#flags).
+
+---
+
+## IMMEDIATE
+
+`( -- )` -- **word**, dictionary
+
+Marks the newest word immediate: from now on it runs at once even inside a definition, instead of being compiled. Put it straight after the `;` of the definition.
+
+```forth
+: HI ." hi " ; IMMEDIATE
+: T HI ." there" ;       \ expect: hi
+T                        \ expect: there
+```
+
+**Notes.**
+
+* `HI` printed while `T` was compiled, not when `T` runs. `T` itself holds only `there`.
+* Typed inside a definition, `IMMEDIATE` is compiled, not run; use it after the `;`.
+* The words `IF`, `DO`, `;` and others of the language are immediate or compile-only in this way. `[']` and `[CHAR]` are too.
+
+**See also** `:`, `;`, `[`, [Compiling and interpreting](05_concepts.md#compiling-and-interpreting).
+
+---
+
 ## INVERT
 
 `( n1 -- n2 )` -- **word**, arithmetic
@@ -1139,6 +2023,184 @@ Flips every one of the 16 bits of *n1*. The result is -*n1* - 1.
   -2, which is not a flag.
 
 **See also** `0=`, `AND`, `NEGATE`.
+
+---
+
+## J
+
+`( -- n )` -- **word**, control
+
+Leaves the index of the loop around the innermost one: in a `DO` loop inside another, `I` is the inner index and `J` the outer.
+
+```forth
+: GRID 2 0 DO 2 0 DO
+J . I . LOOP LOOP ;
+GRID                     \ expect: 0 0 0 1 1 0 1 1
+```
+
+**Notes.**
+
+* Outside two nested loops `J` gives a meaningless number, with no error. Like `I`, it works only in the word that holds the loops.
+
+**See also** `I`, `DO`, `LOOP`.
+
+---
+
+## LEAVE
+
+`( -- )` -- **compile-only word**, control
+
+Ends the innermost `DO` loop at once: the words between `LEAVE` and `LOOP` are skipped, and the program carries on after `LOOP`. A loop can hold any number of `LEAVE`s, usually inside an `IF`.
+
+```forth
+: UPTO3 10 0 DO I 3 =
+IF LEAVE THEN I . LOOP 99 . ;
+UPTO3                    \ expect: 0 1 2 99
+```
+
+**Notes.**
+
+* Only the innermost loop ends. In a loop inside a loop, the outer one goes on.
+* `LEAVE` belongs inside a `DO` loop; its use anywhere else is not checked.
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| typed at the prompt | `LEAVE ?` |
+
+**See also** `DO`, `LOOP`, `EXIT`.
+
+---
+
+## LEFT
+
+`( addr len n -- addr len2 )` -- **word**, strings
+
+Leaves the first *n* characters of the string: the same address, and *len2* the smaller of *n* and *len*. Nothing is copied. If *n* is *len* or more, or more than 255, or negative, the string is left whole.
+
+```forth
+: HAY S" HELLO WORLD" ;
+HAY 5 LEFT TYPE          \ expect: HELLO
+HAY 99 LEFT TYPE         \ expect: HELLO WORLD
+HAY 0 LEFT . DROP        \ expect: 0
+```
+
+**Notes.**
+
+* This is BASIC's `LEFT$`. The result is a view of the same memory, so changing it (with `UPPER`, say) changes the original.
+
+**See also** `RIGHT`, `SEARCH`, [Strings](05_concepts.md#strings).
+
+---
+
+## LEN
+
+`( caddr -- n )` -- **word**, strings
+
+Leaves the length byte of a counted string, the kind `STRING` makes: *n* is how many characters it holds now.
+
+```forth
+10 STRING NAME
+NAME LEN .               \ expect: 0
+S" ADA" NAME PLACE
+NAME LEN .               \ expect: 3
+```
+
+**Notes.**
+
+* Unlike BASIC's `LEN`, this takes the address of a counted string, not an address and a length. For the pair that `S"` or `STR` leaves, the length is already on top: `DUP .` or `SWAP DROP`.
+
+**See also** `COUNT`, `STRING`, `PLACE`, [Strings](05_concepts.md#strings).
+
+---
+
+## LIST-DEFS
+
+`( -- )` -- **word**, dictionary
+
+Lists the colon definitions in the line store, oldest first, each on its own row: its number from 0, then `:` and the first 20 characters of its source. It lists only the first 16.
+
+```forth
+: AA DUP + ;
+: BB DUP - ;
+: LONG-ONE 1 2 3 4 5 + + + + ;
+LIST-DEFS                \ expect: 0: : AA DUP + ;|1: : BB DUP - ;|2: : LONG-ONE 1 2 3 4 5
+```
+
+**Notes.**
+
+* The store holds each line you entered (or loaded with `LOAD-TEXT`), including those that failed. A definition is found from its `:` to the `;`; a `;` inside a string, a `(` comment or after a `\` does not end it.
+* Redefine a word with `EDIT` and the line is replaced in the store; redefine it by typing and both lines are listed.
+
+**See also** `EDIT`, `FORGET`, [The editor and the line store](05_concepts.md#the-editor-and-the-line-store).
+
+---
+
+## LITERAL
+
+`( n -- )` -- **compile-only word**, dictionary
+
+Used inside a definition, with `[` and `]`: compiles *n* as a number in the definition, so that when the definition runs it leaves *n*. It is how a value worked out while compiling goes into the definition.
+
+```forth
+: SEVEN [ 3 4 + ] LITERAL ;
+SEVEN .                  \ expect: 7
+5 LITERAL                \ expect: LITERAL ?
+```
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| typed at the prompt | `LITERAL ?` |
+
+**See also** `[`, `]`, `[']`, `[CHAR]`, [Compiling and interpreting](05_concepts.md#compiling-and-interpreting).
+
+---
+
+## LOOP
+
+`( -- )` -- **compile-only word**, control
+
+Closes a `DO` loop. At run time it adds 1 to the index; if the index has not reached the limit, the program goes back to the first word after `DO`, otherwise it carries on after `LOOP`.
+
+```forth
+: ROW 4 1 DO I . LOOP ;
+ROW                      \ expect: 1 2 3
+```
+
+**Notes.**
+
+* The index runs from *start* to *limit* minus 1. To count in other steps use `+LOOP`.
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| typed at the prompt | `LOOP ?` |
+
+**See also** `DO`, `+LOOP`, `LEAVE`, `I`.
+
+---
+
+## LOWER
+
+`( addr len -- addr len )` -- **word**, strings
+
+Changes the letters A to Z of the string to a to z, in place, and leaves the string. Other characters are unchanged.
+
+```forth
+: GREETING S" Hello, World" ;
+GREETING LOWER TYPE      \ expect: hello, world
+```
+
+**Notes.**
+
+* The string must be in RAM; a string in the ROM is not changed and no error is shown.
+* This is BASIC's `LOWER$`, except that it works on the string itself instead of making a copy. A string from `S"` inside a definition is changed for good.
+
+**See also** `UPPER`, [Strings](05_concepts.md#strings).
 
 ---
 
@@ -1310,6 +2372,28 @@ Copies the *u*-th number down the stack to the top, counting the top number (jus
 
 ---
 
+## PLACE
+
+`( addr len dest -- )` -- **word**, strings
+
+Copies the *len* characters at *addr* into the counted string *dest* and sets its length byte to *len*. *dest* is usually a `STRING` buffer.
+
+```forth
+10 STRING NAME
+S" HELLO" NAME PLACE
+NAME COUNT TYPE          \ expect: HELLO
+S" HI" NAME PLACE
+NAME COUNT TYPE          \ expect: HI
+```
+
+**Notes.**
+
+* Nothing checks that *dest* is big enough. `PLACE` of more than *n* characters into an *n*-character `STRING` overwrites the memory that follows it. *len* is one byte: only its low 8 bits count.
+
+**See also** `STRING`, `COUNT`, `S"`, [Strings](05_concepts.md#strings).
+
+---
+
 ## PLACES
 
 `( n -- )` -- **word**, float
@@ -1338,6 +2422,26 @@ PI F.                    \ expect: 3.1416
 | *n* is below 0 or above 9 | `OUT OF RANGE`, and the setting is as it was |
 
 **See also** `F.`, `FS.`.
+
+---
+
+## QUIT
+
+`( -- )` -- **word**, errors
+
+Gives up like `ABORT` but keeps the stacks as they are: stops everything that is running, however deep, and returns to the prompt. Nothing after it on the line runs, and no `OK` is printed.
+
+```forth
+5 QUIT 6 .
+.                        \ expect: 5
+```
+
+**Notes.**
+
+* Like `ABORT` it goes past every `CATCH`.
+* If a definition is open when it runs, the definition is dropped.
+
+**See also** `ABORT`, `THROW`, `CATCH`, [Errors](05_concepts.md#errors).
 
 ---
 
@@ -1385,6 +2489,49 @@ fixed start: the next `RND` takes one from the processor's refresh counter, whic
 
 ---
 
+## REPEAT
+
+`( -- )` -- **compile-only word**, control
+
+Closes a `BEGIN ... WHILE ... REPEAT` loop: at run time it jumps back to `BEGIN`. The loop ends when `WHILE` finds a 0 flag.
+
+```forth
+: SMALLER 0 BEGIN DUP 3 <
+WHILE DUP . 1+ REPEAT DROP ;
+SMALLER                  \ expect: 0 1 2
+```
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| typed at the prompt | `REPEAT ?` |
+
+**See also** `BEGIN`, `WHILE`, `UNTIL`.
+
+---
+
+## RIGHT
+
+`( addr len n -- addr2 len2 )` -- **word**, strings
+
+Leaves the last *n* characters of the string: *len2* the smaller of *n* and *len*, and *addr2* the address of the first of them. Nothing is copied. If *n* is *len* or more, or more than 255, or negative, the string is left whole.
+
+```forth
+: HAY S" HELLO WORLD" ;
+HAY 5 RIGHT TYPE         \ expect: WORLD
+HAY 99 RIGHT TYPE        \ expect: HELLO WORLD
+HAY 0 RIGHT . DROP       \ expect: 0
+```
+
+**Notes.**
+
+* This is BASIC's `RIGHT$`. The result is a view of the same memory.
+
+**See also** `LEFT`, `SEARCH`, [Strings](05_concepts.md#strings).
+
+---
+
 ## RND
 
 `( n1 -- n2 )` -- **word**, arithmetic
@@ -1427,6 +2574,29 @@ Moves the third number from the top to the top.
 
 ---
 
+## S"
+
+`( -- addr len )` -- **immediate word**, strings
+
+Reads text up to the next `"` and makes it a string. Inside a definition it compiles the text into the definition, and when the definition runs it leaves the address and length of that text. At the prompt it leaves the address and length at once. Write one space after `S"`; the text starts at the next character and is kept as typed, upper and lower case alike.
+
+```forth
+: HI S" Hello" TYPE ;
+HI                       \ expect: Hello
+S" abc" . DROP           \ expect: 3
+```
+
+**Notes.**
+
+* At the prompt the text is not kept anywhere safe: it sits in free dictionary space above `HERE`, and the next definition, `,` or `S"` overwrites it. Two `S"` on one line therefore overwrite each other; put the second in a definition. A string inside a definition is part of it and stays.
+* The length is kept in one byte, so a string of more than 255 characters is not supported.
+* A line with no closing `"` takes the rest of the line as the text; there is no error.
+* The address and length are not a counted string. To keep the text, copy it with `PLACE`.
+
+**See also** `TYPE`, `PLACE`, `COUNT`, `STRING`, [Strings](05_concepts.md#strings).
+
+---
+
 ## S>F
 
 `( n -- ) ( F: -- f )` -- **word**, float
@@ -1451,6 +2621,32 @@ Turns the whole number *n* into the same value as a decimal. It is exact. The de
 | the data stack is empty | `STACK?` |
 
 **See also** `F>S`, [Floating point](05_concepts.md#floating-point).
+
+---
+
+## SEARCH
+
+`( addr1 len1 addr2 len2 -- addr3 len3 flag )` -- **word**, strings
+
+Looks for the second string in the first. If it is found, *addr3 len3* is the rest of the first string from the match on, and *flag* is true (-1). If not, *addr3 len3* is the first string unchanged and *flag* is false (0). An empty second string is never found.
+
+```forth
+: HAY S" HELLO WORLD" ;
+: W S" WORLD" ;
+: LO S" LO" ;
+: NO S" XYZ" ;
+HAY W SEARCH . TYPE      \ expect: -1 WORLD
+HAY LO SEARCH . TYPE     \ expect: -1 LO WORLD
+HAY NO SEARCH . TYPE     \ expect: 0 HELLO WORLD
+```
+
+**Notes.**
+
+* This is BASIC's `INSTR`, with the answer as the rest of the string instead of a position. To get the position, subtract: the match starts `addr3 addr1 -` characters in (take the addresses before dropping the pair).
+* The first match is found. A second string longer than the first is simply not found.
+* Put each `S"` in a definition, as above: two `S"` typed on one line at the prompt overwrite each other.
+
+**See also** `LEFT`, `RIGHT`, `S"`, [Strings](05_concepts.md#strings).
 
 ---
 
@@ -1523,6 +2719,55 @@ negative *n1* gives 0, with no error.
 
 ---
 
+## STR
+
+`( n -- addr len )` -- **word**, strings
+
+Makes the decimal text of *n*, as `.` would print it but without the trailing space, and leaves its address and length. A negative number starts with `-`; the longest is `-32768`, six characters. The text is kept in one buffer that every `STR` uses, so it lasts only until the next `STR`.
+
+```forth
+-42 STR TYPE             \ expect: -42
+1234 STR . DROP          \ expect: 4
+0 STR TYPE               \ expect: 0
+```
+
+**Notes.**
+
+* This is BASIC's `STR$`. To keep the text, copy it with `PLACE`.
+
+**See also** `VAL`, `CHR`, `.`, [Strings](05_concepts.md#strings).
+
+---
+
+## STRING
+
+`( n "name" -- )` -- **defining word**, strings
+
+Defines *name* as a counted-string buffer that can hold up to *n* characters, empty to start with. Executing *name* leaves its address. The buffer is a length byte followed by *n* bytes, so it takes *n*+1 bytes. Fill it with `PLACE`; read it with `COUNT` or `LEN`.
+
+```forth
+10 STRING NAME
+NAME LEN .               \ expect: 0
+S" ADA" NAME PLACE
+NAME COUNT TYPE          \ expect: ADA
+```
+
+**Notes.**
+
+* The length byte holds 0 to 255, so *n* above 255 makes a buffer that `PLACE` and `LEN` cannot fill or read fully.
+* The size is not checked later: see `PLACE`.
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| no name after `STRING` | `MISSING NAME` |
+| no room | `DICTIONARY FULL` |
+
+**See also** `PLACE`, `COUNT`, `LEN`, `VARIABLE`, [Strings](05_concepts.md#strings).
+
+---
+
 ## SWAP
 
 `( x1 x2 -- x2 x1 )` -- **word**, stack
@@ -1574,6 +2819,194 @@ PI 2.0 F/ TAN            \ expect: DIVISION BY ZERO
 
 ---
 
+## THEN
+
+`( -- )` -- **compile-only word**, control
+
+Ends an `IF` (or `IF ... ELSE`): the program carries on here, whichever way the flag went. It compiles nothing; it only settles where `IF` and `ELSE` jump to.
+
+```forth
+: AFTER IF 11 . THEN 12 . ;
+0 AFTER                  \ expect: 12
+7 AFTER                  \ expect: 11 12
+```
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| typed at the prompt | `THEN ?` |
+| no `IF` before it | nothing is noticed; see `IF` |
+
+**See also** `IF`, `ELSE`.
+
+---
+
+## THROW
+
+`( n -- )` -- **word**, errors
+
+If *n* is 0, does nothing. Otherwise stops everything that is running and goes back to the nearest `CATCH`, which leaves *n*. With no `CATCH`, both stacks are emptied, a message for *n* is printed in place of `OK`, and the prompt returns.
+
+```forth
+: FAIL 42 THROW 1 . ;
+' FAIL CATCH .           \ expect: 42
+0 THROW  5 .             \ expect: 5
+-28 THROW                \ expect: BREAK
+7 THROW                  \ expect: ERROR 7
+```
+
+**Notes.**
+
+* The ROM throws these: -5 `RETURN STACK FULL`, -8 `DICTIONARY FULL`, -13 `UNDEFINED WORD`, -16 `MISSING NAME`, -28 `BREAK`, -37 `TAPE ERROR`, -42 `DIVISION BY ZERO`, -43 `OUT OF RANGE`, -46 `INVALID ARGUMENT`. Any other number prints `ERROR` and the number. -3 and -4 print `STACK?`. All are in [Appendix A](08_appendices.md#appendix-a-messages-and-error-codes).
+* BREAK pressed while a word runs is `-28 THROW`, wherever the word was. A program can catch it, tidy up and go on.
+* Standard Forth keeps -1 to -255 for the system, so use positive numbers for your own codes.
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| no number on the stack | `STACK?`, after the word or after the next word that takes a number |
+
+**See also** `CATCH`, `ABORT`, `QUIT`, [Errors](05_concepts.md#errors), [BREAK](05_concepts.md#break).
+
+---
+
+## UNTIL
+
+`( flag -- )` -- **compile-only word**, control
+
+Closes a `BEGIN ... UNTIL` loop. At run time it takes a flag: if it is 0 the program goes back to `BEGIN`, otherwise it carries on after `UNTIL`. The body runs at least once.
+
+```forth
+: TO3 0 BEGIN 1+ DUP .
+DUP 3 = UNTIL DROP ;
+TO3                      \ expect: 1 2 3
+```
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| typed at the prompt | `UNTIL ?` |
+
+**See also** `BEGIN`, `WHILE`, `REPEAT`, `0=`.
+
+---
+
+## UPPER
+
+`( addr len -- addr len )` -- **word**, strings
+
+Changes the letters a to z of the string to A to Z, in place, and leaves the string. Other characters are unchanged.
+
+```forth
+: GREETING S" Hello, World" ;
+GREETING UPPER TYPE      \ expect: HELLO, WORLD
+GREETING TYPE            \ expect: HELLO, WORLD
+```
+
+**Notes.**
+
+* The second line shows that the text inside the definition itself was changed, not a copy. Each time `GREETING` runs, its text is as it was left.
+* The string must be in RAM; a string in the ROM is not changed and no error is shown.
+* This is BASIC's `UPPER$`, except that it works on the string itself.
+
+**See also** `LOWER`, [Strings](05_concepts.md#strings).
+
+---
+
+## VAL
+
+`( addr len -- n )` -- **word**, strings
+
+Converts the decimal text of the string to a number. The text is digits with an optional `-` first. A string that is empty, is a lone `-`, or has any other character (a space, a `+`, a letter, a decimal point) gives 0, with no error.
+
+```forth
+S" 1234" VAL .           \ expect: 1234
+S" -17" VAL .            \ expect: -17
+S" 12abc" VAL .          \ expect: 0
+```
+
+**Notes.**
+
+* The result wraps at 16 bits like any other whole-number arithmetic: `S" 99999"` gives -31073.
+* `VAL` does not look words up and does not read decimals; for a fraction use the float words.
+
+**See also** `STR`, [Strings](05_concepts.md#strings), [Numbers](05_concepts.md#numbers).
+
+---
+
+## VARIABLE
+
+`( "name" -- )` -- **defining word**, memory
+
+Defines *name* as a variable: a cell of memory, set to 0. Executing *name* leaves the cell's address; `@` reads it and `!` changes it.
+
+```forth
+VARIABLE COUNT-ME
+COUNT-ME @ .             \ expect: 0
+5 COUNT-ME !
+COUNT-ME @ 1+ COUNT-ME !
+COUNT-ME @ .             \ expect: 6
+```
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| no name after `VARIABLE` | `MISSING NAME` |
+| no room | `DICTIONARY FULL` |
+
+**See also** `@`, `!`, `CONSTANT`, `ARRAY`, `FVARIABLE`, [Defining words](05_concepts.md#defining-words).
+
+---
+
+## VLIST
+
+`( -- )` -- **word**, dictionary
+
+Prints the name of every word in the dictionary, newest first, each followed by a space, ending with the oldest word of the ROM. The names wrap at the screen's edge and scroll; there are several screens of them.
+
+```forth
+: Q 1 ;
+VLIST                    \ expect-end: DUP DROP
+```
+
+**Notes.**
+
+* Your own words come first. A word defined twice is listed twice, the newer first.
+* The stack is not changed.
+
+**See also** `FORGET`, `'`, [The dictionary](05_concepts.md#the-dictionary).
+
+---
+
+## WHILE
+
+`( flag -- )` -- **compile-only word**, control
+
+Used in `BEGIN ... WHILE ... REPEAT`. At run time it takes a flag: if it is not 0 the words up to `REPEAT` run; if it is 0 the loop ends and the program carries on after `REPEAT`. The test comes first, so the body may run no times.
+
+```forth
+: UPTO 0 BEGIN DUP 3 <
+WHILE DUP . 1+ REPEAT DROP ;
+UPTO                     \ expect: 0 1 2
+: NONE 5 BEGIN DUP 3 <
+WHILE 1+ REPEAT . ;
+NONE                     \ expect: 5
+```
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| typed at the prompt | `WHILE ?` |
+
+**See also** `BEGIN`, `REPEAT`, `UNTIL`.
+
+---
+
 ## XOR
 
 `( n1 n2 -- n3 )` -- **word**, arithmetic
@@ -1593,5 +3026,113 @@ number twice gives the first number back.
 | fewer than two numbers on the stack | `STACK?`, after `XOR` or after the next word that takes a number |
 
 **See also** `AND`, `OR`, `INVERT`.
+
+---
+
+## [
+
+`( -- )` -- **immediate word**, dictionary
+
+Used inside a definition: switches from compiling to running. The words after `[` run at once, up to `]`, and their results can go into the definition with `LITERAL`.
+
+```forth
+: SIX [ 2 3 * ] LITERAL ;
+SIX .                    \ expect: 6
+```
+
+**Notes.**
+
+* Typed at the prompt, `[` has no effect: the console is already running what you type.
+
+**See also** `]`, `LITERAL`, [Compiling and interpreting](05_concepts.md#compiling-and-interpreting).
+
+---
+
+## [']
+
+`( "name" -- )` -- **compile-only word**, dictionary
+
+Used inside a definition: reads the next word from the line and compiles its execution token as a number. When the definition runs it leaves that *xt* (the run-time effect is `( -- xt )`). It is `'` done once, while compiling, instead of every time the word runs.
+
+```forth
+: SQ DUP * ;
+: RUN ['] SQ EXECUTE ;
+5 RUN .                  \ expect: 25
+```
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| typed at the prompt | `['] ?`, nothing is compiled |
+| a name that is not a word | `UNDEFINED WORD`; the definition is dropped |
+
+**See also** `'`, `EXECUTE`, `CATCH`, `LITERAL`.
+
+---
+
+## [CHAR]
+
+`( "name" -- )` -- **compile-only word**, strings
+
+Used inside a definition: reads the next word from the line, as `CHAR` does, and compiles the code of its first character as a literal. When the definition runs it leaves that code. At run time the stack effect is `( -- c )`.
+
+```forth
+: STAR [CHAR] * ;
+STAR .                   \ expect: 42
+: LETTER [CHAR] hello ;
+LETTER .                 \ expect: 104
+```
+
+**Errors.**
+
+| Mistake | What happens |
+|---|---|
+| typed at the prompt | `[CHAR] ?`, nothing is compiled |
+| nothing after `[CHAR]` on the line | `MISSING NAME`; the definition is dropped |
+
+**See also** `CHAR`, `LITERAL`, [Characters and keys](05_concepts.md#characters-and-keys).
+
+---
+
+## \
+
+`( -- )` -- **immediate word**, dictionary
+
+Starts a comment that runs to the end of the line. It works at the prompt and inside a definition. Put a space after `\`.
+
+```forth
+1 2 + .  \ not read: 3 4 + .  \ expect: 3
+: SHOW 5 \ five
+. ;
+SHOW                          \ expect: 5
+```
+
+**Notes.**
+
+* A `\` at the very end of a line is an empty comment.
+* The comment ends at the end of the line, so it also ends a `;` or `)` hidden in it: `: F 2 \ ;` leaves the definition open.
+
+**See also** `(`.
+
+---
+
+## ]
+
+`( -- )` -- **word**, dictionary
+
+Switches to compiling: the words after it are compiled, not run, until `;` or `[`. Used inside a definition after `[` to go back to compiling.
+
+```forth
+: SIX [ 2 3 * ] LITERAL ;
+: SEVEN [ SIX 1+ ] LITERAL ;
+SEVEN .                  \ expect: 7
+```
+
+**Notes.**
+
+* Typed at the prompt, `]` starts compiling into the dictionary at `HERE` with no definition open. What you type next is compiled, with no `OK`, until you type `[`. Do not do this.
+
+**See also** `[`, `LITERAL`, `:`.
 
 ---
