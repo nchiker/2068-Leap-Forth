@@ -2,7 +2,8 @@
 #   make              the images in build/: forth_boot_rom0.bin (HOME), graphics_exrom.bin (EXROM),
 #                     forth_zesarux.bin (the two as one 24 KB file for ZEsarUX), graphics_exrom.dck, SHA256SUMS
 #   make check        strict assembly, opcode and source checks, RAM layout guard, budgets, provenance, the
-#                     adopted tape code, the tape tools' self-test, ROM_IDENTITY
+#                     adopted tape code, the tape tools' self-test, ROM_IDENTITY, the manual (its examples
+#                     in step with tests/doc/, one entry per word of the ROM)
 #   make budget       free bytes per image against the floors (budget.toml)
 #   make cart         the DOCK cartridge for a stock TS2068 in build/cart/ (manual Part 6): the HOME image
 #                     assembled with -DCARTRIDGE (tools/cart_check.py), the EXROM, forth_cart.dck (Forth, no
@@ -80,6 +81,7 @@ check: all cart
 	python3 -I tools/rom_identity.py --verify build/forth_boot_rom0.bin build/forth_boot.sym
 	python3 -I tools/cart_check.py build $(CART)
 	python3 -I tools/docexamples.py --check
+	python3 -I tools/manualcheck.py build
 
 budget: all
 	python3 -I tools/budget.py
