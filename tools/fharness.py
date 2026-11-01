@@ -27,8 +27,9 @@ The API (a library; `python3 -I tools/fharness.py --selftest` is its self-test):
 `build` is a directory that holds forth_boot_rom0.bin (DIR or DIR/build, as tools/tapetol.py), so the images of an
 older build in a git worktree work.  Symbols come from forth_boot.sym and, when the build has it, graphics_exrom.sym.
 
-Ports: base 10900, allowed 10900-10919, 10840-10859, 10860-10879 and 10760-10779 (PORT_RANGES: this harness's own,
-floattest's, shapetest's and tools/run_tests.py's; worker k uses base + k, all of a pool's ports in one range); other
+Ports: base 10900, allowed 10900-10919, 10840-10859, 10860-10879, 10760-10779 and 10920-10939 (PORT_RANGES: this
+harness's own, floattest's, shapetest's, tools/run_tests.py's and tools/carttest.py's; worker k uses base + k, all of a
+pool's ports in one range); other
 harnesses own 10820-10839, 10880-10899 and 10960-10999.
 A port outside the ranges, or one that something already listens on, is refused.  Needs ts2068-debug ($TS2068_DEBUG_DIR,
 default ~/ts2068-debug; the ZRCP client and the process control), ZEsarUX 13.0 ($TS2068_DEBUG_ZESARUX_DIR, default
@@ -36,6 +37,11 @@ default ~/ts2068-debug; the ZRCP client and the process control), ZEsarUX 13.0 (
 and starts ZEsarUX with --emulatorspeed 1000 --frameskip 49 itself; this file does both too (so an older ts2068-debug
 behaves the same) and FORTH_REALTIME=1 runs at real speed.  Neither changes the emulated machine (T-states per
 frame, interrupts), so every T-state figure is unchanged.
+
+A cartridge build (make cart: build/cart, with forth_cart.dck) runs as a DOCK cartridge on the stock ROM: ZEsarUX starts
+with its stock ts2068.rom and `smartload`s the .dck (Machine's dck=, or the build's forth_cart.dck), the stock ROM hands
+over to the cartridge, and every breakpoint also requires PEEK(1)=1 (the LROS header's type byte: the cartridge's HOME,
+not the stock ROM, is at $0000).  The symbols are the release's (tools/cart_check.py), so every tool's --build takes it.
 
 Memory the harness uses: $FF00 RET_SLOT, $FF02 STOP_ADDR, $FF10 GLYPH_PROG.  Forth's machine stack starts at
 SP = $FF00 and grows down (rom/forth_boot.asm COLD_START `ld sp,$FF00`; include/forth_layout.inc asserts that
@@ -67,6 +73,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HOME = os.path.expanduser("~")
 DEBUG_DIR = os.environ.get("TS2068_DEBUG_DIR", os.path.join(HOME, "ts2068-debug"))
 ZESARUX = os.environ.get("TS2068_DEBUG_ZESARUX_DIR", os.path.join(HOME, "Applications", "ZEsarUX-13.0"))
+STOCK_ROM = os.path.join(ZESARUX, "ts2068.rom")     # the stock HOME ROM and EXROM (24 KB): a cartridge's machine
 sys.path.insert(0, DEBUG_DIR)
 from ts2068_debug.zrcp import ZRCPClient, ZRCPError      # noqa: E402
 from ts2068_debug.process import ZEsarUXProcess as _ZProcess, terminate_emulator  # noqa: E402
@@ -76,8 +83,9 @@ from ts2068_debug.process import ZEsarUXProcess as _ZProcess, terminate_emulator
 FAST_ARGS = [] if os.environ.get("FORTH_REALTIME") else ["--emulatorspeed", "1000", "--frameskip", "49"]
 PORT_LO, PORT_HI = 10900, 10919     # this harness's ports (run_tests 10760-10779, poweron 10820-10839,
                                     # ay_audio 10880-10899, tapetest 10960-10979, tapetol 10980-10999)
-PORT_RANGES = ((10900, 10919), (10840, 10859), (10860, 10879), (10760, 10779))  # every range a Machine / run_pool accepts
-                                    # (tools/floattest.py: the second; tools/shapetest.py: the third; tools/run_tests.py: the fourth)
+PORT_RANGES = ((10900, 10919), (10840, 10859), (10860, 10879), (10760, 10779), (10920, 10939))
+                                    # every range a Machine / run_pool accepts (tools/floattest.py: the second;
+                                    # tools/shapetest.py: the third; tools/run_tests.py: the fourth; tools/carttest.py)
 RET_SLOT = 0xFF00                   # return address slot for routine calls (unused by the ROM: the header)
 STOP_ADDR = 0xFF02                  # `jr $` written here; routine calls return to it
 GLYPH_PROG = 0xFF10                 # the glyph rendering program and its code list
@@ -236,10 +244,11 @@ def key_map(rom, S):
 # ---------------------------------------------------------------------------------------------------- the machine
 class Machine:
     """One ZEsarUX running a Forth image.  `build`: a directory with forth_boot_rom0.bin (resolve_build).
-    `snapdir` (default a private temp dir, removed by stop) holds the ROM file and the boot snapshot."""
+    `snapdir` (default a private temp dir, removed by stop) holds the ROM file and the boot snapshot.  `dck`: a
+    cartridge to run on the stock ROM (default: the build's forth_cart.dck, if it has one)."""
     power_on = None             # f(machine) after reset-cpu, before the boot (a RAM / register pattern)
 
-    def __init__(self, build, port, snapdir=None):
+    def __init__(self, build, port, snapdir=None, dck=None):
         port_range(port)
         self.build = resolve_build(build)
         self.port = port
@@ -250,9 +259,14 @@ class Machine:
         self._own_snapdir = snapdir is None
         self.snapdir = snapdir or tempfile.mkdtemp(prefix="fh%d-" % port)
         os.makedirs(self.snapdir, exist_ok=True)
-        self.rom = os.path.join(self.snapdir, "image.bin")
-        with open(self.rom, "wb") as f:
-            f.write(self.rom_home + self.rom_exrom)
+        own = os.path.join(self.build, "forth_cart.dck")
+        self.dck = os.path.abspath(dck) if dck else (own if os.path.isfile(own) else None)
+        if self.dck:
+            self.rom = STOCK_ROM
+        else:
+            self.rom = os.path.join(self.snapdir, "image.bin")
+            with open(self.rom, "wb") as f:
+                f.write(self.rom_home + self.rom_exrom)
         self.snap = os.path.join(self.snapdir, "boot.zsf")
         self.proc = None
         self.c = None
@@ -323,13 +337,15 @@ class Machine:
         """Arm breakpoints 1..n at the given PCs; clear 1..8 beyond.  An InExrom address stops only
         with the EXROM paged in (BANK_EXROM_DEPTH nonzero)."""
         self._enable_bp()
+        cart = " and PEEK(1)=1" if self.dck else ""
         for i in range(1, 9):
             if i <= len(addrs):
                 a = addrs[i - 1]
                 if isinstance(a, InExrom):
-                    self.cmd("set-breakpoint %d PC=%04XH and PEEK(%04XH)<>0" % (i, a, self.S["BANK_EXROM_DEPTH"]))
+                    self.cmd("set-breakpoint %d PC=%04XH and PEEK(%04XH)<>0%s"
+                             % (i, a, self.S["BANK_EXROM_DEPTH"], cart))
                 else:
-                    self.cmd("set-breakpoint %d PC=%04XH" % (i, a))
+                    self.cmd("set-breakpoint %d PC=%04XH%s" % (i, a, cart))
             else:
                 self.cmd("set-breakpoint %d" % i)
 
@@ -378,8 +394,9 @@ class Machine:
         return self
 
     def reset(self):
-        """Reset the CPU to the cold start (PC 0), the registers pinned; RAM is kept."""
-        self.cmd("reset-cpu")
+        """Reset the CPU to the cold start (PC 0), the registers pinned; RAM is kept.  A cartridge: smartload, which
+        resets the machine into the stock ROM, which starts the cartridge."""
+        self.cmd("smartload " + self.dck if self.dck else "reset-cpu")
         # ZRCP reset-cpu sets PC/SP/AF only: BC, DE, HL, IX, IY, the alternate set and the refresh register R
         # keep what the free-running boot left (step T found this; RANDOMIZE seeds from R).  Pin them.
         for r in ("R", "BC", "DE", "HL", "IX", "IY", "AF'", "BC'", "DE'", "HL'"):
@@ -733,8 +750,8 @@ def stock_build(build):
 
 
 def run_suites(suites, build, workers=None, port0=PORT_LO):
-    """Every suite's tasks on one pool (long tasks first), the stock-EXROM tasks on a second pool after it.  Returns
-    each suite's results in its task order."""
+    """Every suite's tasks on one pool (long tasks first), the stock-EXROM tasks on a second pool after it (not on a
+    cartridge build: they are reported as not run).  Returns each suite's results in its task order."""
     build = resolve_build(build)
     main, stock = [], []
     for si, s in enumerate(suites):
@@ -747,7 +764,13 @@ def run_suites(suites, build, workers=None, port0=PORT_LO):
     if main:
         for k, r in zip(main, run_pool(build, main, fn, workers, port0)):
             out[k[0]][k[1]] = r
-    if stock:
+    if stock and os.path.isfile(os.path.join(build, "forth_cart.dck")):
+        for si, ti in stock:                        # a cartridge always carries its EXROM in DOCK chunk 5
+            out[si][ti] = dict(ok=True, skipped=True, detail="not run on a cartridge (it needs no EXROM)", wall=0.0,
+                               worker=None)
+        print("%s: %d case(s) not run on a cartridge: they need the HOME ROM without its EXROM"
+              % (", ".join(sorted({suites[si].name for si, _ in stock})), len(stock)))
+    elif stock:
         d = stock_build(build)
         try:
             for k, r in zip(stock, run_pool(d, stock, fn, min(workers or default_workers(), 2), port0)):

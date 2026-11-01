@@ -16,8 +16,8 @@
 ;   - the 32 multiply and 40 divide steps run in registers (FMUL_K, FDIV_K: shift-and-add and restoring division
 ;     with the partial product or remainder in HL, H'L', C' and the operand in DE, D'E'), not through the byte-loop
 ;     helpers: about 3.5 kT per F* and 4.5 kT per F/ instead of 19 and 34. They compute fpmodel.mul's and .div's
-;     loops exactly (checked on 5,698 cases in tools/z80sim). They use EXX and never AF'; no interrupt routine of
-;     this ROM or of the stock ROM serving the cartridge build changes BC', DE', HL' (FLOAT_SPEC section 5);
+;     loops exactly (checked on 5,698 cases in tools/z80sim). They use EXX and never AF'; the interrupt routine
+;     (this ROM's, in the cartridge build too) never changes BC', DE', HL' (FLOAT_SPEC section 5);
 ;   - FADD aligns by whole bytes first, then by bits (the same floor(y / 2^d), so the same results);
 ;   - errors leave through F_THROW (THROW with the ANS codes), not Leap-C's F_ERR.
 ;

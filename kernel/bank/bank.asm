@@ -14,6 +14,10 @@
 ; paged. If the handler ever touches chunk 5, the banking state or those ports, this needs
 ; re-deriving. Both routines end with EI.
 ;
+; The cartridge build (-DCARTRIDGE, kernel/bank/cart.asm) runs this ROM from DOCK chunks 0-1 and the
+; EXROM from DOCK chunk 5: its variants keep HSR bits 0-1 set and never write port $FF (bit 7 stays 0,
+; DOCK), and each fits its release routine's bytes, so every later label keeps its address.
+;
 ; The EXROM's entry convention: execution starts at the first byte of the 8K image ($A000 once
 ; paged in), as a ROM's reset vector. Services are reached through the service table there
 ; (rom/graphics_exrom.asm), not through these primitives.
@@ -31,6 +35,25 @@
 ; a call from code already running inside the EXROM just bumps the counter.
 ; ============================================================================
 BANK_PAGE_EXROM_IN:
+    IFDEF CARTRIDGE
+    ld   a, (BANK_EXROM_DEPTH)
+    inc  a
+    ld   (BANK_EXROM_DEPTH), a
+    dec  a
+    jr   nz, .already_paged_in
+    ld   a, CART_HSR_EXROM            ; chunks 0-1 (this ROM) and 5 (the EXROM) DOCK
+    out  (PORT_BANK_HOME), a
+.already_paged_in:
+    ei
+    ret
+BANK_CART_HOME:                       ; BANK_PAGE_EXROM_OUT's last step: chunk 5 back to HOME
+    ld   a, CART_HSR_HOME
+    out  (PORT_BANK_HOME), a
+    ei
+    ret
+    ASSERT $ <= BANK_PAGE_EXROM_IN + 27
+    DS   BANK_PAGE_EXROM_IN + 27 - $, $FF  ; the release routine's 27 bytes
+    ELSE
     ld   a, (BANK_EXROM_DEPTH)
     inc  a
     ld   (BANK_EXROM_DEPTH), a
@@ -47,6 +70,7 @@ BANK_PAGE_EXROM_IN:
 .already_paged_in:
     ei
     ret
+    ENDIF
 
 ; ============================================================================
 ; BANK_PAGE_EXROM_OUT -- restore chunk 5 to Home, once BANK_EXROM_DEPTH is back to 0
@@ -57,6 +81,18 @@ BANK_PAGE_EXROM_IN:
 ; clearing it would cost a read-modify-write through PORT_FF_SHADOW for no effect.
 ; ============================================================================
 BANK_PAGE_EXROM_OUT:
+    IFDEF CARTRIDGE
+    ld   a, (BANK_EXROM_DEPTH)
+    or   a
+    jr   z, .depth_already_zero
+    dec  a
+    ld   (BANK_EXROM_DEPTH), a
+    jr   z, BANK_CART_HOME
+.depth_already_zero:
+    ei
+    ret
+    DS   2, $FF                       ; the release routine's 16 bytes
+    ELSE
     ld   a, (BANK_EXROM_DEPTH)
     or   a
     jr   z, .depth_already_zero       ; an unbalanced OUT: don't underflow the counter
@@ -68,5 +104,6 @@ BANK_PAGE_EXROM_OUT:
 .depth_already_zero:
     ei
     ret
+    ENDIF
 
     ENDIF

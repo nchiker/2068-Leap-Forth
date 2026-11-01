@@ -11,6 +11,10 @@ Suites on one pool of emulators (ports 10760 up, one per worker):
 Then, on their own emulators:
   poweron the boot from power-on RAM patterns (tools/poweron.py, ports 10820-10839)
   tape    SAVE/LOAD/VERIFY on real tape signals (tools/tapetest.py, ports 10960-10979)
+  cart    the DOCK cartridge on the stock ROMs (tools/carttest.py, ports 10920-10939; needs make cart)
+
+--build build/cart runs the pool suites on the cartridge build instead (make test-cart: every Forth test, the editor,
+floats and shapes on the stock ROM with the cartridge in the DOCK; fharness.Machine's cartridge mode).
 
 --fast (make test-fast): boot, forth, editor, float without its speed group and with fewer random cases, shape
 without speeds.  Exit 0 when every suite passes; the results are also written to build/test_results.json.
@@ -36,7 +40,7 @@ import shapetest        # noqa: E402
 
 ROOT = os.path.dirname(HERE)
 POOL = ("boot", "forth", "editor", "float", "shape", "bench")
-ALL = POOL + ("poweron", "tape")
+ALL = POOL + ("poweron", "tape", "cart")
 FAST = ("boot", "forth", "editor", "float", "shape")
 
 
@@ -101,7 +105,8 @@ def main():
             for line in buf.getvalue().splitlines():      # the suites' summaries, tables and failures
                 if not line.startswith("PASS "):
                     print(line)
-    for n, cmd in (("poweron", ["tools/poweron.py"]), ("tape", ["tools/tapetest.py", "--build", build])):
+    for n, cmd in (("poweron", ["tools/poweron.py"]), ("tape", ["tools/tapetest.py", "--build", build]),
+                   ("cart", ["tools/carttest.py"])):
         if n in names:
             print("run_tests: %s" % n, flush=True)
             codes[n] = subprocess.call([sys.executable, "-I"] + cmd, cwd=ROOT)

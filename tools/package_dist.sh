@@ -2,8 +2,8 @@
 # The download bundle: dist/2068-Forth-<version>.zip (make dist; CI publishes it).
 #
 # Contents: roms/ (the HOME ROM, the graphics EXROM, the two as one 24 KB file for ZEsarUX, the EXROM as a .dck for
-# EightyOne and TS-Pico, SHA256SUMS), symbols/ (.sym/.lst), docs/ (the tutorial as Markdown, PDF and DOCX, the README,
-# hardware notes, the numeric model), demos/ (Forth sources), run_fuse.sh, README-FIRST.txt, LICENSE, BUILD_INFO.txt.
+# EightyOne and TS-Pico, Forth as a cartridge for a stock TS2068, SHA256SUMS), symbols/ (.sym/.lst), docs/ (the tutorial as Markdown, PDF and DOCX, the README,
+# hardware notes, the numeric model, the cartridge guide), demos/ (Forth sources), run_fuse.sh, README-FIRST.txt, LICENSE, BUILD_INFO.txt.
 # VERSION may be passed in (CI passes the tag); otherwise it comes from git.
 #
 # Usage:  tools/package_dist.sh            # or:  VERSION=v1.0 tools/package_dist.sh
@@ -31,11 +31,13 @@ for f in forth_boot_rom0.bin graphics_exrom.bin forth_zesarux.bin graphics_exrom
   test -f "build/$f" || { echo "missing build/$f -- run make first" >&2; exit 1; }
   cp "build/$f" "$stage/roms/"
 done
+test -f build/cart/forth_cart.dck || { echo "missing build/cart/forth_cart.dck -- run make cart first" >&2; exit 1; }
+cp build/cart/forth_cart.dck "$stage/roms/"
 cp build/forth_boot.sym build/forth_boot.lst build/graphics_exrom.sym build/graphics_exrom.lst "$stage/symbols/"
 cp demos/*.fs "$stage/demos/"
 
 # --- docs ---------------------------------------------------------------
-cp README.md docs/forth_tutorial.md docs/hardware_notes.md docs/numeric_model.md "$stage/docs/"
+cp README.md docs/forth_tutorial.md docs/hardware_notes.md docs/numeric_model.md docs/cartridge.md "$stage/docs/"
 cp docs/images/*.png "$stage/docs/images/"
 for f in forth_tutorial.pdf forth_tutorial.docx README.pdf; do
   if [ -f "build/docs/$f" ]; then
@@ -80,6 +82,8 @@ roms/graphics_exrom.bin     The 8 KB EXROM: the editor (EDIT), FILL, CIRCLE, REC
 roms/forth_zesarux.bin      The two as one 24 KB file, for ZEsarUX --romfile.
 roms/graphics_exrom.dck     The EXROM as a cartridge for EightyOne and TS-Pico (bank \$FE, chunk 5);
                             see docs/eightyone_setup.md.
+roms/forth_cart.dck         Forth as a DOCK cartridge for a stock TS2068 (the stock ROMs stay in);
+                            docs/cartridge.md, also for making a cartridge of your own program.
 roms/SHA256SUMS             The images' hashes.
 symbols/                    Assembler .sym/.lst listings.
 demos/                      Forth programs (Blackjack, Shooting Gallery) as source text.
@@ -87,6 +91,7 @@ docs/forth_tutorial.{md,pdf,docx}  Learning Forth on 2068-Forth -- start here.
 docs/README.{md,pdf}        The project README.
 docs/hardware_notes.md      TS2068 hardware facts.
 docs/numeric_model.md       Integers and floats.
+docs/cartridge.md           Forth and Forth programs as cartridges.
 
 Running it in Fuse
 ------------------
