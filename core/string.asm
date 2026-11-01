@@ -6,8 +6,8 @@
 ; (W_EMIT). Chained from DICT_CHAIN_POINT (set by the including ROM before the INCLUDE); every word may
 ; destroy all registers except IX (the data stack pointer), IY and SP.
 ; STRING buffers are fixed-size and nothing is bounds-checked: PLACE of more than n characters into an
-; n-character STRING overruns it. Lengths are one byte. CHR$, STR$, UPPER$/LOWER$, LEFT$/RIGHT$ and INSTR
-; are not provided.
+; n-character STRING overruns it. Lengths are one byte. The BASIC-style words (CHR STR UPPER LOWER LEFT
+; RIGHT SEARCH CODE) are in core/stringext.asm.
 ; ============================================================================
 
     IFNDEF CORE_STRING_ASM
