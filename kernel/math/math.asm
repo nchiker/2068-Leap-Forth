@@ -249,8 +249,9 @@ MATH_SQRT16:
 ; x <= 0 returns 0 without advancing the generator.
 ; The generator is Leap-C's 16-bit xorshift (LIB_RAND): x ^= x<<7, x ^= x>>9, x ^= x<<8. Period
 ; 65535; 0 is its one fixed point. RND_STATE = 0 means "never seeded" (cold start, or
-; MATH_RND_SEED with 0): the first call seeds it from the Z80 R register, the low byte OR 1 so
-; the seed is not 0.
+; MATH_RND_SEED with 0): the first call seeds it from FRAMES, the Z80 R register XORed into its
+; high byte and bit 0 set so the seed is not 0 (R alone gave 128 seeds; FRAMES's low byte moves
+; every frame, so a seed taken after a key press differs with the frame it was pressed in).
 ; The result is the high word of state * x (floor(state * x / 65536), in 0..x-1), by a
 ; shift-right product loop: HL is the high half of the running product, BC starts as x and takes
 ; the low half in as it shifts out.
@@ -263,7 +264,7 @@ MATH_RND16:
     or   a
     jp   m, .zero_result                ; x < 0
     or   l
-    jr   z, .zero_result                  ; x = 0
+    ret  z                                ; x = 0: HL is the result
 
     ld   b, h
     ld   c, l                              ; BC = x
@@ -272,12 +273,12 @@ MATH_RND16:
     or   l
     jr   nz, .step
 
-    ; never seeded: seed from the R register, nonzero via OR 1
+    ; never seeded: FRAMES with R in its high byte; bit 0 set so the seed is not 0
+    ld   hl, (FRAMES)
     ld   a, r
-    or   1
-    ld   l, a
-    ld   a, r                              ; a second read for the high byte
+    xor  h
     ld   h, a
+    set  0, l
 .step:                                      ; HL ^= HL<<7; HL ^= HL>>9; HL ^= HL<<8
     ld   a, h
     rra
@@ -318,7 +319,7 @@ MATH_RND16:
 
 ; ============================================================================
 ; MATH_RND_SEED -- set the random generator's state (RANDOMISE n)
-; 0 puts MATH_RND16 back to "never seeded": its next call seeds from the R register. A nonzero
+; 0 puts MATH_RND16 back to "never seeded": its next call seeds from FRAMES and R. A nonzero
 ; HL is the new state, giving a reproducible sequence.
 ; In:  HL = new seed (0 = reset to unseeded)
 ; Out: none

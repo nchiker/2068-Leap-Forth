@@ -2465,7 +2465,8 @@ Turns an angle in degrees into radians: it multiplies by pi/180.
 `( n -- )` -- **word**, arithmetic
 
 Sets where the random numbers of `RND` start. The same *n* (not 0) always gives the same run of numbers. 0 means no
-fixed start: the next `RND` takes one from the processor's refresh counter, which differs from run to run.
+fixed start: the next `RND` takes one from the frame counter (the time since switch-on, in frames) mixed with the
+processor's refresh counter, which differs from run to run.
 
 ```forth
 7 RANDOMIZE 6 RND .      \ expect: 3
@@ -2478,6 +2479,9 @@ fixed start: the next `RND` takes one from the processor's refresh counter, whic
 * The machine starts with no fixed seed, so a program that wants the same numbers each time begins with `n RANDOMIZE`.
   A program that wants different numbers each time need do nothing.
 * *n* is the generator's whole state; any 16-bit value but 0 is a valid start.
+* A program that starts by itself (a cartridge's start word) runs at the same moment after every switch-on, so its
+  first `RND` would be the same each time. Put `0 RANDOMIZE` after the first key the player presses: how long they
+  took to press it makes the start different each time (`demos/blackjack.fs` does this).
 
 **Errors.**
 
@@ -2548,8 +2552,8 @@ the result is 0.
 **Notes.**
 
 * The sequence is fixed by the seed. After `n RANDOMIZE`, with *n* not 0, the same calls give the same numbers every
-  time, on every machine with this ROM: the first two lines above always print 2 and 8. With no `RANDOMIZE` (or after `0 RANDOMIZE`) the first `RND` starts from the processor's refresh counter,
-  which depends on the moment, so each run is different.
+  time, on every machine with this ROM: the first two lines above always print 2 and 8. With no `RANDOMIZE` (or after `0 RANDOMIZE`) the first `RND` starts from the frame counter and the
+  processor's refresh counter, which depend on the moment, so each run is different.
 * The generator is a 16-bit xorshift, which cycles through 65,535 values before it repeats. The result is the
   generator's value scaled to the range (not its remainder), so the small numbers are not favoured.
 * A call with *n1* of 0 or less does not advance the generator.

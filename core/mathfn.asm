@@ -4,7 +4,7 @@
 ; Each word is a thin wrapper that pops its operands from the integer data stack (IX), calls the matching
 ; kernel/math/math.asm routine and pushes the result; that file's headers give the algorithms and edge
 ; cases (ABS of -32768 stays -32768, the MOD remainder takes the dividend's sign, RND(x) seeds itself
-; from the Z80 R register on first use, division or MOD by zero gives 0). Needs kernel/math/math.asm.
+; from FRAMES and the Z80 R register on first use, division or MOD by zero gives 0). Needs kernel/math/math.asm.
 ; The float words (F+ F- F* F/ ...) work on the separate float stack (IY).
 ; Chained from DICT_CHAIN_POINT (set by the including ROM before the INCLUDE); every word may destroy
 ; all registers except IX (the data stack pointer), IY and SP.
@@ -76,7 +76,7 @@ W_RND:
     ret
 
 ; ============================================================================
-; RANDOMIZE ( n -- ) -- MATH_RND_SEED; 0 reseeds from R on the next RND
+; RANDOMIZE ( n -- ) -- MATH_RND_SEED; 0 reseeds from FRAMES and R on the next RND
 ; ============================================================================
 H_RANDOMIZE:
     DW   H_RND
