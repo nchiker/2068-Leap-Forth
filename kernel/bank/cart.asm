@@ -29,7 +29,10 @@
 ;   +8    32   the start word: its length (1-31), then its name, padded
 ;   +40   168  the UDG table (UDG_COUNT x 8 bytes)
 ;   +208  n    the dictionary, copied to FORTH_DICT_RAM
-;   +208+n 2   CRC-16 (STORAGE_CRC) of bytes +0 .. +207+n, low byte first
+;   +208+n 2   CRC-16 (STORAGE_CRC) of bytes +0 .. +207+n, low byte first: checked by the packer
+;              (tools/forthcart.py, the Leap IDE), not at power-on. As Leap V2's production cartridge
+;              (Leap-Cartridge rom/v2_cart_home.asm, CART_LOAD), the image in ROM is trusted once its
+;              magic, identity and length are right: the CRC cost 400 T a byte (2.7 s for the largest)
 ; ============================================================================
 
     IFNDEF KERNEL_BANK_CART_ASM
@@ -68,7 +71,7 @@ CART_ENTRY:
 ; prompt (EDITOR_LOOP_LIVE.enter): its output, then OK or the error, then the prompt
 ; In:  interrupts on; the screen cleared, the version on row 23
 ; Out: no image (no CART_MAGIC): the chime, then returns (COLD_START goes on to the prompt). An image
-;      that fails a check (identity, length, start word, CRC): "BAD PROGRAM" on the output, the
+;      that fails a check (identity, length, start word): "BAD PROGRAM" on the output, the
 ;      chime, returns, the dictionary empty. A good image: does not return
 ; Destroys: all registers but IX, IY
 ; ============================================================================
@@ -92,20 +95,7 @@ CART_START_PROGRAM:
     ld   a, (CART_IMAGE + CART_IMG_START)
     dec  a
     cp   31
-    jr   nc, .bad                   ; the start word's length is not 1-31
-    ld   hl, CART_IMG_DICT
-    add  hl, bc
-    ld   b, h
-    ld   c, l
-    ld   hl, CART_IMAGE
-    call STORAGE_CRC                ; DE = the CRC, HL = past the dictionary
-    ld   a, (hl)
-    cp   e
-    jr   nz, .bad
-    inc  hl
-    ld   a, (hl)
-    cp   d
-    jr   z, .load
+    jr   c, .load                   ; the start word's length is 1-31
 .bad:
     call .home
     ld   hl, CART_BAD_TEXT

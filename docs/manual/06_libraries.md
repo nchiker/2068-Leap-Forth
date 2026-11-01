@@ -97,8 +97,8 @@ or give the packer the 168 bytes of the table (from `0 UDG` on) with `UDG=file`.
 ### At switch-on
 
 * The TS2068's own ROM takes about 2 seconds to find the cartridge.
-* Forth starts, then checks the program and copies it: about 0.3 seconds, plus 0.15 seconds for every 1,000 bytes of
-  program (2.7 seconds for the largest). The version stays on the status bar meanwhile.
+* Forth starts, then checks the program and copies it: under half a second, whatever the program's size. The version
+  stays on the status bar meanwhile.
 * The screen is cleared and the start word runs. Its output, an error or `BREAK` look exactly as when you type a
   line, and the prompt follows. The start word's name is in the line store, so `EDIT` shows it and you can type it
   again to run the program again.
@@ -106,5 +106,7 @@ or give the packer the 168 bytes of the table (from `0 UDG` on) with `UDG=file`.
   start the program afresh.
 
 With no program in it (`forth_cart.dck`, in the release's `roms/` folder) the cartridge gives you Forth itself: the
-version, the chime and the prompt. If the program fails its check (a different ROM build, a damaged image), the
-cartridge prints `BAD PROGRAM` and gives you Forth with no words of your own.
+version, the chime and the prompt. If the program fails its check (it was saved by a different ROM build, or its
+length or start word is wrong), the cartridge prints `BAD PROGRAM` and gives you Forth with no words of your own. The
+packer has already checked the program's own checksum, so the cartridge does not check it again at switch-on (as
+Leap V2's cartridges do not).

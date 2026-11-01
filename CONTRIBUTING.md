@@ -98,7 +98,7 @@ Port `$F4` holds `$03` (chunks 0-1 from the cartridge), `$23` while an EXROM wor
 copied. Port `$FF` bit 7 stays 0 (the cartridge, never the stock EXROM). The program image, the hand-off from the stock
 ROM and the paging are described in `kernel/bank/cart.asm`.
 
-The cartridge's own code (194 bytes) goes in the release image's free space, and `cart_check.py` keeps it within the
+The cartridge's own code (173 bytes) goes in the release image's free space, and `cart_check.py` keeps it within the
 HOME reserve floor in `budget.toml`. So the cartridge always fits as long as the release keeps its floor.
 
 ### Its tests
@@ -107,7 +107,7 @@ HOME reserve floor in `budget.toml`. So the cartridge always fits as long as the
 
 - Forth with no program.
 - A program's output, an error and `BREAK` in the start word.
-- The UDG table, the largest dictionary, and four kinds of bad image.
+- The UDG table, the largest dictionary (loaded within a speed ceiling), and three kinds of bad image.
 - A second emulator (TSRun, `tools/cartrun.mjs`) checks the stock ROM's hand-off, including an interrupt forced before
   the entry's `di`. It also checks that the paging never leaves the cartridge's chunks, and that the screen at the
   prompt matches ZEsarUX's byte for byte.

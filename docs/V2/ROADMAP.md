@@ -6,7 +6,7 @@ the best solution for the language and its users; fix a problem in the session i
 reason not to (the reason is written here); **follow Leap-C's conventions** (`~/2068-Leap-C` `CONTRIBUTING.md` and
 `project_plan.md` section 1) for testing, paperwork, code style and RAM layout.
 
-Last updated 2026-11-01. Free bytes: HOME 1,924, EXROM 3,136, the cartridge's HOME image 1,730 (`make budget`: per
+Last updated 2026-11-01. Free bytes: HOME 1,924, EXROM 3,136, the cartridge's HOME image 1,751 (`make budget`: per
 component, `budget.toml`; `make inventory`: per routine). Dictionary: 16,128 bytes at power-on.
 
 ## Done
@@ -33,12 +33,14 @@ component, `budget.toml`; `make inventory`: per routine). Dictionary: 16,128 byt
 | IDE hooks | The Leap IDE's questions answered; labels a host drives the prompt by and `LAST_ERROR` (`milestones/IDE_hooks.md`) |
 | Cartridge | `make cart`: Forth, and a program saved with `SAVE-LIB`, as a DOCK cartridge for a stock TS2068 (`milestones/Cartridge.md`) |
 | Manual | The user's manual in Leap-C's shape, every example a test, its entries held to the ROM's words; five defects fixed (`milestones/Manual.md`) |
+| Polygon edges | POLYGON and POLYGON-FILL move an off-screen corner to the nearest edge, as Leap-C (`milestones/Polygon_edges.md`) |
 
-## Now: Polygon edges — done (`docs/V2/milestones/Polygon_edges.md`)
+## Now: Cart start — done (`docs/V2/milestones/Cart_start.md`)
 
-POLYGON and POLYGON-FILL move a corner off the screen to the nearest edge, as Leap-C's `draw()` and `box()` do, so
-nothing wraps (the last of the shape words that wrapped); +11 B HOME. Step Manual (PR #19) is complete
-(`docs/V2/milestones/Manual.md`): the user's manual in Leap-C's shape, five defects fixed.
+A program cartridge no longer checks its image's CRC at power-on, as Leap V2's production cartridge (Leap-Cartridge
+`CART_LOAD`) does not: the packer checks it. The largest program starts in 0.38 s, not 2.7 s; the cartridge's code
+is 173 B (was 194). Before it, step Polygon edges (PR #20): POLYGON's corners move to the nearest edge, as Leap-C's
+`draw()`/`box()`.
 
 ## Next, in order
 
@@ -50,8 +52,11 @@ nothing wraps (the last of the shape words that wrapped); +11 B HOME. Step Manua
 
 | Defect | Found | Fixed in |
 |---|---|---|
-| A program cartridge's load checks the image with the ROM's CRC: about 0.15 s per 1,000 bytes of dictionary (2.7 s for the largest, 16,128 B) | Cartridge | Not scheduled: an unrolled CRC is about +60 B, over the 200 B the cartridge's own code is held to (it must fit whenever the release does); a sum would catch less. Spent once, at power-on. 2068-Leap-C's cartridge plan checks the ROM identity and leaves the image's check to the packer (`tools/forthcart.py` already checks the CRC): dropping the power-on CRC would save the time and bytes; the owner's call |
 | LINE with an end far off the screen walks to it at about 270 T a step (ends near ±32,768: about 10M T, 3 s) | Display speed | Not scheduled: an exact jump over the off-screen part (32-bit multiply and divide) was built: its routines 70 B, about 130 B with the code around them. 2068-Leap-C's `draw()` moves an off-screen end to the edge (fast, but not the line meant); Forth keeps the exact line |
+
+Fixed in Cart start: a program cartridge checked the image's CRC at power-on (2.7 s for the largest); it now checks
+the magic, identity, length and start word only, as Leap V2's production cartridge does, and the packer checks the CRC
+(the largest loads in 0.38 s).
 
 Fixed in Polygon edges: POLYGON and POLYGON-FILL kept each corner's low byte (a corner off the screen wrapped); a
 corner off the screen now moves to the nearest edge, as Leap-C's `draw()` and `box()` do (+11 B HOME).
