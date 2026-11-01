@@ -35,18 +35,13 @@ component, `budget.toml`; `make inventory`: per routine). Dictionary: 16,128 byt
 | Manual | The user's manual in Leap-C's shape, every example a test, its entries held to the ROM's words; five defects fixed (`milestones/Manual.md`) |
 | Polygon edges | POLYGON and POLYGON-FILL move an off-screen corner to the nearest edge, as Leap-C (`milestones/Polygon_edges.md`) |
 | Cart start | A program cartridge starts without the power-on CRC, as Leap V2's: the largest in 0.38 s, not 2.7 s (`milestones/Cart_start.md`) |
+| Blackjack | The demo rebuilt for the finished ROM and a cartridge (`make blackjack`); `RND`'s own seed from the frame counter (`milestones/Blackjack.md`) |
 
-## Now: Blackjack — done (`docs/V2/milestones/Blackjack.md`)
+## Now: V2 is complete (2026-11-01)
 
-The Blackjack demo rebuilt for the finished ROM (`demos/blackjack.fs`: readable, the same rules, a title, a tally,
-hands of up to 11 cards) and shipped as a cartridge by `make blackjack` (`tools/fs2lib.py` compiles a source on the
-release ROMs and writes its SAVE-LIB tape; `make cart` packs it). `RND`'s own seed now comes from the frame counter
-as well as R, and `tools/tape_gen_forth.py` puts a PC file's lines on tape ended by CR.
-
-## Next, in order
-
-Nothing scheduled. The Shooting Gallery is not wanted now (the owner, 2026-11-01): `demos/gallery.fs` stays as the old
-demo ROM's source, not rebuilt and not run on this ROM.
+Every step above is merged into master (`24a5bf2`, PR #22 the last). Nothing is scheduled. The Shooting Gallery is not
+wanted now (the owner, 2026-11-01): `demos/gallery.fs` stays as the old demo ROM's source, not rebuilt and not run on
+this ROM. The one known defect below is left as it is, with its reason.
 
 ## Known defects
 

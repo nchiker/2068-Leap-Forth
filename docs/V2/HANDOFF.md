@@ -5,32 +5,20 @@ reports: `docs/V2/milestones/`.
 
 ## Where things stand (2026-11-01)
 
-- **Master `800e979`**: PR #17 (step Cartridge) merged.
-- **Branch `v2/step-manual`** (from master `800e979`): step Manual is complete (`docs/V2/milestones/Manual.md`). The
-  user's manual is `docs/manual/`, eight parts in Leap-C's shape, one entry per ROM word; every ```forth block is a
-  test and `tools/manualcheck.py` holds the entries to the ROM. The tutorial, `cartridge.md`, `numeric_model.md` and
-  `hardware_notes.md` are gone into it. Five defects found while writing it are fixed (`NO EXROM`, the data stack's
-  guard, `RECT` clipping, the sprite range checks, the `g p q` glyphs). PR #19 open; the owner reviews it.
-- **Branch `v2/step-polygon-edges`** (from `v2/step-manual`): POLYGON and POLYGON-FILL move a corner off the screen to
-  the nearest edge, as Leap-C's `draw()`/`box()` (`docs/V2/milestones/Polygon_edges.md`). PR #20 open, based on
-  `v2/step-manual` (it becomes master's once #19 merges); the owner reviews it after #19.
-- **Branch `v2/step-cart-start`** (from `v2/step-polygon-edges`): a program cartridge no longer checks its CRC at
-  power-on, as Leap V2's production cartridge (`~/Projects/Leap-Cartridge`, `CART_LOAD`) does not
-  (`docs/V2/milestones/Cart_start.md`). PR #21 open, stacked on #20; the owner reviews it after #20.
-- **Branch `v2/step-blackjack`** (from `v2/step-cart-start`; master had not moved): the Blackjack demo rebuilt and
-  made a cartridge by `make blackjack`; `RND`'s own seed from `FRAMES` and R; `tape_gen_forth.py`'s line ends
-  (`docs/V2/milestones/Blackjack.md`). PR #22 open, stacked on #21; the owner reviews it after #21. This branch's
-  HANDOFF and ROADMAP are the newest. Merge order: #19, #20, #21, #22.
+- **V2 is complete. Master `24a5bf2`**: PRs #19 (Manual), #20 (Polygon edges), #21 (Cart start) and #22 (Blackjack)
+  merged 2026-11-01, in that order, with merge commits; no PR open, every other branch merged. The ROADMAP has nothing
+  scheduled. The step reports are `docs/V2/milestones/`; the last is `Blackjack.md`.
 - **The owner (2026-11-01):** for a remaining defect, look first at how Leap-C (and Leap V2, whose cartridge is in
   production) handled the same problem. The one left (LINE far off the screen) is compared in the Polygon edges
   report: Forth keeps the exact line.
 - **Decided (2026-11-01):** the manual has Leap-C's eight parts, the words split into Part 3 (the language) and Part 4
   (the machine) by the IDE's groups; the tutorial is folded in as Part 2 (the owner). Earlier: after the cartridge's
-  start word, the `OK` prompt; Blackjack (a demo) is one of the last steps.
+  start word, the `OK` prompt.
 - **Free bytes:** HOME 1,924, EXROM 3,136, the cartridge's HOME image 1,751; per component in `budget.toml`
   (`make budget`), per routine `make inventory`. The dictionary starts at `$9100` (`FREE` 16,128 at power-on); the data
   stack is 896 cells under a 256-byte guard (`$9000-$90FF`).
-- **Next:** nothing scheduled in the ROADMAP; the Shooting Gallery is not wanted now (the owner, 2026-11-01). Leap V2 (`~/2068-Leap`, `kernel/math/math.asm`) seeds `RND` from R alone, the defect fixed here
+- **Next:** nothing scheduled; the Shooting Gallery is not wanted now (the owner, 2026-11-01). A new step starts
+  from master. Leap V2 (`~/2068-Leap`, `kernel/math/math.asm`) seeds `RND` from R alone, the defect fixed here
   in step Blackjack; that is Leap V2's to fix, not this repo's.
 
 ## How the owner wants the work done
