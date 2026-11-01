@@ -118,6 +118,7 @@ chord and waits at the prompt. Try:
 | TSRun (browser) | "Load ROM0" `forth_boot_rom0.bin`, "Load ROM1" `graphics_exrom.bin`. |
 | EightyOne 1.41 | the HOME ROM as the ROM file, `graphics_exrom.dck` as a Timex ROM cartridge: [docs/eightyone_setup.md](docs/eightyone_setup.md) (the EXROM cartridge does not load correctly on EightyOne 1.41). |
 | TS-Pico | the HOME ROM in its ROM slot; TS-Pico has no EXROM slot yet: [docs/ts_pico_setup.md](docs/ts_pico_setup.md). |
+| A stock TS2068 | no ROMs replaced: `forth_cart.dck` as a dock cartridge (ZEsarUX with its stock `ts2068.rom` and *smartload*, TSRun's dock slot). `make cart PROG=game.tap START=PLAY` packs a program saved with `SAVE-LIB` into a cartridge that runs it at power-on: [docs/cartridge.md](docs/cartridge.md). |
 
 Everything here is checked on emulators only (ZEsarUX, Fuse, TSRun); there is no real hardware in this project.
 
@@ -127,7 +128,8 @@ Everything here is checked on emulators only (ZEsarUX, Fuse, TSRun); there is no
 
 Every push to `master` builds
 [2068-Forth-latest.zip](https://github.com/nchiker/2068-Leap-Forth/releases/download/latest/2068-Forth-latest.zip):
-the two images, the two as one file for ZEsarUX, the EXROM `.dck`, `SHA256SUMS`, the symbol listings, the demo
+the two images, the two as one file for ZEsarUX, the EXROM `.dck`, Forth as a cartridge for a stock TS2068
+(`forth_cart.dck`), `SHA256SUMS`, the symbol listings, the demo
 programs' source (`demos/`) and the documents as Markdown, PDF and DOCX. Numbered releases are on the
 [releases page](https://github.com/nchiker/2068-Leap-Forth/releases); `make dist` makes the same zip locally.
 

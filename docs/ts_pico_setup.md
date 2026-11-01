@@ -31,6 +31,14 @@ else works. The EXROM (`build/graphics_exrom.dck`) has no slot to go in on TS-Pi
 TS-Pico's documentation notes that a ROM switch can hang the machine, with a fall-back to the stock ROM on the next
 boot; a TS Reset or a power cycle recovers.
 
+## The cartridge in the DCK slot (not tried)
+
+`build/cart/forth_cart.dck` (`make cart`, also in the release zip) is the HOME ROM and the EXROM as one DOCK cartridge
+for a stock TS2068: the stock ROM starts it from the DOCK (an LROS header), and the EXROM comes from DOCK chunk 5
+([cartridge.md](cartridge.md)). In TS-Pico's DCK slot, with the stock HOME ROM booted, that would give every word,
+`EDIT` and the EXROM words included, without the ROM slot. It runs on ZEsarUX and TSRun with the stock ROM; whether
+TS-Pico's firmware serves DOCK chunks 0-1 (the LROS start) has not been checked.
+
 ## Sources
 
 - `github.com/timex-sinclair-projects/TS-Pico`: `commands.md` (command reference: `.rom`, `.dck` and `.tap` loading,
