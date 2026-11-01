@@ -455,6 +455,9 @@ INTERPRET_NESTED:
     ld   a, (hl)
     or   a
     jr   z, .done                 ; empty word: input exhausted
+.token:                           ; (a label for hosts: tools/fharness.py, the Leap IDE) WORD_BUF =
+                                  ; the token, SRC_PTR past it and its delimiter, HERE where its code
+                                  ; goes while STATE is 1
     rst RST_DPUSH
     call FIND
     rst RST_DPOP                 ; HL = the found flag
@@ -519,9 +522,10 @@ INTERPRET_NESTED:
 ; core/fpcore.asm before this file, and RUNTIME_ERROR_HOOK from the ROM. It catches a word that
 ; pops more than the stack holds or pushes past its region (`+` or `DROP` on an empty stack), not
 ; one that nets to a wrong depth within range.
-; Out: returns if both are in range. Otherwise both stacks are reset to empty (IX = DSTACK_TOP,
-;      IY = FSTACK_TOP), its return address into .loop is discarded, and it jumps to
-;      RUNTIME_ERROR_HOOK, leaving the hardware stack at one entry
+; Out: returns if both are in range. Otherwise THROW_CODE = -3 (a stack overflowed) or -4 (a stack
+;      underflowed), both stacks are reset to empty (IX = DSTACK_TOP, IY = FSTACK_TOP), its return
+;      address into .loop is discarded, and it jumps to RUNTIME_ERROR_HOOK (`STACK?`), leaving the
+;      hardware stack at one entry
 ; Destroys: AF, DE, HL (and BC on the error path)
 ; ============================================================================
 STACK_CHECK:
@@ -534,14 +538,14 @@ STACK_CHECK:
     ld   a, h
     or   l
     jr   z, .dstack_top_ok    ; empty
-    jr   .violation            ; IX > DSTACK_TOP: underflow
+    jr   .under                ; IX > DSTACK_TOP: underflow
 .dstack_top_ok:
     push ix
     pop  hl
     ld   de, DSTACK_LIMIT
     or   a
     sbc  hl, de
-    jr   c, .violation          ; IX < DSTACK_LIMIT: overflow
+    jr   c, .over               ; IX < DSTACK_LIMIT: overflow
     push iy
     pop  hl
     ld   de, FSTACK_TOP
@@ -551,16 +555,22 @@ STACK_CHECK:
     ld   a, h
     or   l
     jr   z, .fstack_top_ok
-    jr   .violation
+    jr   .under
 .fstack_top_ok:
     push iy
     pop  hl
     ld   de, FSTACK_LIMIT
     or   a
     sbc  hl, de
-    jr   c, .violation
+    jr   c, .over
     ret                        ; both stacks in range
+.over:
+    ld   hl, -3
+    jr   .violation
+.under:
+    ld   hl, -4
 .violation:
+    ld   (THROW_CODE), hl
     ld   ix, DSTACK_TOP
     ld   iy, FSTACK_TOP
     pop  hl                    ; the return address into .loop: one entry is left

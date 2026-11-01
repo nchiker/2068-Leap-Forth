@@ -17,3 +17,8 @@ FDEPTH .                               \ expect: 0
 DROP                                   \ expect: STACK?
 \ a word under CATCH that read a name before it threw: the line goes on after the name (the tape words' idiom)
 ' ' CATCH NOSUCHWORD . 99 .            \ expect: -13 99
+\ an error that is not a THROW (an unknown word, STACK?) under CATCH ends the line and drops the frame: a later THROW
+\ is not caught in it (it was: `-1 THROW` went back into the dead frame and printed `THROW  ?`)
+' IF CATCH                             \ expect: CATCH ?
+{CATCH_DEPTH} C@ .                     \ expect: 0
+-1 THROW                               \ expect: ERROR -1

@@ -314,6 +314,7 @@ COLON_HDR:                DEFS 2                        ; header of the `:` defi
 COLON_XT:                 DEFS 2                        ; its code address (0: none): a call to it is recursion (STK_GUARD)
 BRK_PEND:                 DEFS 1                        ; nonzero: BREAK was pressed during a section that defers it
 NOBRK:                    DEFS 1                        ; > 0: BREAK waits for the end of the section (core/throwcatch.asm)
+LAST_ERROR:               DEFS 2                        ; the code the last console line ended with: 0 OK, else its error's (REPORT_INTERP_ERROR)
     DEFS RAM_CELLS_END - $                              ; free: room for new cells
     ASSERT $ == RAM_CELLS_END
     ASSERT FP_RAM + 66 == THROW_CODE && FMT + 24 == FDIG && FDIG + 9 == FSQ_N && FQ + 8 == FFLAGS + 1

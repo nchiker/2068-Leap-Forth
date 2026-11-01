@@ -3,17 +3,19 @@
 Read this, then `docs/V2/ROADMAP.md` (done / next / known defects) and `CONTRIBUTING.md` (build, test, rules). Milestone
 reports: `docs/V2/milestones/`.
 
-## Where things stand (2026-10-31)
+## Where things stand (2026-11-01)
 
-- **Branch `v2/step-break-timing`** (from master `0e9ebd0`, PR #14 Display speed merged; `make test` passed on master
-  first): step BREAK and timing is complete (`docs/V2/milestones/BREAK_and_timing.md`); `make test`, `make check` and
-  `make repro` pass on it. Pushed; PR #15 open (the owner merges it, or asks Claude to).
-- **Decided (2026-10-31):** the owner approved every recommendation: 2068-Leap-C's BREAK model; the shapes stop at
-  once, the sprites and `EDIT` defer; `KEY`/`ACCEPT` stop rather than return 16; BREAK silences the AY; the recursion
-  guard (-5 `RETURN STACK FULL`); the scan rewrite; an error drops the open `:` definition.
-- **Free bytes:** HOME 1,939, EXROM 3,208; per component in `budget.toml` (`make budget`), per routine
+- **Master `7b39732`**: PR #15 (BREAK and timing) merged.
+- **Branch `v2/step-ide-hooks`** (from master `7b39732`): step IDE hooks is complete
+  (`docs/V2/milestones/IDE_hooks.md`): the Leap IDE's questions answered in
+  `~/Projects/Leap-IDE/docs/requests/LEAP_FORTH_ANSWERS.md` (written there, not committed in that repository), the
+  labels and `LAST_ERROR` the answers promise, a stale CATCH frame fixed. Pushed; PR #16 open.
+- **Decided (2026-11-01):** the owner approved the answers' recommendations; the V2 manual is rewritten in the style
+  of the Leap-C and Leap V2 manuals (a roadmap step); the cartridge build comes before Blackjack, and Blackjack (a
+  demo) is one of the last steps.
+- **Free bytes:** HOME 1,938, EXROM 3,208; per component in `budget.toml` (`make budget`), per routine
   `make inventory`. The dictionary starts at `$9100` (`FREE` 16,128 at power-on).
-- **Next:** ROADMAP's *Blackjack*.
+- **Next:** ROADMAP's *Cartridge build* (the answers' Q7 holds the design).
 
 ## How the owner wants the work done
 
@@ -83,6 +85,14 @@ reports: `docs/V2/milestones/`.
   and `CATCH_SRC_HERE` (called when such a run starts) moves the frames' position past the name. A new word that runs
   `INTERPRET_NESTED` must call `CATCH_SRC_HERE` first. In the same source a caught THROW goes on after whatever the
   word read: `' LOAD-TEXT CATCH name` (the tutorial's idiom) depends on it.
+- **The Leap IDE drives the prompt by names** (the answers, `~/Projects/Leap-IDE/docs/requests/`):
+  `IO_READ_KEY` with `EDITOR_LOOP_LIVE.key_ret` at SP is the prompt; a line written into `EDIT_BUF` / `EDIT_LEN` /
+  `EDIT_CURSOR` runs from `EDITOR_LOOP_LIVE.enter`; `LAST_ERROR` is the code the last line ended with;
+  `INTERPRET_NESTED.token` maps compiled code to source; also `INTERPRET_RUN`, `STORE_APPEND`, the error routines and
+  the cells `SRC_PTR`, `SRC_END`, `STORE_START`, `STORE_END`, `LATEST`, `HERE`, `STATE`, `THROW_CODE`, `WORD_BUF`,
+  `INTERP_ERROR_FLAG`, `COLON_XT`. Do not rename them (a rename is a breaking change for the IDE: CHANGELOG); boot
+  check `p host line` and `Console.host_line` drive them the IDE's way. Every error ends in `REPORT_INTERP_ERROR`
+  with the code in HL.
 - **Page zero holds 3 free bytes** before `$0100` (the interrupt routine and `IO_KEY_SCAN_ALL`).
 - **The view's store lookup remembers a line** (`STORE_MARK_N`, `STORE_MARK_PTR`): every change to the store during a
   session must go through `STORE_GAP` (which keeps or resets the mark); a session starts it at line 0.

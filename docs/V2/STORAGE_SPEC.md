@@ -230,9 +230,12 @@ own copy, and their own name cells at `$8580` and `$8A62`).
 | `SAVE-LIB` | `( "name" -- )` | `HERE + 2 > DICT_RAM_CEILING`: `THROW -8`. Else CRC over `FORTH_DICT_RAM..HERE-1` into `HERE`, save type 3 with identity and LATEST. SPACE: `THROW -28` |
 | `LOAD-LIB` | `( "name" -- )` | Load type 3 into `FORTH_DICT_RAM`, max `DICT_RAM_CEILING - FORTH_DICT_RAM`. CRC check. Success: `HERE`, `LATEST` set. Failure with nothing written: dictionary unchanged, `THROW -37` (or -28). Failure after writing, or CRC mismatch: **the user dictionary is reset to empty** (`LATEST = DICT_LATEST_INIT_RECALL`, `HERE = FORTH_DICT_RAM`, as cold start does), then `THROW -37` (or -28) |
 | `VERIFY-LIB` | `( "name" -- )` | CRC of the current dictionary into `HERE`; verify type 3 against `FORTH_DICT_RAM..HERE+1`, requiring identity, length and LATEST to match. Nothing is written. Failure: `THROW -37` (or -28) |
-| `SAVE-TEXT` | `( addr len "name" -- )` | As today; SPACE: `THROW -28` |
-| `LOAD-TEXT` | `( "name" -- )` | As today (into `LOADTEXT_BUF`, max 8,192, then interpret); failure: `THROW -37` (or -28) instead of silence |
-| `VERIFY-TEXT` | `( addr len "name" -- )` | Verify type 0 of exactly `len` bytes against `addr`. Failure: `THROW -37` (or -28) |
+| `SAVE-TEXT` | `( "name" -- )` | The line store (`STORE_START..STORE_END`) less the console line holding the command (`STORE_TRIM`); SPACE: `THROW -28` |
+| `LOAD-TEXT` | `( "name" -- )` | Into the line store (`STORE_START`, max 8,192, replacing it), then interpret; failure: `THROW -37` (or -28) instead of silence |
+| `VERIFY-TEXT` | `( "name" -- )` | Verify type 0 against the line store less the console line; the lengths must match. Failure: `THROW -37` (or -28) |
+
+The text words take the line store since step Console and editor (2026-10-29); this table said `( addr len "name" -- )`
+for `SAVE-TEXT` and `VERIFY-TEXT`, from before it, until step IDE hooks (2026-11-01).
 
 `LOAD-LIB` called from a word compiled in the dictionary overwrites the code it will return into; that is true today
 and stays true. The docs say to call it from the prompt.

@@ -644,7 +644,21 @@ class Console:
         self.wait(maxi)
 
     def in_editor(self):
-        return self.caller == self.S("EDITOR_LOOP_LIVE.keyloop") + 3
+        return self.caller == self.S("EDITOR_LOOP_LIVE.key_ret")
+
+    def host_line(self, text, maxi=60_000_000):
+        """Run a line the Leap IDE's way (its questions' answers, docs/V2/milestones/IDE_hooks.md): at the prompt's key
+        wait, EDIT_BUF / EDIT_LEN / EDIT_CURSOR get the line, the key wait's return address is dropped and the console's
+        own ENTER path runs it (EDITOR_LOOP_LIVE.enter: the store, the run, OK); then on to the next key wait."""
+        m, S = self.m, self.S
+        if not self.in_editor():
+            raise RuntimeError("host_line: not at the prompt (the key wait returns to %04X)" % self.caller)
+        data = text.encode("latin-1")
+        m.write(S("EDIT_BUF"), data)
+        m.write(S("EDIT_LEN"), bytes([len(data), len(data)]))
+        m.setreg("SP", m.regs()["SP"] + 2)
+        m.setreg("PC", S("EDITOR_LOOP_LIVE.enter"))
+        self.wait(maxi)
 
     def edit_line(self):
         n = self.m.read(self.S("EDIT_LEN"), 1)[0]
@@ -1039,6 +1053,44 @@ def _check_isr_cost(m, _):
         max(idle), ISR_IDLE_CEIL, max(held), ISR_HELD_CEIL))
 
 
+# The labels and the cell the Leap IDE drives the prompt by (step IDE hooks): EDITOR_LOOP_LIVE.key_ret tells the prompt's
+# key wait from a running word's, EDITOR_LOOP_LIVE.enter runs a line written into EDIT_BUF, LAST_ERROR keeps the
+# line's error code, INTERPRET_NESTED.token maps a definition's code to its source (SRC_PTR, HERE while STATE is 1).
+def _check_host(m, _):
+    S = m.sym
+    con = Console(m)
+    con.boot()
+    buf = S("EDIT_BUF")
+    out = []
+    con.host_line("1 2 + .")
+    store = m.read(S("STORE_START"), m.w16(S("STORE_END")) - S("STORE_START"))
+    out.append(("ok", con.rows()[0], m.w16(S("LAST_ERROR")), store))
+    m.set_bps([S("INTERPRET_NESTED.token")])
+    m.write(buf, b": SQ DUP * ;")
+    m.write(S("EDIT_LEN"), bytes([12, 12]))
+    m.setreg("SP", m.regs()["SP"] + 2)
+    m.setreg("PC", S("EDITOR_LOOP_LIVE.enter"))
+    recs = []
+    while m.run_to([S("INTERPRET_NESTED.token"), S("IO_READ_KEY")], 60_000_000) == S("INTERPRET_NESTED.token"):
+        if m.read(S("STATE"), 1)[0]:
+            recs.append((m.read(S("WORD_BUF") + 1, m.read(S("WORD_BUF"), 1)[0]).decode(),
+                         m.w16(S("SRC_PTR")) - buf, m.w16(S("HERE"))))
+        m.cmd("cpu-step")
+    con.caller = m.w16(m.regs()["SP"])
+    xt = m.w16(S("LATEST")) + 5          # SQ's header: link, the length byte, 2 characters
+    out.append(("token", recs == [("DUP", 9, xt), ("*", 11, xt + 3), (";", 12, xt + 6)], recs))
+    con.host_line("NOSUCHWORD 5 .")
+    out.append(("error", con.rows()[2], m.w16(S("LAST_ERROR")) - 0x10000, m.w16(S("SRC_PTR")) - buf))
+    con.host_line("KEY DROP")
+    waiting = con.in_editor()
+    con.key(ord("x"))
+    out.append(("key", waiting, con.in_editor(), m.w16(S("LAST_ERROR"))))
+    want = [("ok", "3 OK", 0, b"1 2 + .\r"), ("token", True), ("error", "NOSUCHWORD ?", -13, 11),
+            ("key", False, True, 0)]
+    got = [o[:2] if o[0] == "token" else o for o in out]
+    return dict(ok=got == want, detail="%s (want %s)" % (out, want))
+
+
 # (letter i, the 64-column screen, was retired in step M6 with the mode; the letters are not renumbered)
 CHECKS = [("a", "boot", _check_boot), ("b", "glyph table", _check_glyphs), ("c", "version", _check_version),
           ("d", "restore determinism", _check_restore), ("e", "call GFX_CLS", _check_call),
@@ -1046,7 +1098,7 @@ CHECKS = [("a", "boot", _check_boot), ("b", "glyph table", _check_glyphs), ("c",
           ("j", "memory assertions", _check_mem),
           ("k", "checkpoint/rollback", _check_checkpoint), ("l", "startup chime", _check_chime),
           ("m", "boot screen", _check_screen), ("n", "first key", _check_first_key),
-          ("o", "interrupt cost", _check_isr_cost)]
+          ("o", "interrupt cost", _check_isr_cost), ("p", "host line", _check_host)]
 
 
 def _run_checks(build, workers, port0):
