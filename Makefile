@@ -78,6 +78,7 @@ check: all cart
 	python3 -I tools/tapes.py --selftest
 	python3 -I tools/rom_identity.py --verify build/forth_boot_rom0.bin build/forth_boot.sym
 	python3 -I tools/cart_check.py build $(CART)
+	python3 -I tools/docexamples.py --check
 
 budget: all
 	python3 -I tools/budget.py
