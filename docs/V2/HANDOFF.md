@@ -5,15 +5,19 @@ reports: `docs/V2/milestones/`.
 
 ## Where things stand (2026-11-01)
 
-- **Master `c45281f`**: PR #16 (IDE hooks) merged.
-- **Branch `v2/step-cartridge`** (from master `c45281f`): step Cartridge is complete (`docs/V2/milestones/Cartridge.md`).
-  `make cart` builds Forth, and a program saved with `SAVE-LIB`, as a DOCK cartridge for a stock TS2068
-  (`docs/cartridge.md`). Pushed; PR #17 open.
-- **Decided (2026-11-01):** after the cartridge's start word, the `OK` prompt (the owner). Earlier: the V2 manual is
-  rewritten in the style of the Leap-C and Leap V2 manuals; Blackjack (a demo) is one of the last steps.
-- **Free bytes:** HOME 1,938, EXROM 3,208, the cartridge's HOME image 1,744; per component in `budget.toml`
-  (`make budget`), per routine `make inventory`. The dictionary starts at `$9100` (`FREE` 16,128 at power-on).
-- **Next:** ROADMAP's *Manual*.
+- **Master `800e979`**: PR #17 (step Cartridge) merged.
+- **Branch `v2/step-manual`** (from master `800e979`): step Manual is complete (`docs/V2/milestones/Manual.md`). The
+  user's manual is `docs/manual/`, eight parts in Leap-C's shape, one entry per ROM word; every ```forth block is a
+  test and `tools/manualcheck.py` holds the entries to the ROM. The tutorial, `cartridge.md`, `numeric_model.md` and
+  `hardware_notes.md` are gone into it. Five defects found while writing it are fixed (`NO EXROM`, the data stack's
+  guard, `RECT` clipping, the sprite range checks, the `g p q` glyphs). Not pushed; no PR yet (the owner asks).
+- **Decided (2026-11-01):** the manual has Leap-C's eight parts, the words split into Part 3 (the language) and Part 4
+  (the machine) by the IDE's groups; the tutorial is folded in as Part 2 (the owner). Earlier: after the cartridge's
+  start word, the `OK` prompt; Blackjack (a demo) is one of the last steps.
+- **Free bytes:** HOME 1,936, EXROM 3,136, the cartridge's HOME image 1,741; per component in `budget.toml`
+  (`make budget`), per routine `make inventory`. The dictionary starts at `$9100` (`FREE` 16,128 at power-on); the data
+  stack is 896 cells under a 256-byte guard (`$9000-$90FF`).
+- **Next:** ROADMAP's *Blackjack*.
 
 ## How the owner wants the work done
 
@@ -56,6 +60,12 @@ reports: `docs/V2/milestones/`.
   it). Comments in LOAD-TEXT's CR-ended text are tape case C.
 - **Defining words share `HEADER_BUILD`** (`core/interp.asm`), which takes the name through `WORD_NAME` (THROW -16 on
   none); `ARRAY`, `STRING`, `FVARIABLE` are `VARIABLE_N` with BC data bytes. A new defining word should use them.
+- **The manual** (`docs/manual/`): a word added, removed or changed needs its entry in Part 3 or 4 in the IDE's shape
+  (`tools/manualcheck.py`, in `make check`, says what is wrong); after editing any part run `tools/docexamples.py`
+  (regenerates `tests/doc/manual_*.fs`, which the forth suite runs) and `make manual` (the `.docx`). Example lines are
+  typed: keep each under 31 characters (forthtest misreads a line that wraps the input area; the screen is right),
+  give `\ expect:` two spaces for output that starts with a space, and keep picture lines `\ draws` (text typed over a
+  picture reads as garbage). Tape commands are ```text blocks. The answers' Q5 has an as-built section for the IDE.
 - **Forth tests:** `{NAME}` in a test line is a ROM symbol's value (never a literal RAM address in a test). A line's
   output must fit the screen; a line that clears the screen must print something new; `\ keys:` feeds
   KEY/ACCEPT/INPUT; `\ draws` for picture lines. A full screen scrolls: put `CLS 0 0 AT-XY` before a long block. A

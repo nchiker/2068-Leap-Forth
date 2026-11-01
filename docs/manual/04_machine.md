@@ -504,6 +504,7 @@ INPUT .                  \ expect: 40000-25536
 **Notes.**
 
 * The characters you type are shown at the print position, as with `ACCEPT`. A ninth character is ignored.
+* ENTER does not move printing to a new row: `CR` after `INPUT` starts the next output on the row below.
 * A number with a decimal point is not a number to `INPUT`: `12.5` gives 0.
 
 **See also** `ACCEPT`, `VAL`, `KEY`.
