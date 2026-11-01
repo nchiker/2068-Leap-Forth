@@ -69,7 +69,7 @@ def source_kinds():
         text = open(path, encoding="latin-1").read()
         for m in re.finditer(r"^W_(\w+):\n(.*?)(?=^H_\w+:|\Z)", text, re.S | re.M):
             body = m.group(2)
-            if re.search(r"\b(call|jp)\s+EXROM_CALL_(SLOT|NOBRK)\b", body):
+            if re.search(r"\b(call|jp|jr)\s+EXROM_CALL_(SLOT|NOBRK)\b", body):
                 kinds["H_" + m.group(1)] = "EXROM word"
             elif re.search(r"\b(call|jp)\s+(HEADER_BUILD|VARIABLE_N)\b", body):
                 kinds["H_" + m.group(1)] = "defining word"

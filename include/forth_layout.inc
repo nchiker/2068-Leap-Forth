@@ -125,10 +125,10 @@ GFX_FILL_OVF:             DEFS 1                        ; FILL: nonzero when a s
 GFX_FILL_AOFF:            DEFS 1                        ; FILL: work plane offset in pages (0 screen, $1B shadow)
 GFX_FILL_EL:              DEFS 1                        ; FILL: span's left edge mask
 GFX_FILL_ER:              DEFS 1                        ; FILL: span's right edge mask
-RECT_X0:                  DEFS 1                        ; RECT: corner x0, as given
-RECT_Y0:                  DEFS 1                        ; RECT: corner y0, as given
-RECT_X1:                  DEFS 1                        ; RECT: corner x1, as given
-RECT_Y1:                  DEFS 1                        ; RECT: corner y1, as given
+RECT_X0:                  DEFS 2                        ; RECT: corner x0, as given (signed); clipped to a byte
+RECT_Y0:                  DEFS 2                        ; RECT: corner y0, the same
+RECT_X1:                  DEFS 2                        ; RECT: corner x1, the same
+RECT_Y1:                  DEFS 2                        ; RECT: corner y1, the same
 RECT_ATTR:                DEFS 1                        ; RECT: fill attribute
 RECT_CUR_X:               DEFS 1                        ; POLYGON fill: span x cursor
 RECT_CUR_Y:               DEFS 1                        ; POLYGON fill: span y cursor

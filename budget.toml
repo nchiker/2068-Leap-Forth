@@ -451,3 +451,15 @@ image = "home"
 component = "graphics"
 delta = 3
 reason = "Manual: EXROM_CALL_SLOT prints NO EXROM when the EXROM does not match (RECT FILL CIRCLE POLYGON POLYGON-FILL and the SPRITE words were silent; the README and the setup guides said NO EXROM, as EDIT printed); the message moved from EDIT into a routine both use; from the reserve"
+
+[[ledger]]
+image = "exrom"
+component = "rect"
+delta = 55
+reason = "Manual: RECT clips signed corners as LINE and CIRCLE do (RECT_CLIP_AXIS sorts and clips each axis; it took the corners' low bytes, so 300 drew at 44, and did not check y, writing past the bitmap); from the EXROM reserve"
+
+[[ledger]]
+image = "exrom"
+component = "sprites"
+delta = 17
+reason = "Manual: SPRITE-DEFINE and SPRITE-SHOW refuse a position whose 2x2 cells are off the screen (SPRITE_ARGS_BAD; row 23 or col 31 read and wrote past the screen); from the EXROM reserve"

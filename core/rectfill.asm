@@ -78,25 +78,21 @@ CALL_HL:
 
 ; ============================================================================
 ; RECT ( x0 y0 x1 y1 -- ) -- fill the rectangle between two corners (any order, inclusive)
-; with the current colour (CURRENT_ATTR), via the EXROM's RECT_FILL_IMPL; out-of-range or no
-; EXROM: nothing is drawn
+; with the current colour (CURRENT_ATTR), via the EXROM's RECT_FILL_IMPL. Signed cells: the part
+; on the screen is drawn (RECT_FILL_IMPL clips); no EXROM: NO EXROM
 ; ============================================================================
 H_RECT:
     DW   DICT_CHAIN_POINT
     DB   4, "R", "E", "C", "T"
 W_RECT:
     rst RST_DPOP           ; hl = y1
-    ld   a, l
-    ld   (RECT_Y1), a
+    ld   (RECT_Y1), hl
     rst RST_DPOP           ; hl = x1
-    ld   a, l
-    ld   (RECT_X1), a
+    ld   (RECT_X1), hl
     rst RST_DPOP           ; hl = y0
-    ld   a, l
-    ld   (RECT_Y0), a
+    ld   (RECT_Y0), hl
     rst RST_DPOP           ; hl = x0
-    ld   a, l
-    ld   (RECT_X0), a
+    ld   (RECT_X0), hl
     ld   a, (CURRENT_ATTR)
     ld   (RECT_ATTR), a
     ld   hl, GRAPHICS_EXROM_BASE + (0 * 3)   ; slot 0 = RECT_FILL_IMPL
