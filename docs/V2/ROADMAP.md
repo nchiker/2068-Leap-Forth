@@ -45,9 +45,8 @@ as well as R, and `tools/tape_gen_forth.py` puts a PC file's lines on tape ended
 
 ## Next, in order
 
-1. **Shooting Gallery** (`demos/gallery.fs`, the old demo ROM's source, not yet rebuilt): proposed, for the owner to
-   decide. It would be rebuilt as Blackjack was (a program for the finished ROM, `make gallery` as a cartridge). Its
-   text has not been loaded or run on this ROM.
+Nothing scheduled. The Shooting Gallery is not wanted now (the owner, 2026-11-01): `demos/gallery.fs` stays as the old
+demo ROM's source, not rebuilt and not run on this ROM.
 
 ## Known defects
 

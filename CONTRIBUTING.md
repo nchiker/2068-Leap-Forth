@@ -127,7 +127,7 @@ HOME reserve floor in `budget.toml`. So the cartridge always fits as long as the
 | `include/` | the RAM layout, hardware constants, the EXROM interface, key codes |
 | `tests/` | the Forth tests by area, the benchmarks (`tests/bench/`), test data |
 | `tools/` | build, check and test tools; the ZEsarUX harness (`fharness.py`, `run_tests.py`), the Fuse harness (`fusedrive.py`, `fuse/`), the tape tools (`tapes.py`, `tape_gen_forth.py`: a source file as a text tape; `fs2lib.py`: compiled, as a SAVE-LIB tape), `z80sim/` |
-| `demos/` | Forth programs as source text: Blackjack (`make blackjack`; tapetest case 2 plays it), Shooting Gallery (its old source, not yet rebuilt) |
+| `demos/` | Forth programs as source text: Blackjack (`make blackjack`; tapetest case 2 plays it), Shooting Gallery (the old demo ROM's source, not rebuilt) |
 | `docs/` | the user's manual (`manual/`, its Word edition), the emulator guides; the roadmap, handoff and milestone reports (`V2/`) |
 | `patches/` | the ZEsarUX EXROM patch |
 

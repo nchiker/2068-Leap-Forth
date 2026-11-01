@@ -1,6 +1,6 @@
 \ Shooting Gallery: a real-time arcade game for Leap-Forth (needs the graphics EXROM).
 \ Controls: Q/A, W/S, E/D move targets 1-3 between lanes; O/P move the blaster; SPACE fires.
-\ The source of the old demo ROM, kept to be rebuilt as a program for the finished ROM (ROADMAP).
+\ The source of the old demo ROM, kept as it was: not rebuilt for the finished ROM, and not run on it.
 0 RANDOMIZE
 3 ARRAY TCOL 3 ARRAY TDIR 3 ARRAY TSTEP 3 ARRAY TLANE 3 ARRAY LANES
 3 ARRAY SROW 3 ARRAY SCOL 3 ARRAY SACTIVE

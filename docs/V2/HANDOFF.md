@@ -30,8 +30,7 @@ reports: `docs/V2/milestones/`.
 - **Free bytes:** HOME 1,924, EXROM 3,136, the cartridge's HOME image 1,751; per component in `budget.toml`
   (`make budget`), per routine `make inventory`. The dictionary starts at `$9100` (`FREE` 16,128 at power-on); the data
   stack is 896 cells under a 256-byte guard (`$9000-$90FF`).
-- **Next:** ROADMAP's next step is proposed, not decided: the Shooting Gallery (`demos/gallery.fs`) rebuilt as Blackjack
-  was. Ask the owner. Leap V2 (`~/2068-Leap`, `kernel/math/math.asm`) seeds `RND` from R alone, the defect fixed here
+- **Next:** nothing scheduled in the ROADMAP; the Shooting Gallery is not wanted now (the owner, 2026-11-01). Leap V2 (`~/2068-Leap`, `kernel/math/math.asm`) seeds `RND` from R alone, the defect fixed here
   in step Blackjack; that is Leap V2's to fix, not this repo's.
 
 ## How the owner wants the work done
