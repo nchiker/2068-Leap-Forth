@@ -1190,3 +1190,6 @@ this is the condensed one-paragraph-per-phase version.
   fixed seed gives the same numbers as before. `tools/tape_gen_forth.py`
   turns a file's LF line ends into CR. HOME free space unchanged (1,924
   bytes). Emulators only (ZEsarUX, TSRun); no hardware.
+- V2 complete (2026-11-01): steps Manual, Polygon edges, Cart start and
+  Blackjack merged (PRs #19-#22); `docs/V2/ROADMAP.md` lists every step
+  and the one known defect left as it is.
