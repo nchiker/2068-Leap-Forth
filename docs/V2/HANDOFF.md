@@ -8,7 +8,7 @@ reports: `docs/V2/milestones/`.
 - **Master `c45281f`**: PR #16 (IDE hooks) merged.
 - **Branch `v2/step-cartridge`** (from master `c45281f`): step Cartridge is complete (`docs/V2/milestones/Cartridge.md`).
   `make cart` builds Forth, and a program saved with `SAVE-LIB`, as a DOCK cartridge for a stock TS2068
-  (`docs/cartridge.md`). Not pushed; no PR yet.
+  (`docs/cartridge.md`). Pushed; PR #17 open.
 - **Decided (2026-11-01):** after the cartridge's start word, the `OK` prompt (the owner). Earlier: the V2 manual is
   rewritten in the style of the Leap-C and Leap V2 manuals; Blackjack (a demo) is one of the last steps.
 - **Free bytes:** HOME 1,938, EXROM 3,208, the cartridge's HOME image 1,744; per component in `budget.toml`
