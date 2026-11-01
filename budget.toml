@@ -10,6 +10,9 @@
 # reallocate from another component or from the reserve, with a ledger entry and its measured reason; ask the owner
 # if the reserve would fall below its floor. The base budgets are the sizes measured at Simplify (2026-10-30). The
 # reserve floors are the owner's targets (decision 1, 2026-10-28): HOME 200 B, EXROM 150 B.
+#
+# The cartridge build (make cart, kernel/bank/cart.asm) puts its own code in the release HOME image's free space;
+# tools/cart_check.py keeps that code within the HOME reserve floor, so the cartridge fits whenever the release does.
 
 [home]
 image = "forth_boot_rom0.bin"

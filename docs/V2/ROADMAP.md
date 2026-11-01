@@ -6,8 +6,8 @@ the best solution for the language and its users; fix a problem in the session i
 reason not to (the reason is written here); **follow Leap-C's conventions** (`~/2068-Leap-C` `CONTRIBUTING.md` and
 `project_plan.md` section 1) for testing, paperwork, code style and RAM layout.
 
-Last updated 2026-11-01. Free bytes: HOME 1,938, EXROM 3,208 (`make budget`: per component, `budget.toml`;
-`make inventory`: per routine). Dictionary: 16,128 bytes at power-on.
+Last updated 2026-11-01. Free bytes: HOME 1,938, EXROM 3,208, the cartridge's HOME image 1,744 (`make budget`: per
+component, `budget.toml`; `make inventory`: per routine). Dictionary: 16,128 bytes at power-on.
 
 ## Done
 
@@ -30,34 +30,34 @@ Last updated 2026-11-01. Free bytes: HOME 1,938, EXROM 3,208 (`make budget`: per
 | Display look | Leap V2's screen: black on white, the version on the status bar, `EDIT`'s bar, Leap V2's chime (`milestones/Display_look.md`) |
 | Display speed | LINE on signed 16-bit ends, about 5× faster; the view's store lookup from the line found last; a faster console scroll (`milestones/Display_speed.md`) |
 | BREAK and timing | BREAK stops a running word (THROW -28 from the interrupt routine); recursion stops with RETURN STACK FULL; the interrupt routine's idle frame 2,010 → 207 T (`milestones/BREAK_and_timing.md`) |
+| IDE hooks | The Leap IDE's questions answered; labels a host drives the prompt by and `LAST_ERROR` (`milestones/IDE_hooks.md`) |
 
-## Now: IDE hooks — done (`docs/V2/milestones/IDE_hooks.md`)
+## Now: Cartridge — done (`docs/V2/milestones/Cartridge.md`)
 
-The Leap IDE's questions (`~/Projects/Leap-IDE/docs/requests/LEAP_FORTH_QUESTIONS.md`) answered in
-`LEAP_FORTH_ANSWERS.md` beside them. Labels a host drives the prompt by (`EDITOR_LOOP_LIVE.key_ret`, `.enter`,
-`INTERPRET_NESTED.token`) and the cell `LAST_ERROR` (the code the last console line ended with); `STACK?` is -4 or -3,
-ABORT -1, QUIT -56. Fixed on the way: an unknown word or `STACK?` under CATCH left a dead frame that caught the next
-THROW; `STORAGE_SPEC.md` gave the text words' old stack effects. HOME 1,939 → 1,938 B free.
+`make cart` builds Forth as a DOCK cartridge for a stock TS2068 (`docs/cartridge.md`): the HOME image with
+`-DCARTRIDGE` in DOCK chunks 0-1 (an LROS header in `RST_00`'s bytes), the release EXROM in chunk 5, and a program
+saved with `SAVE-LIB` in chunks 2-3. At power-on the program is copied to `$9100` and its start word runs as a typed
+line, then the `OK` prompt (the owner's choice). Every release label keeps its address and the cartridge carries the
+release's `ROM_IDENTITY` (`tools/cart_check.py`); the release images are byte-identical. `tools/forthcart.py` packs a
+`.tap`/`.tzx`; `make test` has a `cart` suite (ZEsarUX and TSRun on the stock ROM); `make test-cart` runs the other
+suites on the cartridge. The cartridge's code is 194 B of the release's free space (within the 200 B floor).
 
 ## Next, in order
 
-1. **Cartridge build** (the owner's decision, 2026-10-31; the IDE's question Q7): `make cart` builds a cartridge that
-   runs a Forth program on a stock TS2068: the Forth HOME in DOCK chunks 0-1 with an LROS header in `RST_00`'s bytes,
-   the EXROM in DOCK chunk 5, the paging routines under a build flag (port `$F4` keeps chunks 0-1 DOCK, port `$FF`
-   bit 7 stays 0), the program a `SAVE-LIB` image with its start word and the UDG table in DOCK chunks 2-3, copied to
-   `$9100` at the start. The release ROMs do not change. The design is in the answers (Q7); the owner chooses what
-   happens after the start word returns.
-2. **Manual**: the V2 manual rewritten in the style of the Leap-C manual (`~/2068-Leap-C/docs/manual`) and the Leap V2
+1. **Manual**: the V2 manual rewritten in the style of the Leap-C manual (`~/2068-Leap-C/docs/manual`) and the Leap V2
    manual: `docs/manual/` parts, one entry per word in the shape the Leap IDE generates its help from (the answers,
-   Q5), every example run by the build, and a check that the manual and the ROM's headers name the same words.
-3. **Blackjack** rebuilt from its saved source (`demos/blackjack.fs`) as a program for the finished ROM; the Shooting
-   Gallery's source is beside it (`demos/gallery.fs`). A demo: one of the last steps.
+   Q5), every example run by the build, and a check that the manual and the ROM's headers name the same words. The
+   cartridge guide (`docs/cartridge.md`) becomes one of its parts.
+2. **Blackjack** rebuilt from its saved source (`demos/blackjack.fs`) as a program for the finished ROM; the Shooting
+   Gallery's source is beside it (`demos/gallery.fs`). A demo: one of the last steps; `make cart` can ship it as a
+   cartridge.
 
 ## Known defects
 
 | Defect | Found | Fixed in |
 |---|---|---|
 | POLYGON and POLYGON-FILL take their vertices as bytes (an off-screen vertex wraps, as LINE's ends did) | Display speed | Not scheduled: the owner chose the least ROM space (2026-10-31); a fix is about +15 B and 48 B RAM for the outline, +100-150 B EXROM for POLYGON-FILL's clipping |
+| A program cartridge's load checks the image with the ROM's CRC: about 0.15 s per 1,000 bytes of dictionary (2.7 s for the largest, 16,128 B) | Cartridge | Not scheduled: an unrolled CRC is about +60 B, over the 200 B the cartridge's own code is held to (it must fit whenever the release does); a sum would catch less. Spent once, at power-on |
 | LINE with an end far off the screen walks to it at about 270 T a step (ends near ±32,768: about 10M T, 3 s) | Display speed | Not scheduled: an exact jump over the off-screen part (32-bit multiply and divide) was built: its routines 70 B, about 130 B with the code around them |
 
 Fixed in IDE hooks: an error that is not a THROW (an unknown word, `STACK?`) under CATCH left `CATCH_DEPTH` counting a

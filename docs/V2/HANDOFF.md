@@ -5,17 +5,15 @@ reports: `docs/V2/milestones/`.
 
 ## Where things stand (2026-11-01)
 
-- **Master `7b39732`**: PR #15 (BREAK and timing) merged.
-- **Branch `v2/step-ide-hooks`** (from master `7b39732`): step IDE hooks is complete
-  (`docs/V2/milestones/IDE_hooks.md`): the Leap IDE's questions answered in
-  `~/Projects/Leap-IDE/docs/requests/LEAP_FORTH_ANSWERS.md` (written there, not committed in that repository), the
-  labels and `LAST_ERROR` the answers promise, a stale CATCH frame fixed. Pushed; PR #16 open.
-- **Decided (2026-11-01):** the owner approved the answers' recommendations; the V2 manual is rewritten in the style
-  of the Leap-C and Leap V2 manuals (a roadmap step); the cartridge build comes before Blackjack, and Blackjack (a
-  demo) is one of the last steps.
-- **Free bytes:** HOME 1,938, EXROM 3,208; per component in `budget.toml` (`make budget`), per routine
-  `make inventory`. The dictionary starts at `$9100` (`FREE` 16,128 at power-on).
-- **Next:** ROADMAP's *Cartridge build* (the answers' Q7 holds the design).
+- **Master `c45281f`**: PR #16 (IDE hooks) merged.
+- **Branch `v2/step-cartridge`** (from master `c45281f`): step Cartridge is complete (`docs/V2/milestones/Cartridge.md`).
+  `make cart` builds Forth, and a program saved with `SAVE-LIB`, as a DOCK cartridge for a stock TS2068
+  (`docs/cartridge.md`). Not pushed; no PR yet.
+- **Decided (2026-11-01):** after the cartridge's start word, the `OK` prompt (the owner). Earlier: the V2 manual is
+  rewritten in the style of the Leap-C and Leap V2 manuals; Blackjack (a demo) is one of the last steps.
+- **Free bytes:** HOME 1,938, EXROM 3,208, the cartridge's HOME image 1,744; per component in `budget.toml`
+  (`make budget`), per routine `make inventory`. The dictionary starts at `$9100` (`FREE` 16,128 at power-on).
+- **Next:** ROADMAP's *Manual*.
 
 ## How the owner wants the work done
 
@@ -40,9 +38,9 @@ reports: `docs/V2/milestones/`.
 - **Never run anything that opens an emulator window** (Fuse needs an X display). The ZEsarUX on port 10330 belongs to
   another project.
 - **Ports:** run_tests' pool 10760-10779 (two agents can split it: `--port 10760 --workers 4`, `--port 10770`),
-  poweron 10820-10839, floattest 10840-10859, shapetest 10860-10879, ay_audio 10880-10899, fharness self-test
-  10900-10919, tapetest 10960-10979, tapetol 10980-10999.
-- **Suite times:** `make test` ~9 min (pool ~3, poweron 0.5, tape ~5.5), `make test-fast` ~2 min,
+  carttest 10920-10939, poweron 10820-10839, floattest 10840-10859, shapetest 10860-10879, ay_audio 10880-10899,
+  fharness self-test 10900-10919, tapetest 10960-10979, tapetol 10980-10999.
+- **Suite times:** `make test` ~9 min (pool ~3, poweron 0.5, tape ~5.5, cart 0.1), `make test-fast` ~2 min,
   `python3 tools/forthtest.py` (the Forth tests alone) ~30 s.
 - **The boot screen:** output starts on row 0; row 23 holds the version on the status bar (`fh.STATUS_BAR`, the cursor
   `$B8` in its column 0) from the boot snapshot until the first key (`VERSION_UP`; `EDITOR_REDRAW` clears it), so a
@@ -117,7 +115,21 @@ reports: `docs/V2/milestones/`.
   the suite: raise the ceiling only with the reason in the commit.
 - **Emulator commands for people:** Fuse finds a ROM given by its name alone only in the current folder, then its own
   ROM folders; ZEsarUX runs from its own folder. The README and `docs/zesarux_setup.md` give full paths.
-- **fusesave** counts 17 checks (the cartridge half is gone); Fuse 1.9.1 can abort in its own `tape_write` on some
+- **fusesave** counts 17 checks (it does not run the cartridge: `make cart`'s tests are ZEsarUX's and TSRun's); Fuse 1.9.1 can abort in its own `tape_write` on some
   recorded signals (glibc assertion).
+- **The cartridge build (`-DCARTRIDGE`) must keep every release label at its address** (`tools/cart_check.py`, in
+  `make check`): cartridge-only code goes in `kernel/bank/cart.asm` (assembled after everything, in the free space),
+  and a flagged variant inside a release routine must fit its bytes (`BANK_PAGE_EXROM_IN` 27, `_OUT` 16). The
+  cartridge's own code (194 B) must stay within the HOME reserve floor (200 B), so the cartridge fits whenever the
+  release does. It carries the release's `ROM_IDENTITY` (copied, not computed). A change to COLD_START's tail keeps the
+  call at `COLD_START.chime`.
+- **Cartridge tests:** `fharness.Machine` runs a build with `forth_cart.dck` (or `dck=`) on ZEsarUX's stock
+  `ts2068.rom` by `smartload`, every breakpoint guarded by `PEEK(1)=1` (the stock ROM has `$AF` there); any tool's
+  `--build build/cart` works (`make test-cart`, about 6 min; the no-EXROM cases are reported as not run).
+  `tools/carttest.py` (ports 10920-10939, about 6 s) is `make test`'s `cart` suite; `tools/cartrun.mjs` is the TSRun
+  cross-check (Node and `~/TSRun`, stock ROMs in `~/TSRun/roms`). The stock ROM hands over at frame 103 with
+  interrupts on, SP `$61FE`, HSR `$23`.
+- **The program image format** (`kernel/bank/cart.asm`'s header, `tools/forthcart.py`, the IDE's answers Q7 "as
+  built") is what the Leap IDE packs: change it only with the IDE (a CHANGELOG line, as for the labels).
 - **CI runs `make check`, `make repro`, `make dist`** (no pandoc locally): `tools/package_dist.sh` heredocs expand `$`,
   so write hex as `\$A000`.

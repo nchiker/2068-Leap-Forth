@@ -1131,3 +1131,17 @@ this is the condensed one-paragraph-per-phase version.
   earlier ROM do not load; `SAVE-TEXT` source does. HOME free space
   1,939 bytes before, 1,938 after; EXROM 3,208. Emulators only; no
   hardware.
+- V2 step Cartridge (`docs/V2/milestones/Cartridge.md`, `docs/cartridge.md`):
+  Forth runs as a DOCK cartridge on a stock TS2068, with the stock ROMs
+  left in (`forth_cart.dck`, in the download too). `make cart PROG=<tape>
+  START=<word>` turns a program saved with `SAVE-LIB` into a cartridge.
+  At power-on the program is copied into RAM and its start word runs as
+  if typed: its output, an error or `BREAK`, then the `OK` prompt with
+  the program's words defined. A damaged image or one from another ROM
+  build prints `BAD PROGRAM`. The cartridge accepts the release ROMs' LIB
+  tapes and the release ROMs accept its. Loading takes about 0.3 s plus
+  0.15 s per 1,000 bytes of program, after the stock ROM's 2 s. The
+  release ROMs did not change: HOME free space 1,938 bytes, EXROM 3,208.
+  For the Leap IDE: the program image format is in its answers (Q7, as
+  built) and `tools/forthcart.py`. Emulators only (ZEsarUX, TSRun); no
+  hardware, Fuse or EightyOne.
