@@ -1145,3 +1145,26 @@ this is the condensed one-paragraph-per-phase version.
   For the Leap IDE: the program image format is in its answers (Q7, as
   built) and `tools/forthcart.py`. Emulators only (ZEsarUX, TSRun); no
   hardware, Fuse or EightyOne.
+- V2 step Manual (`docs/V2/milestones/Manual.md`): the user's manual is
+  rewritten in the shape of the Leap-C and Leap V2 manuals, in
+  `docs/manual/`: an introduction, a beginner's guide (the old tutorial,
+  rewritten), every word of the language and of the machine with an
+  example, concepts, libraries and cartridges, 15 practical programs,
+  and appendices (messages, keys, limits, the memory map). Its Word
+  edition is `docs/2068_Leap-Forth_Users_Manual.docx`. Every example is
+  typed into the ROM by the build and checked, and the build checks that
+  the manual describes exactly the ROM's 184 words. The tutorial,
+  `cartridge.md`, `numeric_model.md` and `hardware_notes.md` are gone
+  into it. Fixed: `RECT`, `FILL`, `CIRCLE`, `POLYGON`, `POLYGON-FILL`
+  and the sprite words printed nothing with another EXROM (now `NO
+  EXROM`, as `EDIT`); `.` or `SWAP` on an empty stack, with a word of
+  your own defined, overwrote it and lost every ROM word (the data stack
+  now has a guard above it, and holds 896 cells, not 1,024); `RECT` took
+  only the low byte of each corner (300 drew at 44) and could write past
+  the screen (it now draws the part on the screen, as `LINE` does);
+  `SPRITE-DEFINE` and `SPRITE-SHOW` did not check that the sprite was on
+  the screen; lower-case `g`, `p` and `q` sat a row high, so `p` looked
+  like `P`. For the Leap IDE: the entry shape is in its answers (Q5, as
+  built). LIB tapes saved by an earlier ROM do not load; `SAVE-TEXT`
+  source does. HOME free space 1,938 bytes before, 1,936 after; EXROM
+  3,208 before, 3,136 after. Emulators only; no hardware.

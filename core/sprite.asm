@@ -22,15 +22,7 @@ H_SPRITEDEFINE:
     DW   DICT_CHAIN_POINT
     DB   13, "S", "P", "R", "I", "T", "E", "-", "D", "E", "F", "I", "N", "E"
 W_SPRITEDEFINE:
-    rst RST_DPOP             ; hl = col
-    ld   a, l
-    ld   (SPRITE_OP_COL), a
-    rst RST_DPOP             ; hl = row
-    ld   a, l
-    ld   (SPRITE_OP_ROW), a
-    rst RST_DPOP             ; hl = slot
-    ld   a, l
-    ld   (SPRITE_OP_SLOT), a
+    call SPRITE_STAGE
     ld   hl, GRAPHICS_EXROM_BASE + (2 * 3)   ; slot 2 = SPRITE_DEFINE_IMPL
     jp   EXROM_CALL_NOBRK
 
@@ -42,17 +34,31 @@ H_SPRITESHOW:
     DW   H_SPRITEDEFINE
     DB   11, "S", "P", "R", "I", "T", "E", "-", "S", "H", "O", "W"
 W_SPRITESHOW:
-    rst RST_DPOP             ; hl = col
-    ld   a, l
-    ld   (SPRITE_OP_COL), a
-    rst RST_DPOP             ; hl = row
-    ld   a, l
-    ld   (SPRITE_OP_ROW), a
-    rst RST_DPOP             ; hl = slot
-    ld   a, l
-    ld   (SPRITE_OP_SLOT), a
+    call SPRITE_STAGE
     ld   hl, GRAPHICS_EXROM_BASE + (3 * 3)   ; slot 3 = SPRITE_SHOW_IMPL
     jp   EXROM_CALL_NOBRK
+
+; ============================================================================
+; SPRITE_STAGE -- SPRITE-DEFINE's and SPRITE-SHOW's ( slot row col -- ) into SPRITE_OP_SLOT/ROW/COL;
+; a value outside 0-255 becomes 255, which the EXROM refuses (not its low byte: 256 is not row 0)
+; Destroys: AF, HL
+; ============================================================================
+SPRITE_STAGE:
+    call .byte
+    ld   (SPRITE_OP_COL), a
+    call .byte
+    ld   (SPRITE_OP_ROW), a
+    call .byte
+    ld   (SPRITE_OP_SLOT), a
+    ret
+.byte:
+    rst  RST_DPOP
+    ld   a, h
+    or   a
+    ld   a, l
+    ret  z
+    ld   a, $FF
+    ret
 
 ; ============================================================================
 ; SPRITE-HIDE ( slot -- ) -- restore the slot's saved background over where it was shown;

@@ -64,41 +64,38 @@ GRAPHICS_EXROM_UNIMPLEMENTED:
 ; ============================================================================
 ; RECT_FILL_IMPL -- fill the rectangle (RECT_X0,RECT_Y0)-(RECT_X1,RECT_Y1), corners inclusive,
 ; with RECT_ATTR
-; In:  RECT_X0/Y0/X1/Y1 (0-255 / 0-191), RECT_ATTR, staged by the Home-side RECT word
+; In:  RECT_X0/Y0/X1/Y1 (signed cells), RECT_ATTR, staged by the Home-side RECT word
 ; Out: none
 ; Destroys: AF, BC, DE, HL
-; The corners are sorted first. The pixels are always set (OR), never toggled. Each scanline's
+; RECT_CLIP_AXIS sorts each axis's corners and clips them to the screen (x 0-255, y 0-191), leaving
+; the bytes in the cells' low bytes; a rectangle wholly off the screen draws nothing. The pixels are always set (OR), never toggled. Each scanline's
 ; row base comes from one GRAPHICS_HOME_ROW_BASE_ADDR call and the span is written as at most
 ; three byte writes: a left partial mask, $FF for the middle bytes (propagated with LDIR;
 ; setting is equivalent to OR-ing $FF), and a right partial mask, or one masked byte if the span
 ; fits in a byte. The attribute pass then stamps each covered attribute cell once
 ; (GRAPHICS_HOME_CELL_ATTR_ADDR). The masks are RECT_LEFTMASK_TABLE[bit] = $FF >> bit and
 ; RECT_RIGHTMASK_TABLE[bit] = ($FF << (7 - bit)) & $FF.
-; Y is not bounds-checked (0-191); the attribute pass skips a cell GRAPHICS_HOME_CELL_ATTR_ADDR
-; reports out of range.
 ; ============================================================================
 RECT_FILL_IMPL:
-    ; ---- sort X: RECT_X0 <= RECT_X1 ----
-    ld   a, (RECT_X0)
-    ld   b, a
-    ld   a, (RECT_X1)
-    cp   b
-    jr   nc, .x_ok                  ; X1 >= X0 already
-    ld   (RECT_X0), a               ; swap
-    ld   a, b
+    ; ---- clip and sort: X0 <= X1 in 0-255, Y0 <= Y1 in 0-191, as bytes ----
+    ld   hl, (RECT_X0)
+    ld   de, (RECT_X1)
+    ld   c, 255
+    call RECT_CLIP_AXIS
+    ret  c                          ; wholly left or right of the screen
+    ld   a, l
+    ld   (RECT_X0), a
+    ld   a, e
     ld   (RECT_X1), a
-.x_ok:
-
-    ; ---- sort Y: RECT_Y0 <= RECT_Y1 ----
-    ld   a, (RECT_Y0)
-    ld   b, a
-    ld   a, (RECT_Y1)
-    cp   b
-    jr   nc, .y_ok
+    ld   hl, (RECT_Y0)
+    ld   de, (RECT_Y1)
+    ld   c, 191
+    call RECT_CLIP_AXIS
+    ret  c                          ; wholly above or below
+    ld   a, l
     ld   (RECT_Y0), a
-    ld   a, b
+    ld   a, e
     ld   (RECT_Y1), a
-.y_ok:
 
     ; ---- col0/bit0, col1/bit1 from the sorted X0/X1 ----
     ld   a, (RECT_X0)
@@ -321,6 +318,54 @@ RECT_RIGHTMASK_TABLE:
     DB   %11111000, %11111100, %11111110, %11111111
 
 ; ============================================================================
+; RECT_CLIP_AXIS -- one axis of RECT: sort two signed ends and clip them to 0..C
+; In:  HL, DE = the two ends (signed), C = the last pixel (255 or 191)
+; Out: carry set: no pixel of 0..C lies between them. Carry clear: L = the lower end, E = the
+;      higher, both clipped to 0..C
+; Destroys: AF, DE, HL
+; ============================================================================
+RECT_CLIP_AXIS:
+    ld   a, h
+    xor  $80
+    ld   h, a
+    ld   a, d
+    xor  $80
+    ld   d, a                       ; biased: unsigned order is the signed order
+    or   a
+    sbc  hl, de
+    add  hl, de                     ; carry: HL < DE
+    jr   c, .sorted
+    ex   de, hl                     ; HL = the lower end, DE = the higher
+.sorted:
+    ld   a, d
+    sub  $80                        ; the higher end's real high byte
+    ret  c                          ; it is negative: all left of (above) the screen
+    jr   nz, .hi_clip               ; 256 or more
+    ld   a, e
+    cp   c
+    jr   c, .hi_ok
+    jr   z, .hi_ok
+.hi_clip:
+    ld   e, c
+.hi_ok:
+    ld   a, h
+    sub  $80                        ; the lower end's real high byte
+    jr   c, .lo_zero                ; negative: from 0
+    jr   nz, .off                   ; 256 or more: all right of (below) the screen
+    ld   a, l
+    cp   c
+    jr   z, .lo_ok
+    jr   c, .lo_ok
+.off:
+    scf
+    ret
+.lo_zero:
+    ld   l, 0
+.lo_ok:
+    or   a
+    ret
+
+; ============================================================================
 ; POLY_DRAW_IMPL -- draw the closed outline through the POLY_COUNT vertices of POLY_VERTS
 ; In:  POLY_COUNT (3-POLY_MAXPTS), POLY_VERTS (that many (x,y) pairs), POLY_ATTR, staged by the
 ;      Home-side POLYGON word
@@ -465,16 +510,35 @@ SPRITE_TRANSFER_IMPL:
 SPRITE_CELL_OFFSETS: DB 0,0, 0,1, 1,0, 1,1
 
 ; ============================================================================
+; SPRITE_ARGS_BAD -- SPRITE_OP_SLOT below SPRITE_SLOT_MAX and the 2x2 cells at SPRITE_OP_ROW/COL on
+; the screen (row 0-22, col 0-30)?
+; Out: carry set if not
+; Destroys: AF
+; ============================================================================
+SPRITE_ARGS_BAD:
+    ld   a, (SPRITE_OP_SLOT)
+    cp   SPRITE_SLOT_MAX
+    ccf
+    ret  c
+    ld   a, (SPRITE_OP_ROW)
+    cp   24 - SPRITE_CELLS + 1
+    ccf
+    ret  c
+    ld   a, (SPRITE_OP_COL)
+    cp   32 - SPRITE_CELLS + 1
+    ccf
+    ret
+
+; ============================================================================
 ; SPRITE_DEFINE_IMPL -- capture the screen area at (SPRITE_OP_ROW, SPRITE_OP_COL) into the
 ; slot's image buffer
 ; In:  SPRITE_OP_SLOT (0-SPRITE_SLOT_MAX-1), SPRITE_OP_ROW/COL, staged by the Home-side word
-; Out: the slot's SPRITE_SLOT_DEFINED flag set; an out-of-range slot does nothing
+; Out: the slot's SPRITE_SLOT_DEFINED flag set; an out-of-range slot or position does nothing
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 SPRITE_DEFINE_IMPL:
-    ld   a, (SPRITE_OP_SLOT)
-    cp   SPRITE_SLOT_MAX
-    ret  nc                          ; out-of-range slot: nothing
+    call SPRITE_ARGS_BAD
+    ret  c                           ; out-of-range slot or position: nothing
     call SPRITE_BUF_ADDR_IMG         ; hl = this slot's own image buffer
     ld   (SPRITE_OP_BUF), hl
     xor  a
@@ -494,13 +558,13 @@ SPRITE_DEFINE_IMPL:
 ; then draw the slot's image over it
 ; In:  SPRITE_OP_SLOT, SPRITE_OP_ROW/COL, staged by the Home-side word
 ; Out: the slot's position recorded, its SPRITE_SLOT_SHOWN flag set. Nothing happens for an
-;      out-of-range slot, one never defined, or one already shown (HIDE then SHOW to move it)
+;      out-of-range slot or position, one never defined, or one already shown (HIDE then SHOW to
+;      move it)
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 SPRITE_SHOW_IMPL:
-    ld   a, (SPRITE_OP_SLOT)
-    cp   SPRITE_SLOT_MAX
-    ret  nc
+    call SPRITE_ARGS_BAD
+    ret  c
 
     call SPRITE_FLAG_ADDR_DEFINED
     ld   a, (hl)

@@ -2,7 +2,7 @@
 
 ### ▶ [Try it now, live in your browser — no install](https://nchiker.github.io/TSRun/?rom=leapforth)
 
-### 📖 Learn the language — the [Forth tutorial](docs/forth_tutorial.md) ([Word/DOCX version](docs/forth_tutorial.docx))
+### 📖 Learn the language — the [user's manual](docs/manual/01_introduction.md): start with its [beginner's guide](docs/manual/02_beginners_guide.md) ([Word/DOCX version](docs/2068_Leap-Forth_Users_Manual.docx))
 
 A from-scratch Forth for the Timex Sinclair 2068, built on the hardware
 kernel proven out by **2068-Leap** (structured-BASIC ROM, same author,
@@ -69,7 +69,7 @@ Highlights:
   `VARIABLE`/`CONSTANT`, decimal literals, and joystick input
   (`STICK`).
 
-See the [Forth tutorial](docs/forth_tutorial.md) linked at the top to
+See the [user's manual](docs/manual/01_introduction.md) linked at the top to
 actually learn the language, or jump straight to "Try it" below for a
 hands-on tour — or [try it live in your browser](https://nchiker.github.io/TSRun/?rom=leapforth)
 right now, no download required.
@@ -118,7 +118,7 @@ chord and waits at the prompt. Try:
 | TSRun (browser) | "Load ROM0" `forth_boot_rom0.bin`, "Load ROM1" `graphics_exrom.bin`. |
 | EightyOne 1.41 | the HOME ROM as the ROM file, `graphics_exrom.dck` as a Timex ROM cartridge: [docs/eightyone_setup.md](docs/eightyone_setup.md) (the EXROM cartridge does not load correctly on EightyOne 1.41). |
 | TS-Pico | the HOME ROM in its ROM slot; TS-Pico has no EXROM slot yet: [docs/ts_pico_setup.md](docs/ts_pico_setup.md). |
-| A stock TS2068 | no ROMs replaced: `forth_cart.dck` as a dock cartridge (ZEsarUX with its stock `ts2068.rom` and *smartload*, TSRun's dock slot). `make cart PROG=game.tap START=PLAY` packs a program saved with `SAVE-LIB` into a cartridge that runs it at power-on: [docs/cartridge.md](docs/cartridge.md). |
+| A stock TS2068 | no ROMs replaced: `forth_cart.dck` as a dock cartridge (ZEsarUX with its stock `ts2068.rom` and *smartload*, TSRun's dock slot). `make cart PROG=game.tap START=PLAY` packs a program saved with `SAVE-LIB` into a cartridge that runs it at power-on: [the manual's Part 6](docs/manual/06_libraries.md#program-cartridges). |
 
 Everything here is checked on emulators only (ZEsarUX, Fuse, TSRun); there is no real hardware in this project.
 

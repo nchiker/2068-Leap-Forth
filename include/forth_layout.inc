@@ -15,7 +15,9 @@
 ;                (FILL does nothing in HIRES)
 ;   $8000-$8503  the cells                                        RAM_CELLS_BASE .. RAM_CELLS_END
 ;   $8504-$88FF  float stack, 204 cells of 5 bytes                FSTACK_LIMIT .. FSTACK_TOP
-;   $8900-$90FF  data stack                                       DSTACK_LIMIT .. DSTACK_TOP
+;   $8900-$8FFF  data stack, 896 cells                            DSTACK_LIMIT .. DSTACK_TOP
+;   $9000-$90FF  the data stack's guard: a word that takes more than the stack holds and then writes (SWAP,
+;                ROT, the digits `.` pushes) writes here, before STACK_CHECK sees it, not in the dictionary
 ;   $9100-$CFFF  dictionary ($A000-$BFFF is hidden while the      FORTH_DICT_RAM .. DICT_RAM_CEILING
 ;                EXROM is paged in)
 ;   $D000-$EFFF  line store                                       STORE_START .. STORE_LIMIT
@@ -45,7 +47,8 @@ RAM_CELLS_END       EQU $8504
 FSTACK_LIMIT        EQU $8504       ; lowest legal IY
 FSTACK_TOP          EQU $8900       ; empty-stack value of IY; the first push lands at $88FB
 DSTACK_LIMIT        EQU $8900       ; lowest legal IX
-DSTACK_TOP          EQU $9100       ; empty-stack value of IX; the first push lands at $90FE
+DSTACK_TOP          EQU $9000       ; empty-stack value of IX; the first push lands at $8FFE
+DSTACK_GUARD        EQU 256         ; bytes between DSTACK_TOP and the dictionary
 FORTH_DICT_RAM      EQU $9100       ; first byte of the RAM dictionary
 DICT_RAM_CEILING    EQU $D000       ; the dictionary ends where the line store begins
 STORE_START         EQU $D000
@@ -77,8 +80,8 @@ COLD_CLEAR_END      EQU UDG_TABLE + UDG_COUNT * 8   ; the cold start zeroes RAM_
     ASSERT SECOND_DISPLAY_END - SECOND_DISPLAY_ADDR == 6144
     ASSERT ZX_SYSVAR_CHARS >= GFX_FILL_SHADOW && ZX_SYSVAR_CHARS + 2 <= GFX_FILL_STACK
     ASSERT RAM_CELLS_END == FSTACK_LIMIT && FSTACK_TOP - FSTACK_LIMIT == 204 * 5
-    ASSERT FSTACK_TOP == DSTACK_LIMIT && DSTACK_TOP - DSTACK_LIMIT == 2048
-    ASSERT DSTACK_TOP == FORTH_DICT_RAM && DICT_RAM_CEILING == STORE_START
+    ASSERT FSTACK_TOP == DSTACK_LIMIT && DSTACK_TOP - DSTACK_LIMIT == 896 * 2
+    ASSERT DSTACK_TOP + DSTACK_GUARD == FORTH_DICT_RAM && DICT_RAM_CEILING == STORE_START
     ASSERT (STORE_LIMIT & $FF) == 0     ; LOAD-TEXT's room test looks at the high byte only
     ASSERT STORE_LIMIT <= SPRITE_SLOT_IMG_BUF
     ASSERT SPRITE_SLOT_BG_BUF + SPRITE_SLOT_MAX * SPRITE_SLOT_BYTES <= UDG_TABLE
@@ -122,10 +125,10 @@ GFX_FILL_OVF:             DEFS 1                        ; FILL: nonzero when a s
 GFX_FILL_AOFF:            DEFS 1                        ; FILL: work plane offset in pages (0 screen, $1B shadow)
 GFX_FILL_EL:              DEFS 1                        ; FILL: span's left edge mask
 GFX_FILL_ER:              DEFS 1                        ; FILL: span's right edge mask
-RECT_X0:                  DEFS 1                        ; RECT: corner x0, as given
-RECT_Y0:                  DEFS 1                        ; RECT: corner y0, as given
-RECT_X1:                  DEFS 1                        ; RECT: corner x1, as given
-RECT_Y1:                  DEFS 1                        ; RECT: corner y1, as given
+RECT_X0:                  DEFS 2                        ; RECT: corner x0, as given (signed); clipped to a byte
+RECT_Y0:                  DEFS 2                        ; RECT: corner y0, the same
+RECT_X1:                  DEFS 2                        ; RECT: corner x1, the same
+RECT_Y1:                  DEFS 2                        ; RECT: corner y1, the same
 RECT_ATTR:                DEFS 1                        ; RECT: fill attribute
 RECT_CUR_X:               DEFS 1                        ; POLYGON fill: span x cursor
 RECT_CUR_Y:               DEFS 1                        ; POLYGON fill: span y cursor

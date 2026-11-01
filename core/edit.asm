@@ -13,7 +13,7 @@
 ; The session's answer is VIEW_RESULT: Home sets it to 0 before the call, the
 ; EXROM to 1 (name not found), 2 (refused; it printed the message) or 3 (the
 ; session ran). A stock EXROM, or one whose slot 6 is still the 1-byte RET,
-; leaves 0 (or answers with carry): NO EXROM.
+; leaves 0 (or answers with carry, EXROM_CALL_SLOT having printed it): NO EXROM.
 ; ============================================================================
 
     IFNDEF CORE_EDIT_ASM
@@ -41,10 +41,10 @@ W_EDIT:
     ld   (hl), 0                    ; the view's BREAK was its key
     inc  hl
     dec  (hl)                       ; NOBRK
-    jr   c, .noexrom
+    ret  c                          ; no EXROM: EXROM_CALL_SLOT printed NO EXROM
     ld   a, (VIEW_RESULT)
     or   a
-    jr   z, .noexrom
+    jp   z, EXROM_NONE_MSG          ; 0: an EXROM without the view
     dec  a
     jp   z, INTERPRET_UNKNOWN_WORD  ; 1: `name ?`, as for an unknown word
     dec  a
@@ -72,7 +72,13 @@ W_EDIT:
     pop  hl
     ld   (SRC_END), hl
     ret
-.noexrom:
+
+; ============================================================================
+; EXROM_NONE_MSG -- print `NO EXROM` and a newline: EXROM_CALL_SLOT's answer when the image does not
+; match, and EDIT's when the EXROM has no view
+; Destroys: AF, BC, DE, HL
+; ============================================================================
+EXROM_NONE_MSG:
     ld   hl, .msg
     jp   FORGET_PRINT_MSG
 .msg:

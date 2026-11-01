@@ -10,6 +10,7 @@ changing Leap-Forth.
 | `make`, `make check`, `make repro`, `make budget` | **[sjasmplus](https://github.com/z00m128/sjasmplus) 1.23.1** (exactly: the images are byte-reproducible with it), **Python 3.11** or later, GNU make, a POSIX shell, `sha256sum` |
 | `make test`, `make test-fast`, `make tapetol` (the ZEsarUX suites) | ZEsarUX 13.0 built with the EXROM patch (`patches/`), [ts2068-debug](https://github.com/nchiker/2068-Debug) (a checkout: its ZRCP client is imported), Linux |
 | `make fusesave`, `make tapetol-fuse` | Fuse 1.9.1 built from source and not stripped, gcc and the SDL2 development files (the harness's shim), fuse-utils (`tape2wav`, `audio2tape`) |
+| `make manual` | python-docx |
 | `make docs`, `make dist` | pandoc, WeasyPrint and python-docx (`tools/requirements-docs.txt`) |
 
 ### Where the tools are: environment variables
@@ -62,11 +63,56 @@ Continuous integration (`.github/workflows/build.yml`) installs sjasmplus 1.23.1
   `budget.toml`. When something does not fit: shrink, move cold code to the EXROM, reallocate, then ask the owner.
 - **Every change to behaviour comes with tests** that fail without it: a Forth test in `tests/` (lines with
   `\ expect:`), or a case in one of the suites above.
+- **The manual follows the ROM** (`docs/manual/`, after Leap-C's). A new or changed word gets its entry in Part 3 or
+  4, in the shape `tools/manualcheck.py` checks (`make check` fails on a ROM word without an entry or an entry for no
+  word, a wrong kind, group or order). Every ```` ```forth ```` block is a test: after editing the manual, run
+  `tools/docexamples.py` (it regenerates `tests/doc/manual_*.fs`) and the forth suite; `make manual` rebuilds the
+  Word edition (`docs/2068_Leap-Forth_Users_Manual.docx`).
 - **Symbolic layout only:** RAM addresses live in `include/forth_layout.inc` (`make check` proves it). Every routine's
   header states In / Out / Destroys.
 - **Release images** are the production build; `make repro` must give identical hashes.
 - Commit messages: a short summary line, then what and why. Do not commit `build/`, emulator screenshots, or stock ROM
   images.
+
+## The cartridge build
+
+`make cart` builds Forth, and a program saved with `SAVE-LIB`, as a DOCK cartridge for a stock TS2068; the user's side
+is Part 6 of the manual ([docs/manual/06_libraries.md](docs/manual/06_libraries.md#program-cartridges)).
+
+### How it is built
+
+The cartridge's HOME image is the release source assembled with `-DCARTRIDGE`. Every label keeps its release address
+(`tools/cart_check.py`, run by `make cart` and `make check`), so a dictionary compiled on the release ROMs calls the
+same routines here. The cartridge also carries the release's `ROM_IDENTITY`, which is why LIB tapes work on both. The
+EXROM is the release's, byte for byte.
+
+| Chunk | Address | In the cartridge | What the CPU sees |
+|---|---|---|---|
+| 0-1 | `$0000-$3FFF` | the Forth HOME ROM; an LROS header at `$0000` | the cartridge, always |
+| 2-3 | `$4000-$7FFF` | the program image (if any) | HOME RAM; the cartridge only while the program is copied, interrupts off |
+| 4 | `$8000-$9FFF` | nothing | HOME RAM: cells, stacks, dictionary |
+| 5 | `$A000-$BFFF` | the Forth EXROM | HOME RAM; the cartridge while an EXROM word runs |
+| 6-7 | `$C000-$FFFF` | nothing | HOME RAM |
+
+Port `$F4` holds `$03` (chunks 0-1 from the cartridge), `$23` while an EXROM word runs, and `$0F` while the program is
+copied. Port `$FF` bit 7 stays 0 (the cartridge, never the stock EXROM). The program image, the hand-off from the stock
+ROM and the paging are described in `kernel/bank/cart.asm`.
+
+The cartridge's own code (194 bytes) goes in the release image's free space, and `cart_check.py` keeps it within the
+HOME reserve floor in `budget.toml`. So the cartridge always fits as long as the release keeps its floor.
+
+### Its tests
+
+`make test` runs the cartridge suite (`tools/carttest.py`). It covers:
+
+- Forth with no program.
+- A program's output, an error and `BREAK` in the start word.
+- The UDG table, the largest dictionary, and four kinds of bad image.
+- A second emulator (TSRun, `tools/cartrun.mjs`) checks the stock ROM's hand-off, including an interrupt forced before
+  the entry's `di`. It also checks that the paging never leaves the cartridge's chunks, and that the screen at the
+  prompt matches ZEsarUX's byte for byte.
+
+`make test-cart` runs the boot, Forth, editor, float and shape suites on the cartridge in the stock ROM's DOCK.
 
 ## Layout
 
@@ -79,7 +125,7 @@ Continuous integration (`.github/workflows/build.yml`) installs sjasmplus 1.23.1
 | `tests/` | the Forth tests by area, the benchmarks (`tests/bench/`), test data |
 | `tools/` | build, check and test tools; the ZEsarUX harness (`fharness.py`, `run_tests.py`), the Fuse harness (`fusedrive.py`, `fuse/`), the tape tools (`tapes.py`, `tape_gen_forth.py`), `z80sim/` |
 | `demos/` | Forth programs as source text (Blackjack, Shooting Gallery) |
-| `docs/` | the tutorial and guides; the roadmap, handoff and milestone reports (`V2/`) |
+| `docs/` | the user's manual (`manual/`, its Word edition), the emulator guides; the roadmap, handoff and milestone reports (`V2/`) |
 | `patches/` | the ZEsarUX EXROM patch |
 
 ## Licence

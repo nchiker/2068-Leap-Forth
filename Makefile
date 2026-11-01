@@ -2,9 +2,10 @@
 #   make              the images in build/: forth_boot_rom0.bin (HOME), graphics_exrom.bin (EXROM),
 #                     forth_zesarux.bin (the two as one 24 KB file for ZEsarUX), graphics_exrom.dck, SHA256SUMS
 #   make check        strict assembly, opcode and source checks, RAM layout guard, budgets, provenance, the
-#                     adopted tape code, the tape tools' self-test, ROM_IDENTITY
+#                     adopted tape code, the tape tools' self-test, ROM_IDENTITY, the manual (its examples
+#                     in step with tests/doc/, one entry per word of the ROM)
 #   make budget       free bytes per image against the floors (budget.toml)
-#   make cart         the DOCK cartridge for a stock TS2068 in build/cart/ (docs/cartridge.md): the HOME image
+#   make cart         the DOCK cartridge for a stock TS2068 in build/cart/ (manual Part 6): the HOME image
 #                     assembled with -DCARTRIDGE (tools/cart_check.py), the EXROM, forth_cart.dck (Forth, no
 #                     program); PROG=<SAVE-LIB tape> START=<word> [UDG=<168-byte file>] also packs that program
 #                     into build/cart/program.dck and program.bin (tools/forthcart.py)
@@ -18,8 +19,9 @@
 #   make fusesave     SAVE-TEXT and SAVE-LIB on Fuse's tape deck, decoded and loaded back
 #   make audio        what the emulated AY plays for BEEP (real time, about two minutes)
 #   make repro        two clean builds (the cartridge too) must give identical hashes
+#   make manual       the Word edition of the manual, docs/2068_Leap-Forth_Users_Manual.docx (docs/manual/*.md)
 #   make docs, dist   the PDF/DOCX documents; the download bundle (CI)
-.PHONY: all cart check budget inventory test test-cart test-fast tapetol tapetol-fuse fusesave audio repro docs dist clean
+.PHONY: all cart check budget inventory test test-cart test-fast tapetol tapetol-fuse fusesave audio repro manual docs dist clean
 
 SJASM := tools/sjasmplus_strict.sh --outprefix=build/
 SRC := $(shell find core kernel include rom -name '*.asm' -o -name '*.inc' | sort) tools/sjasmplus_strict.sh
@@ -78,6 +80,8 @@ check: all cart
 	python3 -I tools/tapes.py --selftest
 	python3 -I tools/rom_identity.py --verify build/forth_boot_rom0.bin build/forth_boot.sym
 	python3 -I tools/cart_check.py build $(CART)
+	python3 -I tools/docexamples.py --check
+	python3 -I tools/manualcheck.py build
 
 budget: all
 	python3 -I tools/budget.py
@@ -109,6 +113,9 @@ audio: all
 
 repro:
 	tools/check_repro.sh all cart
+
+manual:
+	python3 tools/build_manual_docx.py
 
 docs:
 	tools/build_docs.sh

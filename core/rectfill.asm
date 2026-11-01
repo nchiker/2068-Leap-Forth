@@ -11,7 +11,8 @@
 ; EXROM_CALL_SLOT is shared by every word the EXROM backs (RECT, POLYGON, the SPRITE-* words).
 ; It checks the image's magic byte and ABI version right after paging chunk 5 in, because a
 ; cartridge socket can hold something else or nothing. On a mismatch it pages out and returns
-; with carry set, and the word silently does nothing (as SOUND, STICK and FILL's HIRES guard do).
+; with carry set after printing `NO EXROM` (the line goes on: a message, not an error), and the word
+; does nothing more.
 ; ============================================================================
 
     IFNDEF CORE_RECTFILL_ASM
@@ -21,8 +22,8 @@
 ; EXROM_CALL_SLOT -- page the EXROM in, verify its magic+ABI pair, call a service-table slot
 ; In:  HL = absolute address of the slot ($A000 + slot*3); the RECT_*/POLY_*/SPRITE_OP_* state
 ;      the caller has staged
-; Out: carry set if the image did not match (nothing ran); carry clear if the slot ran. The
-;      EXROM is paged out again either way
+; Out: carry set if the image did not match (nothing ran, `NO EXROM` printed); carry clear if the
+;      slot ran. The EXROM is paged out again either way
 ; Destroys: AF, BC, DE, HL
 ; ============================================================================
 EXROM_CALL_SLOT:
@@ -44,6 +45,7 @@ EXROM_CALL_SLOT:
 
 .mismatch:
     call BANK_PAGE_EXROM_OUT
+    call EXROM_NONE_MSG              ; core/edit.asm
     scf
     ret
 
@@ -76,25 +78,21 @@ CALL_HL:
 
 ; ============================================================================
 ; RECT ( x0 y0 x1 y1 -- ) -- fill the rectangle between two corners (any order, inclusive)
-; with the current colour (CURRENT_ATTR), via the EXROM's RECT_FILL_IMPL; out-of-range or no
-; EXROM: nothing is drawn
+; with the current colour (CURRENT_ATTR), via the EXROM's RECT_FILL_IMPL. Signed cells: the part
+; on the screen is drawn (RECT_FILL_IMPL clips); no EXROM: NO EXROM
 ; ============================================================================
 H_RECT:
     DW   DICT_CHAIN_POINT
     DB   4, "R", "E", "C", "T"
 W_RECT:
     rst RST_DPOP           ; hl = y1
-    ld   a, l
-    ld   (RECT_Y1), a
+    ld   (RECT_Y1), hl
     rst RST_DPOP           ; hl = x1
-    ld   a, l
-    ld   (RECT_X1), a
+    ld   (RECT_X1), hl
     rst RST_DPOP           ; hl = y0
-    ld   a, l
-    ld   (RECT_Y0), a
+    ld   (RECT_Y0), hl
     rst RST_DPOP           ; hl = x0
-    ld   a, l
-    ld   (RECT_X0), a
+    ld   (RECT_X0), hl
     ld   a, (CURRENT_ATTR)
     ld   (RECT_ATTR), a
     ld   hl, GRAPHICS_EXROM_BASE + (0 * 3)   ; slot 0 = RECT_FILL_IMPL
