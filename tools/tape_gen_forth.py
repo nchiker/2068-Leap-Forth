@@ -45,8 +45,13 @@ the order given (STORAGE_LOAD searches forward from the tape's current
 position, so multiple named files on one tape load correctly in
 sequence, exactly like a real multi-program cassette).
 
-Example (what tools/tapetest.py case 2 plays):
-    python3 tools/tape_gen_forth.py build/bj.tap BJPROG:tests/data/blackjack_rounds.txt
+A file's lines may end in LF or CR LF (a PC's text file): they go on tape
+ended by CR, as the line store holds them (docs/V2/EDITOR_SPEC.md section
+3), so that a backslash comment ends with its line. A text longer than LOAD-TEXT
+takes (LOAD_TEXT_MAX, the line store's room) is refused.
+
+Example (the Blackjack demo as a text tape):
+    python3 tools/tape_gen_forth.py build/bj.tap BLACKJACK:demos/blackjack.fs
 """
 import sys
 
@@ -54,6 +59,12 @@ HEADER_FILENAME_LEN = 10
 TYPE_HEADER = 0x00
 TYPE_DATA = 0xFF
 NO_AUTOSTART = 0x8000
+LOAD_TEXT_MAX = 0xF000 - 0xD000     # STORE_LIMIT - STORE_START (include/forth_layout.inc)
+
+
+def store_text(data: bytes) -> bytes:
+    """A host text file's bytes as the line store holds them: every line ended by CR."""
+    return data.replace(b"\r\n", b"\r").replace(b"\n", b"\r")
 
 
 def checksum(flag: int, payload: bytes) -> int:
@@ -103,7 +114,9 @@ def main():
         if not path:
             raise SystemExit(f"bad entry {spec!r}, expected NAME:FILE")
         with open(path, "rb") as f:
-            data = f.read()
+            data = store_text(f.read())
+        if len(data) > LOAD_TEXT_MAX:
+            raise SystemExit(f"{path}: {len(data)} bytes, more than the {LOAD_TEXT_MAX} LOAD-TEXT takes")
         entries.append((name, data))
 
     tap = build_tap(entries)
