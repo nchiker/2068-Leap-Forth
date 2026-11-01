@@ -1168,3 +1168,9 @@ this is the condensed one-paragraph-per-phase version.
   built). LIB tapes saved by an earlier ROM do not load; `SAVE-TEXT`
   source does. HOME free space 1,938 bytes before, 1,936 after; EXROM
   3,208 before, 3,136 after. Emulators only; no hardware.
+- V2 step Polygon edges (`docs/V2/milestones/Polygon_edges.md`):
+  `POLYGON` and `POLYGON-FILL` move a corner that is off the screen to
+  the nearest edge, as Leap-C's `draw()` and `box()` do, instead of
+  wrapping it to the other side (-20 was drawn at x 236); a count above
+  255 is refused. HOME free space 1,936 bytes before, 1,924 after;
+  EXROM 3,136. Emulators only; no hardware.
