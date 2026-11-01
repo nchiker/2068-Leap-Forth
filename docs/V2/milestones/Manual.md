@@ -62,7 +62,8 @@ compiling; in-place words (`SWAP`, `DUP`) report nothing on an empty stack (the 
 
 - `make check` passes: `docexamples` (314 examples in step), `manualcheck` (184 words agree).
 - `make test`: boot 14/14, forth 361/361 (before Part 7's 15, which pass on their own), editor 30/30, float 66/66,
-  shape 48/48, bench 6/6, poweron 7/7, cart 12/12 (480 s for these); tape: see below. `make repro`: 16 files identical.
+  shape 48/48, bench 6/6, poweron 7/7, cart 12/12 (480 s for these); tape 19/19 (+1 extra; 368 s, on this branch's
+  tip). `make repro`: 16 files identical.
 - The manual's examples alone: 314 cases (`python3 tools/forthtest.py manual_`), every one passing.
 - The forth suite's limit, found here: a typed line longer than 32 characters wraps the input area, and forthtest
   then misreads that line's output (the screen itself is right). The manual's lines are kept under 31 characters.
