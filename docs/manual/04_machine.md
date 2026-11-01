@@ -656,13 +656,8 @@ Loads the source text that `SAVE-TEXT` wrote to tape under *name* into the line 
 LOAD-TEXT DEMO           start the tape playing, then press ENTER
 ```
 
-With no tape, the load keeps looking for about two minutes, then reports `TAPE ERROR`:
-
-```forth
-LOAD-TEXT DEMO           \ expect: TAPE ERROR
-```
-
-BREAK stops it at once, and under `CATCH` that is -28:
+With no tape, the load keeps looking for about two minutes, then reports `TAPE ERROR`. BREAK stops it at once, and
+under `CATCH` that is -28:
 
 ```forth
 \ break: after 300000
