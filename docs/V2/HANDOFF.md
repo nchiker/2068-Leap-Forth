@@ -16,11 +16,11 @@ reports: `docs/V2/milestones/`.
   `v2/step-manual` (it becomes master's once #19 merges); the owner reviews it after #19.
 - **Branch `v2/step-cart-start`** (from `v2/step-polygon-edges`): a program cartridge no longer checks its CRC at
   power-on, as Leap V2's production cartridge (`~/Projects/Leap-Cartridge`, `CART_LOAD`) does not
-  (`docs/V2/milestones/Cart_start.md`). Not pushed; its PR (stacked on #20) when the owner asks.
+  (`docs/V2/milestones/Cart_start.md`). PR #21 open, stacked on #20; the owner reviews it after #20.
 - **Branch `v2/step-blackjack`** (from `v2/step-cart-start`; master had not moved): the Blackjack demo rebuilt and
   made a cartridge by `make blackjack`; `RND`'s own seed from `FRAMES` and R; `tape_gen_forth.py`'s line ends
-  (`docs/V2/milestones/Blackjack.md`). Not pushed; its PR (stacked on cart-start) when the owner asks. This branch's
-  HANDOFF and ROADMAP are the newest. Merge order: #19, #20, cart-start, then this.
+  (`docs/V2/milestones/Blackjack.md`). PR #22 open, stacked on #21; the owner reviews it after #21. This branch's
+  HANDOFF and ROADMAP are the newest. Merge order: #19, #20, #21, #22.
 - **The owner (2026-11-01):** for a remaining defect, look first at how Leap-C (and Leap V2, whose cartridge is in
   production) handled the same problem. The one left (LINE far off the screen) is compared in the Polygon edges
   report: Forth keeps the exact line.
