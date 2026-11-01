@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Build the Word edition of the Leap-Forth user's manual (docs/manual/*.md -> docs/2068_Leap-Forth_Users_Manual.docx).
 
-Ported from 2068-Leap-C's builder (itself from the 2068-Leap V2 one). The eight Markdown parts are concatenated in order; headings become
-Word headings with bookmarks (so the links between parts work), tables, lists, code blocks and the pictures
-are carried over. A ```forth block (lines to type, their `\ expect:` comments included -- they are ordinary Forth
-comments) is set grey, a ```text or plain ``` block (a screen, a command shape) green. Links like [x](05_concepts.md#memory) become Word
-bookmarks named by the GitHub heading slug (`## #define` -> `define`; a repeated slug gets -1, -2 as on GitHub).
+Ported from 2068-Leap-C's builder (itself from the 2068-Leap V2 one). The eight Markdown parts are concatenated in
+order; headings become Word headings with bookmarks (so the links between parts work), tables, lists, code blocks
+and the pictures are carried over. A ```forth block (lines to type, their `\\ expect:` comments included -- they are
+ordinary Forth comments) is set grey, a ```text or plain ``` block (a screen, a command shape) green. Links like
+[x](05_concepts.md#memory) become Word bookmarks named by the GitHub heading slug (`## #define` -> `define`; a
+repeated slug gets -1, -2 as on GitHub).
 
     python3 tools/build_manual_docx.py [output.docx]      (make manual)
     FORTH_MANUAL_DIR=DIR   reads the parts (and ../images/ beside them) from DIR instead of docs/manual
