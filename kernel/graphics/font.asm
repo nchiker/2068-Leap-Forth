@@ -4,7 +4,8 @@
 ; Printable ASCII in code order, space to '~' (95 glyphs): the glyph of code c is at FONT_TABLE +
 ; (c - 32) * 8 (GFX_CHAR_TO_FONT_OFFSET), 8 bytes, top row first. The glyphs are original designs,
 ; not a copy of any ROM's font; '[' '\' ']' '^' '{' '|' '}' '~' are 2068-Leap-C's (its delta D8),
-; '1' and 'l' Leap-C's D13 (two pixels told them apart before), '`' Leap's. rom/forth_boot.asm
+; '1' and 'l' Leap-C's D13 (two pixels told them apart before), 'g' 'p' 'q' its D24 (the bowl on the
+; x-height: 'p' read as 'P'), '`' Leap's. rom/forth_boot.asm
 ; includes this file itself, after kernel/storage, so that the font covers $11F8 (see the ASSERT
 ; there).
 ; ============================================================================
@@ -152,8 +153,8 @@ FONT_TABLE:
     DB   $00, $00, $70, $88, $F8, $80, $70, $00
     ; 'f'
     DB   $30, $40, $F0, $40, $40, $40, $40, $00
-    ; 'g'
-    DB   $00, $78, $88, $88, $78, $08, $70, $00
+    ; 'g'  Leap-C delta D24: the bowl on the x-height (rows 2-5), as 'y'
+    DB   $00, $00, $78, $88, $88, $78, $08, $70
     ; 'h'
     DB   $80, $80, $B0, $C8, $88, $88, $88, $00
     ; 'i'
@@ -170,10 +171,10 @@ FONT_TABLE:
     DB   $00, $00, $B0, $C8, $88, $88, $88, $00
     ; 'o'
     DB   $00, $00, $70, $88, $88, $88, $70, $00
-    ; 'p'
-    DB   $00, $F0, $88, $88, $F0, $80, $80, $80
-    ; 'q'
-    DB   $00, $78, $88, $88, $78, $08, $08, $08
+    ; 'p'  Leap-C D24: a row lower, so it no longer reads as 'P'
+    DB   $00, $00, $F0, $88, $88, $F0, $80, $80
+    ; 'q'  Leap-C D24
+    DB   $00, $00, $78, $88, $88, $78, $08, $08
     ; 'r'
     DB   $00, $00, $B0, $C8, $80, $80, $80, $00
     ; 's'
