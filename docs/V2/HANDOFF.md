@@ -7,7 +7,7 @@ reports: `docs/V2/milestones/`.
 
 - **Branch `v2/step-break-timing`** (from master `0e9ebd0`, PR #14 Display speed merged; `make test` passed on master
   first): step BREAK and timing is complete (`docs/V2/milestones/BREAK_and_timing.md`); `make test`, `make check` and
-  `make repro` pass on it. Not pushed; the owner asks for the push and the PR.
+  `make repro` pass on it. Pushed; PR #15 open (the owner merges it, or asks Claude to).
 - **Decided (2026-10-31):** the owner approved every recommendation: 2068-Leap-C's BREAK model; the shapes stop at
   once, the sprites and `EDIT` defer; `KEY`/`ACCEPT` stop rather than return 16; BREAK silences the AY; the recursion
   guard (-5 `RETURN STACK FULL`); the scan rewrite; an error drops the open `:` definition.
