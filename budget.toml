@@ -445,3 +445,9 @@ image = "home"
 component = "console"
 delta = 5
 reason = "IDE hooks: the console sets LAST_ERROR to 0 after a line that ends in OK; 4 B from interp, 1 B from the reserve"
+
+[[ledger]]
+image = "home"
+component = "graphics"
+delta = 3
+reason = "Manual: EXROM_CALL_SLOT prints NO EXROM when the EXROM does not match (RECT FILL CIRCLE POLYGON POLYGON-FILL and the SPRITE words were silent; the README and the setup guides said NO EXROM, as EDIT printed); the message moved from EDIT into a routine both use; from the reserve"
