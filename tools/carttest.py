@@ -17,6 +17,8 @@ checks what the start word did and the state at the prompt:
   largest   a dictionary of CART_IMG_MAX bytes (to $D000) loads; the load's T-states, the CRC's included
   bad-*     an image with another ROM's identity, a wrong CRC, a length over CART_IMG_MAX, a start word of length 0:
             "BAD PROGRAM", the dictionary empty, the version on row 23, the prompt
+  packer    tools/forthcart.py's command line on SAVE-LIB .tap and .tzx tapes gives the image the cases run, and the
+            flat .bin; it refuses two LIB files without --name, another ROM's tape, a damaged one, an unknown word
   tsrun     the hello cartridge on TSRun's core (tools/cartrun.mjs): the hand-off state, an interrupt forced before
             CART_ENTRY's `di` is harmless, only DOCK mappings of chunks 0-1 written, and the screen at the prompt is
             ZEsarUX's byte for byte (skipped, and said so, without node or ~/TSRun)
@@ -195,6 +197,61 @@ def run_case(cart, tmp, port, S, progs, name, img, opts):
         m.stop()
 
 
+def packer_case(cart, tmp, S, progs):
+    """tools/forthcart.py's command line on SAVE-LIB tapes (.tap and .tzx, with a TEXT file and other LIB files on
+    them): the .dck it writes holds the same image the cases run (program_image from memory), the flat .bin has the
+    chunks in address order; and its refusals."""
+    fails = []
+    home = open(os.path.join(cart, "forth_boot_rom0.bin"), "rb").read()
+    exrom = open(os.path.join(cart, "graphics_exrom.bin"), "rb").read()
+
+    def lib(name, p, identity=None, crc=None):
+        q = progs[p]
+        return tapes.lib_file(name, q["dictionary"], q["latest"], q["identity"] if identity is None else identity,
+                              crc=crc)
+
+    def cli(*args):
+        r = subprocess.run([sys.executable, "-I", os.path.join(HERE, "forthcart.py"), "--cart", cart] + list(args),
+                           capture_output=True, text=True)
+        return r.returncode, (r.stdout + r.stderr).strip()
+
+    text = tapes.text_file("NOTES", ": X ;\r")
+    hello_tap = os.path.join(tmp, "hello.tap")
+    open(hello_tap, "wb").write(tapes.tap(text + lib("HELLO", "hello")))
+    out, flat = os.path.join(tmp, "cli.dck"), os.path.join(tmp, "cli.bin")
+    rc, msg = cli("--lib", hello_tap, "--start", "go", "-o", out, "--bin", flat)
+    img = forthcart.program_image(S, progs["hello"]["dictionary"], progs["hello"]["latest"],
+                                  progs["hello"]["identity"], "GO", progs["hello"]["udg"])
+    if rc or open(out, "rb").read() != forthcart.dck(home, exrom, img):
+        fails.append("the .tap's cartridge differs from the image the cases run (%s)" % msg)
+    b = open(flat, "rb").read() if os.path.exists(flat) else b""
+    if len(b) != 0x10000 or b[:0x4000] != home or b[0x4000:0x4000 + len(img)] != img or b[0xA000:0xC000] != exrom \
+            or b[0x8000:0xA000] != b"\xff" * 0x2000:
+        fails.append("the flat .bin is not HOME, the image, $FF, the EXROM in address order")
+    udg_tzx, udg_bin = os.path.join(tmp, "udg.tzx"), os.path.join(tmp, "udg.bin")
+    open(udg_tzx, "wb").write(tapes.tzx(text + lib("UDGPROG", "udg") + lib("HELLO", "hello"), lead_ms=500))
+    open(udg_bin, "wb").write(progs["udg"]["udg"])
+    rc, msg = cli("--lib", udg_tzx, "--name", "UDGPROG", "--start", "GO", "--udg", udg_bin, "-o", out)
+    img = forthcart.program_image(S, progs["udg"]["dictionary"], progs["udg"]["latest"], progs["udg"]["identity"],
+                                  "GO", progs["udg"]["udg"])
+    if rc or open(out, "rb").read() != forthcart.dck(home, exrom, img):
+        fails.append("the .tzx's cartridge (--name, --udg) differs (%s)" % msg)
+    refusals = [("two LIB files, no --name", [udg_tzx, "--start", "GO"], "--name"),
+                ("another ROM's tape", [lib("OLD", "hello", identity=progs["hello"]["identity"] ^ 1)], "another ROM"),
+                ("a damaged tape", [lib("BAD", "hello", crc=0)], "CRC"),
+                ("an unknown start word", [hello_tap, "--start", "NOPE"], "not one of the program's words")]
+    for what, args, says in refusals:
+        if not isinstance(args[0], str):
+            path = os.path.join(tmp, "refuse.tap")
+            open(path, "wb").write(tapes.tap(args[0]))
+            args = [path, "--start", "GO"]
+        rc, msg = cli("--lib", *args, "-o", os.path.join(tmp, "refused.dck"))
+        if rc == 0 or says not in msg:
+            fails.append("%s: exit %d, %r" % (what, rc, msg))
+    return dict(ok=not fails, detail=", ".join(fails) or "ok: .tap, .tzx, --name, --udg, .bin; %d refusals"
+                % len(refusals))
+
+
 def tsrun_case(cart, tmp, zscreen):
     tsrun = os.environ.get("TSRUN", os.path.expanduser("~/TSRun"))
     if not shutil.which("node") or not os.path.isfile(os.path.join(tsrun, "machine.js")):
@@ -260,6 +317,8 @@ def main(argv):
                     free.append(port)
                     if pending:
                         submit(pending.pop(0))
+        if not a.only or any(o in "packer" for o in a.only):
+            results["packer"] = packer_case(a.cart, tmp, S, progs)
         if "hello" in results:                      # TSRun runs the hello case's cartridge
             results["tsrun"] = tsrun_case(a.cart, tmp, results["hello"].get("screen"))
     finally:
