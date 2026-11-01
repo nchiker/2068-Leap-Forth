@@ -34,25 +34,32 @@ component, `budget.toml`; `make inventory`: per routine). Dictionary: 16,128 byt
 | Cartridge | `make cart`: Forth, and a program saved with `SAVE-LIB`, as a DOCK cartridge for a stock TS2068 (`milestones/Cartridge.md`) |
 | Manual | The user's manual in Leap-C's shape, every example a test, its entries held to the ROM's words; five defects fixed (`milestones/Manual.md`) |
 | Polygon edges | POLYGON and POLYGON-FILL move an off-screen corner to the nearest edge, as Leap-C (`milestones/Polygon_edges.md`) |
+| Cart start | A program cartridge starts without the power-on CRC, as Leap V2's: the largest in 0.38 s, not 2.7 s (`milestones/Cart_start.md`) |
 
-## Now: Cart start — done (`docs/V2/milestones/Cart_start.md`)
+## Now: Blackjack — done (`docs/V2/milestones/Blackjack.md`)
 
-A program cartridge no longer checks its image's CRC at power-on, as Leap V2's production cartridge (Leap-Cartridge
-`CART_LOAD`) does not: the packer checks it. The largest program starts in 0.38 s, not 2.7 s; the cartridge's code
-is 173 B (was 194). Before it, step Polygon edges (PR #20): POLYGON's corners move to the nearest edge, as Leap-C's
-`draw()`/`box()`.
+The Blackjack demo rebuilt for the finished ROM (`demos/blackjack.fs`: readable, the same rules, a title, a tally,
+hands of up to 11 cards) and shipped as a cartridge by `make blackjack` (`tools/fs2lib.py` compiles a source on the
+release ROMs and writes its SAVE-LIB tape; `make cart` packs it). `RND`'s own seed now comes from the frame counter
+as well as R, and `tools/tape_gen_forth.py` puts a PC file's lines on tape ended by CR.
 
 ## Next, in order
 
-1. **Blackjack** rebuilt from its saved source (`demos/blackjack.fs`) as a program for the finished ROM; the Shooting
-   Gallery's source is beside it (`demos/gallery.fs`). A demo: one of the last steps; `make cart` can ship it as a
-   cartridge.
+Nothing scheduled. The Shooting Gallery is not wanted now (the owner, 2026-11-01): `demos/gallery.fs` stays as the old
+demo ROM's source, not rebuilt and not run on this ROM.
 
 ## Known defects
 
 | Defect | Found | Fixed in |
 |---|---|---|
 | LINE with an end far off the screen walks to it at about 270 T a step (ends near ±32,768: about 10M T, 3 s) | Display speed | Not scheduled: an exact jump over the off-screen part (32-bit multiply and divide) was built: its routines 70 B, about 130 B with the code around them. 2068-Leap-C's `draw()` moves an off-screen end to the edge (fast, but not the line meant); Forth keeps the exact line |
+
+Fixed in Blackjack: `RND` with no seed (or after `0 RANDOMIZE`) took it from the R register alone, 128 seeds, and a
+cartridge's start word runs at the same moment after every switch-on; the seed is now the frame counter with R in its
+high byte (as Leap-C advises, `srand(frames())` after a key; the manual says to `0 RANDOMIZE` after the first key).
+`tools/tape_gen_forth.py` put a PC file's LF line ends on tape, so `LOAD-TEXT` saw one line and its first `\` comment
+hid the rest (as Leap-C's `c2tape.py`, the lines now end in CR). The old demo cleared its first round to white, read
+past its column table at an 11-card hand, and its test logged at a literal RAM address.
 
 Fixed in Cart start: a program cartridge checked the image's CRC at power-on (2.7 s for the largest); it now checks
 the magic, identity, length and start word only, as Leap V2's production cartridge does, and the packer checks the CRC

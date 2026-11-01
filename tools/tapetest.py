@@ -103,6 +103,7 @@ import time
 sys.dont_write_bytecode = True
 HERE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE_DIR)                      # python3 -I does not put the script's directory on sys.path
+import fpforth                                    # noqa: E402
 import tapes                                      # noqa: E402
 
 HOME = os.path.expanduser("~")
@@ -627,8 +628,69 @@ def case_cs(ctx):
     return v
 
 
-BJ_FS = REPO + "/tests/data/blackjack_rounds.txt"   # demos/blackjack.fs with a log of each round at 62120
-BJ_EXPECT = [21, 15, 4, 23, 12, 3, 21, 19, 4, 15, 23, 1]       # the round log at 62120.. (seed 15785)
+# Step Blackjack: the demo itself (demos/blackjack.fs, a PC text file: tape_gen_forth.py turns its LFs into CRs, without
+# which its first \ comment would swallow the rest) between the lines of tests/data/blackjack_rounds.txt, which script its
+# keys and leave each round's totals and outcome on the stack; bj_model plays the same rounds with fpforth's RND.
+BJ_DEMO = REPO + "/demos/blackjack.fs"
+BJ_REPLAY = REPO + "/tests/data/blackjack_rounds.txt"   # .txt: the forth suite runs every .fs in tests/
+
+
+def bj_score(hand):
+    t = aces = 0
+    for c in hand:                                  # card n: rank n MOD 13 + 1, J Q K 10, an ace 11 ...
+        p = min(c % 13 + 1, 10)
+        if p == 1:
+            p, aces = 11, aces + 1
+        t += p
+    while t > 21 and aces:                          # ... or 1
+        t, aces = t - 10, aces - 1
+    return t
+
+
+def bj_model(seed, keys, rounds):
+    """What the replay's RUN leaves (bottom first): per round player + 32 * dealer + 1024 * OUTCOME, then WON LOST
+    PUSHED; the demo's rules (SHUFFLE, OPENING, PLAYER-TURN, DEALER-TURN, JUDGE)."""
+    st, k, out, tally = seed, 0, [], [0, 0, 0]
+    for _ in range(rounds):
+        deck = list(range(52))
+        for i in range(51, -1, -1):                 # 0 51 DO ... -1 +LOOP: i = 51 down to 0
+            st, j = fpforth.rnd(st, i + 1)
+            deck[i], deck[j] = deck[j], deck[i]
+        it = iter(deck)
+        player, dealer = [], []
+        for hand in (player, dealer, player, dealer):
+            hand.append(next(it))
+        natural = lambda h: len(h) == 2 and bj_score(h) == 21     # noqa: E731
+        if natural(player):
+            o = 5 if natural(dealer) else 4
+        else:
+            while bj_score(player) < 21:
+                while True:                         # HIT? waits for h or s
+                    key = ord(keys[k % len(keys)]) | 32
+                    k += 1
+                    if key in (ord("h"), ord("s")):
+                        break
+                if key != ord("h"):
+                    break
+                player.append(next(it))
+            if bj_score(player) <= 21:
+                while bj_score(dealer) < 17:
+                    dealer.append(next(it))
+            p, d = bj_score(player), bj_score(dealer)
+            o = 3 if p > 21 else 1 if d > 21 else 5 if p == d else 1 if p > d else 2
+        tally[2 if o == 5 else 0 if o in (1, 4) else 1] += 1
+        out.append(bj_score(player) + 32 * bj_score(dealer) + 1024 * o)
+    return out + tally
+
+
+def bj_text():
+    """The tape's text and bj_model's arguments, read from the replay file."""
+    replay = open(BJ_REPLAY).read()
+    before, after = replay.split("\\ DEMO\n")
+    seed = int(re.search(r"(\d+) RANDOMIZE", after).group(1))
+    rounds = int(re.search(r"(\d+) 0 DO LOG", after).group(1))
+    keys = re.search(r'S" (\w+)"', before).group(1)
+    return (before + open(BJ_DEMO).read() + after).encode("ascii"), (seed, keys, rounds)
 
 
 # Step Words and keys: the comments in LOAD-TEXT's CR-ended text.  Line 1 ends in \ right before its CR, which WORD
@@ -655,14 +717,15 @@ def case_c(ctx):
 
 def case_2(ctx):
     v = Verdict()
-    text = open(BJ_FS, "rb").read()
+    text, model = bj_text()
+    want = bj_model(*model)
     blocks = gen_tap_tape_gen_forth(ctx.work, [("BJPROG", text)])
     s, _ = play(ctx, blocks, [], "LOAD-TEXT BJPROG")
     try:
         r = finish(s, max_wall=600)
         v.check(r["idle"], "no prompt after the Blackjack text (%.0f s emulated)" % r["emu_s"])
-        got = [s.rd16(62120 + 2 * i) for i in range(12)]
-        v.check(got == BJ_EXPECT, "round log %s, expected %s" % (got, BJ_EXPECT))
+        got = s.stack()[::-1]
+        v.check(got == want, "rounds and tally %s, the model's %s" % (got, want))
         v.check(s.err_flag() == 0, "error reported while loading")
         v.note("%.0f s emulated; screen %s" % (r["emu_s"], s.screen()[-2:]))
     finally:

@@ -1180,3 +1180,13 @@ this is the condensed one-paragraph-per-phase version.
   the cartridge is built). The largest program starts in 0.38 s, not
   2.7 s. The release ROMs do not change. Emulators only (ZEsarUX,
   TSRun); no hardware.
+- V2 step Blackjack (`docs/V2/milestones/Blackjack.md`): the Blackjack
+  demo rebuilt for the finished ROM (`demos/blackjack.fs`, start word
+  `BLACKJACK`) and made a cartridge by `make blackjack`
+  (`tools/fs2lib.py` compiles a Forth source on the release ROMs in
+  ZEsarUX and writes its SAVE-LIB tape; `make cart` takes `OUT=`).
+  `RND`'s own seed (no `RANDOMIZE`, or `0 RANDOMIZE`) comes from the
+  frame counter with R in its high byte, not R alone (128 seeds); a
+  fixed seed gives the same numbers as before. `tools/tape_gen_forth.py`
+  turns a file's LF line ends into CR. HOME free space unchanged (1,924
+  bytes). Emulators only (ZEsarUX, TSRun); no hardware.

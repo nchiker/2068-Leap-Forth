@@ -130,7 +130,7 @@ Every push to `master` builds
 [2068-Forth-latest.zip](https://github.com/nchiker/2068-Leap-Forth/releases/download/latest/2068-Forth-latest.zip):
 the two images, the two as one file for ZEsarUX, the EXROM `.dck`, Forth as a cartridge for a stock TS2068
 (`forth_cart.dck`), `SHA256SUMS`, the symbol listings, the demo
-programs' source (`demos/`) and the documents as Markdown, PDF and DOCX. Numbered releases are on the
+programs' source (`demos/`; `make blackjack` makes the Blackjack game a cartridge) and the documents as Markdown, PDF and DOCX. Numbered releases are on the
 [releases page](https://github.com/nchiker/2068-Leap-Forth/releases); `make dist` makes the same zip locally.
 
 ## Building, testing, contributing

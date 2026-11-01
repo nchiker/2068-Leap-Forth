@@ -811,6 +811,26 @@ def t_rnd_reseed(m, fw, a):
         " ".join("%04X" % s for s in states[:6]), len(set(states))))
 
 
+def t_rnd_frames(m, fw, a):
+    # Step Blackjack: the seed is FRAMES with R in its high byte.  The same delay (the same R) with FRAMES set to each of
+    # a["frames"] must give as many different RND_STATEs; the old seed (R alone) gave one.
+    states, bad = [], []
+    for fr in a["frames"]:
+        m.restore()
+        fw.stuck = 0
+        m.set_bps([])
+        m.poke16(m.sym("FRAMES"), fr)
+        for step in (lambda: fw.call("RANDOMIZE", ints=[0]), lambda: fw.call("RND", ints=[1000], catch=False)):
+            why = settle(step())
+            if why:
+                bad.append(why)
+        states.append(m.w16(m.sym("RND_STATE")))
+    if len(set(states)) < len(states) or 0 in states:
+        bad.append("FRAMES %s gave RND_STATE %s" % (" ".join("%04X" % f for f in a["frames"]),
+                                                   " ".join("%04X" % s for s in states)))
+    return dict(ok=not bad, detail=bad[0] if bad else "RND_STATE %s" % " ".join("%04X" % s for s in states))
+
+
 def t_uncaught(m, fw, a):
     fails = []
     for line, want in a["lines"]:
@@ -860,7 +880,7 @@ def t_speed(m, fw, a):
 
 
 FUNCS = {"cases": t_cases, "words": t_words, "int": t_int, "console": t_console, "beep_typed": t_beep_typed,
-         "lit": t_lit, "stack": t_stack, "rnd_seq": t_rnd_seq, "rnd_reseed": t_rnd_reseed, "uncaught": t_uncaught,
+         "lit": t_lit, "stack": t_stack, "rnd_seq": t_rnd_seq, "rnd_reseed": t_rnd_reseed, "rnd_frames": t_rnd_frames, "uncaught": t_uncaught,
          "speed": t_speed}
 
 
@@ -1196,6 +1216,7 @@ def new_checks(count, seed, int_n):
         L.append(Check("RND 1000 results (seed %d)" % seed, "new", [task("rnd_seq", dict(seed=seed, ns=ns), 40)]))
     L.append(Check("RND 6: all 36 consecutive pairs", "new", [task("rnd_seq", dict(seed=1, ns=[6] * 3600, pairs=36), 120)]))
     L.append(Check("0 RANDOMIZE reseeds from R", "new", [task("rnd_reseed", dict(delays=[0, 1, 2, 3, 5, 8, 13, 21, 34, 55]), 10)]))
+    L.append(Check("0 RANDOMIZE seeds from FRAMES", "new", [task("rnd_frames", dict(frames=[0, 2, 0x100, 0x8000, 0xFF00]), 10)]))
 
     # ---- BEEP
     rng = rngf("beep")

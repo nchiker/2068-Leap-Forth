@@ -20,6 +20,11 @@ checks what the start word did and the state at the prompt:
             "BAD PROGRAM", the dictionary empty, the version on row 23, the prompt
   packer    tools/forthcart.py's command line on SAVE-LIB .tap and .tzx tapes gives the image the cases run, and the
             flat .bin; it refuses two LIB files without --name, another ROM's tape, a damaged one, an unknown word
+  blackjack the Blackjack demo (demos/blackjack.fs, compiled by tools/fs2lib.py's compile_lines, start word
+            BLACKJACK), as make blackjack packs it: its title with the suits (the start word draws the UDGs), a key,
+            a round dealt, S until the round ends, N: THANKS FOR PLAYING and the prompt, LAST_ERROR 0
+  blackjack-deal  the same with the title's key pressed 50 frames later deals other cards (0 RANDOMIZE after the
+            key: a cartridge starts at the same moment after every switch-on)
   tsrun     the hello cartridge on TSRun's core (tools/cartrun.mjs): the hand-off state, an interrupt forced before
             CART_ENTRY's `di` is harmless, only DOCK mappings of chunks 0-1 written, and the screen at the prompt is
             ZEsarUX's byte for byte (skipped, and said so, without node or ~/TSRun)
@@ -45,6 +50,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import fharness as fh   # noqa: E402
 import forthcart        # noqa: E402
+import fs2lib           # noqa: E402
 import tapes            # noqa: E402
 
 ROOT = os.path.dirname(HERE)
@@ -58,6 +64,7 @@ PROGRAMS = {
     "error": [": GO 1.0 0.0 F/ ;"],
     "break": [": GO BEGIN 0 UNTIL ;"],
 }
+BLACKJACK = os.path.join(ROOT, "demos", "blackjack.fs")
 
 
 def compile_programs(build, port):
@@ -66,18 +73,9 @@ def compile_programs(build, port):
     out = {}
     try:
         m.start()
-        S = m.sym
-        c = fh.Console(m)
         for name, lines in PROGRAMS.items():
-            c.boot()
-            for line in lines:
-                c.host_line(line)
-                if m.w16(S("LAST_ERROR")):
-                    raise fh.HarnessError("%s: %r ended in error %d" % (name, line, m.w16(S("LAST_ERROR"))))
-            here = m.w16(S("HERE"))
-            out[name] = dict(dictionary=m.read(S("FORTH_DICT_RAM"), here - S("FORTH_DICT_RAM")),
-                             latest=m.w16(S("LATEST")), identity=m.w16(S("ROM_IDENTITY")),
-                             udg=m.read(S("UDG_TABLE"), S("UDG_COUNT") * 8))
+            out[name] = fs2lib.compile_lines(m, list(enumerate(lines, 1)))
+        out["blackjack"] = fs2lib.compile_lines(m, fs2lib.source_lines(open(BLACKJACK).read()))
     finally:
         m.stop()
     return out
@@ -105,6 +103,8 @@ def cases(S, progs):
     nostart[S["CART_IMG_START"]] = 0
     return [("plain", None, {}), ("hello", hello, {}), ("udg", image("udg"), {}), ("error", image("error"), {}),
             ("break", image("break"), dict(hold_break=True)), ("largest", bytes(longest), {}),
+            ("blackjack", image("blackjack", "BLACKJACK"), {}),
+            ("blackjack-later", image("blackjack", "BLACKJACK"), dict(title_frames=50)),
             ("bad-identity", recrc(other), {}), ("bad-length", recrc(over), {}),
             ("bad-start", recrc(nostart), {})]
 
@@ -138,6 +138,8 @@ def run_case(cart, tmp, port, S, progs, name, img, opts):
                 m.cmd("send-keys-event %d 0" % e)
         c = fh.Console(m)
         c.boot()
+        if name.startswith("blackjack"):
+            return blackjack_run(m, c, S, opts)
         rows = m.screen_rows()
         screen = m.read(0x4000, 6912)
         err = m.w16(S["LAST_ERROR"])
@@ -198,6 +200,46 @@ def run_case(cart, tmp, port, S, progs, name, img, opts):
         return dict(ok=False, detail="TASK FAILED %s: %s" % (type(e).__name__, e))
     finally:
         m.stop()
+
+
+def blackjack_run(m, c, S, opts):
+    """The demo's cartridge, from its title's key wait: a round played with S, then N.  dict(ok, detail, cards): the
+    player's first two cards as drawn (rows 8-11)."""
+    fails = []
+
+    def want(ok, what):
+        if not ok:
+            fails.append(what)
+    rows = m.screen_rows()
+    suits = "".join(chr(fh.UDG_BASE + i) for i in range(4))
+    want(not c.in_editor() and rows[18].strip() == "PRESS ANY KEY", "title: row 18 %r" % rows[18])
+    want(rows[5].replace(" ", "") == suits, "title: the suits not drawn on row 5 (%r): no UDGs" % rows[5])
+    if opts.get("title_frames"):
+        m.set_bps([])
+        f0 = m.w16(S["FRAMES"])
+        while (m.w16(S["FRAMES"]) - f0) & 0xFFFF < opts["title_frames"]:
+            m.run(20_000)
+        m.run_to([S["IO_READ_KEY"]], 1000)      # the wait loop's top, as Console.key expects
+    c.key(ord(" "))
+    rows = m.screen_rows()
+    cards = rows[8:12]
+    want(rows[0].strip() == "BLACKJACK" and rows[21].startswith("WON 0 LOST 0 PUSHED 0"), "the table: rows 0, 21 %r %r"
+         % (rows[0], rows[21]))
+    for _ in range(12):
+        if "ANOTHER ROUND" in m.screen_rows()[18]:
+            break
+        c.key(ord("s"))
+    rows = m.screen_rows()
+    result = rows[16]
+    tally = [int(w) for w in rows[21].split()[1::2]]
+    want("ANOTHER ROUND" in rows[18] and sum(tally) == 1, "after S: rows 18, 21 %r %r" % (rows[18], rows[21]))
+    c.key(ord("n"))
+    rows = m.screen_rows()
+    err = m.w16(S["LAST_ERROR"])
+    want(c.in_editor() and rows[:2] == ["THANKS FOR PLAYING", "OK"] and err == 0, "after N: rows %r, LAST_ERROR %d"
+         % (rows[:2], err))
+    return dict(ok=not fails, detail=", ".join(fails) or "ok: the title, a round (%s), N, the prompt" % result,
+                cards=cards)
 
 
 def packer_case(cart, tmp, S, progs):
@@ -322,6 +364,10 @@ def main(argv):
                         submit(pending.pop(0))
         if not a.only or any(o in "packer" for o in a.only):
             results["packer"] = packer_case(a.cart, tmp, S, progs)
+        if "blackjack" in results and "blackjack-later" in results:
+            a_, b_ = results["blackjack"].get("cards"), results["blackjack-later"].get("cards")
+            results["blackjack-deal"] = dict(ok=bool(a_) and a_ != b_, detail="ok: other cards" if a_ != b_ else
+                                             "the same cards %r after a later key" % (a_,))
         if "hello" in results:                      # TSRun runs the hello case's cartridge
             results["tsrun"] = tsrun_case(a.cart, tmp, results["hello"].get("screen"))
     finally:
