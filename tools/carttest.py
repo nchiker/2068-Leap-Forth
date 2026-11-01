@@ -14,8 +14,9 @@ checks what the start word did and the state at the prompt:
   udg       the UDG table is copied
   error     an error in the start word (F/ by zero) is reported as a typed line's (LAST_ERROR -42), then the prompt
   break     BREAK stops the start word (LAST_ERROR -28), then the prompt
-  largest   a dictionary of CART_IMG_MAX bytes (to $D000) loads; the load's T-states, the CRC's included
-  bad-*     an image with another ROM's identity, a wrong CRC, a length over CART_IMG_MAX, a start word of length 0:
+  largest   a dictionary of CART_IMG_MAX bytes (to $D000) loads within LOAD_CEIL T-states (the power-on CRC, 9.5M T,
+            is gone: the packer checks the image, as Leap V2's cartridge does)
+  bad-*     an image with another ROM's identity, a length over CART_IMG_MAX, a start word of length 0:
             "BAD PROGRAM", the dictionary empty, the version on row 23, the prompt
   packer    tools/forthcart.py's command line on SAVE-LIB .tap and .tzx tapes gives the image the cases run, and the
             flat .bin; it refuses two LIB files without --name, another ROM's tape, a damaged one, an unknown word
@@ -48,6 +49,8 @@ import tapes            # noqa: E402
 
 ROOT = os.path.dirname(HERE)
 PORT0 = 10920
+LOAD_CEIL = 2_000_000     # CART_ENTRY to the start word for the largest dictionary: cold start + the copy (9.5M T with
+                          # the power-on CRC, before step Cart start); raise it only with the reason in the commit
 
 PROGRAMS = {
     "hello": [': GO CLS ." HELLO CART" CR 6 7 * . ;'],
@@ -96,15 +99,13 @@ def cases(S, progs):
     longest = bytearray(image("hello", dictionary=pad))
     other = bytearray(hello)
     other[2] ^= 1                                           # another ROM's identity
-    crc = bytearray(hello)
-    crc[S["CART_IMG_DICT"]] ^= 0x40                         # a dictionary byte changed, the CRC not
     over = bytearray(hello)
     struct.pack_into("<H", over, 4, S["CART_IMG_MAX"] + 1)  # longer than the dictionary's RAM
     nostart = bytearray(hello)
     nostart[S["CART_IMG_START"]] = 0
     return [("plain", None, {}), ("hello", hello, {}), ("udg", image("udg"), {}), ("error", image("error"), {}),
             ("break", image("break"), dict(hold_break=True)), ("largest", bytes(longest), {}),
-            ("bad-identity", recrc(other), {}), ("bad-crc", bytes(crc), {}), ("bad-length", recrc(over), {}),
+            ("bad-identity", recrc(other), {}), ("bad-length", recrc(over), {}),
             ("bad-start", recrc(nostart), {})]
 
 
@@ -166,6 +167,8 @@ def run_case(cart, tmp, port, S, progs, name, img, opts):
             want(m.read(base, len(prog["dictionary"])) == prog["dictionary"], "dictionary differs from the release's")
             store = m.read(S["STORE_START"], m.w16(S["STORE_END"]) - S["STORE_START"])
             want(store == b"GO\r", "line store %r, not the start word's line" % store)
+        if name == "largest":
+            want(timing.get("load_t", LOAD_CEIL + 1) <= LOAD_CEIL, "load %s T, over %d" % (timing.get("load_t"), LOAD_CEIL))
         if name in ("hello", "largest"):
             want(rows[0] == "HELLO CART" and rows[1] == "42 OK", "rows %r" % rows[:2])
             want(err == 0, "LAST_ERROR %d" % err)

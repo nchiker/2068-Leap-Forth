@@ -12,14 +12,19 @@ reports: `docs/V2/milestones/`.
   `hardware_notes.md` are gone into it. Five defects found while writing it are fixed (`NO EXROM`, the data stack's
   guard, `RECT` clipping, the sprite range checks, the `g p q` glyphs). PR #19 open; the owner reviews it.
 - **Branch `v2/step-polygon-edges`** (from `v2/step-manual`): POLYGON and POLYGON-FILL move a corner off the screen to
-  the nearest edge, as Leap-C's `draw()`/`box()` (`docs/V2/milestones/Polygon_edges.md`). Its PR follows #19.
-- **The owner (2026-11-01):** for a remaining defect, look first at how Leap-C handled the same problem. The two left
-  (a cartridge's power-on CRC; LINE far off the screen) are compared in the Polygon edges report: dropping the CRC
-  as Leap-C's plan does is the owner's call.
+  the nearest edge, as Leap-C's `draw()`/`box()` (`docs/V2/milestones/Polygon_edges.md`). PR #20 open, based on
+  `v2/step-manual` (it becomes master's once #19 merges); the owner reviews it after #19.
+- **Branch `v2/step-cart-start`** (from `v2/step-polygon-edges`): a program cartridge no longer checks its CRC at
+  power-on, as Leap V2's production cartridge (`~/Projects/Leap-Cartridge`, `CART_LOAD`) does not
+  (`docs/V2/milestones/Cart_start.md`). Not pushed; its PR (stacked on #20) when the owner asks. This branch's
+  HANDOFF and ROADMAP are the newest. Merge order: #19, #20, then this.
+- **The owner (2026-11-01):** for a remaining defect, look first at how Leap-C (and Leap V2, whose cartridge is in
+  production) handled the same problem. The one left (LINE far off the screen) is compared in the Polygon edges
+  report: Forth keeps the exact line.
 - **Decided (2026-11-01):** the manual has Leap-C's eight parts, the words split into Part 3 (the language) and Part 4
   (the machine) by the IDE's groups; the tutorial is folded in as Part 2 (the owner). Earlier: after the cartridge's
   start word, the `OK` prompt; Blackjack (a demo) is one of the last steps.
-- **Free bytes:** HOME 1,924, EXROM 3,136, the cartridge's HOME image 1,730; per component in `budget.toml`
+- **Free bytes:** HOME 1,924, EXROM 3,136, the cartridge's HOME image 1,751; per component in `budget.toml`
   (`make budget`), per routine `make inventory`. The dictionary starts at `$9100` (`FREE` 16,128 at power-on); the data
   stack is 896 cells under a 256-byte guard (`$9000-$90FF`).
 - **Next:** ROADMAP's *Blackjack*.
@@ -135,7 +140,7 @@ reports: `docs/V2/milestones/`.
 - **The cartridge build (`-DCARTRIDGE`) must keep every release label at its address** (`tools/cart_check.py`, in
   `make check`): cartridge-only code goes in `kernel/bank/cart.asm` (assembled after everything, in the free space),
   and a flagged variant inside a release routine must fit its bytes (`BANK_PAGE_EXROM_IN` 27, `_OUT` 16). The
-  cartridge's own code (194 B) must stay within the HOME reserve floor (200 B), so the cartridge fits whenever the
+  cartridge's own code (173 B) must stay within the HOME reserve floor (200 B), so the cartridge fits whenever the
   release does. It carries the release's `ROM_IDENTITY` (copied, not computed). A change to COLD_START's tail keeps the
   call at `COLD_START.chime`.
 - **Cartridge tests:** `fharness.Machine` runs a build with `forth_cart.dck` (or `dck=`) on ZEsarUX's stock

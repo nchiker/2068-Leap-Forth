@@ -1174,3 +1174,9 @@ this is the condensed one-paragraph-per-phase version.
   wrapping it to the other side (-20 was drawn at x 236); a count above
   255 is refused. HOME free space 1,936 bytes before, 1,924 after;
   EXROM 3,136. Emulators only; no hardware.
+- V2 step Cart start (`docs/V2/milestones/Cart_start.md`): a program
+  cartridge starts its program without checking the image's checksum
+  at power-on, as Leap V2's cartridge does (the packer checks it when
+  the cartridge is built). The largest program starts in 0.38 s, not
+  2.7 s. The release ROMs do not change. Emulators only (ZEsarUX,
+  TSRun); no hardware.
