@@ -16,8 +16,11 @@ reports: `docs/V2/milestones/`.
   `v2/step-manual` (it becomes master's once #19 merges); the owner reviews it after #19.
 - **Branch `v2/step-cart-start`** (from `v2/step-polygon-edges`): a program cartridge no longer checks its CRC at
   power-on, as Leap V2's production cartridge (`~/Projects/Leap-Cartridge`, `CART_LOAD`) does not
-  (`docs/V2/milestones/Cart_start.md`). Not pushed; its PR (stacked on #20) when the owner asks. This branch's
-  HANDOFF and ROADMAP are the newest. Merge order: #19, #20, then this.
+  (`docs/V2/milestones/Cart_start.md`). Not pushed; its PR (stacked on #20) when the owner asks.
+- **Branch `v2/step-blackjack`** (from `v2/step-cart-start`; master had not moved): the Blackjack demo rebuilt and
+  made a cartridge by `make blackjack`; `RND`'s own seed from `FRAMES` and R; `tape_gen_forth.py`'s line ends
+  (`docs/V2/milestones/Blackjack.md`). Not pushed; its PR (stacked on cart-start) when the owner asks. This branch's
+  HANDOFF and ROADMAP are the newest. Merge order: #19, #20, cart-start, then this.
 - **The owner (2026-11-01):** for a remaining defect, look first at how Leap-C (and Leap V2, whose cartridge is in
   production) handled the same problem. The one left (LINE far off the screen) is compared in the Polygon edges
   report: Forth keeps the exact line.
@@ -27,7 +30,9 @@ reports: `docs/V2/milestones/`.
 - **Free bytes:** HOME 1,924, EXROM 3,136, the cartridge's HOME image 1,751; per component in `budget.toml`
   (`make budget`), per routine `make inventory`. The dictionary starts at `$9100` (`FREE` 16,128 at power-on); the data
   stack is 896 cells under a 256-byte guard (`$9000-$90FF`).
-- **Next:** ROADMAP's *Blackjack*.
+- **Next:** ROADMAP's next step is proposed, not decided: the Shooting Gallery (`demos/gallery.fs`) rebuilt as Blackjack
+  was. Ask the owner. Leap V2 (`~/2068-Leap`, `kernel/math/math.asm`) seeds `RND` from R alone, the defect fixed here
+  in step Blackjack; that is Leap V2's to fix, not this repo's.
 
 ## How the owner wants the work done
 
@@ -125,8 +130,16 @@ reports: `docs/V2/milestones/`.
   `{NAME}`; `tests/core/free.fs` holds the dictionary size on purpose.
 - **z80sim** (`tools/z80sim/`) is a vendored copy: change it upstream (`~/z80sim`), never here; its `SYSVARS` table is
   from the BASIC project.
-- **Whole-flow tests carry their own expected values** (the Blackjack round log in tapetest case 2): after a change to
-  RND or anything they replay, grep for the old values.
+- **tapetest case 2 plays `demos/blackjack.fs` itself** between the lines of `tests/data/blackjack_rounds.txt` (a
+  scripted `KEY` before it, 8 rounds from seed 15785 after it) and compares the stack with `bj_model` (tapetest: the
+  demo's rules on `fpforth.rnd`). A change to the demo's rules needs the same change in `bj_model`; a change to `RND`
+  needs it in `fpforth.rnd` (floattest checks that against the ROM).
+- **A Forth source as a program:** `tools/fs2lib.py` compiles it on the release ROMs (ZEsarUX, port 10900 by default:
+  fharness's self-test range) and writes its SAVE-LIB tape; `make blackjack` = that + `make cart ... OUT=blackjack`.
+  carttest compiles its programs with `fs2lib.compile_lines`. `tools/tape_gen_forth.py` (a source as a text tape for
+  LOAD-TEXT) turns LF into CR: without it a `\` comment hides the rest of the file.
+- **`RND`'s own seed** (`MATH_RND16`, no `RANDOMIZE` or `0 RANDOMIZE`) is `FRAMES` with R XORed into its high byte,
+  bit 0 set. A program that starts by itself seeds after the first key (`demos/blackjack.fs`'s start word).
 - **Old-build comparisons:** `git worktree add --detach <scratch>/old <commit> && make -C <scratch>/old`, then
   `python3 tools/forthtest.py --build <scratch>/old/build`, or `--build` for the edtest/floattest/shapetest tools,
   `TAPETOL_BASE=`.
