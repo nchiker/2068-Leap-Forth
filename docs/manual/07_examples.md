@@ -380,4 +380,30 @@ COL @ .  \ expect: 17
 
 ---
 
+## A larger program: Blackjack
+
+`demos/blackjack.fs`, in the Leap-Forth source, is a whole game in about 150 short lines: you against the dealer, with the
+cards drawn on a green table, a sound for each card and a count of rounds won, lost and pushed. It uses most of what
+this part shows: arrays for the deck and the two hands (a hand is an `ARRAY` whose cell 0 is the number of cards),
+`RND` to shuffle, `UDG` for the suits, `LINE` for the cards' edges, `KEY` for H, S, Y and N, and `BEEP`, `TONE`,
+`NOISE` and `VOLUME` for the sounds. Its words are short and each says what it does: `SHUFFLE`, `DEAL`, `SCORE`
+(counting an ace as 11, or 1 when that would go over 21), `PLAYER-TURN`, `DEALER-TURN` (draws to 17), `JUDGE`, `ROUND`.
+
+The start word, `BLACKJACK`, shows the rules and waits for a key, and only then does `0 RANDOMIZE`: how long you take
+to press the key decides the cards, so no two games are the same, even on a cartridge, which starts at the same moment
+after every switch-on.
+
+To play it on the release ROMs, put the file on a text tape and load it:
+
+```text
+python3 tools/tape_gen_forth.py bj.tap BLACKJACK:demos/blackjack.fs
+LOAD-TEXT BLACKJACK
+BLACKJACK
+```
+
+The first line is typed on the PC, the other two in the emulator once `bj.tap` is in its tape player. `make blackjack`
+makes it a cartridge (see [Program cartridges](06_libraries.md#program-cartridges)).
+
+---
+
 That is all the programs. To keep one, remember that everything you type is kept in the line store, and `SAVE-TEXT` puts the store on tape: see [Part 4](04_machine.md) and [Tapes](05_concepts.md#tapes).

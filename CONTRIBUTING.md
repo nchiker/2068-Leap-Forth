@@ -38,6 +38,7 @@ make test-fast   # the development subset, about 2 minutes
 make tapetol     # the tape receiver's tolerance (TAPETOL_BASE=<old build dir> compares two builds)
 make fusesave    # SAVE-TEXT and SAVE-LIB on Fuse's tape deck, decoded by fuse-utils and loaded back
 make audio       # what the emulated AY plays for BEEP (real time, about two minutes)
+make blackjack   # the Blackjack demo as a cartridge, build/cart/blackjack.dck (ZEsarUX compiles it: tools/fs2lib.py)
 ```
 
 `make test` runs these suites (`tools/run_tests.py --suite NAME` runs one; arguments after the options filter cases by
@@ -108,6 +109,8 @@ HOME reserve floor in `budget.toml`. So the cartridge always fits as long as the
 - Forth with no program.
 - A program's output, an error and `BREAK` in the start word.
 - The UDG table, the largest dictionary (loaded within a speed ceiling), and three kinds of bad image.
+- The Blackjack demo as `make blackjack` packs it: its title, a round, the end and the prompt; a key pressed later on
+  the title deals other cards.
 - A second emulator (TSRun, `tools/cartrun.mjs`) checks the stock ROM's hand-off, including an interrupt forced before
   the entry's `di`. It also checks that the paging never leaves the cartridge's chunks, and that the screen at the
   prompt matches ZEsarUX's byte for byte.
@@ -123,8 +126,8 @@ HOME reserve floor in `budget.toml`. So the cartridge always fits as long as the
 | `kernel/` | the hardware layer: graphics, keyboard and interrupt, memory, banking, tape |
 | `include/` | the RAM layout, hardware constants, the EXROM interface, key codes |
 | `tests/` | the Forth tests by area, the benchmarks (`tests/bench/`), test data |
-| `tools/` | build, check and test tools; the ZEsarUX harness (`fharness.py`, `run_tests.py`), the Fuse harness (`fusedrive.py`, `fuse/`), the tape tools (`tapes.py`, `tape_gen_forth.py`), `z80sim/` |
-| `demos/` | Forth programs as source text (Blackjack, Shooting Gallery) |
+| `tools/` | build, check and test tools; the ZEsarUX harness (`fharness.py`, `run_tests.py`), the Fuse harness (`fusedrive.py`, `fuse/`), the tape tools (`tapes.py`, `tape_gen_forth.py`: a source file as a text tape; `fs2lib.py`: compiled, as a SAVE-LIB tape), `z80sim/` |
+| `demos/` | Forth programs as source text: Blackjack (`make blackjack`; tapetest case 2 plays it), Shooting Gallery (its old source, not yet rebuilt) |
 | `docs/` | the user's manual (`manual/`, its Word edition), the emulator guides; the roadmap, handoff and milestone reports (`V2/`) |
 | `patches/` | the ZEsarUX EXROM patch |
 

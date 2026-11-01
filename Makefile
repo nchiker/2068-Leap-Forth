@@ -8,7 +8,9 @@
 #   make cart         the DOCK cartridge for a stock TS2068 in build/cart/ (manual Part 6): the HOME image
 #                     assembled with -DCARTRIDGE (tools/cart_check.py), the EXROM, forth_cart.dck (Forth, no
 #                     program); PROG=<SAVE-LIB tape> START=<word> [UDG=<168-byte file>] also packs that program
-#                     into build/cart/program.dck and program.bin (tools/forthcart.py)
+#                     into build/cart/program.dck and program.bin (tools/forthcart.py; OUT=<name> for another name)
+#   make blackjack    the Blackjack demo (demos/blackjack.fs) as a cartridge, build/cart/blackjack.dck and .bin:
+#                     compiled on the release ROMs in ZEsarUX (tools/fs2lib.py, build/blackjack.tap), then make cart
 #   make test         every suite in ZEsarUX (tools/run_tests.py): boot, the Forth tests in tests/, the editor,
 #                     floats, FILL and CIRCLE, the benchmarks, power-on RAM, tape, the cartridge
 #   make test-cart    the boot, Forth, editor, float and shape suites on the cartridge (build/cart) in the stock
@@ -21,7 +23,7 @@
 #   make repro        two clean builds (the cartridge too) must give identical hashes
 #   make manual       the Word edition of the manual, docs/2068_Leap-Forth_Users_Manual.docx (docs/manual/*.md)
 #   make docs, dist   the PDF/DOCX documents; the download bundle (CI)
-.PHONY: all cart check budget inventory test test-cart test-fast tapetol tapetol-fuse fusesave audio repro manual docs dist clean
+.PHONY: all cart blackjack check budget inventory test test-cart test-fast tapetol tapetol-fuse fusesave audio repro manual docs dist clean
 
 SJASM := tools/sjasmplus_strict.sh --outprefix=build/
 SRC := $(shell find core kernel include rom -name '*.asm' -o -name '*.inc' | sort) tools/sjasmplus_strict.sh
@@ -62,11 +64,18 @@ $(CART)/forth_boot_rom0.bin: $(SRC) build/forth_boot_rom0.bin build/graphics_exr
 $(CART)/forth_cart.dck: $(CART)/forth_boot_rom0.bin tools/forthcart.py tools/tapes.py
 	python3 -I tools/forthcart.py --cart $(CART) -o $@
 
+OUT ?= program
 cart: $(CART)/forth_cart.dck
 ifdef PROG
 	python3 -I tools/forthcart.py --cart $(CART) --lib $(PROG) --start $(START) $(if $(UDG),--udg $(UDG)) \
-	    -o $(CART)/program.dck --bin $(CART)/program.bin
+	    -o $(CART)/$(OUT).dck --bin $(CART)/$(OUT).bin
 endif
+
+build/blackjack.tap: demos/blackjack.fs build/forth_boot_rom0.bin tools/fs2lib.py
+	python3 -I tools/fs2lib.py --name BLACKJACK demos/blackjack.fs $@
+
+blackjack: build/blackjack.tap $(CART)/forth_cart.dck
+	$(MAKE) cart PROG=build/blackjack.tap START=BLACKJACK OUT=blackjack
 
 check: all cart
 	python3 tools/check_asm.py core/*.asm kernel/*/*.asm rom/*.asm

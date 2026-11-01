@@ -83,13 +83,27 @@ You need the Leap-Forth source (a checkout of the repository, with Python 3) to 
    ```
 
    This writes `build/cart/program.dck` (for emulators) and `build/cart/program.bin` (the whole 64 KB cartridge as one
-   file, for a cartridge board). `tools/forthcart.py` does the packing and can be run on its own
-   (`python3 tools/forthcart.py --help`).
+   file, for a cartridge board); `OUT=play` names them `play.dck` and `play.bin`. `tools/forthcart.py` does the
+   packing and can be run on its own (`python3 tools/forthcart.py --help`).
 4. Insert the `.dck` as a dock cartridge and switch on: ZEsarUX with its stock ROM (`--machine TS2068 --romfile
    ts2068.rom`, then *smartload* the `.dck`), or TSRun's dock slot.
 
 The packer refuses a tape saved by a different ROM build, a damaged tape, a start word that is not among the
 program's words, and a dictionary larger than the cartridge can copy (16,128 bytes).
+
+**From a source file.** `tools/fs2lib.py` does steps 1 and 2 for you: it types a source file's lines into the release
+ROMs in ZEsarUX (with no window), then writes the tape that `SAVE-LIB` would have written. `make blackjack` uses it to
+make the Blackjack game (`demos/blackjack.fs`, [Part 7](07_examples.md#a-larger-program-blackjack)) a cartridge:
+
+```text
+make blackjack
+```
+
+That writes `build/blackjack.tap` and then `build/cart/blackjack.dck` and `blackjack.bin`.
+
+**Random numbers.** A cartridge starts at the same moment after every switch-on, so a start word that calls `RND`
+before the player has pressed a key gets the same numbers every time. Do `0 RANDOMIZE` after the first key (as
+Blackjack does): the time the player takes makes the numbers different.
 
 **User-defined characters.** A library does not hold the UDG table. Define a program's characters in its start word,
 or give the packer the 168 bytes of the table (from `0 UDG` on) with `UDG=file`.
