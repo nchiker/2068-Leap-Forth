@@ -12,10 +12,12 @@ reports: `docs/V2/milestones/`.
   `hardware_notes.md` are gone into it. Five defects found while writing it are fixed (`NO EXROM`, the data stack's
   guard, `RECT` clipping, the sprite range checks, the `g p q` glyphs). PR #19 open; the owner reviews it.
 - **Branch `v2/step-polygon-edges`** (from `v2/step-manual`): POLYGON and POLYGON-FILL move a corner off the screen to
-  the nearest edge, as Leap-C's `draw()`/`box()` (`docs/V2/milestones/Polygon_edges.md`). Its PR follows #19.
+  the nearest edge, as Leap-C's `draw()`/`box()` (`docs/V2/milestones/Polygon_edges.md`). PR #20 open, based on
+  `v2/step-manual` (it becomes master's once #19 merges); the owner reviews it after #19.
 - **Branch `v2/step-cart-start`** (from `v2/step-polygon-edges`): a program cartridge no longer checks its CRC at
   power-on, as Leap V2's production cartridge (`~/Projects/Leap-Cartridge`, `CART_LOAD`) does not
-  (`docs/V2/milestones/Cart_start.md`). Not pushed.
+  (`docs/V2/milestones/Cart_start.md`). Not pushed; its PR (stacked on #20) when the owner asks. This branch's
+  HANDOFF and ROADMAP are the newest. Merge order: #19, #20, then this.
 - **The owner (2026-11-01):** for a remaining defect, look first at how Leap-C (and Leap V2, whose cartridge is in
   production) handled the same problem. The one left (LINE far off the screen) is compared in the Polygon edges
   report: Forth keeps the exact line.
