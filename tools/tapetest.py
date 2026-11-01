@@ -629,10 +629,10 @@ def case_cs(ctx):
 
 
 # Step Blackjack: the demo itself (demos/blackjack.fs, a PC text file: tape_gen_forth.py turns its LFs into CRs, without
-# which its first \ comment would swallow the rest) between the lines of tests/data/blackjack_rounds.fs, which script its
+# which its first \ comment would swallow the rest) between the lines of tests/data/blackjack_rounds.txt, which script its
 # keys and leave each round's totals and outcome on the stack; bj_model plays the same rounds with fpforth's RND.
 BJ_DEMO = REPO + "/demos/blackjack.fs"
-BJ_REPLAY = REPO + "/tests/data/blackjack_rounds.fs"
+BJ_REPLAY = REPO + "/tests/data/blackjack_rounds.txt"   # .txt: the forth suite runs every .fs in tests/
 
 
 def bj_score(hand):
