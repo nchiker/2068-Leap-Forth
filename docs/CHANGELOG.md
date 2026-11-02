@@ -1193,3 +1193,11 @@ this is the condensed one-paragraph-per-phase version.
 - V2 complete (2026-11-01): steps Manual, Polygon edges, Cart start and
   Blackjack merged (PRs #19-#22); `docs/V2/ROADMAP.md` lists every step
   and the one known defect left as it is.
+- V2 step STICK (`docs/V2/milestones/STICK.md`): `STICK` makes the AY's
+  port A an input (register 7 bit 6 = 0) before it reads, and selects
+  joystick 1 or 2 by A8/A9 as the stock ROM does; the result is 0-31 for
+  both sticks, the four directions plus 16 for fire (joystick 2 was 0 or
+  1). On TSRun `2 STICK` gave 1 with nothing connected. The fix is Leap
+  V2 v2.1.1's. A `tsrun` suite in `make test` checks it on TSRun's
+  joystick model. HOME free space 1,924 bytes before, 1,915 after.
+  Emulators only (ZEsarUX, TSRun); no hardware.

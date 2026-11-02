@@ -12,6 +12,8 @@ Then, on their own emulators:
   poweron the boot from power-on RAM patterns (tools/poweron.py, ports 10820-10839)
   tape    SAVE/LOAD/VERIFY on real tape signals (tools/tapetest.py, ports 10960-10979)
   cart    the DOCK cartridge on the stock ROMs (tools/carttest.py, ports 10920-10939; needs make cart)
+  tsrun   the release images on TSRun's core, for what ZEsarUX does not model: STICK's two connectors and port A's
+          direction (tools/tsruntest.mjs; skipped, and said so, without node or ~/TSRun)
 
 --build build/cart runs the pool suites on the cartridge build instead (make test-cart: every Forth test, the editor,
 floats and shapes on the stock ROM with the cartridge in the DOCK; fharness.Machine's cartridge mode).
@@ -26,6 +28,7 @@ import io
 import json
 import os
 import subprocess
+import shutil
 import sys
 import time
 
@@ -40,7 +43,7 @@ import shapetest        # noqa: E402
 
 ROOT = os.path.dirname(HERE)
 POOL = ("boot", "forth", "editor", "float", "shape", "bench")
-ALL = POOL + ("poweron", "tape", "cart")
+ALL = POOL + ("poweron", "tape", "cart", "tsrun")
 FAST = ("boot", "forth", "editor", "float", "shape")
 
 
@@ -110,6 +113,14 @@ def main():
         if n in names:
             print("run_tests: %s" % n, flush=True)
             codes[n] = subprocess.call([sys.executable, "-I"] + cmd, cwd=ROOT)
+    if "tsrun" in names:
+        print("run_tests: tsrun", flush=True)
+        tsrun = os.environ.get("TSRUN", os.path.expanduser("~/TSRun"))
+        if shutil.which("node") and os.path.isfile(os.path.join(tsrun, "machine.js")):
+            codes["tsrun"] = subprocess.call(["node", os.path.join(HERE, "tsruntest.mjs"), build], cwd=ROOT)
+        else:
+            print("tsrun: SKIPPED: needs node and TSRun at %s" % tsrun)
+            codes["tsrun"] = 0
     bad = [n for n, c in codes.items() if c]
     json.dump(dict(codes=codes, wall=round(time.time() - t0, 1), fast=a.fast),
               open(os.path.join(build, "test_results.json"), "w"), indent=1)

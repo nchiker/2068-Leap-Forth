@@ -5,6 +5,8 @@ reports: `docs/V2/milestones/`.
 
 ## Where things stand (2026-11-01)
 
+- **Step STICK (2026-11-01), branch `v2/stick-fix`, not yet merged:** `STICK` makes port A an input and selects
+  its connector, as Leap V2 v2.1.1 (`milestones/STICK.md`); a `tsrun` suite in `make test`.
 - **V2 is complete. Master `24a5bf2`**: PRs #19 (Manual), #20 (Polygon edges), #21 (Cart start) and #22 (Blackjack)
   merged 2026-11-01, in that order, with merge commits; no PR open, every other branch merged. The ROADMAP has nothing
   scheduled. The step reports are `docs/V2/milestones/`; the last is `Blackjack.md`.
@@ -14,7 +16,7 @@ reports: `docs/V2/milestones/`.
 - **Decided (2026-11-01):** the manual has Leap-C's eight parts, the words split into Part 3 (the language) and Part 4
   (the machine) by the IDE's groups; the tutorial is folded in as Part 2 (the owner). Earlier: after the cartridge's
   start word, the `OK` prompt.
-- **Free bytes:** HOME 1,924, EXROM 3,136, the cartridge's HOME image 1,751; per component in `budget.toml`
+- **Free bytes:** HOME 1,915, EXROM 3,136, the cartridge's HOME image 1,742 (branch `v2/stick-fix`); per component in `budget.toml`
   (`make budget`), per routine `make inventory`. The dictionary starts at `$9100` (`FREE` 16,128 at power-on); the data
   stack is 896 cells under a 256-byte guard (`$9000-$90FF`).
 - **Next:** nothing scheduled; the Shooting Gallery is not wanted now (the owner, 2026-11-01). A new step starts

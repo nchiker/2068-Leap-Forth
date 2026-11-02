@@ -54,6 +54,7 @@ name):
 | bench | the programs in `tests/bench/`, timed in T-states (recorded) |
 | poweron | the boot from power-on RAM patterns (`tools/poweron.py`) |
 | tape | `SAVE`/`LOAD`/`VERIFY` on real tape signals (`tools/tapetest.py`) |
+| tsrun | the release images on TSRun's core, for what ZEsarUX does not model: `STICK`'s two connectors (`tools/tsruntest.mjs`; needs node and `~/TSRun`, skipped without) |
 
 Continuous integration (`.github/workflows/build.yml`) installs sjasmplus 1.23.1 and runs `make check`, `make repro` and
 `make dist`. The emulator suites run locally.

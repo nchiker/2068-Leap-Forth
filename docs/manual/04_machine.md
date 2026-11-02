@@ -710,7 +710,7 @@ LINE 2 LPRINT
 
 `( mask -- )` -- **word**, sound
 
-Writes *mask* to the AY chip's mixer, register 7, which chooses what each channel plays. A 0 bit switches a source on: bits 0, 1 and 2 are the tones of channels A, B and C, bits 3, 4 and 5 their noise. Bits 6 and 7 are not sound (the chip's I/O port direction); leave them 1. `253 MIXER` plays channel B's tone only; `255 MIXER` plays nothing.
+Writes *mask* to the AY chip's mixer, register 7, which chooses what each channel plays. A 0 bit switches a source on: bits 0, 1 and 2 are the tones of channels A, B and C, bits 3, 4 and 5 their noise. Bits 6 and 7 are not sound: they set the direction of the chip's two I/O ports (1 = output). Any value can be written there: `STICK` sets bit 6 to 0 itself before each read. `253 MIXER` plays channel B's tone only; `255 MIXER` plays nothing.
 
 ```forth
 : AY@ 245 OUT 246 IN ;
@@ -722,6 +722,7 @@ Writes *mask* to the AY chip's mixer, register 7, which chooses what each channe
 
 * The mask is written as it is, low byte only.
 * `BEEP` changes only the bits for channel A.
+* `STICK` clears bit 6 (port A an input) and leaves the rest; `7 AY@` reads that back after a `STICK`.
 
 **See also** `TONE`, `VOLUME`, `NOISE`, `SOUND`, [Sound](05_concepts.md#sound).
 
@@ -1058,7 +1059,7 @@ The last two lines play a tone with three writes: channel B's period (251, from 
 
 **Notes.**
 
-* The registers: 0-1, 2-3 and 4-5 are the tone periods of channels A, B and C (low byte, then the top four bits); 6 the noise period; 7 the mixer; 8, 9 and 10 the volumes; 11-12 and 13 the envelope. `TONE`, `VOLUME`, `MIXER`, `NOISE` and `ENVELOPE` do these writes for you.
+* The registers: 0-1, 2-3 and 4-5 are the tone periods of channels A, B and C (low byte, then the top four bits); 6 the noise period; 7 the mixer (its bits 6 and 7 are the I/O ports' directions, not sound: see `MIXER`); 8, 9 and 10 the volumes; 11-12 and 13 the envelope. `TONE`, `VOLUME`, `MIXER`, `NOISE` and `ENVELOPE` do these writes for you.
 * The chip's clock makes the tone frequency 110,250 / *period* Hz.
 * Register 16 is accepted and selects none of the chip's registers.
 * The pair lists of Sinclair BASIC's `SOUND` are not supported: one register and one value at a time.
@@ -1208,17 +1209,24 @@ CLS 0 18 AT-XY                           \ draws
 
 `( device -- value )` -- **word**, I/O
 
-Reads a joystick. *device* 1 gives a number from 0 to 15, one bit for each of the four direction lines, with the bit set while that direction is pushed; 0 means none. *device* 2 gives 0 or 1, the state of one line. With no joystick connected both give 0.
+Reads joystick *device*, 1 or 2. The result is a number from 0 to 31: bits 0 to 3 are the four direction switches (a bit is 1 while that direction is pushed), and 16 is added while the fire button is pressed. 0 means nothing is pressed. With no joystick connected both give 0.
 
 ```forth
 1 STICK .                \ expect: 0
 2 STICK .                \ expect: 0
+: AY@ 245 OUT 246 IN ;
+248 MIXER  1 STICK DROP  7 AY@ .   \ expect: 184
 ```
+
+`248 MIXER` leaves both I/O ports outputs; after `STICK`, register 7 reads 184 (bit 6 cleared).
 
 **Notes.**
 
-* The joystick lines are the bits of the sound chip's port A (its register 14), read and inverted. If all four direction lines read as pushed at once, which is what an open port gives, device 1 gives 0.
-* *device* is not checked: any value other than 1 is read as device 2.
+* The joystick lines are the bits of the sound chip's port A (its register 14), read and inverted: bits 0 to 3 the directions, bit 7 fire. If all four direction lines read as pushed at once (no real joystick can do that), the directions read 0.
+* Before reading, `STICK` makes port A an input: it sets bit 6 of register 7, the mixer, to 0 and leaves the other bits. The boot sound, `MIXER` and `SOUND` can leave the port an output, and an output port gives back what was last written to it, not the joystick, on some machines and emulators.
+* *device* is put on the address lines during the read (A8 for joystick 1, A9 for joystick 2), as the TS2068's own ROM does; that is what enables one connector. *device* is not checked.
+* Changed in V2: earlier ROMs gave joystick 2 as 0 or 1 (the fire line only) and did not select a connector or make the port an input.
+* Untested on hardware: no emulator here models the two connectors, so the selection by A8 and A9 and the fire bit have not been tried with a real joystick.
 * The emulator the ROM is tested in has no joystick, so the examples show the empty case.
 
 **See also** `KEY`, `IN`, `BREAK?`.
