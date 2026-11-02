@@ -5,12 +5,14 @@ reports: `docs/V2/milestones/`.
 
 ## Where things stand (2026-11-01)
 
-- **Release v2.0.1 (2026-11-01):** step STICK (PR #24: `STICK` makes port A an input and selects its connector, as
-  Leap V2 v2.1.1, `milestones/STICK.md`; a `tsrun` suite in `make test`), then the version text `2068 FORTH V2.0.1`,
-  tagged `v2.0.1` (CI publishes the release); the TSRun demo serves it.
-- **V2 is complete. Master `24a5bf2`**: PRs #19 (Manual), #20 (Polygon edges), #21 (Cart start) and #22 (Blackjack)
-  merged 2026-11-01, in that order, with merge commits; no PR open, every other branch merged. The ROADMAP has nothing
-  scheduled. The step reports are `docs/V2/milestones/`; the last is `Blackjack.md`.
+- **v2.0.1 is released (2026-11-01), master `0dabe74`.** Step STICK (PR #24: `STICK` makes port A an input and
+  selects its connector, as Leap V2 v2.1.1, `milestones/STICK.md`; a `tsrun` suite in `make test`), then the version
+  text `2068 FORTH V2.0.1` (PR #25), tagged `v2.0.1`; CI published the GitHub release with `2068-Forth-v2.0.1.zip`.
+  The TSRun demo (`nchiker/TSRun` main, `02e5325`) serves its ROMs. No PR open; only master, locally and on GitHub.
+  LIB tapes saved by v2.0 do not load on v2.0.1 (the ROM identity changed); `SAVE-TEXT` source does.
+- **V2 was completed as v2.0** (master `50170f2`): PRs #19 (Manual), #20 (Polygon edges), #21 (Cart start), #22
+  (Blackjack) and #23 (wrap-up) merged 2026-11-01 with merge commits. The ROADMAP has nothing scheduled. The step
+  reports are `docs/V2/milestones/`; the last is `STICK.md`.
 - **The owner (2026-11-01):** for a remaining defect, look first at how Leap-C (and Leap V2, whose cartridge is in
   production) handled the same problem. The one left (LINE far off the screen) is compared in the Polygon edges
   report: Forth keeps the exact line.

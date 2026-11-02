@@ -38,9 +38,9 @@ component, `budget.toml`; `make inventory`: per routine). Dictionary: 16,128 byt
 | Blackjack | The demo rebuilt for the finished ROM and a cartridge (`make blackjack`); `RND`'s own seed from the frame counter (`milestones/Blackjack.md`) |
 | STICK | Port A made an input before the read, joystick *n* selected by A8/A9, 0-31 with fire for both sticks, as Leap V2 v2.1.1; a `tsrun` suite (`milestones/STICK.md`) |
 
-## Now: V2 is complete (2026-11-01)
+## Now: V2 is complete, v2.0.1 released (2026-11-01)
 
-Every step above is merged into master (`24a5bf2`, PR #22 the last). Nothing is scheduled. The Shooting Gallery is not
+Every step above is merged into master and released as v2.0.1 (`0dabe74`, PR #25 the last). Nothing is scheduled. The Shooting Gallery is not
 wanted now (the owner, 2026-11-01): `demos/gallery.fs` stays as the old demo ROM's source, not rebuilt and not run on
 this ROM. The one known defect below is left as it is, with its reason.
 
