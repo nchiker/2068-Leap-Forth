@@ -2,7 +2,7 @@
 
 **For the Timex Sinclair 2068 with the Leap-Forth ROMs.**
 
-*Edition for V2.0.* This manual describes the ROM whose status bar reads `2068 FORTH V2.0`. It has been tested on
+*Edition for V2.0.1.* This manual describes the ROM whose status bar reads `2068 FORTH V2.0.1`. It has been tested on
 ZEsarUX 13.0 (with a small patch), Fuse 1.9.1 and TSRun, and it has **not been run on a physical TS2068**. Where
 something depends on real hardware, the manual says so.
 
@@ -54,7 +54,7 @@ different language. The three do not share programs or tapes.
 
 ## The status of this release
 
-V2.0 is tested by automated suites on emulators: ZEsarUX 13.0 (with a patch), Fuse 1.9.1 for the tape, and TSRun for
+V2.0.1 is tested by automated suites on emulators: ZEsarUX 13.0 (with a patch), Fuse 1.9.1 for the tape, and TSRun for
 the cartridge. It has **not been run on a physical TS2068**, a real cassette recorder or a real keyboard.
 
 Every example in this manual is an automated test. The build types it into the ROM and checks that it prints what its
@@ -90,7 +90,7 @@ EightyOne and TS-Pico cannot run it yet. Without the EXROM, the words it does (`
 **On a TS2068.** The HOME ROM replaces the 16 KB system ROM and the EXROM the 8 KB extension ROM; or, leaving the
 machine's ROMs in place, `forth_cart.dck` runs from a dock cartridge. Neither has been tried on real hardware.
 
-Switch on. The screen turns white with `2068 FORTH V2.0` on a black bar at the bottom, a chord sounds, and the cursor
+Switch on. The screen turns white with `2068 FORTH V2.0.1` on a black bar at the bottom, a chord sounds, and the cursor
 waits on that bar.
 
 **The keyboard.** The TS2068 has two shift keys: CAPS SHIFT (capitals and the editing keys) and SYMBOL SHIFT

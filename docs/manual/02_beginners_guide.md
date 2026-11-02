@@ -17,7 +17,7 @@ without its comment.
 ## Chapter 1 -- Switching on
 
 Switch on the machine. A chord plays, and the screen turns white with a black bar at the bottom that reads
-`2068 FORTH V2.0`:
+`2068 FORTH V2.0.1`:
 
 ![The screen after switching on](../images/boot_screen.png)
 

@@ -27,7 +27,7 @@ from docx.shared import Inches, Pt, RGBColor
 ROOT = Path(__file__).resolve().parent.parent
 MANUAL = Path(os.environ.get("FORTH_MANUAL_DIR") or ROOT / "docs" / "manual")
 OUTPUT = ROOT / "docs" / "2068_Leap-Forth_Users_Manual.docx"
-EDITION = "V2.0"
+EDITION = "V2.0.1"
 PARTS = ["01_introduction.md", "02_beginners_guide.md", "03_language.md", "04_machine.md",
          "05_concepts.md", "06_libraries.md", "07_examples.md", "08_appendices.md"]
 FLOW_PARTS = {"03_language.md", "04_machine.md", "05_concepts.md"}   # A-Z entries flow on: no page break before each ##

@@ -6,4 +6,4 @@
 ; generated from git, so that a build stays reproducible (make repro). At most 27 characters: it starts
 ; at column 2 (the cursor is in column 0) and the bar's colour cells are columns 29-31.
 ; ============================================================================
-FORTH_VERSION_TEXT: DB "2068 FORTH V2.0", 0
+FORTH_VERSION_TEXT: DB "2068 FORTH V2.0.1", 0
