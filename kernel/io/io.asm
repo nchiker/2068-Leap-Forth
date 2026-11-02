@@ -284,31 +284,37 @@ IO_KEY_AVAILABLE:
     ret
 
 ; ============================================================================
-; STICK_READ -- read a joystick through the AY's I/O port A (register 14)
-; Stick 1 gives a 4-bit direction nibble, stick 2 a single bit (bit 7 of the port).
-; In:  HL = device (1 or 2; not validated)
-; Out: HL = stick value (device 1: 0-15, one bit per direction, 0 if all four read set;
-;      device 2: 0 or 1)
-; Destroys: AF, BC, DE, HL
+; STICK_READ -- read joystick 1 or 2 through the AY's I/O port A (register 14)
+; Port A is made an input first (register 7 bit 6 = 0; the boot sound reset, MIXER and SOUND can leave it an
+; output, and an output port gives its latch, not the joystick, on some machines). Joystick n is enabled while
+; A8 (n = 1) or A9 (n = 2) is high during the read, as the stock ROM's STICK does with B = n; B is 0 while
+; register 7 is written, so no joystick is enabled then.
+; In:  HL = device (1 or 2; not validated: L goes to A8-A15 as it is)
+; Out: HL = 0-31: bits 0-3 the four directions (1 while closed; 0 if all four read closed), +16 while fire
+;      (port bit 7) is pressed
+; Destroys: AF, BC, HL
 ; ============================================================================
 STICK_READ:
-    ld   a, l
-    ld   d, a                          ; D = device (1 or 2)
+    ld   a, 7
+    out  (PORT_AY_REG), a               ; select register 7, the mixer
+    ld   bc, PORT_AY_DATA               ; B = 0: no joystick enabled while writing
+    in   a, (c)
+    and  $BF                            ; bit 6 = 0: port A an input
+    out  (c), a
     ld   a, $0E
-    out  (PORT_AY_REG), a               ; select AY register 14 (I/O port A)
-    ld   c, PORT_AY_DATA
-    in   a, (c)                          ; A = raw joystick lines
-    cpl                                   ; active-low -> active-high
-    ld   b, d
-    djnz .stick2                          ; device 2 jumps
-    and  $0F                              ; stick 1: the four direction bits
+    out  (PORT_AY_REG), a               ; select register 14 (I/O port A)
+    ld   b, l                           ; A8 or A9 high: joystick n
+    in   a, (c)                         ; A = the joystick lines, active low
+    cpl                                 ; active high
+    ld   l, a
+    and  $0F                            ; the four direction bits
     cp   $0F
-    jr   c, .done
-    xor  a                                 ; all four set: no real input
-    jr   .done
-.stick2:
-    rlca                                   ; stick 2: bit 7 -> bit 0
-    and  $01
+    jr   c, .dirs
+    xor  a                              ; all four set: no real input
+.dirs:
+    bit  7, l
+    jr   z, .done
+    or   $10                            ; fire
 .done:
     ld   l, a
     ld   h, 0

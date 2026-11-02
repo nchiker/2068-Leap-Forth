@@ -2,7 +2,7 @@
 ; core/stick.asm -- STICK: read a joystick
 ;
 ; A thin word over kernel/io/io.asm's STICK_READ, which must be INCLUDEd too. The device number is not
-; validated (STICK_READ trusts its caller): a value other than 1 or 2 goes to the hardware as it is.
+; validated (STICK_READ trusts its caller): its low byte goes to A8-A15 during the read as it is.
 ; Chained from DICT_CHAIN_POINT (set by the including ROM before the INCLUDE); every word may destroy
 ; all registers except IX (the data stack pointer), IY and SP.
 ; ============================================================================
@@ -11,7 +11,7 @@
     DEFINE CORE_STICK_ASM
 
 ; ============================================================================
-; STICK ( device -- value ) -- device 1: a 4-bit direction nibble; device 2: a single bit (0 or 1)
+; STICK ( device -- value ) -- joystick 1 or 2: 0-31, the four directions in bits 0-3, 16 for fire
 ; See STICK_READ in kernel/io/io.asm for the bit meanings.
 ; ============================================================================
 H_STICK:

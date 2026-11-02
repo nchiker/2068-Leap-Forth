@@ -9,6 +9,10 @@ KEY .                                    \ expect: 53
 1 {KBD_KEYHIT} C! 88 {KBD_LASTK} C! KEY . KEY? .      \ expect: 88 0
 4242 1 STICK . .                         \ expect: 0 4242
 4242 2 STICK . .                         \ expect: 0 4242
+\ STICK makes the AY's port A an input (register 7 bit 6 = 0) whatever MIXER left there; 7 AY@ reads it back
+: AY@ 245 OUT 246 IN ;
+248 MIXER  1 STICK DROP  7 AY@ .         \ expect: 184
+255 MIXER  2 STICK DROP  7 AY@ .         \ expect: 191
 CREATE B 5 ALLOT
 \ keys: HELLOX\b\r
 B 5 ACCEPT DUP . B SWAP TYPE SPACE       \ expect: HELL4 HELL

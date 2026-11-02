@@ -469,3 +469,9 @@ image = "home"
 component = "graphics"
 delta = 11
 reason = "Polygon edges: POLY_POP_VERTICES moves a vertex off the screen to its nearest edge, as 2068-Leap-C's draw() and box() do (+26 B: the low byte was taken, so -20 was x 236), and refuses n > 255; the pop loop rewritten on a pointer and DJNZ (-15 B); from the reserve"
+
+[[ledger]]
+image = "home"
+component = "kernel"
+delta = 9
+reason = "STICK fix: STICK_READ makes AY port A an input (register 7 bit 6 = 0) and selects joystick n by B = n (A8/A9), returning 0-31 with fire as 16 for both sticks (Leap V2 v2.1.1's fix, ec2ee7e); from the reserve"

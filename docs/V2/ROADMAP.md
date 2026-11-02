@@ -6,7 +6,7 @@ the best solution for the language and its users; fix a problem in the session i
 reason not to (the reason is written here); **follow Leap-C's conventions** (`~/2068-Leap-C` `CONTRIBUTING.md` and
 `project_plan.md` section 1) for testing, paperwork, code style and RAM layout.
 
-Last updated 2026-11-01. Free bytes: HOME 1,924, EXROM 3,136, the cartridge's HOME image 1,751 (`make budget`: per
+Last updated 2026-11-01. Free bytes: HOME 1,915, EXROM 3,136, the cartridge's HOME image 1,742 (`make budget`: per
 component, `budget.toml`; `make inventory`: per routine). Dictionary: 16,128 bytes at power-on.
 
 ## Done
@@ -36,12 +36,17 @@ component, `budget.toml`; `make inventory`: per routine). Dictionary: 16,128 byt
 | Polygon edges | POLYGON and POLYGON-FILL move an off-screen corner to the nearest edge, as Leap-C (`milestones/Polygon_edges.md`) |
 | Cart start | A program cartridge starts without the power-on CRC, as Leap V2's: the largest in 0.38 s, not 2.7 s (`milestones/Cart_start.md`) |
 | Blackjack | The demo rebuilt for the finished ROM and a cartridge (`make blackjack`); `RND`'s own seed from the frame counter (`milestones/Blackjack.md`) |
+| STICK | Port A made an input before the read, joystick *n* selected by A8/A9, 0-31 with fire for both sticks, as Leap V2 v2.1.1; a `tsrun` suite (`milestones/STICK.md`) |
 
 ## Now: V2 is complete (2026-11-01)
 
 Every step above is merged into master (`24a5bf2`, PR #22 the last). Nothing is scheduled. The Shooting Gallery is not
 wanted now (the owner, 2026-11-01): `demos/gallery.fs` stays as the old demo ROM's source, not rebuilt and not run on
 this ROM. The one known defect below is left as it is, with its reason.
+
+Fixed in STICK (after V2 was complete, from the Leap IDE's report on Leap V2): `STICK` read the AY's port A while
+it was an output (register 7 bit 6 set since boot) and never selected a connector (B was not set), so on TSRun
+`2 STICK` gave 1 with nothing connected and no joystick was ever read.
 
 ## Known defects
 
