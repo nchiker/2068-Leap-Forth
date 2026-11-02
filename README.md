@@ -93,7 +93,7 @@ fuse --machine ts2068 --rom-ts2068-0 "$PWD/forth_boot_rom0.bin" --rom-ts2068-1 "
 With full paths (`$PWD/...`) the command works from any folder: Fuse looks for a ROM given by its name alone in the
 current folder and then in its own ROM folders, so the bare names work only from the images' folder.
 
-It boots to a white screen with its version (`2068 FORTH V2.0`) on the status bar at the bottom, plays a short startup
+It boots to a white screen with its version (`2068 FORTH V2.0.1`) on the status bar at the bottom, plays a short startup
 chord and waits at the prompt. Try:
 
 | Type | It prints or does |

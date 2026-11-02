@@ -1201,3 +1201,7 @@ this is the condensed one-paragraph-per-phase version.
   V2 v2.1.1's. A `tsrun` suite in `make test` checks it on TSRun's
   joystick model. HOME free space 1,924 bytes before, 1,915 after.
   Emulators only (ZEsarUX, TSRun); no hardware.
+- Release v2.0.1 (2026-11-01): the STICK fix (PR #24); the status bar
+  reads `2068 FORTH V2.0.1`. LIB tapes saved by v2.0 do not load (the
+  ROM's identity changed); `SAVE-TEXT` source does. HOME free space
+  1,913 bytes; EXROM 3,136.

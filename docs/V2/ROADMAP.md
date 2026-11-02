@@ -6,7 +6,7 @@ the best solution for the language and its users; fix a problem in the session i
 reason not to (the reason is written here); **follow Leap-C's conventions** (`~/2068-Leap-C` `CONTRIBUTING.md` and
 `project_plan.md` section 1) for testing, paperwork, code style and RAM layout.
 
-Last updated 2026-11-01. Free bytes: HOME 1,915, EXROM 3,136, the cartridge's HOME image 1,742 (`make budget`: per
+Last updated 2026-11-01. Free bytes: HOME 1,913, EXROM 3,136, the cartridge's HOME image 1,740 (`make budget`: per
 component, `budget.toml`; `make inventory`: per routine). Dictionary: 16,128 bytes at power-on.
 
 ## Done
